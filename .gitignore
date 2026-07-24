@@ -1,0 +1,5 @@
+# Exclude Oracle Visual Builder Files
+
+node_modules/
+build/
+private/
