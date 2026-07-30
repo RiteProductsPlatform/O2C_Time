@@ -1,0 +1,355 @@
+<!-- PAGE-003 Team Approvals — manager landing (PER-003)
+
+     The landing page answers three questions in order:
+       1. Which of my projects still need attention this month?
+       2. What are the cut-offs I am working against?  (FLD-036)
+       3. Is anything waiting on me personally — retro adjustments?  (ACT-021)
+
+     Approve/reject happen one level down (PAGE-004 / PAGE-005); this page is
+     navigation and triage. -->
+
+<oj-sp-general-overview-page
+  id="teamApprovalsPage"
+  class="oj-sm-width-full rw-page-full"
+  display-options.responsive-padding="off"
+  page-title="Team Approvals"
+  page-subtitle="Open a project to review and approve your team's time.">
+
+  <div class="oj-flex oj-sm-flex-direction-column oj-sm-width-full oj-sm-gap-4x"
+       slot="main">
+
+    <!-- ══════════════════ Filters ══════════════════ -->
+    <div class="oj-sm-padding-4x rw-metric">
+      <div class="oj-flex oj-sm-justify-content-space-between oj-sm-align-items-start oj-sm-flex-wrap oj-sm-gap-3x">
+        <oj-form-layout max-columns="3" direction="row" label-edge="top" class="oj-flex-item">
+          <oj-select-single label-hint="Month / Year"
+                            data="[[ $application.variables.periodOptions ]]"
+                            value="{{ $variables.periodId }}"
+                            item-text="label">
+          </oj-select-single>
+
+          <oj-input-text label-hint="Project"
+                         value="{{ $variables.projectFilter }}"
+                         placeholder="Filter by name or number">
+          </oj-input-text>
+
+          <oj-label-value>
+            <span slot="label" class="oj-label-nowrap">Reviewing as</span>
+            <span slot="value" class="oj-typography-body-md">
+              <oj-bind-text value="[[ $application.variables.actingManagerId ]]"></oj-bind-text>
+            </span>
+          </oj-label-value>
+        </oj-form-layout>
+
+        <div class="oj-flex oj-sm-gap-2x">
+          <oj-button chroming="borderless" on-oj-action="[[ $listeners.toggleCutoffs ]]">
+            <span slot="startIcon" class="oj-ux-ico-calendar-clock"></span>
+            <span>All cut-offs</span>
+          </oj-button>
+          <oj-button chroming="borderless" on-oj-action="[[ $listeners.reload ]]">
+            <span slot="startIcon" class="oj-ux-ico-refresh"></span>
+            <span>Refresh</span>
+          </oj-button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════ All cut-offs panel (FLD-036) ══════════════════ -->
+    <oj-bind-if test="[[ $variables.showCutoffs && $variables.cutoffs ]]">
+      <div class="oj-sm-padding-4x rw-metric">
+        <h2 class="oj-typography-heading-xs oj-sm-margin-0 oj-sm-margin-3x-bottom">
+          Cut-offs for <oj-bind-text value="[[ $variables.cutoffs.period_name ]]"></oj-bind-text>
+        </h2>
+        <oj-form-layout max-columns="4" direction="row" label-edge="top">
+          <oj-label-value>
+            <span slot="label" class="oj-label-nowrap">Weekly (timesheet)</span>
+            <span slot="value" class="oj-typography-body-md"><oj-bind-text value="[[ $variables.cutoffs.weekly_cutoff_display || '—' ]]"></oj-bind-text></span>
+          </oj-label-value>
+          <oj-label-value>
+            <span slot="label" class="oj-label-nowrap">Delivery</span>
+            <span slot="value" class="oj-typography-body-md"><oj-bind-text value="[[ $variables.cutoffs.delivery_cutoff || '—' ]]"></oj-bind-text></span>
+          </oj-label-value>
+          <oj-label-value>
+            <span slot="label" class="oj-label-nowrap">Finance</span>
+            <span slot="value" class="oj-typography-body-md"><oj-bind-text value="[[ $variables.cutoffs.finance_cutoff || '—' ]]"></oj-bind-text></span>
+          </oj-label-value>
+          <oj-label-value>
+            <span slot="label" class="oj-label-nowrap">Book closure</span>
+            <span slot="value" class="oj-typography-body-md"><oj-bind-text value="[[ $variables.cutoffs.book_closure || '—' ]]"></oj-bind-text></span>
+          </oj-label-value>
+          <oj-label-value>
+            <span slot="label" class="oj-label-nowrap">MEC close</span>
+            <span slot="value" class="oj-typography-body-md"><oj-bind-text value="[[ $variables.cutoffs.mec_close || '—' ]]"></oj-bind-text></span>
+          </oj-label-value>
+          <oj-label-value>
+            <span slot="label" class="oj-label-nowrap">Payroll</span>
+            <span slot="value" class="oj-typography-body-md"><oj-bind-text value="[[ $variables.cutoffs.payroll_cutoff || '—' ]]"></oj-bind-text></span>
+          </oj-label-value>
+          <oj-label-value>
+            <span slot="label" class="oj-label-nowrap">Client</span>
+            <span slot="value" class="oj-typography-body-md"><oj-bind-text value="[[ $variables.cutoffs.client_cutoff || '—' ]]"></oj-bind-text></span>
+          </oj-label-value>
+          <oj-label-value>
+            <span slot="label" class="oj-label-nowrap">Adjustment window</span>
+            <span slot="value" class="oj-typography-body-md">
+              <oj-bind-text value="[[ $variables.cutoffs.adjustment_months ]]"></oj-bind-text> months
+            </span>
+          </oj-label-value>
+        </oj-form-layout>
+        <p class="oj-typography-body-xs rw-metric-label oj-sm-margin-2x-top">
+          Only the Weekly and Delivery cut-offs affect timesheet status. The rest
+          drive downstream finance and payroll.
+        </p>
+      </div>
+    </oj-bind-if>
+
+    <!-- ══════════════════ Advance approval (PROC-010) ══════════════════ -->
+    <!-- A future month can be advance-approved at month level; the whole month is
+         then tagged 'Advance closure' and later actuals arrive as flagged
+         adjustments. -->
+    <oj-bind-if test="[[ $variables.isFuturePeriod ]]">
+      <div class="oj-sm-padding-4x rw-metric">
+        <h2 class="oj-typography-heading-xs oj-sm-margin-0">Advance approval</h2>
+        <p class="oj-typography-body-sm rw-metric-label oj-sm-margin-1x-top">
+          This month has not started yet. You can advance-approve it now — the
+          month is tagged <strong>Advance closure</strong>, defaulted hours are
+          treated as approved, and any later actuals come through as flagged
+          adjustments.
+        </p>
+        <oj-form-layout max-columns="2" direction="row" label-edge="top">
+          <oj-select-single label-hint="Project"
+                            data="[[ $variables.projectsAllADP ]]"
+                            value="{{ $variables.advanceProjectId }}"
+                            item-text="projectName">
+          </oj-select-single>
+        </oj-form-layout>
+        <div class="oj-flex oj-sm-justify-content-flex-end oj-sm-margin-2x-top">
+          <oj-button chroming="callToAction"
+                     disabled="[[ $variables.busy || !$variables.advanceProjectId ]]"
+                     on-oj-action="[[ $listeners.advanceApprove ]]">
+            <span>Advance-approve month</span>
+          </oj-button>
+        </div>
+      </div>
+    </oj-bind-if>
+
+    <!-- ══════════════════ Retro adjustments awaiting me (ACT-021) ══════════════════ -->
+    <oj-bind-if test="[[ $variables.adjustments.length > 0 ]]">
+      <div class="oj-sm-padding-4x rw-metric">
+        <h2 class="oj-typography-heading-xs oj-sm-margin-0">
+          Backdated changes awaiting your approval
+          (<oj-bind-text value="[[ $variables.adjustments.length ]]"></oj-bind-text>)
+        </h2>
+        <p class="oj-typography-body-sm rw-metric-label oj-sm-margin-1x-top">
+          Each row is one day. Approving posts a Reversal&nbsp;(&minus;) against
+          the old project and an Adjustment&nbsp;(+) on the new one, in the
+          currently open period. A change that moves hours between two projects
+          needs both managers to approve.
+        </p>
+
+        <div class="rw-grid-scroll oj-sm-margin-3x-top">
+          <oj-table aria-label="Backdated adjustments awaiting approval"
+                    data="[[ $variables.adjustmentsADP ]]"
+                    layout="fixed"
+                    horizontal-grid-visible="enabled"
+                    selection-mode='{"row": "none", "column": "none"}'
+                    columns='[
+                      {"headerText":"Employee","field":"employeeName","weight":2,"minWidth":150},
+                      {"headerText":"Date","field":"workDate","template":"dateCell","width":120},
+                      {"headerText":"Reversal — old","field":"oldProjectName","template":"oldCell","weight":3},
+                      {"headerText":"Adjustment — new","field":"newProjectName","template":"newCell","weight":3},
+                      {"headerText":"Net","field":"netHours","template":"netCell","width":80},
+                      {"headerText":"Reason","field":"reason","weight":2},
+                      {"headerText":"Waiting on","field":"status","template":"waitCell","width":170},
+                      {"headerText":"","field":"adjustmentId","template":"actionCell","width":110,"sortable":"disabled"}
+                    ]'>
+
+            <template slot="dateCell" data-oj-as="row">
+              <span><oj-bind-text value="[[ $application.functions.fmtDate(row.data.workDate) ]]"></oj-bind-text></span>
+            </template>
+
+            <template slot="oldCell" data-oj-as="row">
+              <span>
+                <oj-bind-text value="[[ row.data.oldProjectName ]]"></oj-bind-text> /
+                <oj-bind-text value="[[ row.data.oldTaskCode ]]"></oj-bind-text>
+                (&minus;<oj-bind-text value="[[ $application.functions.fmtHours(row.data.oldHours) ]]"></oj-bind-text>)
+              </span>
+            </template>
+
+            <template slot="newCell" data-oj-as="row">
+              <span>
+                <oj-bind-if test="[[ row.data.newProjectName ]]">
+                  <oj-bind-text value="[[ row.data.newProjectName ]]"></oj-bind-text> /
+                  <oj-bind-text value="[[ row.data.newTaskCode ]]"></oj-bind-text>
+                  (+<oj-bind-text value="[[ $application.functions.fmtHours(row.data.newHours) ]]"></oj-bind-text>)
+                </oj-bind-if>
+                <oj-bind-if test="[[ !row.data.newProjectName ]]">
+                  <span class="rw-metric-label">Reversal only</span>
+                </oj-bind-if>
+              </span>
+            </template>
+
+            <template slot="netCell" data-oj-as="row">
+              <span><oj-bind-text value="[[ $application.functions.fmtHours(row.data.netHours) ]]"></oj-bind-text></span>
+            </template>
+
+            <!-- Makes it obvious whether this manager is the blocker or the other
+                 side is (RA-014: both managers see the row). -->
+            <template slot="waitCell" data-oj-as="row">
+              <span class="rw-metric-label">
+                <oj-bind-text value="[[ $page.functions.waitingOn(row.data) ]]"></oj-bind-text>
+              </span>
+            </template>
+
+            <template slot="actionCell" data-oj-as="row">
+              <!-- Disabled once this manager has done their part: offering an
+                   action the server would refuse is worse than not offering it. -->
+              <oj-button chroming="outlined"
+                         disabled="[[ $variables.busy || $page.functions.alreadyActed(row.data) ]]"
+                         :aria-label="[[ $page.functions.approveAdjLabel(row.data.employeeName) ]]"
+                         on-oj-action="[[ function(){
+                            $page.listeners.approveAdjustment({ adjustmentId: row.data.adjustmentId }); } ]]">
+                <span>Approve</span>
+              </oj-button>
+            </template>
+          </oj-table>
+        </div>
+      </div>
+    </oj-bind-if>
+
+    <!-- ══════════════════ Projects managed ══════════════════ -->
+    <div class="oj-sm-padding-4x rw-metric">
+      <h2 class="oj-typography-heading-xs oj-sm-margin-0 oj-sm-margin-3x-bottom">
+        Projects for
+        <oj-bind-text value="[[ $application.variables.selectedPeriodName ]]"></oj-bind-text>
+      </h2>
+
+      <oj-bind-if test="[[ $variables.projects.length === 0 && !$variables.busy ]]">
+        <div class="oj-typography-body-sm rw-metric-label" role="status">
+          <oj-bind-text value="[[ $page.functions.emptyMessage($variables.projectsRaw) ]]"></oj-bind-text>
+        </div>
+      </oj-bind-if>
+
+      <oj-bind-if test="[[ $variables.projects.length > 0 ]]">
+        <div class="rw-grid-scroll">
+          <oj-table aria-label="Projects you manage"
+                    data="[[ $variables.projectsADP ]]"
+                    layout="fixed"
+                    horizontal-grid-visible="enabled"
+                    selection-mode='{"row": "none", "column": "none"}'
+                    columns='[
+                      {"headerText":"Project","field":"projectName","template":"projCell","weight":3,"minWidth":200},
+                      {"headerText":"Number","field":"projectNumber","width":120},
+                      {"headerText":"TS start","field":"tsStart","template":"startCell","width":115},
+                      {"headerText":"TS end","field":"tsEnd","template":"endCell","width":115},
+                      {"headerText":"Team","field":"employees","template":"teamCell","weight":2,"minWidth":170},
+                      {"headerText":"Billable","field":"billableHours","template":"billCell","width":95},
+                      {"headerText":"Non-bill","field":"nonBillableHours","template":"nonBillCell","width":95},
+                      {"headerText":"Leave","field":"leaveHours","template":"leaveCell","width":85},
+                      {"headerText":"Status","field":"monthStatus","template":"statusCell","width":170},
+                      {"headerText":"","field":"projectId","template":"actionCell","width":110,"sortable":"disabled"}
+                    ]'>
+
+            <template slot="projCell" data-oj-as="row">
+              <span>
+                <oj-bind-text value="[[ row.data.projectName ]]"></oj-bind-text>
+                <oj-bind-if test="[[ row.data.revenueModel === 'FCP' && row.data.leaveLossFlag === 'Y' ]]">
+                  <span class="rw-flag rw-flag-advance" title="Fixed Capacity Project with leave loss coverage — absences need a covering colleague (PAGE-006).">FCP · Leave loss</span>
+                </oj-bind-if>
+                <oj-bind-if test="[[ row.data.pendingAdjustments > 0 ]]">
+                  <span class="rw-flag rw-flag-defaulted">
+                    <oj-bind-text value="[[ row.data.pendingAdjustments ]]"></oj-bind-text> adj.
+                  </span>
+                </oj-bind-if>
+              </span>
+            </template>
+
+            <template slot="startCell" data-oj-as="row">
+              <span><oj-bind-text value="[[ $application.functions.fmtDate(row.data.tsStart) ]]"></oj-bind-text></span>
+            </template>
+            <template slot="endCell" data-oj-as="row">
+              <span><oj-bind-text value="[[ $application.functions.fmtDate(row.data.tsEnd) ]]"></oj-bind-text></span>
+            </template>
+
+            <!-- Approved / total is the number that tells the manager whether
+                 Confirm Month is even reachable (RULE-020). -->
+            <template slot="teamCell" data-oj-as="row">
+              <span>
+                <oj-bind-text value="[[ row.data.approvedEmployees ]]"></oj-bind-text> /
+                <oj-bind-text value="[[ row.data.employees ]]"></oj-bind-text> approved
+                <oj-bind-if test="[[ row.data.rejectedEmployees > 0 ]]">
+                  <span class="rw-flag rw-flag-reversal">
+                    <oj-bind-text value="[[ row.data.rejectedEmployees ]]"></oj-bind-text> rejected
+                  </span>
+                </oj-bind-if>
+              </span>
+            </template>
+
+            <template slot="billCell" data-oj-as="row">
+              <span><oj-bind-text value="[[ $application.functions.fmtHours(row.data.billableHours) ]]"></oj-bind-text></span>
+            </template>
+            <template slot="nonBillCell" data-oj-as="row">
+              <span><oj-bind-text value="[[ $application.functions.fmtHours(row.data.nonBillableHours) ]]"></oj-bind-text></span>
+            </template>
+            <template slot="leaveCell" data-oj-as="row">
+              <span><oj-bind-text value="[[ $application.functions.fmtHours(row.data.leaveHours) ]]"></oj-bind-text></span>
+            </template>
+
+            <template slot="statusCell" data-oj-as="row">
+              <span>
+                <span :class="[[ $application.functions.outcomeClass(row.data.monthStatus) ]]">
+                  <oj-bind-text value="[[ row.data.monthStatus ]]"></oj-bind-text>
+                </span>
+                <oj-bind-if test="[[ row.data.confirmId ]]">
+                  <span class="rw-flag rw-flag-adjustment">
+                    Confirmed<oj-bind-if test="[[ row.data.confirmType === 'Advance closure' ]]"> · advance</oj-bind-if>
+                  </span>
+                </oj-bind-if>
+              </span>
+            </template>
+
+            <template slot="actionCell" data-oj-as="row">
+              <oj-button chroming="outlined"
+                         :aria-label="[[ $page.functions.openProjectLabel(row.data.projectName) ]]"
+                         on-oj-action="[[ function(){
+                            $page.listeners.openProject({
+                              projectId: row.data.projectId,
+                              projectName: row.data.projectName }); } ]]">
+                <span>Open</span>
+              </oj-button>
+            </template>
+          </oj-table>
+        </div>
+      </oj-bind-if>
+    </div>
+
+    <oj-bind-if test="[[ $variables.busy ]]">
+      <div class="oj-flex oj-sm-align-items-center oj-sm-gap-2x" role="status" aria-live="polite">
+        <oj-progress-circle size="sm" value="-1"></oj-progress-circle>
+        <span class="oj-typography-body-sm">Working…</span>
+      </div>
+    </oj-bind-if>
+
+  </div>
+
+  <!-- ══════════════════ Confirmation ══════════════════ -->
+  <!-- oj-dialog opened via Actions.callComponentMethod, not window.confirm:
+       SES blocks browser globals inside chains (knowledge/14 §7). -->
+  <oj-dialog id="advanceApproveDlg" dialog-title="Advance-approve month" cancel-behavior="icon">
+    <div slot="body">
+      <p class="oj-typography-body-md">
+        <oj-bind-text value="[[ $variables.confirmMessage ]]"></oj-bind-text>
+      </p>
+    </div>
+    <div slot="footer">
+      <oj-button on-oj-action="[[ $listeners.cancelAdvanceApprove ]]">
+        <span>Cancel</span>
+      </oj-button>
+      <oj-button chroming="callToAction" disabled="[[ $variables.busy ]]"
+                 on-oj-action="[[ $listeners.confirmAdvanceApprove ]]">
+        <span>Advance-approve</span>
+      </oj-button>
+    </div>
+  </oj-dialog>
+
+</oj-sp-general-overview-page>

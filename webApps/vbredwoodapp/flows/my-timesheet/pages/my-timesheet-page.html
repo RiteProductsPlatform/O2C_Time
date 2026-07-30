@@ -1,0 +1,611 @@
+<!-- PAGE-001 My Timesheet (PER-001 Employee, PER-002 Contractor)
+
+     What is deliberately NOT on this page:
+       * Billable Type (FLD-012) — hidden from the employee, manager-only (#7).
+       * Bill rate / revenue      — restricted fields per the Personas sheet.
+       * A Leave picker           — leave comes from HCM Absence (RULE-008); the
+                                    Leave row renders read-only.
+       * Editable Billing Loss    — automatic and non-editable (RULE-009).
+
+     Shift is displayed per day but never editable (RULE-011). Sat/Sun ARE
+     editable and default to 0 (RULE-012). -->
+
+<oj-sp-general-overview-page
+  id="myTimesheetPage"
+  class="oj-sm-width-full rw-page-full"
+  display-options.responsive-padding="off"
+  page-title="My Timesheet"
+  page-subtitle="Record your time per task per day, then submit the week for approval.">
+
+  <div class="oj-flex oj-sm-flex-direction-column oj-sm-width-full oj-sm-gap-4x"
+       slot="main">
+
+    <!-- ══════════════════ Selectors + cut-off ══════════════════ -->
+    <div class="oj-flex oj-sm-flex-direction-column oj-sm-gap-2x oj-sm-padding-4x rw-metric">
+
+      <div class="oj-flex oj-sm-justify-content-space-between oj-sm-align-items-start oj-sm-flex-wrap">
+        <oj-form-layout max-columns="4" direction="row" label-edge="top" class="oj-flex-item">
+
+          <oj-select-single label-hint="Month"
+                            data="[[ $application.variables.periodOptions ]]"
+                            value="{{ $variables.periodId }}"
+                            item-text="label"
+                            placeholder="Select month">
+          </oj-select-single>
+
+          <oj-select-single label-hint="Select Week"
+                            data="[[ $variables.weekOptions ]]"
+                            value="{{ $variables.weekId }}"
+                            item-text="label"
+                            placeholder="Select week">
+          </oj-select-single>
+
+          <!-- FLD-003 weekly cut-off, shown to the employee -->
+          <oj-label-value>
+            <span slot="label" class="oj-label-nowrap">Weekly cut-off</span>
+            <span slot="value" class="oj-typography-body-md">
+              <oj-bind-text value="[[ $variables.weeklyCutoff || '—' ]]"></oj-bind-text>
+            </span>
+          </oj-label-value>
+
+          <!-- FLD-004 week status. The status text is always rendered, so the
+               capsule colour is a reinforcement and never the only signal. -->
+          <oj-label-value>
+            <span slot="label" class="oj-label-nowrap">Status</span>
+            <span slot="value">
+              <span :class="[[ $application.functions.statusClass($variables.weekStatus) ]]">
+                <oj-bind-text value="[[ $variables.weekStatus ]]"></oj-bind-text>
+              </span>
+            </span>
+          </oj-label-value>
+
+        </oj-form-layout>
+
+        <!-- FLD-005 / ACT-008 -->
+        <oj-button chroming="borderless" on-oj-action="[[ $listeners.showAllocation ]]">
+          <span slot="startIcon" class="oj-ux-ico-information-s"></span>
+          <span>My allocation</span>
+        </oj-button>
+      </div>
+
+      <!-- The 6 workflow flags. Independent of status and several can be set at
+           once, so they render as a row of chips, each carrying the explanation
+           in its title. -->
+      <oj-bind-if test="[[ $application.functions.weekFlags($variables.weekRow).length > 0 ]]">
+        <div class="oj-flex oj-sm-gap-2x oj-sm-flex-wrap">
+          <oj-bind-for-each data="[[ $application.functions.weekFlags($variables.weekRow) ]]">
+            <template>
+              <span :class="[[ $current.data.cls ]]" :title="[[ $current.data.title ]]">
+                <oj-bind-text value="[[ $current.data.label ]]"></oj-bind-text>
+              </span>
+            </template>
+          </oj-bind-for-each>
+        </div>
+      </oj-bind-if>
+    </div>
+
+    <!-- ══════════════════ Rejection notice (#5) ══════════════════ -->
+    <!-- The employee sees the reason, the remarks and exactly which dates were
+         rejected, so they know what to correct before resubmitting. -->
+    <oj-bind-if test="[[ $variables.weekStatus === 'Rejected' ]]">
+      <div class="oj-sm-padding-3x rw-shell-error" role="alert">
+        <div class="oj-typography-body-md oj-typography-semi-bold">
+          This week was rejected —
+          <oj-bind-text value="[[ $variables.rejectReason ]]"></oj-bind-text>
+        </div>
+        <oj-bind-if test="[[ $variables.rejectRemarks ]]">
+          <div class="oj-typography-body-sm oj-sm-margin-1x-top">
+            <oj-bind-text value="[[ $variables.rejectRemarks ]]"></oj-bind-text>
+          </div>
+        </oj-bind-if>
+        <oj-bind-if test="[[ $variables.rejectedDates.length > 0 ]]">
+          <div class="oj-typography-body-sm oj-sm-margin-1x-top oj-flex oj-sm-gap-1x oj-sm-flex-wrap oj-sm-align-items-center">
+            <span>Rejected dates:</span>
+            <oj-bind-for-each data="[[ $variables.rejectedDates ]]">
+              <template>
+                <span class="rw-flag rw-flag-reversal">
+                  <oj-bind-text value="[[ $application.functions.fmtDate($current.data.rejected_date) ]]"></oj-bind-text>
+                </span>
+              </template>
+            </oj-bind-for-each>
+          </div>
+        </oj-bind-if>
+        <div class="oj-typography-body-sm oj-sm-margin-1x-top">
+          Correct the hours below and submit again. You can resubmit until the
+          delivery cut-off
+          (<oj-bind-text value="[[ $variables.deliveryCutoff || 'not set' ]]"></oj-bind-text>).
+        </div>
+      </div>
+    </oj-bind-if>
+
+    <!-- ══════════════════ Read-only notices ══════════════════ -->
+    <oj-bind-if test="[[ $variables.periodState === 'Future' ]]">
+      <div class="oj-sm-padding-3x rw-notice" role="status">
+        This month has not started yet. Values are shown for reference but cannot
+        be filled in.
+      </div>
+    </oj-bind-if>
+
+    <!-- A defaulted week locks only when the EMPLOYEE missed the weekly cut-off.
+         If the manager missed the delivery cut-off the week is still theirs to
+         approve and the employee is not at fault, so the wording differs. -->
+    <oj-bind-if test="[[ $variables.locked ]]">
+      <div class="oj-sm-padding-3x rw-notice rw-notice-warning" role="status">
+        This week was auto-submitted with default hours at the weekly cut-off and
+        is locked. Ask your manager to correct it — a defaulted timesheet also
+        holds salary until it is fixed.
+      </div>
+    </oj-bind-if>
+
+    <oj-bind-if test="[[ !$variables.locked && $variables.defaultedBy === 'MANAGER' ]]">
+      <div class="oj-sm-padding-3x rw-notice rw-notice-warning" role="status">
+        The delivery cut-off passed before your manager acted on this week. It is
+        marked Defaulted, but nothing is required from you and your salary is not
+        held — your manager can still approve it.
+      </div>
+    </oj-bind-if>
+
+    <!-- ══════════════════ Day / shift row ══════════════════ -->
+    <!-- FLD-008 shift and FLD-011 standard hours per day, both read-only. -->
+    <div class="oj-sm-padding-4x rw-metric">
+      <h2 class="oj-typography-heading-xs oj-sm-margin-0 oj-sm-margin-3x-bottom">
+        Week <oj-bind-text value="[[ $variables.weekRange ]]"></oj-bind-text>
+      </h2>
+
+      <div class="rw-grid-scroll">
+        <table class="rw-shift-table">
+          <thead>
+            <tr>
+              <th scope="col">Day</th>
+              <oj-bind-for-each data="[[ $variables.dayHeaders ]]">
+                <template>
+                  <th scope="col"
+                      :class="[[ $page.functions.dayHeaderClass($current.data) ]]"
+                      :title="[[ $application.functions.fmtDate($current.data.entryDate) ]]">
+                    <oj-bind-text value="[[ $current.data.dayName ]]"></oj-bind-text>
+                    <div class="oj-typography-body-xs">
+                      <oj-bind-text value="[[ $application.functions.fmtDayShort($current.data.entryDate) ]]"></oj-bind-text>
+                    </div>
+                  </th>
+                </template>
+              </oj-bind-for-each>
+            </tr>
+          </thead>
+          <tbody class="rw-shift-row">
+            <tr>
+              <th scope="row">Shift</th>
+              <oj-bind-for-each data="[[ $variables.dayHeaders ]]">
+                <template>
+                  <td class="rw-grid-day">
+                    <oj-bind-text value="[[ $current.data.shiftCode || '—' ]]"></oj-bind-text>
+                  </td>
+                </template>
+              </oj-bind-for-each>
+            </tr>
+            <tr>
+              <th scope="row">Standard / day</th>
+              <oj-bind-for-each data="[[ $variables.dayHeaders ]]">
+                <template>
+                  <td class="rw-grid-day">
+                    <oj-bind-text value="[[ $application.functions.fmtHours($current.data.standardHours) ]]"></oj-bind-text>
+                  </td>
+                </template>
+              </oj-bind-for-each>
+            </tr>
+            <tr class="rw-grid-total">
+              <th scope="row">Entered</th>
+              <oj-bind-for-each data="[[ $variables.dayHeaders ]]">
+                <template>
+                  <!-- RULE-003 is a cross-line rule, so the breach is reported on
+                       the column total: no single cell is individually at fault. -->
+                  <td :class="[[ $page.functions.dayTotalClass($current.data) ]]">
+                    <oj-bind-text value="[[ $application.functions.fmtHours($current.data.dayTotal) ]]"></oj-bind-text>
+                  </td>
+                </template>
+              </oj-bind-for-each>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ══════════════════ Editable grid ══════════════════ -->
+    <div class="oj-sm-padding-4x rw-metric">
+      <div class="oj-flex oj-sm-justify-content-space-between oj-sm-align-items-center oj-sm-margin-3x-bottom">
+        <h2 class="oj-typography-heading-xs oj-sm-margin-0">Hours</h2>
+        <oj-bind-if test="[[ $variables.editable ]]">
+          <oj-button chroming="outlined" on-oj-action="[[ $listeners.openAddLine ]]">
+            <span slot="startIcon" class="oj-ux-ico-plus"></span>
+            <span>Add line</span>
+          </oj-button>
+        </oj-bind-if>
+      </div>
+
+      <!-- Hours are entered in 15-minute blocks (RULE-005): step 0.25, min 0,
+           max 24. The stepper enforces the increment client-side and the server
+           re-checks it, so a pasted value cannot get through. -->
+      <div class="rw-grid-scroll">
+        <oj-table id="tsGrid"
+                  aria-label="Weekly hours by project and task"
+                  data="[[ $variables.gridADP ]]"
+                  layout="fixed"
+                  horizontal-grid-visible="enabled"
+                  vertical-grid-visible="enabled"
+                  selection-mode='{"row": "none", "column": "none"}'
+                  columns='[
+                    {"headerText":"Project","field":"projectName","template":"projCell","weight":3,"minWidth":170},
+                    {"headerText":"Task (WBS)","field":"taskName","template":"taskCell","weight":3,"minWidth":160},
+                    {"headerText":"Mon","field":"d0","template":"d0Cell","width":88},
+                    {"headerText":"Tue","field":"d1","template":"d1Cell","width":88},
+                    {"headerText":"Wed","field":"d2","template":"d2Cell","width":88},
+                    {"headerText":"Thu","field":"d3","template":"d3Cell","width":88},
+                    {"headerText":"Fri","field":"d4","template":"d4Cell","width":88},
+                    {"headerText":"Sat","field":"d5","template":"d5Cell","width":88},
+                    {"headerText":"Sun","field":"d6","template":"d6Cell","width":88},
+                    {"headerText":"Total","field":"lineTotal","template":"totalCell","width":78},
+                    {"headerText":"","field":"rowKey","template":"actionCell","width":56,"sortable":"disabled"}
+                  ]'>
+
+          <template slot="projCell" data-oj-as="row">
+            <span>
+              <oj-bind-text value="[[ row.data.projectName ]]"></oj-bind-text>
+              <oj-bind-if test="[[ row.data.projectType === 'Organization' ]]">
+                <span class="rw-flag rw-flag-advance">Non-billable</span>
+              </oj-bind-if>
+            </span>
+          </template>
+
+          <template slot="taskCell" data-oj-as="row">
+            <span>
+              <oj-bind-text value="[[ row.data.taskName ]]"></oj-bind-text>
+              <!-- The unbilled reason IS the task for common non-billable tasks
+                   (RULE-002), so showing it separately would just repeat the
+                   name. It is surfaced only when it differs. -->
+              <oj-bind-if test="[[ row.data.unbilledReason
+                                && row.data.unbilledReason !== row.data.taskName ]]">
+                <span class="rw-flag rw-flag-advance">
+                  <oj-bind-text value="[[ row.data.unbilledReason ]]"></oj-bind-text>
+                </span>
+              </oj-bind-if>
+              <oj-bind-if test="[[ row.data.isLeave === 'Y' ]]">
+                <span class="rw-flag rw-flag-advance" title="Sourced from HCM Absence. Leave is never entered here (RULE-008).">From HR</span>
+              </oj-bind-if>
+            </span>
+          </template>
+
+          <template slot="d0Cell" data-oj-as="row">
+            <oj-input-number aria-label="Monday hours" value="{{ row.data.d0 }}"
+                             min="0" max="24" step="0.25"
+                             readonly="[[ !$variables.editable || row.data.readOnly ]]"
+                             on-value-changed="[[ function(e){ $page.functions.cellChanged(row.data, 0, e); } ]]">
+            </oj-input-number>
+          </template>
+          <template slot="d1Cell" data-oj-as="row">
+            <oj-input-number aria-label="Tuesday hours" value="{{ row.data.d1 }}"
+                             min="0" max="24" step="0.25"
+                             readonly="[[ !$variables.editable || row.data.readOnly ]]"
+                             on-value-changed="[[ function(e){ $page.functions.cellChanged(row.data, 1, e); } ]]">
+            </oj-input-number>
+          </template>
+          <template slot="d2Cell" data-oj-as="row">
+            <oj-input-number aria-label="Wednesday hours" value="{{ row.data.d2 }}"
+                             min="0" max="24" step="0.25"
+                             readonly="[[ !$variables.editable || row.data.readOnly ]]"
+                             on-value-changed="[[ function(e){ $page.functions.cellChanged(row.data, 2, e); } ]]">
+            </oj-input-number>
+          </template>
+          <template slot="d3Cell" data-oj-as="row">
+            <oj-input-number aria-label="Thursday hours" value="{{ row.data.d3 }}"
+                             min="0" max="24" step="0.25"
+                             readonly="[[ !$variables.editable || row.data.readOnly ]]"
+                             on-value-changed="[[ function(e){ $page.functions.cellChanged(row.data, 3, e); } ]]">
+            </oj-input-number>
+          </template>
+          <template slot="d4Cell" data-oj-as="row">
+            <oj-input-number aria-label="Friday hours" value="{{ row.data.d4 }}"
+                             min="0" max="24" step="0.25"
+                             readonly="[[ !$variables.editable || row.data.readOnly ]]"
+                             on-value-changed="[[ function(e){ $page.functions.cellChanged(row.data, 4, e); } ]]">
+            </oj-input-number>
+          </template>
+          <!-- RULE-012: Saturday and Sunday are editable and default to 0. -->
+          <template slot="d5Cell" data-oj-as="row">
+            <oj-input-number aria-label="Saturday hours" value="{{ row.data.d5 }}"
+                             min="0" max="24" step="0.25"
+                             readonly="[[ !$variables.editable || row.data.readOnly ]]"
+                             on-value-changed="[[ function(e){ $page.functions.cellChanged(row.data, 5, e); } ]]">
+            </oj-input-number>
+          </template>
+          <template slot="d6Cell" data-oj-as="row">
+            <oj-input-number aria-label="Sunday hours" value="{{ row.data.d6 }}"
+                             min="0" max="24" step="0.25"
+                             readonly="[[ !$variables.editable || row.data.readOnly ]]"
+                             on-value-changed="[[ function(e){ $page.functions.cellChanged(row.data, 6, e); } ]]">
+            </oj-input-number>
+          </template>
+
+          <template slot="totalCell" data-oj-as="row">
+            <span class="oj-typography-semi-bold">
+              <oj-bind-text value="[[ $application.functions.fmtHours($page.functions.lineTotal(row.data)) ]]"></oj-bind-text>
+            </span>
+          </template>
+
+          <template slot="actionCell" data-oj-as="row">
+            <!-- An HR-sourced leave row is not the employee's to remove. -->
+            <oj-bind-if test="[[ $variables.editable && row.data.isLeave !== 'Y' ]]">
+              <oj-button chroming="borderless" display="icons"
+                         :aria-label="[[ $page.functions.removeLineLabel(row.data.taskName) ]]"
+                         on-oj-action="[[ function(){ $page.functions.removeRow(row.data); } ]]">
+                <span slot="startIcon" class="oj-ux-ico-trash"></span>
+                <span>Remove</span>
+              </oj-button>
+            </oj-bind-if>
+          </template>
+        </oj-table>
+      </div>
+
+      <!-- Week totals. Billing Loss is automatic (RULE-009). -->
+      <div class="oj-flex oj-sm-flex-wrap oj-sm-gap-6x oj-sm-margin-4x-top">
+        <div class="oj-flex-item">
+          <div class="rw-metric-value"><oj-bind-text value="[[ $application.functions.fmtHours($variables.billableHours) ]]"></oj-bind-text></div>
+          <div class="rw-metric-label">Billable</div>
+        </div>
+        <div class="oj-flex-item">
+          <div class="rw-metric-value"><oj-bind-text value="[[ $application.functions.fmtHours($variables.nonBillableHours) ]]"></oj-bind-text></div>
+          <div class="rw-metric-label">Non-billable</div>
+        </div>
+        <div class="oj-flex-item">
+          <div class="rw-metric-value"><oj-bind-text value="[[ $application.functions.fmtHours($variables.leaveHours) ]]"></oj-bind-text></div>
+          <div class="rw-metric-label">Leave</div>
+        </div>
+        <div class="oj-flex-item">
+          <div class="rw-metric-value"><oj-bind-text value="[[ $application.functions.fmtHours($variables.billingLossHours) ]]"></oj-bind-text></div>
+          <div class="rw-metric-label">Billing loss (automatic)</div>
+        </div>
+        <div class="oj-flex-item">
+          <div class="rw-metric-value"><oj-bind-text value="[[ $application.functions.fmtHours($variables.totalHours) ]]"></oj-bind-text></div>
+          <div class="rw-metric-label">Total</div>
+        </div>
+        <div class="oj-flex-item">
+          <div class="rw-metric-value"><oj-bind-text value="[[ $application.functions.fmtHours($variables.standardHours) ]]"></oj-bind-text></div>
+          <div class="rw-metric-label">Standard</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════ Actions ══════════════════ -->
+    <oj-bind-if test="[[ $variables.editable ]]">
+      <div class="oj-flex oj-sm-align-items-center oj-sm-gap-3x oj-sm-justify-content-flex-end">
+        <oj-bind-if test="[[ $variables.hasUnsaved ]]">
+          <span class="oj-flex-item oj-typography-body-sm rw-metric-label" role="status">Unsaved changes</span>
+        </oj-bind-if>
+        <oj-button chroming="outlined" disabled="[[ $variables.busy ]]"
+                   on-oj-action="[[ $listeners.saveDraft ]]">
+          <span slot="startIcon" :class="[[ $application.functions.busyIcon($variables.busy, 'oj-ux-ico-save') ]]"></span>
+          <span>Save draft</span>
+        </oj-button>
+        <oj-button chroming="callToAction" disabled="[[ $variables.busy ]]"
+                   on-oj-action="[[ $listeners.submitWeek ]]">
+          <span>
+            <oj-bind-text value="[[ $application.functions.ifEq($variables.weekStatus, 'Rejected', 'Correct & resubmit', 'Submit for approval') ]]"></oj-bind-text>
+          </span>
+        </oj-button>
+      </div>
+    </oj-bind-if>
+
+    <!-- ══════════════════ Retro adjustment card ══════════════════ -->
+    <!-- FLD-016..FLD-018 / ACT-009. Offered only on a CLOSED month that is still
+         inside the backdating window (RULE-019). The old line is reversed (-)
+         and the new line added (+), per day, and the whole change goes to the
+         manager for approval before it reaches accrual. -->
+    <oj-bind-if test="[[ $variables.adjustmentAllowed ]]">
+      <div class="oj-sm-padding-4x rw-metric">
+        <div class="oj-flex oj-sm-justify-content-space-between oj-sm-align-items-start oj-sm-gap-4x">
+          <div class="oj-flex-item">
+            <h2 class="oj-typography-heading-xs oj-sm-margin-0">Backdated Project / WBS change</h2>
+            <p class="oj-typography-body-sm rw-metric-label oj-sm-margin-1x-top">
+              This month is closed. A correction is posted day-wise as a
+              Reversal&nbsp;(&minus;) of the old line and an Adjustment&nbsp;(+) on
+              the new one, into the currently open period, and needs your
+              manager's approval.
+            </p>
+          </div>
+          <oj-button chroming="outlined" on-oj-action="[[ $listeners.openAdjustment ]]">
+            <span>Enter new &amp; reverse old</span>
+          </oj-button>
+        </div>
+
+        <oj-bind-if test="[[ $variables.myAdjustments.length > 0 ]]">
+          <div class="rw-grid-scroll oj-sm-margin-3x-top">
+            <oj-table aria-label="My backdated adjustments"
+                      data="[[ $variables.myAdjustmentsADP ]]"
+                      layout="fixed"
+                      horizontal-grid-visible="enabled"
+                      selection-mode='{"row": "none", "column": "none"}'
+                      columns='[
+                        {"headerText":"Date","field":"workDate","template":"dateCell","width":120},
+                        {"headerText":"Reversal — old project / task","field":"oldProjectName","template":"oldCell","weight":3},
+                        {"headerText":"Adjustment — new project / task","field":"newProjectName","template":"newCell","weight":3},
+                        {"headerText":"Net hrs","field":"netHours","template":"netCell","width":90},
+                        {"headerText":"Status","field":"status","template":"statusCell","width":150}
+                      ]'>
+              <template slot="dateCell" data-oj-as="row">
+                <span><oj-bind-text value="[[ $application.functions.fmtDate(row.data.workDate) ]]"></oj-bind-text></span>
+              </template>
+              <template slot="oldCell" data-oj-as="row">
+                <span>
+                  <oj-bind-text value="[[ row.data.oldProjectName ]]"></oj-bind-text> /
+                  <oj-bind-text value="[[ row.data.oldTaskCode ]]"></oj-bind-text>
+                  (&minus;<oj-bind-text value="[[ $application.functions.fmtHours(row.data.oldHours) ]]"></oj-bind-text>)
+                </span>
+              </template>
+              <template slot="newCell" data-oj-as="row">
+                <span>
+                  <oj-bind-if test="[[ row.data.newProjectName ]]">
+                    <oj-bind-text value="[[ row.data.newProjectName ]]"></oj-bind-text> /
+                    <oj-bind-text value="[[ row.data.newTaskCode ]]"></oj-bind-text>
+                    (+<oj-bind-text value="[[ $application.functions.fmtHours(row.data.newHours) ]]"></oj-bind-text>)
+                  </oj-bind-if>
+                  <oj-bind-if test="[[ !row.data.newProjectName ]]">
+                    <span class="rw-metric-label">Reversal only</span>
+                  </oj-bind-if>
+                </span>
+              </template>
+              <template slot="netCell" data-oj-as="row">
+                <span><oj-bind-text value="[[ $application.functions.fmtHours(row.data.netHours) ]]"></oj-bind-text></span>
+              </template>
+              <template slot="statusCell" data-oj-as="row">
+                <span :class="[[ $application.functions.outcomeClass(row.data.status) ]]">
+                  <oj-bind-text value="[[ row.data.status ]]"></oj-bind-text>
+                </span>
+              </template>
+            </oj-table>
+          </div>
+        </oj-bind-if>
+      </div>
+    </oj-bind-if>
+
+    <!-- Busy indicator -->
+    <oj-bind-if test="[[ $variables.busy ]]">
+      <div class="oj-flex oj-sm-align-items-center oj-sm-gap-2x" role="status" aria-live="polite">
+        <oj-progress-circle size="sm" value="-1"></oj-progress-circle>
+        <span class="oj-typography-body-sm">Working…</span>
+      </div>
+    </oj-bind-if>
+
+  </div>
+
+  <!-- ══════════════════ Allocation dialog (ACT-008) ══════════════════ -->
+  <oj-dialog id="allocDlg" dialog-title="My allocation"
+             cancel-behavior="icon"
+             opened="{{ $variables.showAllocation }}">
+    <div slot="body">
+      <oj-bind-if test="[[ $variables.allocationWarning ]]">
+        <div class="oj-sm-padding-3x oj-sm-margin-3x-bottom rw-notice rw-notice-warning" role="status">
+          <oj-bind-text value="[[ $variables.allocationWarning ]]"></oj-bind-text>
+        </div>
+      </oj-bind-if>
+
+      <oj-table aria-label="My project allocation"
+                data="[[ $variables.allocationADP ]]"
+                layout="fixed"
+                horizontal-grid-visible="enabled"
+                selection-mode='{"row": "none", "column": "none"}'
+                columns='[
+                  {"headerText":"Project","field":"projectName","weight":3},
+                  {"headerText":"Client","field":"customerName","weight":2},
+                  {"headerText":"Allocation %","field":"allocPct","width":110},
+                  {"headerText":"Billing","field":"billingStatus","width":110},
+                  {"headerText":"Role","field":"clientRole","weight":2},
+                  {"headerText":"Approving manager","field":"approvingManagerName","weight":2}
+                ]'>
+      </oj-table>
+    </div>
+    <div slot="footer">
+      <oj-button on-oj-action="[[ $listeners.closeAllocation ]]">
+        <span>Close</span>
+      </oj-button>
+    </div>
+  </oj-dialog>
+
+  <!-- ══════════════════ Add line dialog ══════════════════ -->
+  <oj-dialog id="addLineDlg" dialog-title="Add a line"
+             cancel-behavior="icon"
+             opened="{{ $variables.showAddLine }}">
+    <div slot="body">
+      <oj-form-layout label-edge="top" max-columns="1">
+        <oj-select-single label-hint="Project" required="true"
+                          data="[[ $variables.projectOptions ]]"
+                          value="{{ $variables.newLineProjectId }}"
+                          item-text="label"
+                          on-value-changed="[[ $listeners.newLineProjectChanged ]]">
+        </oj-select-single>
+
+        <!-- RULE-010: the LOV is this project's WBS plus the common
+             non-billable tasks. Leave is not offered (RULE-008). -->
+        <oj-select-single label-hint="Task (WBS)" required="true"
+                          data="[[ $variables.taskOptions ]]"
+                          value="{{ $variables.newLineTaskId }}"
+                          item-text="label"
+                          disabled="[[ !$variables.newLineProjectId ]]">
+        </oj-select-single>
+      </oj-form-layout>
+    </div>
+    <div slot="footer">
+      <oj-button on-oj-action="[[ $listeners.closeAddLine ]]">
+        <span>Cancel</span>
+      </oj-button>
+      <oj-button chroming="callToAction" on-oj-action="[[ $listeners.addLine ]]">
+        <span>Add</span>
+      </oj-button>
+    </div>
+  </oj-dialog>
+
+  <!-- ══════════════════ Adjustment dialog (ACT-009) ══════════════════ -->
+  <oj-dialog id="adjDlg" dialog-title="Backdated Project / WBS change"
+             cancel-behavior="icon"
+             opened="{{ $variables.showAdjustment }}">
+    <div slot="body">
+      <p class="oj-typography-body-sm rw-metric-label">
+        Adjustments are day-wise. Enter the day, the hours to take off the old
+        project/task, and where they should go instead.
+      </p>
+
+      <oj-form-layout label-edge="top" max-columns="2">
+        <oj-input-date label-hint="Adjustment date" required="true"
+                       value="{{ $variables.adjWorkDate }}">
+        </oj-input-date>
+
+        <oj-input-number label-hint="Hours to reverse (−)" required="true"
+                         value="{{ $variables.adjOldHours }}"
+                         min="0" max="24" step="0.25">
+        </oj-input-number>
+
+        <oj-select-single label-hint="Old project" required="true"
+                          data="[[ $variables.projectOptions ]]"
+                          value="{{ $variables.adjOldProjectId }}"
+                          item-text="label">
+        </oj-select-single>
+
+        <oj-select-single label-hint="Old task" required="true"
+                          data="[[ $variables.taskOptions ]]"
+                          value="{{ $variables.adjOldTaskId }}"
+                          item-text="label">
+        </oj-select-single>
+
+        <oj-select-single label-hint="New project"
+                          data="[[ $variables.projectOptions ]]"
+                          value="{{ $variables.adjNewProjectId }}"
+                          item-text="label"
+                          on-value-changed="[[ $listeners.adjProjectChanged ]]">
+        </oj-select-single>
+
+        <oj-select-single label-hint="New task"
+                          data="[[ $variables.adjTaskOptions ]]"
+                          value="{{ $variables.adjNewTaskId }}"
+                          item-text="label"
+                          disabled="[[ !$variables.adjNewProjectId ]]">
+        </oj-select-single>
+
+        <oj-input-number label-hint="Hours to add (+)"
+                         value="{{ $variables.adjNewHours }}"
+                         min="0" max="24" step="0.25">
+        </oj-input-number>
+      </oj-form-layout>
+
+      <oj-text-area label-hint="Reason" rows="2"
+                    value="{{ $variables.adjReason }}">
+      </oj-text-area>
+    </div>
+    <div slot="footer">
+      <oj-button on-oj-action="[[ $listeners.closeAdjustment ]]">
+        <span>Cancel</span>
+      </oj-button>
+      <oj-button chroming="callToAction" disabled="[[ $variables.busy ]]"
+                 on-oj-action="[[ $listeners.applyAdjustment ]]">
+        <span>Apply &amp; send for approval</span>
+      </oj-button>
+    </div>
+  </oj-dialog>
+
+</oj-sp-general-overview-page>

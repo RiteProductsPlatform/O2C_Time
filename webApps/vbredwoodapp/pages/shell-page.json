@@ -1,33 +1,127 @@
 {
-    "description": "",
-    "routerFlow": "main",
-    "variables": {
-      "messageToast": {
-        "type": "string"
+  "description": "O2C Timesheet shell — Redwood applayout frame: drawer navigation (RBAC, RULE-022), the manager switcher (ACT-011), the app-wide messages banner and toast, and the router outlet.",
+  "routerFlow": "my-timesheet",
+  "variables": {
+    "navReady": {
+      "type": "boolean",
+      "defaultValue": false,
+      "input": "none",
+      "description": "False until bootstrapChain has resolved the signed-in worker. The nav stays hidden until then so a menu is never rendered for an unknown role."
+    },
+    "signInError": {
+      "type": "string",
+      "defaultValue": "",
+      "input": "none"
+    },
+    "isDrawerOpen": {
+      "type": "boolean",
+      "defaultValue": false
+    },
+    "currentRoute": {
+      "type": "string",
+      "defaultValue": "",
+      "input": "none",
+      "description": "The flow the router is actually on. onNavSelectionChain compares against this so a programmatic selection write (bootstrap, in-page drill-down) cannot re-trigger navigation."
+    },
+    "navItemsArray": {
+      "type": "any[]",
+      "defaultValue": [],
+      "description": "Built by bootstrapChain from the resolved role. RULE-022 is enforced here by omission — a role never receives an item it is not entitled to — and again in navigateChain for typed URLs."
+    },
+    "navItemsDP": {
+      "type": "vb/ArrayDataProvider2",
+      "defaultValue": {
+        "itemType": "navItemType",
+        "keyAttributes": "id",
+        "data": "{{ $page.variables.navItemsArray }}"
+      }
+    },
+    "managerOptionsArray": {
+      "type": "any[]",
+      "defaultValue": []
+    },
+    "managerOptions": {
+      "type": "vb/ArrayDataProvider2",
+      "defaultValue": {
+        "itemType": "managerOptType",
+        "keyAttributes": "value",
+        "data": "{{ $page.variables.managerOptionsArray }}"
       },
-      "messagesBannerADP": {
-        "type": "vb/ArrayDataProvider2",
-        "defaultValue": {
-          "itemType": "MessagesBannerType",
-          "keyAttributes": "id"
+      "description": "Manager switcher (ACT-011): a split employee reports into more than one manager, so the acting manager can change identity to review each team."
+    },
+    "messageToast": {
+      "type": "string"
+    },
+    "messagesBannerADP": {
+      "type": "vb/ArrayDataProvider2",
+      "defaultValue": {
+        "itemType": "MessagesBannerType",
+        "keyAttributes": "id"
+      }
+    },
+    "messageId": {
+      "type": "string",
+      "defaultValue": "1",
+      "description": "MUST have a defaultValue. Without one it starts undefined, arithmetic yields NaN, and the ADP can never match a key to remove — notifications would never dismiss."
+    }
+  },
+  "metadata": {},
+  "types": {
+    "MessagesBannerType": {
+      "id": "string",
+      "messageType": "string",
+      "primaryText": "string",
+      "primaryActionLabel": "string",
+      "secondaryText": "any",
+      "secondaryActionLabel": "string"
+    },
+    "navItemType": {
+      "id": "string",
+      "label": "string",
+      "icon": "string",
+      "iconClass": "string"
+    },
+    "managerOptType": {
+      "value": "string",
+      "label": "string"
+    }
+  },
+  "chains": {},
+  "eventListeners": {
+    "vbEnter": {
+      "chains": [
+        {
+          "chain": "bootstrapChain"
         }
-      },
-      "messageId": {
-        "type": "string"
-      }
+      ]
     },
-    "metadata": {},
-    "types": {
-      "MessagesBannerType": {
-        "id": "string",
-        "messageType": "string",
-        "primaryText": "string",
-        "primaryActionLabel": "string",
-        "secondaryText": "any",
-        "secondaryActionLabel": "string"
-      }
+    "onNavSelectionChanged": {
+      "chains": [
+        {
+          "chain": "onNavSelectionChain",
+          "parameters": {
+            "target": "{{ $event.detail.value }}"
+          }
+        }
+      ]
     },
-    "eventListeners": {
+    "toggleDrawer": {
+      "chains": [
+        {
+          "chain": "toggleDrawerChain"
+        }
+      ]
+    },
+    "switchManager": {
+      "chains": [
+        {
+          "chain": "switchManagerChain",
+          "parameters": {
+            "managerId": "{{ $event.detail.value }}"
+          }
+        }
+      ]
+    },
     "application:spShowToast": {
       "chains": [
         {
@@ -58,16 +152,37 @@
         }
       ]
     }
-    },
-    "imports": {
+  },
+  "imports": {
     "components": {
       "oj-sp-messages-banner": {
         "path": "oj-sp/messages-banner/loader"
       },
       "oj-sp-messages-toast": {
         "path": "oj-sp/messages-toast/loader"
+      },
+      "oj-drawer-popup": {
+        "path": "ojs/ojdrawerpopup"
+      },
+      "oj-navigation-list": {
+        "path": "ojs/ojnavigationlist"
+      },
+      "oj-button": {
+        "path": "ojs/ojbutton"
+      },
+      "oj-select-single": {
+        "path": "ojs/ojselectsingle"
+      },
+      "oj-form-layout": {
+        "path": "ojs/ojformlayout"
+      },
+      "oj-bind-if": {
+        "path": "ojs/ojbindif"
+      },
+      "oj-bind-text": {
+        "path": "ojs/ojbindtext"
       }
     }
-    },
-    "translations": {}
-  }
+  },
+  "translations": {}
+}

@@ -1,0 +1,259 @@
+{
+  "description": "PAGE-006 Leave Loss Coverage — for FCP projects with Leave Loss = Yes, cover an absentee with an unbilled colleague so the absence hours count as billed. Approved coverage flows to the invoice annexure (PROC-006 / BRD 4.2.1).",
+  "variables": {
+    "projectId": {
+      "type": "number",
+      "defaultValue": null,
+      "onValueChanged": {
+        "chains": [
+          {
+            "chain": "loadLinesChain"
+          }
+        ]
+      }
+    },
+    "periodId": {
+      "type": "number",
+      "defaultValue": null,
+      "onValueChanged": {
+        "chains": [
+          {
+            "chain": "loadLinesChain"
+          }
+        ]
+      }
+    },
+    "projectOptionsArray": {
+      "type": "any[]",
+      "defaultValue": [],
+      "input": "none"
+    },
+    "projectOptions": {
+      "type": "vb/ArrayDataProvider2",
+      "defaultValue": {
+        "itemType": "lovOptType",
+        "keyAttributes": "value",
+        "data": "{{ $page.variables.projectOptionsArray }}"
+      },
+      "description": "Only FCP projects with Leave Loss = Yes appear — the entry condition for PROC-006."
+    },
+    "lines": {
+      "type": "any[]",
+      "defaultValue": [],
+      "input": "none"
+    },
+    "linesADP": {
+      "type": "vb/ArrayDataProvider2",
+      "defaultValue": {
+        "itemType": "llcRowType",
+        "keyAttributes": "llcId",
+        "data": "{{ $page.variables.lines }}"
+      }
+    },
+    "openCount": {
+      "type": "number",
+      "defaultValue": 0,
+      "input": "none"
+    },
+    "assignedCount": {
+      "type": "number",
+      "defaultValue": 0,
+      "input": "none"
+    },
+    "approvedCount": {
+      "type": "number",
+      "defaultValue": 0,
+      "input": "none"
+    },
+    "billedHours": {
+      "type": "number",
+      "defaultValue": 0,
+      "input": "none"
+    },
+    "showAssign": {
+      "type": "boolean",
+      "defaultValue": false,
+      "input": "none"
+    },
+    "assignLlcId": {
+      "type": "number",
+      "defaultValue": null,
+      "input": "none"
+    },
+    "assignLabel": {
+      "type": "string",
+      "defaultValue": "",
+      "input": "none"
+    },
+    "assignCoverId": {
+      "type": "string",
+      "defaultValue": ""
+    },
+    "coverOptionsArray": {
+      "type": "any[]",
+      "defaultValue": [],
+      "input": "none"
+    },
+    "coverOptions": {
+      "type": "vb/ArrayDataProvider2",
+      "defaultValue": {
+        "itemType": "coverOptType",
+        "keyAttributes": "value",
+        "data": "{{ $page.variables.coverOptionsArray }}"
+      },
+      "description": "RULE-014 — unbilled on the same project, not absent that day, not already covering someone. Filtered server-side."
+    },
+    "busy": {
+      "type": "boolean",
+      "defaultValue": false,
+      "input": "none"
+    },
+    "confirmMessage": {
+      "type": "string",
+      "defaultValue": "",
+      "input": "none",
+      "description": "Body text for the confirmation dialog. window.confirm cannot be used - SES blocks browser globals in chains (knowledge/14 §7)."
+    }
+  },
+  "types": {
+    "lovOptType": {
+      "value": "number",
+      "label": "string"
+    },
+    "coverOptType": {
+      "value": "string",
+      "label": "string",
+      "clientRole": "string"
+    },
+    "llcRowType": {
+      "llcId": "number",
+      "absentEmployeeId": "string",
+      "absentEmployeeName": "string",
+      "absenceDate": "string",
+      "absenceDay": "string",
+      "absenceType": "string",
+      "absenceHours": "number",
+      "coverEmployeeId": "string",
+      "coverEmployeeName": "string",
+      "llcStatus": "string",
+      "billedFlag": "string",
+      "assignedBy": "string",
+      "assignedOn": "string",
+      "approvedBy": "string",
+      "approvedOn": "string",
+      "remarks": "string"
+    }
+  },
+  "chains": {},
+  "eventListeners": {
+    "vbEnter": {
+      "chains": [
+        {
+          "chain": "enterChain"
+        }
+      ]
+    },
+    "reload": {
+      "chains": [
+        {
+          "chain": "loadLinesChain"
+        }
+      ]
+    },
+    "generate": {
+      "chains": [
+        {
+          "chain": "generateLinesChain"
+        }
+      ]
+    },
+    "doAssign": {
+      "chains": [
+        {
+          "chain": "assignCoverChain"
+        }
+      ]
+    },
+    "closeAssign": {
+      "chains": [
+        {
+          "chain": "closeAssignChain"
+        }
+      ]
+    },
+    "approveAll": {
+      "chains": [
+        {
+          "chain": "askApproveAllChain"
+        }
+      ]
+    },
+    "openAssign": {
+      "chains": [
+        {
+          "chain": "openAssignChain",
+          "parameters": {
+            "llcId": "{{ $event.llcId }}",
+            "absenceDate": "{{ $event.absenceDate }}",
+            "label": "{{ $event.label }}"
+          }
+        }
+      ]
+    },
+    "approveOne": {
+      "chains": [
+        {
+          "chain": "approveCoverChain",
+          "parameters": {
+            "llcId": "{{ $event.llcId }}"
+          }
+        }
+      ]
+    },
+    "confirmApproveAll": {
+      "chains": [
+        {
+          "chain": "approveAllChain"
+        }
+      ]
+    },
+    "cancelApproveAll": {
+      "chains": [
+        {
+          "chain": "cancelApproveAllChain"
+        }
+      ]
+    }
+  },
+  "imports": {
+    "components": {
+      "oj-sp-general-overview-page": {
+        "path": "oj-sp/general-overview-page/loader"
+      },
+      "oj-button": {
+        "path": "ojs/ojbutton"
+      },
+      "oj-select-single": {
+        "path": "ojs/ojselectsingle"
+      },
+      "oj-form-layout": {
+        "path": "ojs/ojformlayout"
+      },
+      "oj-table": {
+        "path": "ojs/ojtable"
+      },
+      "oj-dialog": {
+        "path": "ojs/ojdialog"
+      },
+      "oj-progress-circle": {
+        "path": "ojs/ojprogress-circle"
+      },
+      "oj-bind-if": {
+        "path": "ojs/ojbindif"
+      },
+      "oj-bind-text": {
+        "path": "ojs/ojbindtext"
+      }
+    }
+  }
+}

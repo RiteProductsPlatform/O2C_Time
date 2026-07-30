@@ -1,0 +1,316 @@
+<!-- PAGE-004 View Timesheet — monthly summary (PER-003)
+
+     Two things this page must get right:
+
+     1. The month is NOT editable here. Hours are shown at WBS level rolled up to
+        the month; corrections happen in the weekly/daily detail (PAGE-005).
+
+     2. Confirm Month is ONE action for ALL employees (ACT-020 / RA-015). There
+        is deliberately no per-employee "send to accrual" — and the button stays
+        disabled until every employee is Approved (RULE-020 / SC-19). The reason
+        it is disabled is stated on screen rather than only in a toast after a
+        failed click. -->
+
+<oj-sp-general-overview-page
+  id="viewTimesheetPage"
+  class="oj-sm-width-full rw-page-full"
+  display-options.responsive-padding="off"
+  page-title="Monthly Summary"
+  page-subtitle="Hours are shown at task (WBS) level; open an employee to approve by week or by day.">
+
+  <div class="oj-flex oj-sm-flex-direction-column oj-sm-width-full oj-sm-gap-4x"
+       slot="main">
+
+    <!-- ══════════════════ Context + month state ══════════════════ -->
+    <div class="oj-sm-padding-4x rw-metric">
+      <div class="oj-flex oj-sm-justify-content-space-between oj-sm-align-items-start oj-sm-flex-wrap oj-sm-gap-3x">
+        <div class="oj-flex-item">
+          <oj-button chroming="borderless" on-oj-action="[[ $listeners.goBack ]]">
+            <span slot="startIcon" class="oj-ux-ico-arrow-left"></span>
+            <span>Team Approvals</span>
+          </oj-button>
+          <h2 class="oj-typography-heading-sm oj-sm-margin-0 oj-sm-margin-1x-top">
+            <oj-bind-text value="[[ $application.variables.selectedProjectName ]]"></oj-bind-text>
+          </h2>
+          <p class="oj-typography-body-sm rw-metric-label">
+            <oj-bind-text value="[[ $application.variables.selectedPeriodName ]]"></oj-bind-text>
+          </p>
+        </div>
+        <oj-button chroming="borderless" on-oj-action="[[ $listeners.reload ]]">
+          <span slot="startIcon" class="oj-ux-ico-refresh"></span>
+          <span>Refresh</span>
+        </oj-button>
+      </div>
+
+      <div class="oj-flex oj-sm-flex-wrap oj-sm-gap-6x oj-sm-margin-4x-top">
+        <div class="oj-flex-item">
+          <div class="rw-metric-value"><oj-bind-text value="[[ $variables.totalEmployees ]]"></oj-bind-text></div>
+          <div class="rw-metric-label">Team</div>
+        </div>
+        <div class="oj-flex-item">
+          <div class="rw-metric-value"><oj-bind-text value="[[ $variables.approvedEmployees ]]"></oj-bind-text></div>
+          <div class="rw-metric-label">Approved</div>
+        </div>
+        <div class="oj-flex-item">
+          <div class="rw-metric-value"><oj-bind-text value="[[ $variables.pendingEmployees ]]"></oj-bind-text></div>
+          <div class="rw-metric-label">Pending</div>
+        </div>
+        <div class="oj-flex-item">
+          <div class="rw-metric-value"><oj-bind-text value="[[ $variables.rejectedEmployees ]]"></oj-bind-text></div>
+          <div class="rw-metric-label">Rejected</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════ Confirmation state ══════════════════ -->
+    <oj-bind-if test="[[ $variables.alreadyConfirmed ]]">
+      <div class="oj-sm-padding-3x rw-notice" role="status">
+        <div class="oj-typography-body-md oj-typography-semi-bold">This month has been confirmed</div>
+        <div class="oj-typography-body-sm oj-sm-margin-1x-top">
+          Confirmed on <oj-bind-text value="[[ $variables.confirmedOn ]]"></oj-bind-text>.
+          <oj-bind-text value="[[ $variables.accrualRows ]]"></oj-bind-text>
+          interface rows were written for the accrual application to collect
+          (status: <oj-bind-text value="[[ $variables.accrualStatus ]]"></oj-bind-text>).
+        </div>
+      </div>
+    </oj-bind-if>
+
+    <!-- SC-19: say WHY confirm is blocked, before the manager clicks. -->
+    <oj-bind-if test="[[ !$variables.alreadyConfirmed && !$variables.confirmAllowed
+                      && $variables.totalEmployees > 0 ]]">
+      <div class="oj-sm-padding-3x rw-notice rw-notice-warning" role="status">
+        <div class="oj-typography-body-md oj-typography-semi-bold">Not ready to confirm to accrual</div>
+        <div class="oj-typography-body-sm oj-sm-margin-1x-top">
+          Every employee on the project must be approved first.
+          <oj-bind-text value="[[ $variables.pendingEmployees ]]"></oj-bind-text>
+          still pending<oj-bind-if test="[[ $variables.rejectedEmployees > 0 ]]">,
+          <oj-bind-text value="[[ $variables.rejectedEmployees ]]"></oj-bind-text>
+          rejected and back with the employee</oj-bind-if>.
+        </div>
+      </div>
+    </oj-bind-if>
+
+    <!-- ══════════════════ Employees ══════════════════ -->
+    <div class="oj-sm-padding-4x rw-metric">
+      <div class="oj-flex oj-sm-justify-content-space-between oj-sm-align-items-center oj-sm-flex-wrap oj-sm-gap-2x oj-sm-margin-3x-bottom">
+        <h2 class="oj-typography-heading-xs oj-sm-margin-0">Employees</h2>
+        <div class="oj-flex oj-sm-align-items-center oj-sm-gap-2x oj-sm-flex-wrap">
+          <span class="oj-typography-body-sm rw-metric-label">
+            <oj-bind-text value="[[ $variables.selectedKeys.length ]]"></oj-bind-text> selected
+          </span>
+          <!-- BRD: "approve all or some employees". Select all skips anyone already
+               approved, so an approve-all never re-sends settled rows. -->
+          <oj-button chroming="borderless"
+                     on-oj-action="[[ function(){ $page.functions.selectAllEmployees(); } ]]">
+            <span>Select all pending</span>
+          </oj-button>
+          <oj-button chroming="borderless"
+                     disabled="[[ $variables.selectedKeys.length === 0 ]]"
+                     on-oj-action="[[ function(){ $page.functions.clearSelection(); } ]]">
+            <span>Clear</span>
+          </oj-button>
+          <oj-button chroming="outlined"
+                     disabled="[[ $variables.busy || $variables.selectedKeys.length === 0 ]]"
+                     on-oj-action="[[ $listeners.openReject ]]">
+            <span>Reject selected</span>
+          </oj-button>
+          <oj-button chroming="callToAction"
+                     disabled="[[ $variables.busy || $variables.selectedKeys.length === 0 ]]"
+                     on-oj-action="[[ $listeners.approveSelected ]]">
+            <span>Approve selected</span>
+          </oj-button>
+        </div>
+      </div>
+
+      <oj-bind-if test="[[ $variables.employees.length === 0 && !$variables.busy ]]">
+        <div class="oj-typography-body-sm rw-metric-label" role="status">
+          No employees on project — nobody has time on this project for this month.
+        </div>
+      </oj-bind-if>
+
+      <oj-bind-if test="[[ $variables.employees.length > 0 ]]">
+        <!-- FLD-037 multi-select. An explicit checkbox column rather than
+             oj-table's selection-mode: selected-row-keys expects a JET KeySet,
+             whereas the bulk approve/reject endpoints take a plain array of
+             employee ids. Keeping it an array end to end avoids converting on
+             every action. -->
+        <div class="rw-grid-scroll">
+          <oj-table aria-label="Employees on this project"
+                    data="[[ $variables.employeesADP ]]"
+                    layout="fixed"
+                    horizontal-grid-visible="enabled"
+                    selection-mode='{"row": "none", "column": "none"}'
+                    columns='[
+                      {"headerText":"","field":"employeeId","template":"pickCell","width":44,"sortable":"disabled"},
+                      {"headerText":"Emp ID","field":"employeeId","width":110},
+                      {"headerText":"Name","field":"employeeName","template":"nameCell","weight":3,"minWidth":190},
+                      {"headerText":"Billing","field":"billingStatus","width":100},
+                      {"headerText":"Billable","field":"billableHours","template":"billCell","width":95},
+                      {"headerText":"Non-billable","field":"nonBillableHours","template":"nonBillCell","width":115},
+                      {"headerText":"Leave","field":"leaveHours","template":"leaveCell","width":85},
+                      {"headerText":"Total","field":"totalHours","template":"totalCell","width":85},
+                      {"headerText":"Cap","field":"capDisplay","width":120},
+                      {"headerText":"Weeks","field":"approvedWeeks","template":"weekCell","width":110},
+                      {"headerText":"Month status","field":"monthStatus","template":"statusCell","width":150},
+                      {"headerText":"","field":"employeeId","template":"actionCell","width":100,"sortable":"disabled"}
+                    ]'>
+
+            <template slot="pickCell" data-oj-as="row">
+              <!-- oj-checkboxset, not a raw HTML checkbox: Redwood standards forbid raw
+                   HTML form controls. One unlabelled option acts as the row tick. -->
+              <oj-checkboxset class="vtim-row-pick"
+                              :aria-label="[[ $page.functions.pickLabel(row.data.employeeName) ]]"
+                              :value="[[ $page.functions.pickValue(row.data.employeeId) ]]"
+                              on-value-changed="[[ function(e){ $page.functions.togglePick(row.data.employeeId, e); } ]]">
+                <oj-option value="on"></oj-option>
+              </oj-checkboxset>
+            </template>
+
+            <template slot="nameCell" data-oj-as="row">
+              <span>
+                <oj-bind-text value="[[ row.data.employeeName ]]"></oj-bind-text>
+                <oj-bind-if test="[[ row.data.workerType === 'Contractor' ]]">
+                  <span class="rw-flag rw-flag-advance">Contractor</span>
+                </oj-bind-if>
+                <oj-bind-if test="[[ row.data.overriddenFlag === 'Y' ]]">
+                  <span class="rw-flag rw-flag-overridden" title="A manager changed hours before approving. The originals are in the audit trail.">Overridden</span>
+                </oj-bind-if>
+                <oj-bind-if test="[[ row.data.lateSubmissionFlag === 'Y' ]]">
+                  <span class="rw-flag rw-flag-late" title="Submitted after the weekly cut-off. The status is still Submitted; this records the SLA miss.">Late</span>
+                </oj-bind-if>
+                <oj-bind-if test="[[ row.data.defaultedFlag === 'Y' ]]">
+                  <span class="rw-flag rw-flag-defaulted" title="A cut-off was missed on at least one week this month.">Defaulted</span>
+                </oj-bind-if>
+                <oj-bind-if test="[[ row.data.advanceClosureFlag === 'Y' ]]">
+                  <span class="rw-flag rw-flag-advance" title="Approved at month level before the work happened (PROC-010).">Advance closure</span>
+                </oj-bind-if>
+              </span>
+            </template>
+
+            <template slot="billCell" data-oj-as="row">
+              <span><oj-bind-text value="[[ $application.functions.fmtHours(row.data.billableHours) ]]"></oj-bind-text></span>
+            </template>
+            <template slot="nonBillCell" data-oj-as="row">
+              <span><oj-bind-text value="[[ $application.functions.fmtHours(row.data.nonBillableHours) ]]"></oj-bind-text></span>
+            </template>
+            <template slot="leaveCell" data-oj-as="row">
+              <span><oj-bind-text value="[[ $application.functions.fmtHours(row.data.leaveHours) ]]"></oj-bind-text></span>
+            </template>
+            <template slot="totalCell" data-oj-as="row">
+              <span class="oj-typography-semi-bold"><oj-bind-text value="[[ $application.functions.fmtHours(row.data.totalHours) ]]"></oj-bind-text></span>
+            </template>
+
+            <template slot="weekCell" data-oj-as="row">
+              <span>
+                <oj-bind-text value="[[ row.data.approvedWeeks ]]"></oj-bind-text> /
+                <oj-bind-text value="[[ row.data.weekCount ]]"></oj-bind-text>
+              </span>
+            </template>
+
+            <template slot="statusCell" data-oj-as="row">
+              <span :class="[[ $application.functions.outcomeClass(row.data.monthStatus) ]]">
+                <oj-bind-text value="[[ row.data.monthStatus ]]"></oj-bind-text>
+              </span>
+            </template>
+
+            <template slot="actionCell" data-oj-as="row">
+              <oj-button chroming="outlined"
+                         :aria-label="[[ $page.functions.openEmployeeLabel(row.data.employeeName) ]]"
+                         on-oj-action="[[ function(){
+                            $page.listeners.openEmployee({
+                              employeeId: row.data.employeeId,
+                              employeeName: row.data.employeeName }); } ]]">
+                <span>Open</span>
+              </oj-button>
+            </template>
+          </oj-table>
+        </div>
+      </oj-bind-if>
+    </div>
+
+    <!-- ══════════════════ Confirm month → accrual ══════════════════ -->
+    <div class="oj-sm-padding-4x rw-metric">
+      <h2 class="oj-typography-heading-xs oj-sm-margin-0">Monthly &#8594; Accrual</h2>
+      <p class="oj-typography-body-sm rw-metric-label oj-sm-margin-1x-top">
+        Confirms the whole project month for <strong>all employees at once</strong>
+        and fills the accrual interface with the consolidated timesheet
+        (employee &times; project &times; task &times; day) plus any day-wise
+        Reversal&nbsp;(&minus;)/Adjustment&nbsp;(+) rows. The accrual application
+        collects it from there. Approved time is also pushed to Oracle Time &amp;
+        Labor, which feeds Project Costing and Payroll.
+      </p>
+      <div class="oj-flex oj-sm-justify-content-flex-end oj-sm-margin-3x-top">
+        <oj-button chroming="callToAction"
+                   disabled="[[ $variables.busy || !$variables.confirmAllowed ]]"
+                   on-oj-action="[[ $listeners.confirmMonth ]]">
+          <span>
+            <oj-bind-text value="[[ $application.functions.ifSet($variables.alreadyConfirmed, 'Month already confirmed', 'Confirm month for all employees') ]]"></oj-bind-text>
+          </span>
+        </oj-button>
+      </div>
+    </div>
+
+    <oj-bind-if test="[[ $variables.busy ]]">
+      <div class="oj-flex oj-sm-align-items-center oj-sm-gap-2x" role="status" aria-live="polite">
+        <oj-progress-circle size="sm" value="-1"></oj-progress-circle>
+        <span class="oj-typography-body-sm">Working…</span>
+      </div>
+    </oj-bind-if>
+
+  </div>
+
+  <!-- ══════════════════ Reject dialog (RULE-013) ══════════════════ -->
+  <oj-dialog id="rejectDlg" dialog-title="Reject selected employees"
+             cancel-behavior="icon"
+             opened="{{ $variables.showReject }}">
+    <div slot="body">
+      <p class="oj-typography-body-sm rw-metric-label">
+        The reason and remarks are shown to the employee together with the
+        rejected dates, so they know exactly what to correct.
+      </p>
+      <oj-form-layout label-edge="top" max-columns="1">
+        <oj-select-single label-hint="Rejection reason" required="true"
+                          data="[[ $application.variables.rejectReasonOptions ]]"
+                          value="{{ $variables.rejectReason }}"
+                          item-text="label"
+                          placeholder="Select a reason">
+        </oj-select-single>
+        <oj-text-area label-hint="Remarks" rows="3"
+                      value="{{ $variables.rejectRemarks }}"
+                      placeholder="What needs to change?">
+        </oj-text-area>
+      </oj-form-layout>
+    </div>
+    <div slot="footer">
+      <oj-button on-oj-action="[[ $listeners.closeReject ]]">
+        <span>Cancel</span>
+      </oj-button>
+      <oj-button chroming="callToAction"
+                 disabled="[[ $variables.busy || !$variables.rejectReason ]]"
+                 on-oj-action="[[ $listeners.rejectSelected ]]">
+        <span>Reject</span>
+      </oj-button>
+    </div>
+  </oj-dialog>
+
+  <!-- ══════════════════ Confirmation ══════════════════ -->
+  <!-- oj-dialog opened via Actions.callComponentMethod, not window.confirm:
+       SES blocks browser globals inside chains (knowledge/14 §7). -->
+  <oj-dialog id="confirmMonthDlg" dialog-title="Confirm month to accrual" cancel-behavior="icon">
+    <div slot="body">
+      <p class="oj-typography-body-md">
+        <oj-bind-text value="[[ $variables.confirmMessage ]]"></oj-bind-text>
+      </p>
+    </div>
+    <div slot="footer">
+      <oj-button on-oj-action="[[ $listeners.cancelConfirmMonth ]]">
+        <span>Cancel</span>
+      </oj-button>
+      <oj-button chroming="callToAction" disabled="[[ $variables.busy ]]"
+                 on-oj-action="[[ $listeners.confirmConfirmMonth ]]">
+        <span>Confirm month</span>
+      </oj-button>
+    </div>
+  </oj-dialog>
+
+</oj-sp-general-overview-page>

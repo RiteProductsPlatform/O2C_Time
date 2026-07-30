@@ -1,0 +1,309 @@
+<!-- PAGE-011 Accrual Integration (PER-004 admin)
+
+     Direction matters and the page says so: on confirmation this module FILLS
+     XX_O2C_TIMESHEET_ACCRUAL_IF, and the accrual application PULLS from it. This
+     page never pushes — "rows pending" means "not yet collected by accrual", not
+     "not yet sent".
+
+     Reversal rows carry NEGATIVE hours so a consumer can SUM the three hour
+     columns with no sign handling and get the net position. That is why the
+     Adjustment view shows a signed net rather than two positive columns. -->
+
+<oj-sp-general-overview-page
+  id="accrualIntegrationPage"
+  class="oj-sm-width-full rw-page-full"
+  display-options.responsive-padding="off"
+  page-title="Accrual Integration"
+  page-subtitle="Confirmed project-months, the extract waiting for the accrual application, and the leave-loss annexure.">
+
+  <div class="oj-flex oj-sm-flex-direction-column oj-sm-width-full oj-sm-gap-4x"
+       slot="main">
+
+    <!-- ══════════════════ Period ══════════════════ -->
+    <div class="oj-sm-padding-4x rw-metric">
+      <div class="oj-flex oj-sm-justify-content-space-between oj-sm-align-items-start oj-sm-flex-wrap oj-sm-gap-3x">
+        <oj-form-layout max-columns="2" direction="row" label-edge="top" class="oj-flex-item">
+          <oj-select-single label-hint="Month"
+                            data="[[ $application.variables.periodOptions ]]"
+                            value="{{ $variables.periodId }}"
+                            item-text="label">
+          </oj-select-single>
+        </oj-form-layout>
+        <oj-button chroming="borderless" on-oj-action="[[ $listeners.reload ]]">
+          <span slot="startIcon" class="oj-ux-ico-refresh"></span>
+          <span>Refresh</span>
+        </oj-button>
+      </div>
+
+      <div class="oj-sm-padding-3x oj-sm-margin-3x-top rw-notice" role="status">
+        The accrual application <strong>pulls</strong> from the interface table
+        after month-end approval and acknowledges each batch. Rows shown as
+        pending have been written and are waiting to be collected — nothing is
+        pushed from this screen.
+      </div>
+    </div>
+
+    <!-- ══════════════════ Confirmed months ══════════════════ -->
+    <div class="oj-sm-padding-4x rw-metric">
+      <h2 class="oj-typography-heading-xs oj-sm-margin-0 oj-sm-margin-3x-bottom">
+        Confirmed project-months
+      </h2>
+
+      <oj-bind-if test="[[ $variables.confirmed.length === 0 && !$variables.busy ]]">
+        <div class="oj-typography-body-sm rw-metric-label" role="status">
+          No month confirmed yet for this period.
+        </div>
+      </oj-bind-if>
+
+      <oj-bind-if test="[[ $variables.confirmed.length > 0 ]]">
+        <div class="rw-grid-scroll">
+          <oj-table aria-label="Confirmed project months"
+                    data="[[ $variables.confirmedADP ]]"
+                    layout="fixed"
+                    horizontal-grid-visible="enabled"
+                    selection-mode='{"row": "none", "column": "none"}'
+                    scroll-policy="loadMoreOnScroll"
+                    scroll-policy-options='{"fetchSize": 25}'
+                    columns='[
+                      {"headerText":"Project","field":"projectName","template":"projCell","weight":3,"minWidth":210},
+                      {"headerText":"Employees","field":"employeeCount","width":110},
+                      {"headerText":"Billable","field":"billableHours","template":"billCell","width":95},
+                      {"headerText":"Non-bill","field":"nonBillableHours","template":"nonBillCell","width":95},
+                      {"headerText":"Leave","field":"leaveHours","template":"leaveCell","width":85},
+                      {"headerText":"Confirmed","field":"confirmedOn","template":"confCell","weight":2,"minWidth":170},
+                      {"headerText":"OTL","field":"otlStatus","template":"otlCell","width":120},
+                      {"headerText":"Accrual","field":"accrualStatus","template":"accrualCell","weight":2,"minWidth":180},
+                      {"headerText":"","field":"confirmId","template":"actionCell","width":110,"sortable":"disabled"}
+                    ]'>
+
+            <template slot="projCell" data-oj-as="row">
+              <span>
+                <oj-bind-text value="[[ row.data.projectName ]]"></oj-bind-text>
+                <div class="oj-typography-body-xs rw-metric-label">
+                  <oj-bind-text value="[[ row.data.customerName ]]"></oj-bind-text>
+                  <oj-bind-if test="[[ row.data.revenueModel ]]">
+                    · <oj-bind-text value="[[ row.data.revenueModel ]]"></oj-bind-text>
+                  </oj-bind-if>
+                </div>
+              </span>
+            </template>
+
+            <template slot="billCell" data-oj-as="row">
+              <span><oj-bind-text value="[[ $application.functions.fmtHours(row.data.billableHours) ]]"></oj-bind-text></span>
+            </template>
+            <template slot="nonBillCell" data-oj-as="row">
+              <span><oj-bind-text value="[[ $application.functions.fmtHours(row.data.nonBillableHours) ]]"></oj-bind-text></span>
+            </template>
+            <template slot="leaveCell" data-oj-as="row">
+              <span><oj-bind-text value="[[ $application.functions.fmtHours(row.data.leaveHours) ]]"></oj-bind-text></span>
+            </template>
+
+            <template slot="confCell" data-oj-as="row">
+              <span>
+                <oj-bind-text value="[[ row.data.confirmedOn ]]"></oj-bind-text>
+                <div class="oj-typography-body-xs rw-metric-label">
+                  <oj-bind-text value="[[ row.data.confirmedBy ]]"></oj-bind-text>
+                </div>
+                <oj-bind-if test="[[ row.data.confirmType === 'Advance closure' ]]">
+                  <span class="rw-flag rw-flag-advance">Advance closure</span>
+                </oj-bind-if>
+              </span>
+            </template>
+
+            <template slot="otlCell" data-oj-as="row">
+              <span :class="[[ $page.functions.handoffClass(row.data.otlStatus) ]]"
+                    :title="[[ row.data.otlMessage || 'OTL push (INT-007) is an OIC flow; until it is built confirmations record Pending.' ]]">
+                <oj-bind-text value="[[ row.data.otlStatus ]]"></oj-bind-text>
+              </span>
+            </template>
+
+            <template slot="accrualCell" data-oj-as="row">
+              <span>
+                <span :class="[[ $page.functions.handoffClass(row.data.accrualStatus) ]]"
+                      :title="[[ row.data.accrualMessage ]]">
+                  <oj-bind-text value="[[ row.data.accrualStatus ]]"></oj-bind-text>
+                </span>
+                <div class="oj-typography-body-xs rw-metric-label">
+                  <oj-bind-text value="[[ row.data.rowsPulled ]]"></oj-bind-text> pulled /
+                  <oj-bind-text value="[[ row.data.rowsPending ]]"></oj-bind-text> pending
+                </div>
+              </span>
+            </template>
+
+            <template slot="actionCell" data-oj-as="row">
+              <oj-button chroming="outlined"
+                         :aria-label="[[ $page.functions.extractLabel(row.data.projectName) ]]"
+                         on-oj-action="[[ function(){
+                            $page.listeners.openExtract({
+                              confirmId: row.data.confirmId,
+                              label: row.data.projectName }); } ]]">
+                <span>Extract</span>
+              </oj-button>
+            </template>
+          </oj-table>
+        </div>
+      </oj-bind-if>
+    </div>
+
+    <!-- ══════════════════ Extract ══════════════════ -->
+    <oj-bind-if test="[[ $variables.confirmId ]]">
+      <div class="oj-sm-padding-4x rw-metric">
+        <div class="oj-flex oj-sm-justify-content-space-between oj-sm-align-items-center oj-sm-flex-wrap oj-sm-gap-2x">
+          <h2 class="oj-typography-heading-xs oj-sm-margin-0">
+            Extract — <oj-bind-text value="[[ $variables.extractLabel ]]"></oj-bind-text>
+          </h2>
+          <div class="oj-flex oj-sm-gap-1x">
+            <oj-button :chroming="[[ $application.functions.ifEq($variables.extractView, 'all', 'outlined', 'borderless') ]]"
+                       on-oj-action="[[ $listeners.showAll ]]">
+              <span>All</span>
+            </oj-button>
+            <oj-button :chroming="[[ $application.functions.ifEq($variables.extractView, 'actual', 'outlined', 'borderless') ]]"
+                       on-oj-action="[[ $listeners.showActual ]]">
+              <span>Actual &amp; default</span>
+            </oj-button>
+            <oj-button :chroming="[[ $application.functions.ifEq($variables.extractView, 'adjustment', 'outlined', 'borderless') ]]"
+                       on-oj-action="[[ $listeners.showAdjustment ]]">
+              <span>Reversal &amp; adjustment</span>
+            </oj-button>
+          </div>
+        </div>
+
+        <div class="oj-flex oj-sm-flex-wrap oj-sm-gap-6x oj-sm-margin-4x-top oj-sm-margin-3x-bottom">
+          <div class="oj-flex-item">
+            <div class="rw-metric-value"><oj-bind-text value="[[ $application.functions.fmtHours($variables.sumBilled) ]]"></oj-bind-text></div>
+            <div class="rw-metric-label">Billed</div>
+          </div>
+          <div class="oj-flex-item">
+            <div class="rw-metric-value"><oj-bind-text value="[[ $application.functions.fmtHours($variables.sumUnbilled) ]]"></oj-bind-text></div>
+            <div class="rw-metric-label">Unbilled</div>
+          </div>
+          <div class="oj-flex-item">
+            <div class="rw-metric-value"><oj-bind-text value="[[ $application.functions.fmtHours($variables.sumLeave) ]]"></oj-bind-text></div>
+            <div class="rw-metric-label">Leave</div>
+          </div>
+          <div class="oj-flex-item">
+            <div class="rw-metric-value"><oj-bind-text value="[[ $application.functions.fmtHours($variables.sumAdjustment) ]]"></oj-bind-text></div>
+            <div class="rw-metric-label">Net of Reversal + Adjustment</div>
+          </div>
+        </div>
+
+        <oj-bind-if test="[[ $variables.extract.length === 0 && !$variables.busy ]]">
+          <div class="oj-typography-body-sm rw-metric-label" role="status">
+            No rows in this view.
+          </div>
+        </oj-bind-if>
+
+        <oj-bind-if test="[[ $variables.extract.length > 0 ]]">
+          <div class="rw-grid-scroll">
+            <oj-table aria-label="Accrual extract rows"
+                      data="[[ $variables.extractADP ]]"
+                      layout="fixed"
+                      horizontal-grid-visible="enabled"
+                      selection-mode='{"row": "none", "column": "none"}'
+                    scroll-policy="loadMoreOnScroll"
+                    scroll-policy-options='{"fetchSize": 25}'
+                      columns='[
+                        {"headerText":"Employee","field":"employeeName","template":"eCell","weight":2,"minWidth":180},
+                        {"headerText":"Project","field":"projectName","weight":2,"minWidth":160},
+                        {"headerText":"WBS task","field":"wbsTask","template":"taskCell","weight":2,"minWidth":160},
+                        {"headerText":"Date","field":"workDate","template":"dateCell","width":130},
+                        {"headerText":"Billed","field":"billed","template":"bCell","width":90},
+                        {"headerText":"Unbilled","field":"unbilled","template":"uCell","width":95},
+                        {"headerText":"Leave","field":"leaveHours","template":"lCell","width":85},
+                        {"headerText":"Type","field":"entryType","template":"typeCell","width":130},
+                        {"headerText":"Flag","field":"flag","width":150},
+                        {"headerText":"Collected","field":"processedFlag","template":"pCell","width":120}
+                      ]'>
+
+              <template slot="eCell" data-oj-as="row">
+                <span>
+                  <oj-bind-text value="[[ row.data.employeeName ]]"></oj-bind-text>
+                  <div class="oj-typography-body-xs rw-metric-label">
+                    <oj-bind-text value="[[ row.data.employeeId ]]"></oj-bind-text>
+                  </div>
+                </span>
+              </template>
+              <template slot="taskCell" data-oj-as="row">
+                <span>
+                  <oj-bind-text value="[[ row.data.wbsTask ]]"></oj-bind-text>
+                  <div class="oj-typography-body-xs rw-metric-label">
+                    <oj-bind-text value="[[ row.data.wbsTaskName ]]"></oj-bind-text>
+                  </div>
+                </span>
+              </template>
+              <template slot="dateCell" data-oj-as="row">
+                <span><oj-bind-text value="[[ $application.functions.fmtDate(row.data.workDate) ]]"></oj-bind-text></span>
+              </template>
+              <template slot="bCell" data-oj-as="row">
+                <span><oj-bind-text value="[[ $application.functions.fmtHours(row.data.billed) ]]"></oj-bind-text></span>
+              </template>
+              <template slot="uCell" data-oj-as="row">
+                <span><oj-bind-text value="[[ $application.functions.fmtHours(row.data.unbilled) ]]"></oj-bind-text></span>
+              </template>
+              <template slot="lCell" data-oj-as="row">
+                <span><oj-bind-text value="[[ $application.functions.fmtHours(row.data.leaveHours) ]]"></oj-bind-text></span>
+              </template>
+              <template slot="typeCell" data-oj-as="row">
+                <span :class="[[ $page.functions.entryTypeClass(row.data.entryType) ]]">
+                  <oj-bind-text value="[[ row.data.entryType ]]"></oj-bind-text>
+                </span>
+              </template>
+              <template slot="pCell" data-oj-as="row">
+                <span :class="[[ $application.functions.yesNo(row.data.processedFlag, 'rw-status rw-status-approved', 'rw-status rw-status-notsubmitted') ]]"
+                      :title="[[ $page.functions.batchTitle(row.data.batchId) ]]">
+                  <oj-bind-text value="[[ $application.functions.yesNo(row.data.processedFlag, 'Collected', 'Waiting') ]]"></oj-bind-text>
+                </span>
+              </template>
+            </oj-table>
+          </div>
+        </oj-bind-if>
+      </div>
+    </oj-bind-if>
+
+    <!-- ══════════════════ Leave-loss annexure (REP-002) ══════════════════ -->
+    <oj-bind-if test="[[ $variables.annexure.length > 0 ]]">
+      <div class="oj-sm-padding-4x rw-metric">
+        <h2 class="oj-typography-heading-xs oj-sm-margin-0">Leave-loss invoice annexure</h2>
+        <p class="oj-typography-body-sm rw-metric-label oj-sm-margin-1x-top">
+          Approved coverage for the month: absence hours that became billable
+          because a colleague covered the day.
+        </p>
+
+        <div class="rw-grid-scroll oj-sm-margin-3x-top">
+          <oj-table aria-label="Leave loss annexure"
+                    data="[[ $variables.annexureADP ]]"
+                    layout="fixed"
+                    horizontal-grid-visible="enabled"
+                    selection-mode='{"row": "none", "column": "none"}'
+                    scroll-policy="loadMoreOnScroll"
+                    scroll-policy-options='{"fetchSize": 25}'
+                    columns='[
+                      {"headerText":"Project","field":"projectName","weight":2,"minWidth":170},
+                      {"headerText":"Client","field":"customerName","weight":2,"minWidth":150},
+                      {"headerText":"Absent","field":"absentEmployeeName","weight":2,"minWidth":170},
+                      {"headerText":"Date","field":"absenceDate","template":"aDateCell","width":130},
+                      {"headerText":"Absence","field":"absenceType","width":130},
+                      {"headerText":"Covered by","field":"coverEmployeeName","weight":2,"minWidth":170},
+                      {"headerText":"Billed hrs","field":"coveredBilledHours","template":"aHoursCell","width":110},
+                      {"headerText":"Approved","field":"approvedOn","width":160}
+                    ]'>
+            <template slot="aDateCell" data-oj-as="row">
+              <span><oj-bind-text value="[[ $application.functions.fmtDate(row.data.absenceDate) ]]"></oj-bind-text></span>
+            </template>
+            <template slot="aHoursCell" data-oj-as="row">
+              <span><oj-bind-text value="[[ $application.functions.fmtHours(row.data.coveredBilledHours) ]]"></oj-bind-text></span>
+            </template>
+          </oj-table>
+        </div>
+      </div>
+    </oj-bind-if>
+
+    <oj-bind-if test="[[ $variables.busy ]]">
+      <div class="oj-flex oj-sm-align-items-center oj-sm-gap-2x" role="status" aria-live="polite">
+        <oj-progress-circle size="sm" value="-1"></oj-progress-circle>
+        <span class="oj-typography-body-sm">Working…</span>
+      </div>
+    </oj-bind-if>
+
+  </div>
+</oj-sp-general-overview-page>

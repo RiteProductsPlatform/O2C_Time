@@ -1,0 +1,24 @@
+{
+  "//": [
+    "O2C Timesheet Module — VBCS backend catalogue.",
+    "",
+    "The module is a STANDALONE application, so it has exactly one backend of",
+    "its own: the ORDS surface over its own ATP schema. Fusion and OTL are",
+    "reached through OIC, never directly from the browser, so they are not",
+    "declared here — that keeps Fusion OAuth credentials out of the client",
+    "entirely (NFR-005, Security sheet 'No secrets in client').",
+    "",
+    "Replace the url per environment; never commit a PROD URL (Instructions",
+    "sheet: 'Keep values environment-neutral')."
+  ],
+  "backends": {
+    "oc_time": {
+      "servers": [
+        {
+          "url": "https://ords-sit.rite.digital/ords/o2c_time",
+          "description": "ORDS — O2C Timesheet modules oc.time / oc.time.approval / oc.time.admin"
+        }
+      ]
+    }
+  }
+}

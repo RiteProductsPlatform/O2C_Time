@@ -1,0 +1,9 @@
+{
+  "id": "team-approvals",
+  "description": "PAGE-003 Team Approvals (landing) — projects managed, the all-cut-offs panel, pending retro adjustments, advance approval (PER-003).",
+  "defaultPage": "team-approvals",
+  "chains": {},
+  "services": {},
+  "types": {},
+  "variables": {}
+}

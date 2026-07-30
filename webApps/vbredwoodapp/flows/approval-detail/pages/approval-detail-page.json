@@ -1,0 +1,377 @@
+{
+  "description": "PAGE-005 Approval Detail — approve or reject at weekly or date-wise granularity, override & approve (original kept in the audit trail), with the change history rendered at the end.",
+  "variables": {
+    "view": {
+      "type": "string",
+      "defaultValue": "weekly",
+      "description": "weekly | daily — the toggle between the week list and the line-wise daily grid."
+    },
+    "weeks": {
+      "type": "any[]",
+      "defaultValue": [],
+      "input": "none"
+    },
+    "weeksADP": {
+      "type": "vb/ArrayDataProvider2",
+      "defaultValue": {
+        "itemType": "weekRowType",
+        "keyAttributes": "tsWeekId",
+        "data": "{{ $page.variables.weeks }}"
+      }
+    },
+    "selectedWeekKeys": {
+      "type": "any[]",
+      "defaultValue": [],
+      "description": "FLD-048 — weeks ticked for a bulk approve. A plain array, not a JET KeySet, because the approve/reject loop iterates ids."
+    },
+    "weekId": {
+      "type": "number",
+      "defaultValue": null,
+      "input": "none"
+    },
+    "weekLabel": {
+      "type": "string",
+      "defaultValue": "",
+      "input": "none"
+    },
+    "weekStatus": {
+      "type": "string",
+      "defaultValue": "",
+      "input": "none"
+    },
+    "days": {
+      "type": "any[]",
+      "defaultValue": [],
+      "input": "none"
+    },
+    "daysADP": {
+      "type": "vb/ArrayDataProvider2",
+      "defaultValue": {
+        "itemType": "dayRowType",
+        "keyAttributes": "tsEntryId",
+        "data": "{{ $page.variables.days }}"
+      }
+    },
+    "selectedDates": {
+      "type": "any[]",
+      "defaultValue": [],
+      "input": "none",
+      "description": "Distinct dates ticked in the daily view for a date-wise approve/reject (ACT-017). Dates, not row keys — the workflow approves a day, not a line."
+    },
+    "auditRows": {
+      "type": "any[]",
+      "defaultValue": [],
+      "input": "none"
+    },
+    "auditADP": {
+      "type": "vb/ArrayDataProvider2",
+      "defaultValue": {
+        "itemType": "auditRowType",
+        "keyAttributes": "auditId",
+        "data": "{{ $page.variables.auditRows }}"
+      }
+    },
+    "showReject": {
+      "type": "boolean",
+      "defaultValue": false,
+      "input": "none"
+    },
+    "rejectScope": {
+      "type": "string",
+      "defaultValue": "week",
+      "input": "none",
+      "description": "week | dates — what the dialog will reject."
+    },
+    "rejectReason": {
+      "type": "string",
+      "defaultValue": ""
+    },
+    "rejectRemarks": {
+      "type": "string",
+      "defaultValue": ""
+    },
+    "showOverride": {
+      "type": "boolean",
+      "defaultValue": false,
+      "input": "none"
+    },
+    "overrideEntryId": {
+      "type": "number",
+      "defaultValue": null,
+      "input": "none"
+    },
+    "overrideLabel": {
+      "type": "string",
+      "defaultValue": "",
+      "input": "none"
+    },
+    "overrideHours": {
+      "type": "number",
+      "defaultValue": 0
+    },
+    "overrideReason": {
+      "type": "string",
+      "defaultValue": ""
+    },
+    "overrideCount": {
+      "type": "number",
+      "defaultValue": 0,
+      "input": "none",
+      "description": "Cells overridden in this sitting. Non-zero means the week must be closed with 'Finish & approve' so it lands as 'Overridden and approved'."
+    },
+    "busy": {
+      "type": "boolean",
+      "defaultValue": false,
+      "input": "none"
+    }
+  },
+  "types": {
+    "weekRowType": {
+      "tsWeekId": "number",
+      "weekIndex": "number",
+      "weekRange": "string",
+      "weekStart": "string",
+      "weekEnd": "string",
+      "weekStatus": "string",
+      "billableHours": "number",
+      "nonBillableHours": "number",
+      "leaveHours": "number",
+      "billingLossHours": "number",
+      "totalHours": "number",
+      "standardHours": "number",
+      "daysTotal": "number",
+      "daysPending": "number",
+      "daysApproved": "number",
+      "daysRejected": "number",
+      "defaulted_flag": "string",
+      "late_submission_flag": "string",
+      "advance_closure_flag": "string",
+      "overridden_flag": "string",
+      "has_reversal_flag": "string",
+      "has_adjustment_flag": "string",
+      "defaulted_by": "string",
+      "lockedFlag": "string",
+      "submittedOn": "string",
+      "approvedBy": "string",
+      "approvedOn": "string",
+      "rejectReason": "string",
+      "rejectRemarks": "string",
+      "projects": "string"
+    },
+    "dayRowType": {
+      "tsEntryId": "number",
+      "entryDate": "string",
+      "dayName": "string",
+      "projectId": "number",
+      "projectName": "string",
+      "taskId": "number",
+      "taskCode": "string",
+      "taskName": "string",
+      "hours": "number",
+      "entryType": "string",
+      "billableType": "string",
+      "unbilledReason": "string",
+      "shiftCode": "string",
+      "standardHours": "number",
+      "isLeave": "string",
+      "absenceType": "string",
+      "dayStatus": "string",
+      "rejectReason": "string",
+      "rejectRemarks": "string",
+      "source": "string"
+    },
+    "auditRowType": {
+      "auditId": "number",
+      "entryDate": "string",
+      "changeType": "string",
+      "oldProjectName": "string",
+      "oldTaskCode": "string",
+      "oldHours": "number",
+      "newProjectName": "string",
+      "newTaskCode": "string",
+      "newHours": "number",
+      "deltaHours": "number",
+      "changeReason": "string",
+      "changedBy": "string",
+      "changedOn": "string"
+    }
+  },
+  "chains": {},
+  "eventListeners": {
+    "vbEnter": {
+      "chains": [
+        {
+          "chain": "enterChain"
+        }
+      ]
+    },
+    "goBack": {
+      "chains": [
+        {
+          "chain": "goBackChain"
+        }
+      ]
+    },
+    "reload": {
+      "chains": [
+        {
+          "chain": "loadWeeksChain"
+        }
+      ]
+    },
+    "showWeekly": {
+      "chains": [
+        {
+          "chain": "showWeeklyChain"
+        }
+      ]
+    },
+    "approveWeeks": {
+      "chains": [
+        {
+          "chain": "approveWeeksChain"
+        }
+      ]
+    },
+    "openRejectWeek": {
+      "chains": [
+        {
+          "chain": "openRejectChain",
+          "parameters": {
+            "scope": "week"
+          }
+        }
+      ]
+    },
+    "openRejectDates": {
+      "chains": [
+        {
+          "chain": "openRejectChain",
+          "parameters": {
+            "scope": "dates"
+          }
+        }
+      ]
+    },
+    "closeReject": {
+      "chains": [
+        {
+          "chain": "closeDialogChain",
+          "parameters": {
+            "which": "reject"
+          }
+        }
+      ]
+    },
+    "closeOverride": {
+      "chains": [
+        {
+          "chain": "closeDialogChain",
+          "parameters": {
+            "which": "override"
+          }
+        }
+      ]
+    },
+    "doReject": {
+      "chains": [
+        {
+          "chain": "rejectChain"
+        }
+      ]
+    },
+    "approveDates": {
+      "chains": [
+        {
+          "chain": "approveDatesChain"
+        }
+      ]
+    },
+    "finishOverride": {
+      "chains": [
+        {
+          "chain": "finishOverrideChain"
+        }
+      ]
+    },
+    "doOverride": {
+      "chains": [
+        {
+          "chain": "overrideChain"
+        }
+      ]
+    },
+    "openWeek": {
+      "chains": [
+        {
+          "chain": "openWeekChain",
+          "parameters": {
+            "tsWeekId": "{{ $event.tsWeekId }}",
+            "label": "{{ $event.label }}"
+          }
+        }
+      ]
+    },
+    "openOverride": {
+      "chains": [
+        {
+          "chain": "openOverrideChain",
+          "parameters": {
+            "tsEntryId": "{{ $event.tsEntryId }}",
+            "label": "{{ $event.label }}",
+            "hours": "{{ $event.hours }}"
+          }
+        }
+      ]
+    }
+  },
+  "imports": {
+    "components": {
+      "oj-sp-general-overview-page": {
+        "path": "oj-sp/general-overview-page/loader"
+      },
+      "oj-button": {
+        "path": "ojs/ojbutton"
+      },
+      "oj-input-number": {
+        "path": "ojs/ojinputnumber"
+      },
+      "oj-text-area": {
+        "path": "ojs/ojinputtext"
+      },
+      "oj-select-single": {
+        "path": "ojs/ojselectsingle"
+      },
+      "oj-form-layout": {
+        "path": "ojs/ojformlayout"
+      },
+      "oj-label-value": {
+        "path": "ojs/ojlabelvalue"
+      },
+      "oj-table": {
+        "path": "ojs/ojtable"
+      },
+      "oj-dialog": {
+        "path": "ojs/ojdialog"
+      },
+      "oj-progress-circle": {
+        "path": "ojs/ojprogress-circle"
+      },
+      "oj-bind-if": {
+        "path": "ojs/ojbindif"
+      },
+      "oj-bind-for-each": {
+        "path": "ojs/ojbindforeach"
+      },
+      "oj-bind-text": {
+        "path": "ojs/ojbindtext"
+      },
+      "oj-checkboxset": {
+        "path": "ojs/ojcheckboxset"
+      },
+      "oj-option": {
+        "path": "ojs/ojoption"
+      }
+    }
+  }
+}

@@ -1,22 +1,140 @@
-<!-- Copyright (c) 2026, Oracle and/or its affiliates -->
+<!-- O2C Timesheet Module — application shell.
 
-<div id="pageContent" class="oj-web-applayout-page">
-    <div class="oj-web-applayout-content-nopad oj-web-applayout-max-width">
+     Redwood applayout frame (knowledge/09 §1): drawer + header + content area
+     with the messages banner, the toast and the router outlet.
 
-      <div class="oj-flex">
-        <oj-sp-messages-banner data="[[ $variables.messagesBannerADP ]]" class="oj-flex-item oj-sm-12 oj-md-12"
-          on-sp-close="[[$listeners.messagesBannerSpClose]]"
-          ></oj-sp-messages-banner>
+     Navigation is RBAC-driven (RULE-022). The nav list is data-driven from
+     $variables.navItemsDP, which bootstrapChain builds from the resolved role —
+     so a ROLE_TIME_NONE user genuinely receives an empty menu rather than a menu
+     of disabled items. navigateChain re-checks entitlement, so a hand-typed URL
+     is refused too.
+
+     Notifications go through the documented pipeline: any page chain fires
+     Actions.fireNotificationEvent -> vbNotification -> showNotificationMessage
+     -> messagesBannerADP -> oj-sp-messages-banner. No page writes banner state
+     directly, and no REST failure is left in the console. -->
+
+<div id="pageContent" class="oj-web-applayout-page rw-shell-page">
+
+  <!-- ══════════════════ Navigation drawer ══════════════════ -->
+  <oj-drawer-popup edge="start" opened="{{ $variables.isDrawerOpen }}">
+    <div class="oj-flex oj-sm-flex-direction-column oj-bg-neutral-10
+                oj-sm-padding-6x-top oj-sm-padding-4x-start oj-sm-padding-4x-end rw-shell-drawer">
+
+      <div class="oj-flex oj-sm-justify-content-space-between oj-sm-align-items-center oj-sm-margin-6x-bottom">
+        <h2 class="oj-typography-heading-sm oj-typography-bold oj-sm-margin-0">Menu</h2>
+        <oj-button chroming="borderless" display="icons"
+                   on-oj-action="[[ $listeners.toggleDrawer ]]">
+          <span slot="startIcon" class="oj-ux-ico-close"></span>
+          <span>Close menu</span>
+        </oj-button>
       </div>
-      
-      <oj-sp-messages-toast primary-text="[[ $variables.messageToast ]]" id="messageToast"></oj-sp-messages-toast>
 
-      <div class="oj-flex">
-        <!-- Renders flow content -->
-        <oj-vb-content id="vbRouterContent" class="oj-flex-item" config="[[vbRouterFlow]]">
-    
-        </oj-vb-content>
-    
+      <!-- The list only renders once the role is known, so a menu is never
+           shown for an unresolved user. -->
+      <oj-bind-if test="[[ $variables.navReady && $variables.navItemsArray.length > 0 ]]">
+        <oj-navigation-list class="oj-sm-width-full"
+                            drill-mode="none"
+                            edge="start"
+                            data="[[ $variables.navItemsDP ]]"
+                            selection="{{ $application.variables.activeNav }}"
+                            on-selection-changed="[[ $listeners.onNavSelectionChanged ]]">
+          <template slot="itemTemplate" data-oj-as="item">
+            <li :id="[[ item.data.id ]]">
+              <a href="#">
+                <span :class="[[ item.data.iconClass ]]"></span>
+                <span class="oj-navigationlist-item-label oj-typography-body-sm oj-typography-semi-bold">
+                  <oj-bind-text value="[[ item.data.label ]]"></oj-bind-text>
+                </span>
+              </a>
+            </li>
+          </template>
+        </oj-navigation-list>
+      </oj-bind-if>
+
+      <!-- No entitlement (PER-005 / RULE-022) -->
+      <oj-bind-if test="[[ $variables.navReady && $variables.navItemsArray.length === 0 ]]">
+        <div class="oj-typography-body-sm oj-text-color-secondary oj-sm-padding-2x" role="status">
+          You are not authorized to access this application.
+        </div>
+      </oj-bind-if>
+
+    </div>
+  </oj-drawer-popup>
+
+  <!-- ══════════════════ Header ══════════════════ -->
+  <header role="banner" class="oj-web-applayout-header oj-sm-padding-4x-horizontal rw-shell-header">
+    <div class="oj-flex-bar oj-sm-align-items-center rw-shell-bar">
+
+      <div class="oj-flex-bar-start oj-sm-align-items-center">
+        <oj-button chroming="borderless" display="icons"
+                   class="oj-color-invert"
+                   on-oj-action="[[ $listeners.toggleDrawer ]]">
+          <span slot="startIcon" class="oj-ux-ico-menu"></span>
+          <span>Open menu</span>
+        </oj-button>
+        <span class="oj-ux-ico-clock oj-sm-margin-2x-start" role="img" aria-label="Timesheet"></span>
+        <h1 class="oj-typography-heading-sm oj-typography-bold oj-sm-margin-0 oj-sm-margin-2x-start rw-shell-title">
+          O2C&nbsp;Time
+        </h1>
+      </div>
+
+      <div class="oj-flex-bar-end oj-sm-align-items-center oj-sm-gap-4x">
+
+        <!-- Manager switcher (ACT-011). Managers and admins only. -->
+        <oj-bind-if test="[[ ($application.variables.currentRole === 'ROLE_TIME_MANAGER'
+                          || $application.variables.currentRole === 'ROLE_TIME_ADMIN')
+                          && $variables.managerOptionsArray.length > 1 ]]">
+          <oj-form-layout label-edge="none" max-columns="1" class="rw-shell-switcher">
+            <oj-select-single label-hint="Logged in as manager"
+                              data="[[ $variables.managerOptions ]]"
+                              value="{{ $application.variables.actingManagerId }}"
+                              item-text="label"
+                              on-value-changed="[[ $listeners.switchManager ]]">
+            </oj-select-single>
+          </oj-form-layout>
+        </oj-bind-if>
+
+        <div class="oj-flex oj-sm-flex-direction-column rw-shell-user">
+          <span class="oj-typography-body-sm oj-typography-semi-bold">
+            <oj-bind-text value="[[ $application.variables.employeeName ]]"></oj-bind-text>
+          </span>
+          <span class="oj-typography-body-xs rw-shell-user-role">
+            <oj-bind-text value="[[ $page.functions.roleLabel($application.variables.currentRole) ]]"></oj-bind-text>
+          </span>
+        </div>
+
       </div>
     </div>
+  </header>
+
+  <!-- ══════════════════ Content ══════════════════ -->
+  <div class="oj-flex oj-sm-flex-wrap-nowrap oj-sm-height-full">
+    <div class="oj-flex-item oj-web-applayout-content-nopad oj-web-applayout-max-width rw-shell-content">
+
+      <div class="oj-flex">
+        <oj-sp-messages-banner data="[[ $variables.messagesBannerADP ]]"
+                               class="oj-flex-item oj-sm-12 oj-md-12"
+                               on-sp-close="[[ $listeners.messagesBannerSpClose ]]">
+        </oj-sp-messages-banner>
+      </div>
+
+      <oj-sp-messages-toast primary-text="[[ $variables.messageToast ]]" id="messageToast"></oj-sp-messages-toast>
+
+      <!-- Sign-in / entitlement failure. Shown instead of an empty page so the
+           user is told why nothing loaded. -->
+      <oj-bind-if test="[[ $variables.signInError ]]">
+        <div class="oj-sm-padding-4x rw-shell-error" role="alert">
+          <oj-bind-text value="[[ $variables.signInError ]]"></oj-bind-text>
+        </div>
+      </oj-bind-if>
+
+      <div class="oj-flex">
+        <oj-vb-content id="vbRouterContent" class="oj-flex-item" config="[[ vbRouterFlow ]]">
+        </oj-vb-content>
+      </div>
+
+    </div>
   </div>
+
+</div>

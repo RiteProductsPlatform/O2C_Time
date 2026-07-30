@@ -1,0 +1,199 @@
+{
+  "description": "PAGE-010 Sync Status — health of the monthly population job and the daily action-date process, plus the failed-record queue with a retry (PROC-014 / ACT-031 / ACT-032).",
+  "variables": {
+    "jobs": {
+      "type": "any[]",
+      "defaultValue": [],
+      "input": "none"
+    },
+    "jobsADP": {
+      "type": "vb/ArrayDataProvider2",
+      "defaultValue": {
+        "itemType": "jobRowType",
+        "keyAttributes": "jobRunId",
+        "data": "{{ $page.variables.jobs }}"
+      }
+    },
+    "failed": {
+      "type": "any[]",
+      "defaultValue": [],
+      "input": "none"
+    },
+    "failedADP": {
+      "type": "vb/ArrayDataProvider2",
+      "defaultValue": {
+        "itemType": "failRowType",
+        "keyAttributes": "failedId",
+        "data": "{{ $page.variables.failed }}"
+      }
+    },
+    "showResolved": {
+      "type": "boolean",
+      "defaultValue": false,
+      "description": "Resolved records are hidden by default — the queue is a work list, not a history.",
+      "onValueChanged": {
+        "chains": [
+          {
+            "chain": "loadFailedChain"
+          }
+        ]
+      }
+    },
+    "openFailures": {
+      "type": "number",
+      "defaultValue": 0,
+      "input": "none"
+    },
+    "runJobPeriodId": {
+      "type": "number",
+      "defaultValue": null
+    },
+    "busy": {
+      "type": "boolean",
+      "defaultValue": false,
+      "input": "none"
+    },
+    "confirmMessage": {
+      "type": "string",
+      "defaultValue": "",
+      "input": "none",
+      "description": "Body text for the confirmation dialog. window.confirm cannot be used - SES blocks browser globals in chains (knowledge/14 §7)."
+    }
+  },
+  "types": {
+    "jobRowType": {
+      "jobRunId": "number",
+      "jobName": "string",
+      "jobType": "string",
+      "scopeKey": "string",
+      "periodName": "string",
+      "actionDate": "string",
+      "jobStatus": "string",
+      "startedOn": "string",
+      "lastRun": "string",
+      "durationMs": "number",
+      "durationText": "string",
+      "recordsRead": "number",
+      "recordsUpserted": "number",
+      "recordsFailed": "number",
+      "openFailures": "number",
+      "message": "string",
+      "traceId": "string",
+      "triggeredBy": "string"
+    },
+    "failRowType": {
+      "failedId": "number",
+      "jobName": "string",
+      "jobType": "string",
+      "entityType": "string",
+      "entityKey": "string",
+      "employeeId": "string",
+      "employeeName": "string",
+      "failureReason": "string",
+      "failureCode": "string",
+      "retryCount": "number",
+      "resolvedFlag": "string",
+      "firstSeenOn": "string",
+      "lastRetryOn": "string",
+      "resolvedBy": "string",
+      "resolvedOn": "string",
+      "traceId": "string"
+    }
+  },
+  "chains": {},
+  "eventListeners": {
+    "vbEnter": {
+      "chains": [
+        {
+          "chain": "enterChain"
+        }
+      ]
+    },
+    "reload": {
+      "chains": [
+        {
+          "chain": "loadStatusChain"
+        }
+      ]
+    },
+    "runPopulation": {
+      "chains": [
+        {
+          "chain": "runPopulationChain"
+        }
+      ]
+    },
+    "runDaily": {
+      "chains": [
+        {
+          "chain": "runDailyChain"
+        }
+      ]
+    },
+    "runDefaulting": {
+      "chains": [
+        {
+          "chain": "askRunDefaultingChain"
+        }
+      ]
+    },
+    "retryRecord": {
+      "chains": [
+        {
+          "chain": "retryRecordChain",
+          "parameters": {
+            "failedId": "{{ $event.failedId }}"
+          }
+        }
+      ]
+    },
+    "confirmRunDefaulting": {
+      "chains": [
+        {
+          "chain": "runDefaultingChain"
+        }
+      ]
+    },
+    "cancelRunDefaulting": {
+      "chains": [
+        {
+          "chain": "cancelRunDefaultingChain"
+        }
+      ]
+    }
+  },
+  "imports": {
+    "components": {
+      "oj-sp-general-overview-page": {
+        "path": "oj-sp/general-overview-page/loader"
+      },
+      "oj-button": {
+        "path": "ojs/ojbutton"
+      },
+      "oj-select-single": {
+        "path": "ojs/ojselectsingle"
+      },
+      "oj-switch": {
+        "path": "ojs/ojswitch"
+      },
+      "oj-form-layout": {
+        "path": "ojs/ojformlayout"
+      },
+      "oj-table": {
+        "path": "ojs/ojtable"
+      },
+      "oj-progress-circle": {
+        "path": "ojs/ojprogress-circle"
+      },
+      "oj-bind-if": {
+        "path": "ojs/ojbindif"
+      },
+      "oj-bind-text": {
+        "path": "ojs/ojbindtext"
+      },
+      "oj-dialog": {
+        "path": "ojs/ojdialog"
+      }
+    }
+  }
+}

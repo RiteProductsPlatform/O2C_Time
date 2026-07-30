@@ -1,0 +1,287 @@
+<!-- PAGE-007 Salary Stopping Tool (PER-003 manager, PER-004 admin)
+
+     RULE-016: only a DEFAULTED timesheet stops salary. A week merely awaiting
+     approval does not — the employee did their part.
+
+     Since the 30-Jul-2026 revision a manager missing the delivery cut-off also
+     produces 'Defaulted', so the hold list is driven by DEFAULTED_BY = EMPLOYEE.
+     An employee is never held because their manager was slow.
+
+     RA-012 (what happens when the release window expires — forfeit or escalate)
+     is still open, so expired holds are flagged here and never auto-resolved. -->
+
+<oj-sp-general-overview-page
+  id="salaryStoppingPage"
+  class="oj-sm-width-full rw-page-full"
+  display-options.responsive-padding="off"
+  page-title="Salary Stopping"
+  page-subtitle="Employees whose timesheet defaulted, and the release once it is corrected.">
+
+  <div class="oj-flex oj-sm-flex-direction-column oj-sm-width-full oj-sm-gap-4x"
+       slot="main">
+
+    <!-- ══════════════════ Period + actions ══════════════════ -->
+    <div class="oj-sm-padding-4x rw-metric">
+      <div class="oj-flex oj-sm-justify-content-space-between oj-sm-align-items-start oj-sm-flex-wrap oj-sm-gap-3x">
+        <oj-form-layout max-columns="2" direction="row" label-edge="top" class="oj-flex-item">
+          <oj-select-single label-hint="Month"
+                            data="[[ $application.variables.periodOptions ]]"
+                            value="{{ $variables.periodId }}"
+                            item-text="label">
+          </oj-select-single>
+        </oj-form-layout>
+
+        <div class="oj-flex oj-sm-gap-2x">
+          <oj-button chroming="borderless" on-oj-action="[[ $listeners.reload ]]">
+            <span slot="startIcon" class="oj-ux-ico-refresh"></span>
+            <span>Refresh</span>
+          </oj-button>
+          <oj-button chroming="outlined"
+                     disabled="[[ $variables.busy || !$variables.periodId ]]"
+                     on-oj-action="[[ $listeners.runJob ]]">
+            <span>Re-evaluate holds</span>
+          </oj-button>
+        </div>
+      </div>
+
+      <div class="oj-flex oj-sm-flex-wrap oj-sm-gap-6x oj-sm-margin-4x-top">
+        <div class="oj-flex-item">
+          <div class="rw-metric-value"><oj-bind-text value="[[ $variables.heldCount ]]"></oj-bind-text></div>
+          <div class="rw-metric-label">Salary held</div>
+        </div>
+        <div class="oj-flex-item">
+          <div class="rw-metric-value"><oj-bind-text value="[[ $variables.releasedCount ]]"></oj-bind-text></div>
+          <div class="rw-metric-label">Released</div>
+        </div>
+        <div class="oj-flex-item">
+          <div class="rw-metric-value"><oj-bind-text value="[[ $variables.expiredCount ]]"></oj-bind-text></div>
+          <div class="rw-metric-label">Past the release window</div>
+        </div>
+      </div>
+
+      <oj-bind-if test="[[ $variables.expiredCount > 0 ]]">
+        <div class="oj-sm-padding-3x oj-sm-margin-3x-top rw-notice rw-notice-warning" role="status">
+          <oj-bind-text value="[[ $variables.expiredCount ]]"></oj-bind-text>
+          hold(s) are past the release window. What should happen then — forfeit
+          or escalate — has not been decided (RA-012), so they are flagged here
+          and left for a human to resolve.
+        </div>
+      </oj-bind-if>
+    </div>
+
+    <!-- ══════════════════ Holds ══════════════════ -->
+    <div class="oj-sm-padding-4x rw-metric">
+      <h2 class="oj-typography-heading-xs oj-sm-margin-0 oj-sm-margin-3x-bottom">Holds</h2>
+
+      <oj-bind-if test="[[ $variables.holds.length === 0 && !$variables.busy ]]">
+        <div class="oj-typography-body-sm rw-metric-label" role="status">
+          No defaulted timesheets — every timesheet was filed this month.
+        </div>
+      </oj-bind-if>
+
+      <oj-bind-if test="[[ $variables.holds.length > 0 ]]">
+        <div class="rw-grid-scroll">
+          <oj-table aria-label="Salary holds"
+                    data="[[ $variables.holdsADP ]]"
+                    layout="fixed"
+                    horizontal-grid-visible="enabled"
+                    selection-mode='{"row": "none", "column": "none"}'
+                    columns='[
+                      {"headerText":"Employee","field":"employeeName","template":"empCell","weight":3,"minWidth":200},
+                      {"headerText":"Country","field":"baseCountry","width":110},
+                      {"headerText":"Weeks","field":"weeksSplit","template":"weeksCell","weight":2,"minWidth":170},
+                      {"headerText":"Applied","field":"appliedHours","template":"appliedCell","width":95},
+                      {"headerText":"Default","field":"defaultHours","template":"defaultCell","width":95},
+                      {"headerText":"Status","field":"salaryStatus","template":"statusCell","width":160},
+                      {"headerText":"Window","field":"windowExpiresOn","template":"windowCell","width":150},
+                      {"headerText":"","field":"holdId","template":"actionCell","width":230,"sortable":"disabled"}
+                    ]'>
+
+            <template slot="empCell" data-oj-as="row">
+              <span>
+                <oj-bind-text value="[[ row.data.employeeName ]]"></oj-bind-text>
+                <div class="oj-typography-body-xs rw-metric-label">
+                  <oj-bind-text value="[[ row.data.employeeId ]]"></oj-bind-text>
+                  <oj-bind-if test="[[ row.data.workerType === 'Contractor' ]]">
+                    · Contractor
+                  </oj-bind-if>
+                </div>
+              </span>
+            </template>
+
+            <template slot="weeksCell" data-oj-as="row">
+              <span>
+                <oj-bind-text value="[[ row.data.weeksDefaulted ]]"></oj-bind-text> defaulted
+                of <oj-bind-text value="[[ row.data.weeksTotal ]]"></oj-bind-text>
+                <div class="oj-typography-body-xs rw-metric-label">
+                  <oj-bind-text value="[[ row.data.weeksSubmitted ]]"></oj-bind-text> submitted
+                </div>
+              </span>
+            </template>
+
+            <template slot="appliedCell" data-oj-as="row">
+              <span><oj-bind-text value="[[ $application.functions.fmtHours(row.data.appliedHours) ]]"></oj-bind-text></span>
+            </template>
+            <template slot="defaultCell" data-oj-as="row">
+              <span><oj-bind-text value="[[ $application.functions.fmtHours(row.data.defaultHours) ]]"></oj-bind-text></span>
+            </template>
+
+            <template slot="statusCell" data-oj-as="row">
+              <span :class="[[ $application.functions.outcomeClass(row.data.salaryStatus) ]]">
+                <oj-bind-text value="[[ row.data.salaryStatus ]]"></oj-bind-text>
+              </span>
+            </template>
+
+            <template slot="windowCell" data-oj-as="row">
+              <span>
+                <oj-bind-text value="[[ $application.functions.fmtDate(row.data.windowExpiresOn) ]]"></oj-bind-text>
+                <oj-bind-if test="[[ row.data.windowExpired === 'Y' && row.data.salaryStatus === 'Held' ]]">
+                  <span class="rw-flag rw-flag-reversal">Expired</span>
+                </oj-bind-if>
+              </span>
+            </template>
+
+            <template slot="actionCell" data-oj-as="row">
+              <div class="oj-flex oj-sm-gap-1x oj-sm-flex-wrap">
+                <oj-button chroming="borderless"
+                           :aria-label="[[ $page.functions.weeksLabel(row.data.employeeName) ]]"
+                           on-oj-action="[[ function(){
+                              $page.listeners.viewWeeks({
+                                employeeId: row.data.employeeId,
+                                label: row.data.employeeName }); } ]]">
+                  <span>Weeks</span>
+                </oj-button>
+
+                <oj-bind-if test="[[ row.data.salaryStatus === 'Held' ]]">
+                  <oj-button chroming="borderless"
+                             :aria-label="[[ $page.functions.correctLabel(row.data.employeeName) ]]"
+                             on-oj-action="[[ function(){
+                                $page.listeners.editDefaulted({
+                                  employeeId: row.data.employeeId,
+                                  employeeName: row.data.employeeName }); } ]]">
+                    <span>Correct</span>
+                  </oj-button>
+                  <oj-button chroming="outlined" disabled="[[ $variables.busy ]]"
+                             :aria-label="[[ $page.functions.releaseLabel(row.data.employeeName) ]]"
+                             on-oj-action="[[ function(){
+                                $page.listeners.openRelease({
+                                  holdId: row.data.holdId,
+                                  label: row.data.employeeName,
+                                  weeksDefaulted: row.data.weeksDefaulted }); } ]]">
+                    <span>Release</span>
+                  </oj-button>
+                </oj-bind-if>
+              </div>
+            </template>
+          </oj-table>
+        </div>
+      </oj-bind-if>
+    </div>
+
+    <oj-bind-if test="[[ $variables.busy ]]">
+      <div class="oj-flex oj-sm-align-items-center oj-sm-gap-2x" role="status" aria-live="polite">
+        <oj-progress-circle size="sm" value="-1"></oj-progress-circle>
+        <span class="oj-typography-body-sm">Working…</span>
+      </div>
+    </oj-bind-if>
+
+  </div>
+
+  <!-- ══════════════════ Weeks breakdown (#3) ══════════════════ -->
+  <oj-dialog id="weeksDlg" dialog-title="Weeks breakdown" cancel-behavior="icon"
+             opened="{{ $variables.showWeeks }}">
+    <div slot="body">
+      <p class="oj-typography-body-sm rw-metric-label">
+        <oj-bind-text value="[[ $variables.weeksLabel ]]"></oj-bind-text> —
+        which weeks were filed and which defaulted. "Missed one week" and "filed
+        nothing all month" deserve very different responses.
+      </p>
+
+      <div class="rw-grid-scroll">
+        <oj-table aria-label="Weeks for this employee"
+                  data="[[ $variables.weekRowsADP ]]"
+                  layout="fixed"
+                  horizontal-grid-visible="enabled"
+                  selection-mode='{"row": "none", "column": "none"}'
+                  columns='[
+                    {"headerText":"Week","field":"weekIndex","template":"wCell","weight":2,"minWidth":170},
+                    {"headerText":"Status","field":"weekStatus","template":"wStatusCell","width":170},
+                    {"headerText":"Applied","field":"appliedHours","template":"wAppliedCell","width":95},
+                    {"headerText":"Default","field":"defaultHours","template":"wDefaultCell","width":95},
+                    {"headerText":"Total","field":"totalHours","template":"wTotalCell","width":95}
+                  ]'>
+          <template slot="wCell" data-oj-as="row">
+            <span>
+              Week <oj-bind-text value="[[ row.data.weekIndex ]]"></oj-bind-text>
+              <div class="oj-typography-body-xs rw-metric-label">
+                <oj-bind-text value="[[ row.data.weekRange ]]"></oj-bind-text>
+              </div>
+            </span>
+          </template>
+          <template slot="wStatusCell" data-oj-as="row">
+            <span>
+              <span :class="[[ $application.functions.statusClass(row.data.weekStatus) ]]">
+                <oj-bind-text value="[[ row.data.weekStatus ]]"></oj-bind-text>
+              </span>
+              <oj-bind-if test="[[ row.data.lockedFlag === 'Y' ]]">
+                <span class="rw-flag rw-flag-defaulted" title="Locked to the employee — only a manager can edit it.">Locked</span>
+              </oj-bind-if>
+            </span>
+          </template>
+          <template slot="wAppliedCell" data-oj-as="row">
+            <span><oj-bind-text value="[[ $application.functions.fmtHours(row.data.appliedHours) ]]"></oj-bind-text></span>
+          </template>
+          <template slot="wDefaultCell" data-oj-as="row">
+            <span><oj-bind-text value="[[ $application.functions.fmtHours(row.data.defaultHours) ]]"></oj-bind-text></span>
+          </template>
+          <template slot="wTotalCell" data-oj-as="row">
+            <span><oj-bind-text value="[[ $application.functions.fmtHours(row.data.totalHours) ]]"></oj-bind-text></span>
+          </template>
+        </oj-table>
+      </div>
+    </div>
+    <div slot="footer">
+      <oj-button on-oj-action="[[ $listeners.closeWeeks ]]">
+        <span>Close</span>
+      </oj-button>
+    </div>
+  </oj-dialog>
+
+  <!-- ══════════════════ Release dialog (ACT-026) ══════════════════ -->
+  <oj-dialog id="releaseDlg" dialog-title="Release the salary hold"
+             cancel-behavior="icon"
+             opened="{{ $variables.showRelease }}">
+    <div slot="body">
+      <p class="oj-typography-body-sm rw-metric-label">
+        <oj-bind-text value="[[ $variables.releaseLabel ]]"></oj-bind-text>
+      </p>
+
+      <!-- Said up front rather than after a refused submit: the defaulted week
+           has to be corrected before the hold can go (ACT-026 precondition). -->
+      <oj-bind-if test="[[ $variables.releaseBlocked ]]">
+        <div class="oj-sm-padding-3x rw-notice rw-notice-warning" role="alert">
+          This employee still has a defaulted week. Correct it first — the hold
+          cannot be released while time is missing.
+        </div>
+      </oj-bind-if>
+
+      <oj-form-layout label-edge="top" max-columns="1">
+        <oj-text-area label-hint="Remarks" rows="3"
+                      value="{{ $variables.releaseRemarks }}"
+                      placeholder="Why is the hold being released?">
+        </oj-text-area>
+      </oj-form-layout>
+    </div>
+    <div slot="footer">
+      <oj-button on-oj-action="[[ $listeners.closeRelease ]]">
+        <span>Cancel</span>
+      </oj-button>
+      <oj-button chroming="callToAction"
+                 disabled="[[ $variables.busy || $variables.releaseBlocked ]]"
+                 on-oj-action="[[ $listeners.doRelease ]]">
+        <span>Release hold</span>
+      </oj-button>
+    </div>
+  </oj-dialog>
+
+</oj-sp-general-overview-page>

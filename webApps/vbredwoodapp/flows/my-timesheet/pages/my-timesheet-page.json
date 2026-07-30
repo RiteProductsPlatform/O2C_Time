@@ -1,0 +1,232 @@
+{
+  "description": "PAGE-001 My Timesheet — weekly time entry per task per day, save draft / submit / correct & resubmit, plus the day-wise retro adjustment card on a closed month.",
+  "variables": {
+
+    "//period": "FLD-001 / FLD-002. Month and week drive everything else on the page.",
+    "periodId": {
+      "type": "number",
+      "defaultValue": null,
+      "description": "Bound to the Month selector. Seeded from $application.variables.selectedPeriodId on entry.",
+      "onValueChanged": { "chains": [ { "chain": "periodChangedChain" } ] }
+    },
+    "weekId": {
+      "type": "number",
+      "defaultValue": null,
+      "description": "OC_TS_WEEK.TS_WEEK_ID of the week being edited.",
+      "onValueChanged": { "chains": [ { "chain": "loadGridChain" } ] }
+    },
+
+    "//header": "Read-only context shown above the grid.",
+    "weekStatus":        { "type": "string",  "defaultValue": "Not yet submitted", "input": "none" },
+    "weekRow":           { "type": "any",     "defaultValue": {}, "input": "none", "description": "The raw week row, so the flag chips can be derived by $application.functions.weekFlags without restating each flag as its own variable." },
+    "weekRange":         { "type": "string",  "defaultValue": "", "input": "none" },
+    "weeklyCutoff":      { "type": "string",  "defaultValue": "", "input": "none", "description": "FLD-003 — shown to the employee, base-location local time." },
+    "deliveryCutoff":    { "type": "string",  "defaultValue": "", "input": "none" },
+    "periodState":       { "type": "string",  "defaultValue": "", "input": "none", "description": "Open | Closed | Future." },
+    "editable":          { "type": "boolean", "defaultValue": false, "input": "none", "description": "RULE-004 / RULE-007. False freezes the grid; a future month is visible but read-only (SC-02)." },
+    "locked":            { "type": "boolean", "defaultValue": false, "input": "none", "description": "RULE-006 — a defaulted week is locked; only a manager can edit it." },
+    "defaultedBy":       { "type": "string",  "defaultValue": "", "input": "none", "description": "EMPLOYEE | MANAGER. A manager-caused default is not the employee's failure and does not lock the week." },
+    "adjustmentAllowed": { "type": "boolean", "defaultValue": false, "input": "none", "description": "RULE-019 — closed month still inside the backdating window." },
+
+    "//totals": "Week roll-up (FLD-010, FLD-015).",
+    "billableHours":    { "type": "number", "defaultValue": 0, "input": "none" },
+    "nonBillableHours": { "type": "number", "defaultValue": 0, "input": "none" },
+    "leaveHours":       { "type": "number", "defaultValue": 0, "input": "none" },
+    "billingLossHours": { "type": "number", "defaultValue": 0, "input": "none", "description": "FLD-015 / RULE-009 — automatic, never editable." },
+    "totalHours":       { "type": "number", "defaultValue": 0, "input": "none" },
+    "standardHours":    { "type": "number", "defaultValue": 0, "input": "none" },
+
+    "//weeks": "Week selector for the chosen month.",
+    "weeksRaw":        { "type": "any[]", "defaultValue": [], "input": "none" },
+    "weekOptionsArray":{ "type": "any[]", "defaultValue": [], "input": "none" },
+    "weekOptions": {
+      "type": "vb/ArrayDataProvider2",
+      "defaultValue": {
+        "itemType": "weekOptType",
+        "keyAttributes": "value",
+        "data": "{{ $page.variables.weekOptionsArray }}"
+      }
+    },
+
+    "//grid": "One row per project-task line, hours pivoted Mon..Sun (FLD-009).",
+    "gridRows": { "type": "any[]", "defaultValue": [], "input": "none" },
+    "gridADP": {
+      "type": "vb/ArrayDataProvider2",
+      "defaultValue": {
+        "itemType": "gridRowType",
+        "keyAttributes": "rowKey",
+        "data": "{{ $page.variables.gridRows }}"
+      },
+      "description": "Live-bound to gridRows. Chains assign the array and the table follows; the ADP variable itself is never reassigned, which would break the component binding."
+    },
+    "dirtyCells": {
+      "type": "any[]",
+      "defaultValue": [],
+      "input": "none",
+      "description": "Cells changed since the last save. Save Draft posts exactly these in one batch call instead of one request per cell."
+    },
+
+    "//dayrow": "FLD-008 / FLD-011 — read-only shift and standard hours per day (RULE-011).",
+    "dayHeaders": {
+      "type": "any[]",
+      "defaultValue": [],
+      "input": "none",
+      "description": "The seven column headers for the current week: date, short day name, shift, standard hours, entered total, and whether the day is a working day."
+    },
+
+    "//lov": "Project and task pickers for a grid line.",
+    "projectOptionsArray": { "type": "any[]", "defaultValue": [], "input": "none" },
+    "projectOptions": {
+      "type": "vb/ArrayDataProvider2",
+      "defaultValue": {
+        "itemType": "projectOptType",
+        "keyAttributes": "value",
+        "data": "{{ $page.variables.projectOptionsArray }}"
+      }
+    },
+    "taskOptionsArray": { "type": "any[]", "defaultValue": [], "input": "none" },
+    "taskOptions": {
+      "type": "vb/ArrayDataProvider2",
+      "defaultValue": {
+        "itemType": "taskOptType",
+        "keyAttributes": "value",
+        "data": "{{ $page.variables.taskOptionsArray }}"
+      },
+      "description": "RULE-010 — the selected project's WBS plus the common non-billable tasks. Leave and Billing Loss are excluded server-side."
+    },
+    "newLineProjectId": { "type": "number", "defaultValue": null },
+    "newLineTaskId":    { "type": "number", "defaultValue": null },
+
+    "//allocation": "FLD-005 / ACT-008 pop-up.",
+    "allocationRows": { "type": "any[]", "defaultValue": [], "input": "none" },
+    "allocationADP": {
+      "type": "vb/ArrayDataProvider2",
+      "defaultValue": {
+        "itemType": "allocRowType",
+        "keyAttributes": "allocationId",
+        "data": "{{ $page.variables.allocationRows }}"
+      }
+    },
+    "allocationWarning": {
+      "type": "string",
+      "defaultValue": "",
+      "input": "none",
+      "description": "RULE-001 warning text when active allocation does not total 100%. A warning, never a block."
+    },
+
+    "//rejection": "#5 — the employee must see the reason, the remarks AND the rejected dates.",
+    "rejectReason":  { "type": "string", "defaultValue": "", "input": "none" },
+    "rejectRemarks": { "type": "string", "defaultValue": "", "input": "none" },
+    "rejectedDates": { "type": "any[]",  "defaultValue": [], "input": "none" },
+
+    "//adjustment": "FLD-016..FLD-018 retro card. Day-wise Reversal(-)/Adjustment(+).",
+    "adjWorkDate":     { "type": "string", "defaultValue": "" },
+    "adjOldProjectId": { "type": "number", "defaultValue": null },
+    "adjOldTaskId":    { "type": "number", "defaultValue": null },
+    "adjOldHours":     { "type": "number", "defaultValue": 0 },
+    "adjNewProjectId": { "type": "number", "defaultValue": null },
+    "adjNewTaskId":    { "type": "number", "defaultValue": null },
+    "adjNewHours":     { "type": "number", "defaultValue": 0 },
+    "adjReason":       { "type": "string", "defaultValue": "" },
+    "adjTaskOptionsArray": { "type": "any[]", "defaultValue": [], "input": "none" },
+    "adjTaskOptions": {
+      "type": "vb/ArrayDataProvider2",
+      "defaultValue": {
+        "itemType": "taskOptType",
+        "keyAttributes": "value",
+        "data": "{{ $page.variables.adjTaskOptionsArray }}"
+      }
+    },
+    "myAdjustments": { "type": "any[]", "defaultValue": [], "input": "none" },
+    "myAdjustmentsADP": {
+      "type": "vb/ArrayDataProvider2",
+      "defaultValue": {
+        "itemType": "adjRowType",
+        "keyAttributes": "adjustmentId",
+        "data": "{{ $page.variables.myAdjustments }}"
+      }
+    },
+
+    "//ui": "Dialog visibility and in-flight guards.",
+    "busy":           { "type": "boolean", "defaultValue": false, "input": "none" },
+    "showAllocation": { "type": "boolean", "defaultValue": false, "input": "none" },
+    "showAddLine":    { "type": "boolean", "defaultValue": false, "input": "none" },
+    "showAdjustment": { "type": "boolean", "defaultValue": false, "input": "none" },
+    "hasUnsaved":     { "type": "boolean", "defaultValue": false, "input": "none" }
+  },
+
+  "types": {
+    "weekOptType": {
+      "value": "number", "label": "string", "weekStatus": "string", "locked": "string"
+    },
+    "gridRowType": {
+      "rowKey": "string",
+      "projectId": "number", "projectNumber": "string", "projectName": "string",
+      "projectType": "string",
+      "taskId": "number", "taskCode": "string", "taskName": "string", "taskType": "string",
+      "billableType": "string", "unbilledReason": "string", "isLeave": "string",
+      "d0": "number", "d1": "number", "d2": "number", "d3": "number",
+      "d4": "number", "d5": "number", "d6": "number",
+      "lineTotal": "number", "lineStatus": "string",
+      "readOnly": "boolean"
+    },
+    "projectOptType": {
+      "value": "number", "label": "string", "projectType": "string",
+      "billingStatus": "string"
+    },
+    "taskOptType": {
+      "value": "number", "label": "string", "taskGroup": "string",
+      "billableType": "string"
+    },
+    "allocRowType": {
+      "allocationId": "number", "projectName": "string", "customerName": "string",
+      "allocPct": "number", "billingStatus": "string", "clientRole": "string",
+      "approvingManagerName": "string", "capType": "string", "capHours": "number"
+    },
+    "adjRowType": {
+      "adjustmentId": "number", "workDate": "string", "adjKind": "string",
+      "oldProjectName": "string", "oldTaskCode": "string", "oldHours": "number",
+      "newProjectName": "string", "newTaskCode": "string", "newHours": "number",
+      "netHours": "number", "status": "string", "postedFlag": "string"
+    }
+  },
+
+  "chains": {},
+
+  "eventListeners": {
+    "vbEnter":                { "chains": [ { "chain": "enterChain" } ] },
+    "saveDraft":              { "chains": [ { "chain": "saveDraftChain" } ] },
+    "submitWeek":             { "chains": [ { "chain": "submitWeekChain" } ] },
+    "openAddLine":            { "chains": [ { "chain": "openAddLineChain" } ] },
+    "addLine":                { "chains": [ { "chain": "addLineChain" } ] },
+    "newLineProjectChanged":  { "chains": [ { "chain": "loadTasksChain" } ] },
+    "showAllocation":         { "chains": [ { "chain": "showAllocationChain" } ] },
+    "closeAllocation":        { "chains": [ { "chain": "closeDialogChain", "parameters": { "which": "allocation" } } ] },
+    "closeAddLine":           { "chains": [ { "chain": "closeDialogChain", "parameters": { "which": "addLine" } } ] },
+    "closeAdjustment":        { "chains": [ { "chain": "closeDialogChain", "parameters": { "which": "adjustment" } } ] },
+    "openAdjustment":         { "chains": [ { "chain": "openAdjustmentChain" } ] },
+    "adjProjectChanged":      { "chains": [ { "chain": "loadAdjTasksChain" } ] },
+    "applyAdjustment":        { "chains": [ { "chain": "applyAdjustmentChain" } ] },
+    "reloadGrid":             { "chains": [ { "chain": "loadGridChain" } ] }
+  },
+
+  "imports": {
+    "components": {
+      "oj-sp-general-overview-page": { "path": "oj-sp/general-overview-page/loader" },
+      "oj-button":          { "path": "ojs/ojbutton" },
+      "oj-input-number":    { "path": "ojs/ojinputnumber" },
+      "oj-input-text":      { "path": "ojs/ojinputtext" },
+      "oj-text-area":       { "path": "ojs/ojinputtext" },
+      "oj-input-date":      { "path": "ojs/ojdatetimepicker" },
+      "oj-select-single":   { "path": "ojs/ojselectsingle" },
+      "oj-form-layout":     { "path": "ojs/ojformlayout" },
+      "oj-label-value":     { "path": "ojs/ojlabelvalue" },
+      "oj-table":           { "path": "ojs/ojtable" },
+      "oj-dialog":          { "path": "ojs/ojdialog" },
+      "oj-progress-circle": { "path": "ojs/ojprogress-circle" },
+      "oj-bind-if":         { "path": "ojs/ojbindif" },
+      "oj-bind-for-each":   { "path": "ojs/ojbindforeach" },
+      "oj-bind-text":       { "path": "ojs/ojbindtext" }
+    }
+  }
+}

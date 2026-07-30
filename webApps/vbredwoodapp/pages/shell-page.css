@@ -1,0 +1,65 @@
+/* O2C Timesheet shell — shell-page styles.
+
+   S2: no style="" attributes; every visual rule lives in a CSS file. These are
+   shell-only rules, so they sit beside shell-page.html rather than in the shared
+   resources/css/o2ctime.css, which holds the cross-page design vocabulary
+   (status capsules, flag chips, grid states) used by all 11 pages. */
+
+/* ── Header bar ──────────────────────────────────────────────── */
+
+.rw-shell-header {
+  background-color: var(--oj-core-bg-neutral-170, #1a1a1a);
+  border-bottom: 1px solid var(--oj-core-divider-margin, #d9d9d9);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  min-height: 48px;
+}
+
+.rw-shell-header,
+.rw-shell-header .rw-shell-title,
+.rw-shell-header .oj-ux-ico-clock,
+.rw-shell-header .rw-shell-user span {
+  color: var(--oj-core-bg-neutral-0, #fff);
+}
+
+.rw-shell-header .rw-shell-user {
+  line-height: 1.2;
+  text-align: end;
+}
+
+.rw-shell-user-role {
+  opacity: 0.75;
+}
+
+/* The switcher sits in a dark bar, so its form-layout margins are removed
+   rather than left to push the header taller. */
+.rw-shell-switcher .oj-formlayout,
+.rw-shell-switcher .oj-form-layout {
+  margin: 0;
+}
+
+.rw-shell-error {
+  background-color: var(--oj-core-bg-danger-subtle, #fdeded);
+  border-inline-start: 3px solid var(--oj-core-danger-color, #c12e2a);
+  color: var(--oj-core-text-color-danger, #c12e2a);
+}
+
+/* ── Frame ───────────────────────────────────────────────────
+   Extracted from the markup: S2 forbids style="" attributes outright, and
+   these are structural rules the Redwood applayout needs before first paint. */
+
+.rw-shell-page {
+  min-height: 100vh;
+}
+
+.rw-shell-drawer {
+  height: 100vh;
+}
+
+.rw-shell-bar {
+  height: 100%;
+  min-height: 48px;
+}
+
+.rw-shell-content {
+  overflow-y: auto;
+}

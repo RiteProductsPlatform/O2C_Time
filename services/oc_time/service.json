@@ -1,0 +1,1099 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "O2C Timesheet Service",
+    "description": "Endpoints from the ORDS modules oc.time (employee), oc.time.approval (manager) and oc.time.admin (admin + accrual pull). Standalone O2C Time schema on ATP. Fusion/OTL are reached via OIC, never from the browser.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "vb-catalog://backends/oc_time",
+      "description": "ORDS O2C Time schema (resolved via the VBCS catalog)"
+    }
+  ],
+  "paths": {
+
+    "//---------- oc.time : EMPLOYEE (PER-001, PER-002) ----------": {},
+
+    "/oc/time/me/{employeeId}": {
+      "get": {
+        "operationId": "getMe",
+        "summary": "Signed-in worker: role, manager, standard hours, total allocation %",
+        "description": "APP_ROLE drives the RBAC menu (RULE-022). TOTAL_ALLOC_PCT lets the page raise the RULE-001 warning without a second call.",
+        "x-vb": { "actionHint": "getMany" },
+        "parameters": [ { "name": "employeeId", "in": "path", "required": true, "schema": { "type": "string" } } ],
+        "responses": { "200": { "description": "Worker context", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Collection" } } } } }
+      }
+    },
+    "/oc/time/periods": {
+      "get": {
+        "operationId": "getPeriods",
+        "summary": "Month LOV with editability (FLD-001, RULE-004, RULE-007)",
+        "x-vb": { "actionHint": "getMany" },
+        "responses": { "200": { "description": "Periods", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Collection" } } } } }
+      }
+    },
+    "/oc/time/weeks/{employeeId}/{periodId}": {
+      "get": {
+        "operationId": "getMyWeeks",
+        "summary": "Weeks in the month with status and the 8 workflow flags",
+        "x-vb": { "actionHint": "getMany" },
+        "parameters": [
+          { "name": "employeeId", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "periodId",   "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Weeks", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Collection" } } } } }
+      }
+    },
+    "/oc/time/weeks/ensure": {
+      "post": {
+        "operationId": "ensureWeek",
+        "summary": "Create or find the week containing a date (weeks are clipped to the month)",
+        "x-vb": { "actionHint": "create" },
+        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EnsureWeekPayload" } } } },
+        "responses": {
+          "200": { "description": "Week id", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EnsureWeekResponse" } } } },
+          "400": { "description": "Business rule violated", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      }
+    },
+    "/oc/time/grid/{tsWeekId}": {
+      "get": {
+        "operationId": "getWeekGrid",
+        "summary": "The weekly grid: one row per project-task line, hours pivoted Mon..Sun",
+        "x-vb": { "actionHint": "getMany" },
+        "parameters": [ { "name": "tsWeekId", "in": "path", "required": true, "schema": { "type": "integer" } } ],
+        "responses": { "200": { "description": "Grid lines", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Collection" } } } } }
+      }
+    },
+    "/oc/time/shift/{tsWeekId}": {
+      "get": {
+        "operationId": "getShiftRow",
+        "summary": "Per-day shift + standard hours row (read-only from HCM, RULE-011)",
+        "x-vb": { "actionHint": "getMany" },
+        "parameters": [ { "name": "tsWeekId", "in": "path", "required": true, "schema": { "type": "integer" } } ],
+        "responses": { "200": { "description": "Day rows", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Collection" } } } } }
+      }
+    },
+    "/oc/time/entry": {
+      "put": {
+        "operationId": "saveEntry",
+        "summary": "Save one grid cell",
+        "description": "Enforces RULE-003 (24h/day), RULE-005 (15-min blocks), RULE-010 (valid task) server-side.",
+        "x-vb": { "actionHint": "update" },
+        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EntryPayload" } } } },
+        "responses": {
+          "200": { "description": "Saved", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SavedResponse" } } } },
+          "400": { "description": "Business rule violated", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      }
+    },
+    "/oc/time/entries/batch": {
+      "post": {
+        "operationId": "saveEntriesBatch",
+        "summary": "Save the whole grid in one transaction",
+        "description": "Save Draft posts every changed cell as a JSON array so the grid is one round-trip and either saves entirely or not at all.",
+        "x-vb": { "actionHint": "create" },
+        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/BatchPayload" } } } },
+        "responses": {
+          "200": { "description": "Saved count", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/BatchResponse" } } } },
+          "400": { "description": "Business rule violated", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/BatchResponse" } } } }
+        }
+      }
+    },
+    "/oc/time/line/{tsWeekId}/{projectId}/{taskId}": {
+      "delete": {
+        "operationId": "removeLine",
+        "summary": "Remove a project-task line from the week (ACT-004)",
+        "x-vb": { "actionHint": "delete" },
+        "parameters": [
+          { "name": "tsWeekId",  "in": "path", "required": true, "schema": { "type": "integer" } },
+          { "name": "projectId", "in": "path", "required": true, "schema": { "type": "integer" } },
+          { "name": "taskId",    "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": {
+          "200": { "description": "Removed", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SavedResponse" } } } },
+          "400": { "description": "Not editable", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      }
+    },
+    "/oc/time/weeks/{id}/submit": {
+      "post": {
+        "operationId": "submitWeek",
+        "summary": "Submit the week for approval (ACT-002)",
+        "description": "Applies RULE-002, RULE-003, RULE-007 (late flag) and RULE-021 (contractor unbilled flag).",
+        "x-vb": { "actionHint": "create" },
+        "parameters": [ { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } } ],
+        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ActorPayload" } } } },
+        "responses": {
+          "200": { "description": "Submitted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/WeekStatusResponse" } } } },
+          "400": { "description": "Business rule violated", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      }
+    },
+    "/oc/time/allocation/{employeeId}": {
+      "get": {
+        "operationId": "getAllocation",
+        "summary": "Allocation pop-up: project / client / alloc % / approving manager (ACT-008)",
+        "x-vb": { "actionHint": "getMany" },
+        "parameters": [ { "name": "employeeId", "in": "path", "required": true, "schema": { "type": "string" } } ],
+        "responses": { "200": { "description": "Allocations", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Collection" } } } } }
+      }
+    },
+    "/oc/time/tasks/{projectId}": {
+      "get": {
+        "operationId": "getTaskLov",
+        "summary": "Task LOV: project WBS + the common non-billable tasks (RULE-010)",
+        "description": "Leave and Billing Loss are excluded — they are system-maintained (RULE-008, RULE-009).",
+        "x-vb": { "actionHint": "getMany" },
+        "parameters": [ { "name": "projectId", "in": "path", "required": true, "schema": { "type": "integer" } } ],
+        "responses": { "200": { "description": "Tasks", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Collection" } } } } }
+      }
+    },
+    "/oc/time/projects/{employeeId}": {
+      "get": {
+        "operationId": "getMyProjects",
+        "summary": "Allocated projects plus the Organization (Non-Billable) project",
+        "x-vb": { "actionHint": "getMany" },
+        "parameters": [ { "name": "employeeId", "in": "path", "required": true, "schema": { "type": "string" } } ],
+        "responses": { "200": { "description": "Projects", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Collection" } } } } }
+      }
+    },
+    "/oc/time/cutoffs/{periodId}": {
+      "get": {
+        "operationId": "getCutoffs",
+        "summary": "Cut-off dates (FLD-003 employee display, FLD-036 manager panel)",
+        "x-vb": { "actionHint": "getMany" },
+        "parameters": [ { "name": "periodId", "in": "path", "required": true, "schema": { "type": "integer" } } ],
+        "responses": { "200": { "description": "Cut-offs", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Collection" } } } } }
+      }
+    },
+    "/oc/time/lookups/{type}": {
+      "get": {
+        "operationId": "getLookups",
+        "summary": "Any seeded dictionary (TIMESHEET_STATUS, WORKFLOW_FLAG, REJECTION_REASON, ...)",
+        "x-vb": { "actionHint": "getMany" },
+        "parameters": [ { "name": "type", "in": "path", "required": true, "schema": { "type": "string" } } ],
+        "responses": { "200": { "description": "Lookup values", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Collection" } } } } }
+      }
+    },
+    "/oc/time/rejection/{tsWeekId}": {
+      "get": {
+        "operationId": "getRejection",
+        "summary": "Rejection reason, remarks and the specific rejected dates (#5)",
+        "x-vb": { "actionHint": "getMany" },
+        "parameters": [ { "name": "tsWeekId", "in": "path", "required": true, "schema": { "type": "integer" } } ],
+        "responses": { "200": { "description": "Rejected dates", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Collection" } } } } }
+      }
+    },
+    "/oc/time/adjustments": {
+      "post": {
+        "operationId": "applyAdjustment",
+        "summary": "Apply a day-wise retro Project/WBS change (ACT-009)",
+        "description": "Creates an 'Awaiting Approval' adjustment. Nothing posts until the manager approves. RULE-019 window enforced.",
+        "x-vb": { "actionHint": "create" },
+        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AdjustmentPayload" } } } },
+        "responses": {
+          "201": { "description": "Created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AdjustmentResponse" } } } },
+          "400": { "description": "Outside the backdating window", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      }
+    },
+    "/oc/time/adjustments/{employeeId}": {
+      "get": {
+        "operationId": "getMyAdjustments",
+        "summary": "My retro adjustments and their approval status",
+        "x-vb": { "actionHint": "getMany" },
+        "parameters": [ { "name": "employeeId", "in": "path", "required": true, "schema": { "type": "string" } } ],
+        "responses": { "200": { "description": "Adjustments", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Collection" } } } } }
+      }
+    },
+    "/oc/time/clientdocs/{projectId}/{periodId}": {
+      "get": {
+        "operationId": "getClientDocs",
+        "summary": "Client timesheet documents for a project + billing period (metadata only)",
+        "x-vb": { "actionHint": "getMany" },
+        "parameters": [
+          { "name": "projectId", "in": "path", "required": true, "schema": { "type": "integer" } },
+          { "name": "periodId",  "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Documents", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Collection" } } } } }
+      }
+    },
+    "/oc/time/clientdocs": {
+      "post": {
+        "operationId": "uploadClientDoc",
+        "summary": "Upload a signed client timesheet (ACT-010)",
+        "description": "content is base64. The 25MB ceiling and the MIME whitelist are enforced server-side.",
+        "x-vb": { "actionHint": "create" },
+        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ClientDocPayload" } } } },
+        "responses": {
+          "201": { "description": "Uploaded", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ClientDocResponse" } } } },
+          "400": { "description": "Rejected (empty, too large, or unsupported type)", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      }
+    },
+    "/oc/time/clientdocs/{id}": {
+      "get": {
+        "operationId": "downloadClientDoc",
+        "summary": "Download a client timesheet document",
+        "parameters": [ { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } } ],
+        "responses": { "200": { "description": "File", "content": { "application/octet-stream": { "schema": { "type": "string", "format": "binary" } } } } }
+      },
+      "delete": {
+        "operationId": "deleteClientDoc",
+        "summary": "Remove a client timesheet document",
+        "x-vb": { "actionHint": "delete" },
+        "parameters": [ { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } } ],
+        "responses": {
+          "200": { "description": "Deleted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/IdResponse" } } } },
+          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      }
+    },
+
+    "//---------- oc.time.approval : MANAGER (PER-003) ----------": {},
+
+    "/oc/time/approval/managers/{employeeId}": {
+      "get": {
+        "operationId": "getManagers",
+        "summary": "Manager switcher for split employees (ACT-011)",
+        "x-vb": { "actionHint": "getMany" },
+        "parameters": [ { "name": "employeeId", "in": "path", "required": true, "schema": { "type": "string" } } ],
+        "responses": { "200": { "description": "Managers", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Collection" } } } } }
+      }
+    },
+    "/oc/time/approval/projects/{managerId}/{periodId}": {
+      "get": {
+        "operationId": "getMgrProjects",
+        "summary": "Manager landing: projects managed, month status, confirm gate, pending adjustments",
+        "x-vb": { "actionHint": "getMany" },
+        "parameters": [
+          { "name": "managerId", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "periodId",  "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Projects", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Collection" } } } } }
+      }
+    },
+    "/oc/time/approval/summary/{projectId}/{periodId}": {
+      "get": {
+        "operationId": "getMonthSummary",
+        "summary": "Per-employee monthly summary for multi-select approve/reject (PAGE-004)",
+        "x-vb": { "actionHint": "getMany" },
+        "parameters": [
+          { "name": "projectId", "in": "path", "required": true, "schema": { "type": "integer" } },
+          { "name": "periodId",  "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Employees", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Collection" } } } } }
+      }
+    },
+    "/oc/time/approval/weeks/{projectId}/{periodId}/{employeeId}": {
+      "get": {
+        "operationId": "getMgrWeeks",
+        "summary": "Weekly detail rows for one employee on one project (PAGE-005)",
+        "x-vb": { "actionHint": "getMany" },
+        "parameters": [
+          { "name": "projectId",  "in": "path", "required": true, "schema": { "type": "integer" } },
+          { "name": "periodId",   "in": "path", "required": true, "schema": { "type": "integer" } },
+          { "name": "employeeId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Weeks", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Collection" } } } } }
+      }
+    },
+    "/oc/time/approval/days/{tsWeekId}": {
+      "get": {
+        "operationId": "getDayDetail",
+        "summary": "Line-wise daily detail with billable Type and Unbilled Reason (manager only)",
+        "x-vb": { "actionHint": "getMany" },
+        "parameters": [ { "name": "tsWeekId", "in": "path", "required": true, "schema": { "type": "integer" } } ],
+        "responses": { "200": { "description": "Day lines", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Collection" } } } } }
+      }
+    },
+    "/oc/time/approval/approve/month": {
+      "post": {
+        "operationId": "approveMonth",
+        "summary": "Approve the selected employees' month (ACT-012)",
+        "x-vb": { "actionHint": "create" },
+        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MonthActionPayload" } } } },
+        "responses": {
+          "200": { "description": "Approved count", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CountResponse" } } } },
+          "400": { "description": "Business rule violated (e.g. RULE-015 self-approval)", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CountResponse" } } } }
+        }
+      }
+    },
+    "/oc/time/approval/reject/month": {
+      "post": {
+        "operationId": "rejectMonth",
+        "summary": "Reject the selected employees' month with a mandatory reason (ACT-013)",
+        "x-vb": { "actionHint": "create" },
+        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MonthRejectPayload" } } } },
+        "responses": {
+          "200": { "description": "Rejected count", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CountResponse" } } } },
+          "400": { "description": "Reason missing or rule violated", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CountResponse" } } } }
+        }
+      }
+    },
+    "/oc/time/approval/approve/week/{id}": {
+      "post": {
+        "operationId": "approveWeek",
+        "summary": "Approve one week; marks every working day approved (ACT-014)",
+        "x-vb": { "actionHint": "create" },
+        "parameters": [ { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } } ],
+        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApproverPayload" } } } },
+        "responses": {
+          "200": { "description": "Approved", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/WeekStatusResponse" } } } },
+          "400": { "description": "Rule violated", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      }
+    },
+    "/oc/time/approval/reject/week/{id}": {
+      "post": {
+        "operationId": "rejectWeek",
+        "summary": "Reject one week with reason + remarks (ACT-015)",
+        "x-vb": { "actionHint": "create" },
+        "parameters": [ { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } } ],
+        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RejectPayload" } } } },
+        "responses": {
+          "200": { "description": "Rejected", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/WeekStatusResponse" } } } },
+          "400": { "description": "Reason missing", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      }
+    },
+    "/oc/time/approval/approve/day/{id}": {
+      "post": {
+        "operationId": "approveDays",
+        "summary": "Approve selected dates; the week closes when all days are approved (ACT-017)",
+        "x-vb": { "actionHint": "create" },
+        "parameters": [ { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } } ],
+        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DayActionPayload" } } } },
+        "responses": {
+          "200": { "description": "Approved dates", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DayActionResponse" } } } },
+          "400": { "description": "Rule violated", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DayActionResponse" } } } }
+        }
+      }
+    },
+    "/oc/time/approval/reject/day/{id}": {
+      "post": {
+        "operationId": "rejectDays",
+        "summary": "Reject selected dates with reason + remarks (ACT-015)",
+        "x-vb": { "actionHint": "create" },
+        "parameters": [ { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } } ],
+        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DayRejectPayload" } } } },
+        "responses": {
+          "200": { "description": "Rejected dates", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DayActionResponse" } } } },
+          "400": { "description": "Reason missing", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DayActionResponse" } } } }
+        }
+      }
+    },
+    "/oc/time/approval/override/{tsEntryId}": {
+      "post": {
+        "operationId": "overrideEntry",
+        "summary": "Override an hour cell; the original is retained in the audit trail (ACT-016)",
+        "x-vb": { "actionHint": "create" },
+        "parameters": [ { "name": "tsEntryId", "in": "path", "required": true, "schema": { "type": "integer" } } ],
+        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OverridePayload" } } } },
+        "responses": {
+          "200": { "description": "Overridden", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SavedResponse" } } } },
+          "400": { "description": "Rule violated", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      }
+    },
+    "/oc/time/approval/override/{tsWeekId}/finish": {
+      "post": {
+        "operationId": "finishOverride",
+        "summary": "Close the overridden week as 'Overridden and approved'",
+        "x-vb": { "actionHint": "create" },
+        "parameters": [ { "name": "tsWeekId", "in": "path", "required": true, "schema": { "type": "integer" } } ],
+        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApproverPayload" } } } },
+        "responses": {
+          "200": { "description": "Closed", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/WeekStatusResponse" } } } },
+          "400": { "description": "Rule violated", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      }
+    },
+    "/oc/time/approval/approve/allweeks": {
+      "post": {
+        "operationId": "approveAllWeeks",
+        "summary": "Approve every pending week for an employee on a project (ACT-019)",
+        "x-vb": { "actionHint": "create" },
+        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AllWeeksPayload" } } } },
+        "responses": {
+          "200": { "description": "Approved", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SavedResponse" } } } },
+          "400": { "description": "Rule violated", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      }
+    },
+    "/oc/time/approval/advanceapprove": {
+      "post": {
+        "operationId": "advanceApprove",
+        "summary": "Advance-approve a future month at month level (ACT-024, PROC-010)",
+        "x-vb": { "actionHint": "create" },
+        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AdvanceApprovePayload" } } } },
+        "responses": {
+          "200": { "description": "Advance approved", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AdvanceApproveResponse" } } } },
+          "400": { "description": "Rule violated", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AdvanceApproveResponse" } } } }
+        }
+      }
+    },
+    "/oc/time/approval/confirm": {
+      "post": {
+        "operationId": "confirmMonth",
+        "summary": "Confirm the project month for ALL employees at once and fill the accrual interface (ACT-020)",
+        "description": "Gated by RULE-020: every employee on the project must be Approved. Returns 400 with the rule message when the gate blocks (SC-19).",
+        "x-vb": { "actionHint": "create" },
+        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ConfirmPayload" } } } },
+        "responses": {
+          "200": { "description": "Confirmed", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ConfirmResponse" } } } },
+          "400": { "description": "Not all employees approved", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      }
+    },
+    "/oc/time/approval/adjustments/{managerId}": {
+      "get": {
+        "operationId": "getMgrAdjustments",
+        "summary": "Retro adjustments awaiting this manager (old and new project managers both see them)",
+        "x-vb": { "actionHint": "getMany" },
+        "parameters": [ { "name": "managerId", "in": "path", "required": true, "schema": { "type": "string" } } ],
+        "responses": { "200": { "description": "Adjustments", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Collection" } } } } }
+      }
+    },
+    "/oc/time/approval/adjustments/{id}/approve": {
+      "post": {
+        "operationId": "approveAdjustment",
+        "summary": "Approve a retro adjustment; posts the Reversal(-)/Adjustment(+) pair (ACT-021)",
+        "x-vb": { "actionHint": "create" },
+        "parameters": [ { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } } ],
+        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApproverPayload" } } } },
+        "responses": {
+          "200": { "description": "Approved", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AdjustmentApproveResponse" } } } },
+          "400": { "description": "Rule violated", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      }
+    },
+    "/oc/time/approval/llc/{projectId}/{periodId}": {
+      "get": {
+        "operationId": "getLlc",
+        "summary": "Leave-loss absentee lines for an FCP + Leave Loss project (PAGE-006)",
+        "x-vb": { "actionHint": "getMany" },
+        "parameters": [
+          { "name": "projectId", "in": "path", "required": true, "schema": { "type": "integer" } },
+          { "name": "periodId",  "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Absentee lines", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Collection" } } } } }
+      }
+    },
+    "/oc/time/approval/llc/generate": {
+      "post": {
+        "operationId": "generateLlc",
+        "summary": "Build the absentee list from HCM absences (LOP/maternity excluded)",
+        "x-vb": { "actionHint": "create" },
+        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LlcGeneratePayload" } } } },
+        "responses": {
+          "200": { "description": "Lines created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LlcGenerateResponse" } } } },
+          "400": { "description": "Not an FCP + Leave Loss project", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LlcGenerateResponse" } } } }
+        }
+      }
+    },
+    "/oc/time/approval/llc/cover/{projectId}/{absenceDate}": {
+      "get": {
+        "operationId": "getLlcCover",
+        "summary": "Eligible cover LOV: unbilled on the project, not absent, not already assigned (RULE-014)",
+        "x-vb": { "actionHint": "getMany" },
+        "parameters": [
+          { "name": "projectId",   "in": "path", "required": true, "schema": { "type": "integer" } },
+          { "name": "absenceDate", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Eligible colleagues", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Collection" } } } } }
+      }
+    },
+    "/oc/time/approval/llc/{id}/assign": {
+      "post": {
+        "operationId": "assignCover",
+        "summary": "Assign a covering colleague (ACT-022)",
+        "x-vb": { "actionHint": "create" },
+        "parameters": [ { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } } ],
+        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AssignCoverPayload" } } } },
+        "responses": {
+          "200": { "description": "Assigned", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LlcStatusResponse" } } } },
+          "400": { "description": "Not eligible", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      }
+    },
+    "/oc/time/approval/llc/{id}/approve": {
+      "post": {
+        "operationId": "approveCover",
+        "summary": "Approve the coverage; absence hours become billed (ACT-023)",
+        "x-vb": { "actionHint": "create" },
+        "parameters": [ { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } } ],
+        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApproverPayload" } } } },
+        "responses": {
+          "200": { "description": "Approved", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LlcStatusResponse" } } } },
+          "400": { "description": "No cover assigned", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      }
+    },
+    "/oc/time/approval/salaryhold/{periodId}": {
+      "get": {
+        "operationId": "getSalaryHold",
+        "summary": "Defaulted employees with submitted vs defaulted weeks and applied vs default hours",
+        "x-vb": { "actionHint": "getMany" },
+        "parameters": [
+          { "name": "periodId",  "in": "path",  "required": true,  "schema": { "type": "integer" } },
+          { "name": "managerId", "in": "query", "required": false, "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Holds", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Collection" } } } } }
+      }
+    },
+    "/oc/time/approval/salaryhold/run/{periodId}": {
+      "post": {
+        "operationId": "runSalaryStopping",
+        "summary": "Run the salary-stopping job for the period (RULE-016)",
+        "x-vb": { "actionHint": "create" },
+        "parameters": [ { "name": "periodId", "in": "path", "required": true, "schema": { "type": "integer" } } ],
+        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ActorPayload" } } } },
+        "responses": {
+          "200": { "description": "Job run", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/JobResponse" } } } },
+          "400": { "description": "Failed", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      }
+    },
+    "/oc/time/approval/salaryhold/{periodId}/{employeeId}/weeks": {
+      "get": {
+        "operationId": "getSalaryHoldWeeks",
+        "summary": "Weeks breakdown pop-up: submitted vs defaulted, applied vs default hours (#3)",
+        "x-vb": { "actionHint": "getMany" },
+        "parameters": [
+          { "name": "periodId",   "in": "path", "required": true, "schema": { "type": "integer" } },
+          { "name": "employeeId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Weeks", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Collection" } } } } }
+      }
+    },
+    "/oc/time/approval/salaryhold/{id}/release": {
+      "post": {
+        "operationId": "releaseSalaryHold",
+        "summary": "Release the salary hold once the defaulted timesheet is corrected (ACT-026)",
+        "x-vb": { "actionHint": "create" },
+        "parameters": [ { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } } ],
+        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ReleaseHoldPayload" } } } },
+        "responses": {
+          "200": { "description": "Released", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/HoldStatusResponse" } } } },
+          "400": { "description": "Still defaulted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      }
+    },
+    "/oc/time/approval/audit/{tsWeekId}": {
+      "get": {
+        "operationId": "getWeekAudit",
+        "summary": "Change history for a week: overrides, adjustments, who and when (REP-007)",
+        "x-vb": { "actionHint": "getMany" },
+        "parameters": [ { "name": "tsWeekId", "in": "path", "required": true, "schema": { "type": "integer" } } ],
+        "responses": { "200": { "description": "Audit rows", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Collection" } } } } }
+      }
+    },
+
+    "//---------- oc.time.admin : ADMIN + ACCRUAL PULL (PER-004) ----------": {},
+
+    "/oc/time/admin/periods": {
+      "get": {
+        "operationId": "getAdminPeriods",
+        "summary": "Period control, read-only (PAGE-008 is reference data maintained outside the app)",
+        "x-vb": { "actionHint": "getMany" },
+        "responses": { "200": { "description": "Periods", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Collection" } } } } }
+      }
+    },
+    "/oc/time/admin/calendar/layers": {
+      "get": {
+        "operationId": "getCalendarLayers",
+        "summary": "The four calendar layer cards with sync state (PAGE-009)",
+        "x-vb": { "actionHint": "getMany" },
+        "responses": { "200": { "description": "Layers", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Collection" } } } } }
+      }
+    },
+    "/oc/time/admin/calendar/{layer}/{scopeKey}/{fromDate}/{toDate}": {
+      "get": {
+        "operationId": "getCalendarDays",
+        "summary": "Calendar days for one layer + scope",
+        "x-vb": { "actionHint": "getMany" },
+        "parameters": [
+          { "name": "layer",    "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "scopeKey", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "fromDate", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "toDate",   "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Days", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Collection" } } } } }
+      }
+    },
+    "/oc/time/admin/calendar/sync/{layer}": {
+      "post": {
+        "operationId": "syncCalendarLayer",
+        "summary": "Upsert one calendar layer from Fusion (ACT-030)",
+        "description": "Precedence is derived from the layer, so callers never supply it: Shift > Client > Project > Corporate.",
+        "x-vb": { "actionHint": "create" },
+        "parameters": [ { "name": "layer", "in": "path", "required": true, "schema": { "type": "string", "enum": ["CORPORATE","PROJECT","CLIENT","SHIFT"] } } ],
+        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CalendarSyncPayload" } } } },
+        "responses": {
+          "200": { "description": "Synced", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CalendarSyncResponse" } } } },
+          "400": { "description": "Bad layer or payload", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      }
+    },
+    "/oc/time/admin/sync/status": {
+      "get": {
+        "operationId": "getSyncStatus",
+        "summary": "Latest run per job: monthly population, daily action-date, calendar, defaulting (PAGE-010)",
+        "x-vb": { "actionHint": "getMany" },
+        "responses": { "200": { "description": "Job cards", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Collection" } } } } }
+      }
+    },
+    "/oc/time/admin/sync/failed": {
+      "get": {
+        "operationId": "getSyncFailed",
+        "summary": "Failed-record queue (new hire without allocation, missing shift calendar)",
+        "x-vb": { "actionHint": "getMany" },
+        "parameters": [ { "name": "resolved", "in": "query", "required": false, "schema": { "type": "string", "enum": ["Y","N"] } } ],
+        "responses": { "200": { "description": "Failed records", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Collection" } } } } }
+      }
+    },
+    "/oc/time/admin/sync/retry/{failedId}": {
+      "post": {
+        "operationId": "retryFailed",
+        "summary": "Retry one failed record (ACT-032)",
+        "x-vb": { "actionHint": "create" },
+        "parameters": [ { "name": "failedId", "in": "path", "required": true, "schema": { "type": "integer" } } ],
+        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ActorPayload" } } } },
+        "responses": {
+          "200": { "description": "Retried", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RetryResponse" } } } },
+          "400": { "description": "Failed", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      }
+    },
+    "/oc/time/admin/jobs/populate/{periodId}": {
+      "post": {
+        "operationId": "runPopulation",
+        "summary": "Run the monthly population job (ACT-031, PROC-001)",
+        "x-vb": { "actionHint": "create" },
+        "parameters": [ { "name": "periodId", "in": "path", "required": true, "schema": { "type": "integer" } } ],
+        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PopulatePayload" } } } },
+        "responses": {
+          "200": { "description": "Job run", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PopulateResponse" } } } },
+          "400": { "description": "Failed", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      }
+    },
+    "/oc/time/admin/jobs/daily": {
+      "post": {
+        "operationId": "runDailyProcess",
+        "summary": "Run the daily action-date process (allocation change, hire, exit, transfer, shift)",
+        "x-vb": { "actionHint": "create" },
+        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DailyJobPayload" } } } },
+        "responses": {
+          "200": { "description": "Job run", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/JobResponse" } } } },
+          "400": { "description": "Failed", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      }
+    },
+    "/oc/time/admin/jobs/defaulting/{periodId}": {
+      "post": {
+        "operationId": "runDefaulting",
+        "summary": "Run the weekly cut-off defaulting job (RULE-006)",
+        "x-vb": { "actionHint": "create" },
+        "parameters": [ { "name": "periodId", "in": "path", "required": true, "schema": { "type": "integer" } } ],
+        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DefaultingPayload" } } } },
+        "responses": {
+          "200": { "description": "Job run", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DefaultingResponse" } } } },
+          "400": { "description": "Failed", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      }
+    },
+    "/oc/time/admin/accrual/confirmed/{periodId}": {
+      "get": {
+        "operationId": "getConfirmedMonths",
+        "summary": "Confirmed project-months with OTL and accrual hand-off state (PAGE-011)",
+        "x-vb": { "actionHint": "getMany" },
+        "parameters": [ { "name": "periodId", "in": "path", "required": true, "schema": { "type": "integer" } } ],
+        "responses": { "200": { "description": "Confirmed months", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Collection" } } } } }
+      }
+    },
+    "/oc/time/admin/accrual/extract/{confirmId}": {
+      "get": {
+        "operationId": "getAccrualExtract",
+        "summary": "Day-wise billed/unbilled/leave extract plus Reversal/Adjustment rows (REP-001)",
+        "x-vb": { "actionHint": "getMany" },
+        "parameters": [ { "name": "confirmId", "in": "path", "required": true, "schema": { "type": "integer" } } ],
+        "responses": { "200": { "description": "Extract rows", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Collection" } } } } }
+      }
+    },
+    "/oc/time/admin/accrual/annexure/{periodId}": {
+      "get": {
+        "operationId": "getLlcAnnexure",
+        "summary": "Leave-loss invoice annexure: approved coverage as billed hours (REP-002)",
+        "x-vb": { "actionHint": "getMany" },
+        "parameters": [ { "name": "periodId", "in": "path", "required": true, "schema": { "type": "integer" } } ],
+        "responses": { "200": { "description": "Annexure rows", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Collection" } } } } }
+      }
+    },
+    "/oc/time/admin/accrual/pull/{periodYear}/{periodMonth}": {
+      "get": {
+        "operationId": "pullAccrual",
+        "summary": "THE ACCRUAL PULL — unprocessed interface rows for a month (INT-014)",
+        "description": "Called by the O2C accrual application after month-end manager approval. Serves only unprocessed rows from successfully confirmed months, so the pull is resumable and never double-counts. The consumer must acknowledge each batch via ackAccrual.",
+        "x-vb": { "actionHint": "getMany" },
+        "parameters": [
+          { "name": "periodYear",  "in": "path", "required": true, "schema": { "type": "integer" } },
+          { "name": "periodMonth", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Interface rows", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Collection" } } } } }
+      }
+    },
+    "/oc/time/admin/accrual/ack/{batchId}": {
+      "post": {
+        "operationId": "ackAccrual",
+        "summary": "Acknowledge a pulled batch: Y = stored, E = rejected",
+        "description": "E flips the confirmation's accrual status to Failed so OBS-005 alerts.",
+        "x-vb": { "actionHint": "create" },
+        "parameters": [ { "name": "batchId", "in": "path", "required": true, "schema": { "type": "string" } } ],
+        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AckPayload" } } } },
+        "responses": {
+          "200": { "description": "Acknowledged", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AckResponse" } } } },
+          "400": { "description": "Bad status", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      }
+    },
+    "/oc/time/admin/integrations": {
+      "get": {
+        "operationId": "getIntegrations",
+        "summary": "Integration reference catalogue (PAGE-012)",
+        "x-vb": { "actionHint": "getMany" },
+        "responses": { "200": { "description": "Integrations", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Collection" } } } } }
+      }
+    },
+    "/oc/time/admin/compliance/{periodId}": {
+      "get": {
+        "operationId": "getCompliance",
+        "summary": "Timesheet compliance dashboard: 9 statuses + flags by week and manager (REP-005)",
+        "x-vb": { "actionHint": "getMany" },
+        "parameters": [ { "name": "periodId", "in": "path", "required": true, "schema": { "type": "integer" } } ],
+        "responses": { "200": { "description": "Counts", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Collection" } } } } }
+      }
+    },
+    "/oc/time/admin/config": {
+      "get": {
+        "operationId": "getConfig",
+        "summary": "Business configuration (CFG-010 .. CFG-015). Never contains secrets.",
+        "x-vb": { "actionHint": "getMany" },
+        "responses": { "200": { "description": "Config", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Collection" } } } } }
+      }
+    }
+  },
+
+  "components": {
+    "schemas": {
+
+      "//": "ORDS collection feeds all share this envelope. Row shapes are declared per page in the page JSON 'types', which is the pattern this codebase already uses, so the rows stay loosely typed here.",
+      "Collection": {
+        "type": "object",
+        "properties": {
+          "items":  { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+          "hasMore":{ "type": "boolean" },
+          "limit":  { "type": "integer" },
+          "offset": { "type": "integer" },
+          "count":  { "type": "integer" }
+        }
+      },
+
+      "ErrorResponse": {
+        "type": "object",
+        "properties": { "error": { "type": "string", "description": "The business rule's own message, ready to show in a toast." } }
+      },
+      "IdResponse":    { "type": "object", "properties": { "docId": { "type": "integer" }, "projectId": { "type": "integer" } } },
+      "SavedResponse": { "type": "object", "properties": { "saved": { "type": "boolean" }, "removed": { "type": "boolean" }, "overridden": { "type": "boolean" }, "approved": { "type": "boolean" } } },
+      "CountResponse": { "type": "object", "properties": { "approved": { "type": "integer" }, "rejected": { "type": "integer" }, "error": { "type": "string" } } },
+      "JobResponse":   { "type": "object", "properties": { "jobRunId": { "type": "integer" } } },
+
+      "ActorPayload": {
+        "type": "object",
+        "properties": {
+          "actor":   { "type": "string", "description": "Audit actor (the signed-in user's email)." },
+          "traceId": { "type": "string", "description": "OBS correlation id." }
+        }
+      },
+      "ApproverPayload": {
+        "type": "object",
+        "properties": {
+          "actorEmpId": { "type": "string", "description": "The acting manager's employee id. RULE-015 rejects self-approval." },
+          "actor":      { "type": "string" },
+          "traceId":    { "type": "string" }
+        }
+      },
+
+      "EnsureWeekPayload": {
+        "type": "object",
+        "properties": {
+          "employeeId": { "type": "string" },
+          "onDate":     { "type": "string", "description": "YYYY-MM-DD; any day inside the wanted week." },
+          "actor":      { "type": "string" }
+        }
+      },
+      "EnsureWeekResponse": { "type": "object", "properties": { "tsWeekId": { "type": "integer" } } },
+
+      "EntryPayload": {
+        "type": "object",
+        "properties": {
+          "tsWeekId":       { "type": "integer" },
+          "projectId":      { "type": "integer" },
+          "taskId":         { "type": "integer" },
+          "entryDate":      { "type": "string", "description": "YYYY-MM-DD" },
+          "hours":          { "type": "number", "description": "Must be a multiple of 0.25 (RULE-005)." },
+          "unbilledReason": { "type": "string" },
+          "source":         { "type": "string", "enum": ["Employee","Manager","Import"] },
+          "actor":          { "type": "string" }
+        }
+      },
+      "BatchPayload": {
+        "type": "object",
+        "properties": {
+          "cells": {
+            "type": "array",
+            "description": "Every changed cell in the grid.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "tsWeekId":       { "type": "integer" },
+                "projectId":      { "type": "integer" },
+                "taskId":         { "type": "integer" },
+                "entryDate":      { "type": "string" },
+                "hours":          { "type": "number" },
+                "unbilledReason": { "type": "string" }
+              }
+            }
+          },
+          "source": { "type": "string" },
+          "actor":  { "type": "string" }
+        }
+      },
+      "BatchResponse": { "type": "object", "properties": { "saved": { "type": "integer" }, "error": { "type": "string" } } },
+      "WeekStatusResponse": { "type": "object", "properties": { "tsWeekId": { "type": "integer" }, "weekStatus": { "type": "string" } } },
+
+      "AdjustmentPayload": {
+        "type": "object",
+        "properties": {
+          "employeeId":   { "type": "string" },
+          "workDate":     { "type": "string", "description": "YYYY-MM-DD — the affected day. Adjustments are day-wise." },
+          "oldProjectId": { "type": "integer" },
+          "oldTaskId":    { "type": "integer" },
+          "oldHours":     { "type": "number", "description": "Hours to Reversal (-)." },
+          "newProjectId": { "type": "integer" },
+          "newTaskId":    { "type": "integer" },
+          "newHours":     { "type": "number", "description": "Hours to Adjust (+). 0 to cancel only." },
+          "reason":       { "type": "string" },
+          "adjKind":      { "type": "string", "enum": ["RetroWBS","DefaultCorrection"] },
+          "actor":        { "type": "string" },
+          "traceId":      { "type": "string" }
+        }
+      },
+      "AdjustmentResponse": { "type": "object", "properties": { "adjustmentId": { "type": "integer" }, "status": { "type": "string" } } },
+      "AdjustmentApproveResponse": { "type": "object", "properties": { "adjustmentId": { "type": "integer" }, "status": { "type": "string" }, "posted": { "type": "string" } } },
+
+      "ClientDocPayload": {
+        "type": "object",
+        "properties": {
+          "projectId":   { "type": "integer" },
+          "periodId":    { "type": "integer" },
+          "displayMode": { "type": "string", "enum": ["Week-wise","Whole month"] },
+          "weekIndex":   { "type": "integer" },
+          "docName":     { "type": "string" },
+          "mimeType":    { "type": "string" },
+          "content":     { "type": "string", "description": "base64-encoded file bytes." },
+          "remarks":     { "type": "string" },
+          "actor":       { "type": "string" }
+        }
+      },
+      "ClientDocResponse": { "type": "object", "properties": { "docId": { "type": "integer" }, "docSize": { "type": "integer" } } },
+
+      "MonthActionPayload": {
+        "type": "object",
+        "properties": {
+          "projectId":  { "type": "integer" },
+          "periodId":   { "type": "integer" },
+          "employees":  { "type": "array", "items": { "type": "string" }, "description": "Selected employee ids." },
+          "actorEmpId": { "type": "string" },
+          "actor":      { "type": "string" },
+          "traceId":    { "type": "string" }
+        }
+      },
+      "MonthRejectPayload": {
+        "type": "object",
+        "properties": {
+          "projectId":  { "type": "integer" },
+          "periodId":   { "type": "integer" },
+          "employees":  { "type": "array", "items": { "type": "string" } },
+          "reason":     { "type": "string", "enum": ["Manager","Client","Absence"], "description": "Mandatory (RULE-013)." },
+          "remarks":    { "type": "string" },
+          "actorEmpId": { "type": "string" },
+          "actor":      { "type": "string" },
+          "traceId":    { "type": "string" }
+        }
+      },
+      "RejectPayload": {
+        "type": "object",
+        "properties": {
+          "reason":     { "type": "string", "enum": ["Manager","Client","Absence"] },
+          "remarks":    { "type": "string" },
+          "actorEmpId": { "type": "string" },
+          "actor":      { "type": "string" },
+          "traceId":    { "type": "string" }
+        }
+      },
+      "DayActionPayload": {
+        "type": "object",
+        "properties": {
+          "dates":      { "type": "array", "items": { "type": "string" }, "description": "YYYY-MM-DD dates to act on." },
+          "actorEmpId": { "type": "string" },
+          "actor":      { "type": "string" },
+          "traceId":    { "type": "string" }
+        }
+      },
+      "DayRejectPayload": {
+        "type": "object",
+        "properties": {
+          "dates":      { "type": "array", "items": { "type": "string" } },
+          "reason":     { "type": "string", "enum": ["Manager","Client","Absence"] },
+          "remarks":    { "type": "string" },
+          "actorEmpId": { "type": "string" },
+          "actor":      { "type": "string" },
+          "traceId":    { "type": "string" }
+        }
+      },
+      "DayActionResponse": {
+        "type": "object",
+        "properties": {
+          "approvedDates": { "type": "integer" },
+          "rejectedDates": { "type": "integer" },
+          "weekStatus":    { "type": "string" },
+          "error":         { "type": "string" }
+        }
+      },
+      "OverridePayload": {
+        "type": "object",
+        "properties": {
+          "newHours":   { "type": "number" },
+          "reason":     { "type": "string", "description": "Retained on the audit row (NFR-010)." },
+          "actorEmpId": { "type": "string" },
+          "actor":      { "type": "string" },
+          "traceId":    { "type": "string" }
+        }
+      },
+      "AllWeeksPayload": {
+        "type": "object",
+        "properties": {
+          "projectId":  { "type": "integer" },
+          "periodId":   { "type": "integer" },
+          "employeeId": { "type": "string" },
+          "actorEmpId": { "type": "string" },
+          "actor":      { "type": "string" },
+          "traceId":    { "type": "string" }
+        }
+      },
+      "AdvanceApprovePayload": {
+        "type": "object",
+        "properties": {
+          "projectId":  { "type": "integer" },
+          "periodId":   { "type": "integer" },
+          "employees":  { "type": "array", "items": { "type": "string" }, "description": "Omit for the whole project month." },
+          "actorEmpId": { "type": "string" },
+          "actor":      { "type": "string" },
+          "traceId":    { "type": "string" }
+        }
+      },
+      "AdvanceApproveResponse": { "type": "object", "properties": { "advanceApproved": { "type": "integer" }, "flag": { "type": "string" }, "error": { "type": "string" } } },
+
+      "ConfirmPayload": {
+        "type": "object",
+        "properties": {
+          "projectId":   { "type": "integer" },
+          "periodId":    { "type": "integer" },
+          "confirmType": { "type": "string", "enum": ["Normal","Advance closure","Reopened"] },
+          "actorEmpId":  { "type": "string" },
+          "actor":       { "type": "string" },
+          "traceId":     { "type": "string" }
+        }
+      },
+      "ConfirmResponse": {
+        "type": "object",
+        "properties": {
+          "confirmId":   { "type": "integer" },
+          "accrualRows": { "type": "integer", "description": "Rows written to XX_O2C_TIMESHEET_ACCRUAL_IF for the accrual pull." },
+          "message":     { "type": "string" }
+        }
+      },
+
+      "LlcGeneratePayload": {
+        "type": "object",
+        "properties": {
+          "projectId": { "type": "integer" },
+          "periodId":  { "type": "integer" },
+          "actor":     { "type": "string" }
+        }
+      },
+      "LlcGenerateResponse": { "type": "object", "properties": { "linesCreated": { "type": "integer" }, "error": { "type": "string" } } },
+      "AssignCoverPayload": {
+        "type": "object",
+        "properties": {
+          "coverEmployeeId": { "type": "string" },
+          "actor":           { "type": "string" }
+        }
+      },
+      "LlcStatusResponse": { "type": "object", "properties": { "llcId": { "type": "integer" }, "llcStatus": { "type": "string" }, "billed": { "type": "boolean" } } },
+
+      "ReleaseHoldPayload": {
+        "type": "object",
+        "properties": {
+          "actorEmpId": { "type": "string" },
+          "remarks":    { "type": "string" },
+          "actor":      { "type": "string" }
+        }
+      },
+      "HoldStatusResponse": { "type": "object", "properties": { "holdId": { "type": "integer" }, "salaryStatus": { "type": "string" } } },
+
+      "CalendarSyncPayload": {
+        "type": "object",
+        "properties": {
+          "days": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "scopeKey":     { "type": "string", "description": "Country for CORPORATE, customer for CLIENT, projectId for PROJECT, employeeId for SHIFT." },
+                "calDate":      { "type": "string" },
+                "isWorkingDay": { "type": "string", "enum": ["Y","N"] },
+                "stdHours":     { "type": "number" },
+                "holidayName":  { "type": "string" },
+                "shiftCode":    { "type": "string" }
+              }
+            }
+          },
+          "actor": { "type": "string" }
+        }
+      },
+      "CalendarSyncResponse": { "type": "object", "properties": { "layer": { "type": "string" }, "daysSynced": { "type": "integer" }, "jobRunId": { "type": "integer" } } },
+
+      "RetryResponse":   { "type": "object", "properties": { "failedId": { "type": "integer" }, "jobRunId": { "type": "integer" }, "resolved": { "type": "boolean" }, "retried": { "type": "boolean" }, "message": { "type": "string" } } },
+      "PopulatePayload": { "type": "object", "properties": { "employeeId": { "type": "string", "description": "Omit to populate every allocation." }, "actor": { "type": "string" } } },
+      "PopulateResponse":{ "type": "object", "properties": { "jobRunId": { "type": "integer" }, "read": { "type": "integer" }, "upserted": { "type": "integer" }, "failed": { "type": "integer" } } },
+      "DailyJobPayload": { "type": "object", "properties": { "actionDate": { "type": "string" }, "scopeKey": { "type": "string", "description": "Base/deputed country." }, "actor": { "type": "string" } } },
+      "DefaultingPayload":{ "type": "object", "properties": { "asOf": { "type": "string" }, "actor": { "type": "string" } } },
+      "DefaultingResponse":{ "type": "object", "properties": { "jobRunId": { "type": "integer" }, "defaulted": { "type": "integer" } } },
+
+      "AckPayload": {
+        "type": "object",
+        "properties": {
+          "status":  { "type": "string", "enum": ["Y","E"], "description": "Y = stored by accrual, E = rejected." },
+          "message": { "type": "string" },
+          "actor":   { "type": "string" }
+        }
+      },
+      "AckResponse": { "type": "object", "properties": { "batchId": { "type": "string" }, "rowsAcknowledged": { "type": "integer" } } }
+    }
+  }
+}

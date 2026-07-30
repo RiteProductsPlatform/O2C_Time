@@ -1,0 +1,252 @@
+<!-- PAGE-006 Leave Loss Coverage (PER-003)
+
+     Entry condition (PROC-006): the project must be a Fixed Capacity Project
+     with Leave Loss = Yes. On such a contract the client pays for capacity, so an
+     absence only stops being a revenue loss if a colleague who is otherwise
+     unbilled covers the day.
+
+     The flow is Open -> Assigned -> Approved. Only APPROVED coverage is billed
+     and reaches the invoice annexure (REP-002), which is why the headline
+     "billed hours" figure counts approved rows alone. -->
+
+<oj-sp-general-overview-page
+  id="leaveLossCoveragePage"
+  class="oj-sm-width-full rw-page-full"
+  display-options.responsive-padding="off"
+  page-title="Leave Loss Coverage"
+  page-subtitle="Cover an absentee with an unbilled colleague so the absence hours count as billed.">
+
+  <div class="oj-flex oj-sm-flex-direction-column oj-sm-width-full oj-sm-gap-4x"
+       slot="main">
+
+    <!-- ══════════════════ Selection ══════════════════ -->
+    <div class="oj-sm-padding-4x rw-metric">
+      <div class="oj-flex oj-sm-justify-content-space-between oj-sm-align-items-start oj-sm-flex-wrap oj-sm-gap-3x">
+        <oj-form-layout max-columns="2" direction="row" label-edge="top" class="oj-flex-item">
+          <oj-select-single label-hint="Project (FCP with leave loss)"
+                            data="[[ $variables.projectOptions ]]"
+                            value="{{ $variables.projectId }}"
+                            item-text="label"
+                            placeholder="Select project">
+          </oj-select-single>
+          <oj-select-single label-hint="Month"
+                            data="[[ $application.variables.periodOptions ]]"
+                            value="{{ $variables.periodId }}"
+                            item-text="label">
+          </oj-select-single>
+        </oj-form-layout>
+
+        <div class="oj-flex oj-sm-gap-2x">
+          <oj-button chroming="borderless" on-oj-action="[[ $listeners.reload ]]">
+            <span slot="startIcon" class="oj-ux-ico-refresh"></span>
+            <span>Refresh</span>
+          </oj-button>
+          <oj-button chroming="outlined"
+                     disabled="[[ $variables.busy || !$variables.projectId || !$variables.periodId ]]"
+                     on-oj-action="[[ $listeners.generate ]]">
+            <span>Refresh absences from HR</span>
+          </oj-button>
+        </div>
+      </div>
+
+      <oj-bind-if test="[[ $variables.projectOptionsArray.length === 0 ]]">
+        <div class="oj-sm-padding-3x oj-sm-margin-3x-top rw-notice" role="status">
+          None of your projects is a Fixed Capacity Project with leave loss
+          enabled, so there is nothing to cover here.
+        </div>
+      </oj-bind-if>
+
+      <div class="oj-flex oj-sm-flex-wrap oj-sm-gap-6x oj-sm-margin-4x-top">
+        <div class="oj-flex-item">
+          <div class="rw-metric-value"><oj-bind-text value="[[ $variables.openCount ]]"></oj-bind-text></div>
+          <div class="rw-metric-label">Uncovered</div>
+        </div>
+        <div class="oj-flex-item">
+          <div class="rw-metric-value"><oj-bind-text value="[[ $variables.assignedCount ]]"></oj-bind-text></div>
+          <div class="rw-metric-label">Assigned, awaiting approval</div>
+        </div>
+        <div class="oj-flex-item">
+          <div class="rw-metric-value"><oj-bind-text value="[[ $variables.approvedCount ]]"></oj-bind-text></div>
+          <div class="rw-metric-label">Approved</div>
+        </div>
+        <div class="oj-flex-item">
+          <div class="rw-metric-value"><oj-bind-text value="[[ $application.functions.fmtHours($variables.billedHours) ]]"></oj-bind-text></div>
+          <div class="rw-metric-label">Hours recovered as billed</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════ Absentee lines ══════════════════ -->
+    <div class="oj-sm-padding-4x rw-metric">
+      <div class="oj-flex oj-sm-justify-content-space-between oj-sm-align-items-center oj-sm-flex-wrap oj-sm-gap-2x oj-sm-margin-3x-bottom">
+        <h2 class="oj-typography-heading-xs oj-sm-margin-0">Absences</h2>
+        <oj-button chroming="callToAction"
+                   disabled="[[ $variables.busy || $variables.assignedCount === 0 ]]"
+                   on-oj-action="[[ $listeners.approveAll ]]">
+          <span>Approve all assigned
+            (<oj-bind-text value="[[ $variables.assignedCount ]]"></oj-bind-text>)</span>
+        </oj-button>
+      </div>
+
+      <oj-bind-if test="[[ $variables.lines.length === 0 && !$variables.busy ]]">
+        <div class="oj-typography-body-sm rw-metric-label" role="status">
+          No absence records this period. Use
+          <strong>Refresh absences from HR</strong> if leave has since been approved.
+        </div>
+      </oj-bind-if>
+
+      <oj-bind-if test="[[ $variables.lines.length > 0 ]]">
+        <div class="rw-grid-scroll">
+          <oj-table aria-label="Absences needing cover"
+                    data="[[ $variables.linesADP ]]"
+                    layout="fixed"
+                    horizontal-grid-visible="enabled"
+                    selection-mode='{"row": "none", "column": "none"}'
+                    columns='[
+                      {"headerText":"Absent employee","field":"absentEmployeeName","weight":2,"minWidth":180},
+                      {"headerText":"Date","field":"absenceDate","template":"dateCell","width":140},
+                      {"headerText":"Absence","field":"absenceType","width":130},
+                      {"headerText":"Hours","field":"absenceHours","template":"hoursCell","width":85},
+                      {"headerText":"Covered by","field":"coverEmployeeName","template":"coverCell","weight":2,"minWidth":180},
+                      {"headerText":"Status","field":"llcStatus","template":"statusCell","width":150},
+                      {"headerText":"","field":"llcId","template":"actionCell","width":170,"sortable":"disabled"}
+                    ]'>
+
+            <template slot="dateCell" data-oj-as="row">
+              <span>
+                <oj-bind-text value="[[ $application.functions.fmtDate(row.data.absenceDate) ]]"></oj-bind-text>
+                <div class="oj-typography-body-xs rw-metric-label">
+                  <oj-bind-text value="[[ row.data.absenceDay ]]"></oj-bind-text>
+                </div>
+              </span>
+            </template>
+
+            <template slot="hoursCell" data-oj-as="row">
+              <span><oj-bind-text value="[[ $application.functions.fmtHours(row.data.absenceHours) ]]"></oj-bind-text></span>
+            </template>
+
+            <template slot="coverCell" data-oj-as="row">
+              <span>
+                <oj-bind-if test="[[ row.data.coverEmployeeName ]]">
+                  <oj-bind-text value="[[ row.data.coverEmployeeName ]]"></oj-bind-text>
+                </oj-bind-if>
+                <oj-bind-if test="[[ !row.data.coverEmployeeName ]]">
+                  <span class="rw-metric-label">No cover assigned</span>
+                </oj-bind-if>
+              </span>
+            </template>
+
+            <template slot="statusCell" data-oj-as="row">
+              <span>
+                <span :class="[[ $application.functions.outcomeClass(row.data.llcStatus) ]]">
+                  <oj-bind-text value="[[ row.data.llcStatus ]]"></oj-bind-text>
+                </span>
+                <oj-bind-if test="[[ row.data.billedFlag === 'Y' ]]">
+                  <span class="rw-flag rw-flag-adjustment" title="On the invoice annexure (REP-002).">Billed</span>
+                </oj-bind-if>
+              </span>
+            </template>
+
+            <template slot="actionCell" data-oj-as="row">
+              <div class="oj-flex oj-sm-gap-1x">
+                <!-- Approved coverage is settled: reassigning it would change
+                     hours already on an invoice annexure. -->
+                <oj-bind-if test="[[ row.data.llcStatus !== 'Approved' ]]">
+                  <oj-button chroming="borderless" disabled="[[ $variables.busy ]]"
+                             :aria-label="[[ $page.functions.assignLabel(row.data.absentEmployeeName) ]]"
+                             on-oj-action="[[ function(){
+                                $page.listeners.openAssign({
+                                  llcId: row.data.llcId,
+                                  absenceDate: row.data.absenceDate,
+                                  label: $page.functions.absenceLabel(row.data) }); } ]]">
+                    <span><oj-bind-text value="[[ $application.functions.ifSet(row.data.coverEmployeeId, 'Reassign', 'Assign') ]]"></oj-bind-text></span>
+                  </oj-button>
+                </oj-bind-if>
+
+                <oj-bind-if test="[[ row.data.llcStatus === 'Assigned' ]]">
+                  <oj-button chroming="outlined" disabled="[[ $variables.busy ]]"
+                             :aria-label="[[ $page.functions.approveLabel(row.data.absentEmployeeName) ]]"
+                             on-oj-action="[[ function(){
+                                $page.listeners.approveOne({ llcId: row.data.llcId }); } ]]">
+                    <span>Approve</span>
+                  </oj-button>
+                </oj-bind-if>
+              </div>
+            </template>
+          </oj-table>
+        </div>
+      </oj-bind-if>
+    </div>
+
+    <oj-bind-if test="[[ $variables.busy ]]">
+      <div class="oj-flex oj-sm-align-items-center oj-sm-gap-2x" role="status" aria-live="polite">
+        <oj-progress-circle size="sm" value="-1"></oj-progress-circle>
+        <span class="oj-typography-body-sm">Working…</span>
+      </div>
+    </oj-bind-if>
+
+  </div>
+
+  <!-- ══════════════════ Assign dialog (ACT-022) ══════════════════ -->
+  <oj-dialog id="assignDlg" dialog-title="Assign a covering colleague"
+             cancel-behavior="icon"
+             opened="{{ $variables.showAssign }}">
+    <div slot="body">
+      <p class="oj-typography-body-sm rw-metric-label">
+        <oj-bind-text value="[[ $variables.assignLabel ]]"></oj-bind-text>
+      </p>
+      <p class="oj-typography-body-sm rw-metric-label">
+        Only colleagues who are unbilled on this project that day, not absent
+        themselves and not already covering someone are listed (RULE-014).
+      </p>
+
+      <oj-bind-if test="[[ $variables.coverOptionsArray.length === 0 ]]">
+        <div class="oj-sm-padding-3x rw-notice rw-notice-warning" role="status">
+          Nobody is eligible to cover this day. The absence stays unbilled — that
+          is a real outcome, not an error.
+        </div>
+      </oj-bind-if>
+
+      <oj-form-layout label-edge="top" max-columns="1">
+        <oj-select-single label-hint="Covering colleague" required="true"
+                          data="[[ $variables.coverOptions ]]"
+                          value="{{ $variables.assignCoverId }}"
+                          item-text="label"
+                          disabled="[[ $variables.coverOptionsArray.length === 0 ]]"
+                          placeholder="Select a colleague">
+        </oj-select-single>
+      </oj-form-layout>
+    </div>
+    <div slot="footer">
+      <oj-button on-oj-action="[[ $listeners.closeAssign ]]">
+        <span>Cancel</span>
+      </oj-button>
+      <oj-button chroming="callToAction"
+                 disabled="[[ $variables.busy || !$variables.assignCoverId ]]"
+                 on-oj-action="[[ $listeners.doAssign ]]">
+        <span>Assign</span>
+      </oj-button>
+    </div>
+  </oj-dialog>
+
+  <!-- ══════════════════ Confirmation ══════════════════ -->
+  <!-- oj-dialog opened via Actions.callComponentMethod, not window.confirm:
+       SES blocks browser globals inside chains (knowledge/14 §7). -->
+  <oj-dialog id="approveAllDlg" dialog-title="Approve all assigned coverage" cancel-behavior="icon">
+    <div slot="body">
+      <p class="oj-typography-body-md">
+        <oj-bind-text value="[[ $variables.confirmMessage ]]"></oj-bind-text>
+      </p>
+    </div>
+    <div slot="footer">
+      <oj-button on-oj-action="[[ $listeners.cancelApproveAll ]]">
+        <span>Cancel</span>
+      </oj-button>
+      <oj-button chroming="callToAction" disabled="[[ $variables.busy ]]"
+                 on-oj-action="[[ $listeners.confirmApproveAll ]]">
+        <span>Approve all</span>
+      </oj-button>
+    </div>
+  </oj-dialog>
+
+</oj-sp-general-overview-page>

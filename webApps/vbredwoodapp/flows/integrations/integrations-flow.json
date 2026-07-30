@@ -1,0 +1,9 @@
+{
+  "id": "integrations",
+  "description": "PAGE-012 Integrations — OTL-centric reference catalogue of the Oracle Fusion integration surfaces (ACT-034).",
+  "defaultPage": "integrations",
+  "chains": {},
+  "services": {},
+  "types": {},
+  "variables": {}
+}

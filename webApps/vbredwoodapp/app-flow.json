@@ -1,10 +1,16 @@
 {
   "id": "starter",
-  "description": "Starter VB app",
+  "description": "O2C Timesheet Module - standalone Fusion extension. Pre-populates from Fusion HCM/PPM, captures & approves time, pushes approved time to Oracle Time & Labor (system of record) and fills the accrual interface the O2C accrual application pulls after month-end manager approval.",
   "defaultPage": "shell",
   "routerStrategy": "path",
   "chains": {},
   "configuration": {},
+  "imports": {
+    "css": [
+      "/resources/css/o2ctime.css",
+      "https://static.oracle.com/cdn/fnd/gallery/2507.0.3/images/iconfont/ojuxIconFont.min.css"
+    ]
+  },
   "requirejs": {
     "paths": {
       "oj-sp": "https://static.oracle.com/cdn/spectra-ui/oj-sp/2604.1.0",
@@ -247,8 +253,169 @@
       "path": "./resources/strings/appBundle/nls/appBundle-strings"
     }
   },
-  "types": {},
-  "variables": {},
+  "types": {
+    "lovOptionType": {
+      "value": "string",
+      "label": "string"
+    },
+    "periodOptionType": {
+      "value": "number",
+      "label": "string",
+      "periodState": "string",
+      "editableFlag": "string",
+      "adjustmentAllowed": "string"
+    }
+  },
+  "variables": {
+    "currentEmail": {
+      "type": "string",
+      "defaultValue": "",
+      "description": "Signed-in user's email. Written to CREATED_BY / UPDATED_BY on every ORDS write so the audit trail names a real person (NFR-010)."
+    },
+    "employeeId": {
+      "type": "string",
+      "defaultValue": "",
+      "description": "HCM PersonNumber of the signed-in worker. Every employee endpoint is keyed on this."
+    },
+    "employeeName": {
+      "type": "string",
+      "defaultValue": ""
+    },
+    "currentRole": {
+      "type": "string",
+      "defaultValue": "",
+      "description": "APP_ROLE from OC_TIME_WORKER: ROLE_TIME_EMPLOYEE | ROLE_TIME_CONTRACTOR | ROLE_TIME_MANAGER | ROLE_TIME_ADMIN | ROLE_TIME_NONE. Drives the whole menu (RULE-022); ROLE_TIME_NONE gets an empty nav."
+    },
+    "managerEmpId": {
+      "type": "string",
+      "defaultValue": "",
+      "description": "Reporting manager. RULE-015: a manager's own time is approved by THIS person, never by themselves."
+    },
+    "workerType": {
+      "type": "string",
+      "defaultValue": "Employee",
+      "description": "Employee | Contractor. Contractor non-billable time raises the exception-approval flag (RULE-021)."
+    },
+    "stdHoursPerDay": {
+      "type": "number",
+      "defaultValue": 8,
+      "description": "Standard hours per day for the worker's country of work (CFG-013)."
+    },
+    "totalAllocPct": {
+      "type": "number",
+      "defaultValue": 0,
+      "description": "Sum of active allocation %. RULE-001 warns when this is not 100."
+    },
+    "actingManagerId": {
+      "type": "string",
+      "defaultValue": "",
+      "description": "The manager whose team is being reviewed. Defaults to employeeId but a split employee reports into several managers, so the manager can switch (ACT-011). All approval calls send this as actorEmpId."
+    },
+    "openPeriodId": {
+      "type": "number",
+      "defaultValue": null,
+      "description": "The single Open period (RULE-017)."
+    },
+    "selectedPeriodId": {
+      "type": "number",
+      "defaultValue": null,
+      "description": "Period the user is working in. Shared by every page so navigation keeps context."
+    },
+    "selectedPeriodName": {
+      "type": "string",
+      "defaultValue": ""
+    },
+    "periodEditable": {
+      "type": "string",
+      "defaultValue": "N",
+      "description": "Y when the selected period may still be edited (RULE-004 / RULE-007)."
+    },
+    "adjustmentAllowed": {
+      "type": "string",
+      "defaultValue": "N",
+      "description": "Y when the selected period is closed but still inside the backdating window, so the retro adjustment card is offered (RULE-019)."
+    },
+    "selectedProjectId": {
+      "type": "number",
+      "defaultValue": null
+    },
+    "selectedProjectName": {
+      "type": "string",
+      "defaultValue": ""
+    },
+    "selectedEmployeeId": {
+      "type": "string",
+      "defaultValue": "",
+      "description": "Employee the manager drilled into from the monthly summary."
+    },
+    "selectedEmployeeName": {
+      "type": "string",
+      "defaultValue": ""
+    },
+    "selectedWeekId": {
+      "type": "number",
+      "defaultValue": null,
+      "description": "OC_TS_WEEK.TS_WEEK_ID currently open on the approval detail page."
+    },
+    "activeNav": {
+      "type": "string",
+      "defaultValue": "my-timesheet",
+      "description": "Highlights the current item in the shell navigation list."
+    },
+    "traceId": {
+      "type": "string",
+      "defaultValue": "",
+      "description": "Correlation id sent on every write so a user action can be followed across VBCS -> ORDS -> OIC (OBS-001..008, NFR-011)."
+    },
+    "ordsBaseUrl": {
+      "type": "string",
+      "defaultValue": "https://ords-sit.rite.digital/ords/o2c_time",
+      "description": "ORDS base for direct fetches (file download/upload) that do not go through callRest. Single place to change per environment; never a PROD URL in source."
+    },
+    "appDateFormat": {
+      "type": "string",
+      "defaultValue": "dd-MMM-yyyy"
+    },
+    "appDateDisplay": {
+      "type": "string",
+      "defaultValue": "DD-MON-YYYY"
+    },
+    "rejectReasonOptions": {
+      "type": "vb/ArrayDataProvider2",
+      "defaultValue": {
+        "itemType": "lovOptionType",
+        "keyAttributes": "value",
+        "data": [
+          {
+            "value": "Manager",
+            "label": "Manager"
+          },
+          {
+            "value": "Client",
+            "label": "Client"
+          },
+          {
+            "value": "Absence",
+            "label": "Absence"
+          }
+        ]
+      },
+      "description": "FLD-057 / RULE-013. Static because the BRD fixes the three values."
+    },
+    "periodOptionsArray": {
+      "type": "any[]",
+      "defaultValue": [],
+      "description": "Raw month LOV rows. periodOptions is live-bound to this (the array-linked ADP pattern), so a chain assigns the array and every period selector updates."
+    },
+    "periodOptions": {
+      "type": "vb/ArrayDataProvider2",
+      "defaultValue": {
+        "itemType": "periodOptionType",
+        "keyAttributes": "value",
+        "data": "{{ $application.variables.periodOptionsArray }}"
+      }
+    }
+  },
   "userConfig": {
     "type": "vb/DefaultSecurityProvider",
     "configuration": {},

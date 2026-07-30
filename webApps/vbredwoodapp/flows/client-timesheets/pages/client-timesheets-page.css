@@ -1,0 +1,27 @@
+/* PAGE-002 Client Timesheets — page-specific styles.
+
+   S2: no style="" attributes anywhere; every visual rule lives in a CSS
+   file. Classes are prefixed `ctim-` to avoid clashing with the shared
+   design system in resources/css/o2ctime.css, which holds the cross-page
+   vocabulary (status capsules, flag chips, grid states) that all 11 pages
+   share and which would be duplicated logic (S4) if copied per page. */
+
+/* Download is an anchor, not a button, because the browser streams the file and
+   SES bars window.open from a page module. It is styled to sit level with the
+   adjacent icon button. */
+.ctim-download-link {
+  align-items: center;
+  color: var(--oj-core-text-color-primary, inherit);
+  display: inline-flex;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  text-decoration: none;
+}
+
+.ctim-download-link:hover {
+  text-decoration: underline;
+}
+
+.ctim-muted {
+  color: var(--oj-core-text-color-secondary, #5a5a5a);
+}

@@ -1,0 +1,9 @@
+{
+  "id": "calendar-sync",
+  "description": "PAGE-009 Calendar (Fusion Sync) — the four calendar layers and what has been synced (PROC-013).",
+  "defaultPage": "calendar-sync",
+  "chains": {},
+  "services": {},
+  "types": {},
+  "variables": {}
+}

@@ -1,0 +1,197 @@
+<!-- PAGE-009 Calendar / Fusion Sync (PER-004 admin)
+
+     Read-only by design. RA-005 is closed: calendars are authored in Oracle
+     Fusion and synced here, so this page answers "did the sync land, and what
+     does the resolved calendar say?" — it never edits a calendar.
+
+     Precedence when several layers cover the same day (PROC-013):
+        Shift > Client > Project > Corporate
+     The highest-precedence layer that has a row for the day wins. -->
+
+<oj-sp-general-overview-page
+  id="calendarSyncPage"
+  class="oj-sm-width-full rw-page-full"
+  display-options.responsive-padding="off"
+  page-title="Calendar (Fusion Sync)"
+  page-subtitle="What has been synced from Oracle Fusion, by layer, and a re-sync per layer. Calendar days are authored in Fusion, never here.">
+
+  <div class="oj-flex oj-sm-flex-direction-column oj-sm-width-full oj-sm-gap-4x"
+       slot="main">
+
+    <div class="oj-sm-padding-4x rw-metric">
+      <div class="oj-flex oj-sm-justify-content-space-between oj-sm-align-items-center oj-sm-flex-wrap oj-sm-gap-2x">
+        <div>
+          <h2 class="oj-typography-heading-xs oj-sm-margin-0">Layers</h2>
+          <p class="oj-typography-body-sm rw-metric-label oj-sm-margin-1x-top">
+            Where two layers cover the same day the higher precedence wins:
+            <strong>Shift &gt; Client &gt; Project &gt; Corporate</strong>.
+          </p>
+        </div>
+        <oj-button chroming="borderless" on-oj-action="[[ $listeners.reload ]]">
+          <span slot="startIcon" class="oj-ux-ico-refresh"></span>
+          <span>Refresh</span>
+        </oj-button>
+      </div>
+
+      <!-- All four layers are always listed, including any that have never been
+           synced — an admin needs to see that Shift is empty, not just fail to
+           see Shift at all. -->
+      <div class="rw-grid-scroll oj-sm-margin-3x-top">
+        <oj-table aria-label="Calendar layers"
+                  data="[[ $variables.layersADP ]]"
+                  layout="fixed"
+                  horizontal-grid-visible="enabled"
+                  selection-mode='{"row": "none", "column": "none"}'
+                  columns='[
+                    {"headerText":"Precedence","field":"precedence","width":110},
+                    {"headerText":"Layer","field":"layerLabel","template":"layerCell","weight":3,"minWidth":230},
+                    {"headerText":"Scopes","field":"scopeCount","width":95},
+                    {"headerText":"Days","field":"dayCount","template":"daysCell","width":130},
+                    {"headerText":"Range","field":"fromDate","template":"rangeCell","weight":2,"minWidth":190},
+                    {"headerText":"Source","field":"sourceSystem","width":130},
+                    {"headerText":"Last synced","field":"lastSyncedOn","template":"syncedCell","width":170},
+                    {"headerText":"","field":"layer","template":"actionCell","width":190,"sortable":"disabled"}
+                  ]'>
+
+          <template slot="layerCell" data-oj-as="row">
+            <span>
+              <oj-bind-text value="[[ row.data.layerLabel ]]"></oj-bind-text>
+              <div class="oj-typography-body-xs rw-metric-label">
+                <oj-bind-text value="[[ row.data.sourceDescription ]]"></oj-bind-text>
+              </div>
+            </span>
+          </template>
+
+          <template slot="daysCell" data-oj-as="row">
+            <span>
+              <oj-bind-text value="[[ row.data.dayCount ]]"></oj-bind-text>
+              <oj-bind-if test="[[ row.data.nonWorkingDays > 0 ]]">
+                <div class="oj-typography-body-xs rw-metric-label">
+                  <oj-bind-text value="[[ row.data.nonWorkingDays ]]"></oj-bind-text> non-working
+                </div>
+              </oj-bind-if>
+            </span>
+          </template>
+
+          <template slot="rangeCell" data-oj-as="row">
+            <span>
+              <oj-bind-text value="[[ row.data.fromDate ]]"></oj-bind-text>
+              &rarr;
+              <oj-bind-text value="[[ row.data.toDate ]]"></oj-bind-text>
+            </span>
+          </template>
+
+          <template slot="syncedCell" data-oj-as="row">
+            <span>
+              <oj-bind-if test="[[ row.data.lastSyncedOn ]]">
+                <oj-bind-text value="[[ row.data.lastSyncedOn ]]"></oj-bind-text>
+              </oj-bind-if>
+              <oj-bind-if test="[[ !row.data.lastSyncedOn ]]">
+                <span class="rw-flag rw-flag-defaulted">Never synced</span>
+              </oj-bind-if>
+            </span>
+          </template>
+
+          <template slot="actionCell" data-oj-as="row">
+            <div class="oj-flex oj-sm-gap-1x">
+              <oj-button chroming="borderless"
+                         disabled="[[ row.data.dayCount === 0 ]]"
+                         :aria-label="[[ $page.functions.inspectLabel(row.data.layerLabel) ]]"
+                         on-oj-action="[[ function(){
+                            $page.listeners.openInspect({
+                              layer: row.data.layer,
+                              scopeHint: row.data.scopeHint }); } ]]">
+                <span>Inspect</span>
+              </oj-button>
+              <!-- ACT-030. RA-005 closed calendar *authoring*, not syncing; the
+                   Pages sheet lists sync-buttons as a required component. -->
+              <oj-button chroming="outlined" disabled="[[ $variables.busy ]]"
+                         :aria-label="[[ $page.functions.syncLabel(row.data.layerLabel) ]]"
+                         on-oj-action="[[ function(){
+                            $page.listeners.syncLayer({ layer: row.data.layer }); } ]]">
+                <span>Sync</span>
+              </oj-button>
+            </div>
+          </template>
+        </oj-table>
+      </div>
+    </div>
+
+    <oj-bind-if test="[[ $variables.busy ]]">
+      <div class="oj-flex oj-sm-align-items-center oj-sm-gap-2x" role="status" aria-live="polite">
+        <oj-progress-circle size="sm" value="-1"></oj-progress-circle>
+        <span class="oj-typography-body-sm">Working…</span>
+      </div>
+    </oj-bind-if>
+
+  </div>
+
+  <!-- ══════════════════ Day inspector ══════════════════ -->
+  <oj-dialog id="inspectDlg" dialog-title="Calendar days" cancel-behavior="icon"
+             opened="{{ $variables.showInspect }}">
+    <div slot="body">
+      <p class="oj-typography-body-sm rw-metric-label">
+        Layer <strong><oj-bind-text value="[[ $variables.inspectLayer ]]"></oj-bind-text></strong>.
+        Scope keys are exact — <oj-bind-text value="[[ $page.functions.scopeHintFor($variables.inspectLayer) ]]"></oj-bind-text>.
+      </p>
+
+      <oj-form-layout max-columns="3" direction="row" label-edge="top">
+        <oj-input-text label-hint="Scope key" required="true"
+                       value="{{ $variables.inspectScope }}"
+                       :placeholder="[[ $page.functions.scopeHintFor($variables.inspectLayer) ]]">
+        </oj-input-text>
+        <oj-input-date label-hint="From" value="{{ $variables.inspectFrom }}"></oj-input-date>
+        <oj-input-date label-hint="To" value="{{ $variables.inspectTo }}"></oj-input-date>
+      </oj-form-layout>
+
+      <div class="oj-flex oj-sm-justify-content-flex-end oj-sm-margin-2x-bottom">
+        <oj-button chroming="callToAction"
+                   disabled="[[ $variables.busy || !$variables.inspectScope ]]"
+                   on-oj-action="[[ $listeners.loadDays ]]">
+          <span>Show days</span>
+        </oj-button>
+      </div>
+
+      <oj-bind-if test="[[ $variables.days.length > 0 ]]">
+        <div class="rw-grid-scroll">
+          <oj-table aria-label="Calendar days"
+                    data="[[ $variables.daysADP ]]"
+                    layout="fixed"
+                    horizontal-grid-visible="enabled"
+                    selection-mode='{"row": "none", "column": "none"}'
+                    columns='[
+                      {"headerText":"Date","field":"calDate","template":"dCell","width":150},
+                      {"headerText":"Working","field":"isWorkingDay","template":"workCell","width":110},
+                      {"headerText":"Std hours","field":"stdHours","template":"hoursCell","width":100},
+                      {"headerText":"Holiday","field":"holidayName","weight":2},
+                      {"headerText":"Shift","field":"shiftCode","width":100},
+                      {"headerText":"Source","field":"sourceSystem","width":120}
+                    ]'>
+            <template slot="dCell" data-oj-as="row">
+              <span>
+                <oj-bind-text value="[[ $application.functions.fmtDate(row.data.calDate) ]]"></oj-bind-text>
+                <div class="oj-typography-body-xs rw-metric-label">
+                  <oj-bind-text value="[[ row.data.dayName ]]"></oj-bind-text>
+                </div>
+              </span>
+            </template>
+            <template slot="workCell" data-oj-as="row">
+              <span :class="[[ $application.functions.yesNo(row.data.isWorkingDay, 'rw-flag rw-flag-adjustment', 'rw-flag rw-flag-defaulted') ]]">
+                <oj-bind-text value="[[ $application.functions.yesNo(row.data.isWorkingDay, 'Working', 'Non-working') ]]"></oj-bind-text>
+              </span>
+            </template>
+            <template slot="hoursCell" data-oj-as="row">
+              <span><oj-bind-text value="[[ $application.functions.fmtHours(row.data.stdHours) ]]"></oj-bind-text></span>
+            </template>
+          </oj-table>
+        </div>
+      </oj-bind-if>
+    </div>
+    <div slot="footer">
+      <oj-button on-oj-action="[[ $listeners.closeInspect ]]">
+        <span>Close</span>
+      </oj-button>
+    </div>
+  </oj-dialog>
+
+</oj-sp-general-overview-page>

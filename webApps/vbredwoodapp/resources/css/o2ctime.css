@@ -1,0 +1,196 @@
+/* ============================================================
+   O2C Timesheet Module — supplementary styles
+
+   Deliberately small. Layout, spacing, typography and colour all come from
+   Redwood: the JET grid classes (oj-sm-*/oj-md-*), the spacing classes
+   (oj-sm-margin-*, oj-sm-padding-*) and the oj-typography-* scale. This file
+   only adds what Redwood has no component for:
+
+     1. the header bar treatment,
+     2. status capsules and flag chips (Redwood ships no badge component),
+     3. the weekly grid's cell states.
+
+   Every colour is an --oj-core-* custom property with a literal fallback, so
+   theme and dark-mode overrides are respected rather than fought. No fixed pixel
+   widths on anything that has to reflow — sizing is left to the grid classes.
+   ============================================================ */
+
+/* ── Status capsules — the 7 week statuses ───────────────────
+   Colour is never the only signal: every capsule shows its status text, so the
+   meaning survives greyscale and colour-blindness. */
+
+.rw-status {
+  border-radius: 12px;
+  padding: 2px 10px;
+  display: inline-block;
+  font-weight: 600;
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
+/* Not yet submitted — neutral: nothing has gone wrong yet. */
+.rw-status-notsubmitted {
+  background-color: var(--oj-core-bg-neutral-20, #f0f0f0);
+  color: var(--oj-core-text-color-secondary, #5a5a5a);
+}
+
+/* Submitted — informational: waiting on someone else. */
+.rw-status-submitted {
+  background-color: var(--oj-core-bg-info-subtle, #e8f1fa);
+  color: var(--oj-core-text-color-info, #04528f);
+}
+
+/* Approved / Overridden and approved / Closed — resolved. */
+.rw-status-approved,
+.rw-status-overridden,
+.rw-status-closed {
+  background-color: var(--oj-core-bg-success-subtle, #e6f4ee);
+  color: var(--oj-core-text-color-success, #0d4f31);
+}
+
+/* Closed is terminal, so it reads a shade quieter than a fresh approval. */
+.rw-status-closed {
+  opacity: 0.85;
+}
+
+/* Rejected — needs the employee to act. */
+.rw-status-rejected {
+  background-color: var(--oj-core-bg-danger-subtle, #fdeceb);
+  color: var(--oj-core-text-color-danger, #8c1d18);
+}
+
+/* Defaulted — a cut-off was missed. Warning, not error: the hours exist. */
+.rw-status-defaulted {
+  background-color: var(--oj-core-bg-warning-subtle, #fdf1e0);
+  color: var(--oj-core-text-color-warning, #6b4100);
+}
+
+/* ── Flag chips — the 6 workflow flags ───────────────────────
+   Flags are independent of status and several can be set at once, so they are
+   chips in a row rather than a single badge. */
+
+.rw-flag {
+  border-radius: 4px;
+  padding: 1px 6px;
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.rw-flag-defaulted,
+.rw-flag-late {
+  background-color: var(--oj-core-bg-warning-subtle, #fdf1e0);
+  border-color: var(--oj-core-warning-color, #a3651a);
+  color: var(--oj-core-text-color-warning, #6b4100);
+}
+
+.rw-flag-advance,
+.rw-flag-overridden {
+  background-color: var(--oj-core-bg-info-subtle, #e8f1fa);
+  border-color: var(--oj-core-info-color, #2563a8);
+  color: var(--oj-core-text-color-info, #04528f);
+}
+
+/* Reversal carries negative hours; Adjustment the positive half of the pair. */
+.rw-flag-reversal {
+  background-color: var(--oj-core-bg-danger-subtle, #fdeceb);
+  border-color: var(--oj-core-danger-color, #b3352c);
+  color: var(--oj-core-text-color-danger, #8c1d18);
+}
+
+.rw-flag-adjustment {
+  background-color: var(--oj-core-bg-success-subtle, #e6f4ee);
+  border-color: var(--oj-core-success-color, #17795e);
+  color: var(--oj-core-text-color-success, #0d4f31);
+}
+
+/* ── Weekly entry grid ───────────────────────────────────── */
+
+/* Day columns are sized in ch so they track the font rather than a fixed pixel
+   width, and the table scrolls inside its own container on small screens. */
+.rw-grid-scroll {
+  overflow-x: auto;
+  width: 100%;
+}
+
+.rw-grid-day {
+  min-width: 7ch;
+  text-align: center;
+}
+
+/* Non-working days stay enterable (RULE-012 — Sat/Sun are editable and default
+   to zero); the tint marks them as unusual, it does not disable them. */
+.rw-grid-nonworking {
+  background-color: var(--oj-core-bg-neutral-20, #f4f4f4);
+}
+
+/* A cell the server refused, so the reason sits next to the value. */
+.rw-grid-invalid input {
+  border-color: var(--oj-core-danger-color, #c12e2a);
+}
+
+.rw-grid-total {
+  font-weight: 700;
+  background-color: var(--oj-core-bg-neutral-10, #fafafa);
+}
+
+/* A day whose cross-line total breaks RULE-003 (24h) — surfaced on the column
+   total, because no single cell is individually at fault. */
+.rw-grid-total-over {
+  color: var(--oj-core-text-color-danger, #c12e2a);
+}
+
+/* ── Read-only shift row (RULE-011) ──────────────────────── */
+
+.rw-shift-row {
+  background-color: var(--oj-core-bg-neutral-10, #fafafa);
+  color: var(--oj-core-text-color-secondary, #5a5a5a);
+  font-size: 0.8125rem;
+}
+
+/* ── Metric strip ────────────────────────────────────────── */
+
+.rw-metric {
+  background-color: var(--oj-core-bg-neutral-0, #fff);
+  border: 1px solid var(--oj-core-divider-margin, #d9d9d9);
+  border-radius: 8px;
+}
+
+.rw-metric-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.rw-metric-label {
+  color: var(--oj-core-text-color-secondary, #5a5a5a);
+  font-size: 0.8125rem;
+}
+
+/* ── Cut-off / rule notice ───────────────────────────────── */
+
+.rw-notice {
+  background-color: var(--oj-core-bg-info-subtle, #e8f1fa);
+  border-inline-start: 3px solid var(--oj-core-info-color, #2563a8);
+  border-radius: 4px;
+  color: var(--oj-core-text-color-info, #04528f);
+  font-size: 0.8125rem;
+}
+
+.rw-notice-warning {
+  background-color: var(--oj-core-bg-warning-subtle, #fdf1e0);
+  border-inline-start-color: var(--oj-core-warning-color, #a3651a);
+  color: var(--oj-core-text-color-warning, #6b4100);
+}
+
+/* ── Redwood page-template width override ────────────────────
+   oj-sp-general-overview-page constrains its own max width, which leaves the
+   wide grids cropped. Documented override, applied by class so it is opt-in per
+   page rather than global. */
+
+.rw-page-full {
+  --oj-sp-general-overview-page-max-width: 100% !important;
+  max-width: 100% !important;
+}

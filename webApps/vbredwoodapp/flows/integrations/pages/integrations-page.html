@@ -1,0 +1,81 @@
+<!-- PAGE-012 Integrations (PER-004 admin)
+
+     A reference catalogue, not a control panel: nothing on this page triggers an
+     integration. The rows come from OC_TIME_LOOKUP via the admin endpoint, so
+     when a Fusion endpoint or load pattern changes it is a seed update rather
+     than a page redeploy. -->
+
+<oj-sp-general-overview-page
+  id="integrationsPage"
+  class="oj-sm-width-full rw-page-full"
+  display-options.responsive-padding="off"
+  page-title="Integrations"
+  page-subtitle="Reference catalogue of the Oracle Fusion and OTL surfaces this module reads from and writes to.">
+
+  <div class="oj-flex oj-sm-flex-direction-column oj-sm-width-full oj-sm-gap-4x"
+       slot="main">
+
+    <div class="oj-sm-padding-4x rw-metric">
+      <div class="oj-flex oj-sm-justify-content-space-between oj-sm-align-items-start oj-sm-flex-wrap oj-sm-gap-3x">
+        <oj-form-layout max-columns="2" direction="row" label-edge="top" class="oj-flex-item">
+          <oj-select-single label-hint="Area"
+                            data="[[ $variables.areaOptions ]]"
+                            value="{{ $variables.areaFilter }}"
+                            item-text="label">
+          </oj-select-single>
+        </oj-form-layout>
+        <oj-button chroming="borderless" on-oj-action="[[ $listeners.reload ]]">
+          <span slot="startIcon" class="oj-ux-ico-refresh"></span>
+          <span>Refresh</span>
+        </oj-button>
+      </div>
+
+      <div class="oj-sm-padding-3x oj-sm-margin-3x-top rw-notice" role="status">
+        Oracle Time &amp; Labor is the system of record. This module pushes
+        approved time to OTL, which feeds Project Costing and Payroll natively —
+        nothing here writes to Payroll or Costing directly.
+      </div>
+    </div>
+
+    <div class="oj-sm-padding-4x rw-metric">
+      <h2 class="oj-typography-heading-xs oj-sm-margin-0 oj-sm-margin-3x-bottom">
+        Catalogue
+        (<oj-bind-text value="[[ $variables.rows.length ]]"></oj-bind-text>)
+      </h2>
+
+      <oj-bind-if test="[[ $variables.rows.length === 0 && !$variables.busy ]]">
+        <div class="oj-typography-body-sm rw-metric-label" role="status">
+          <oj-bind-text value="[[ $page.functions.emptyMessage($variables.rowsRaw) ]]"></oj-bind-text>
+        </div>
+      </oj-bind-if>
+
+      <oj-bind-if test="[[ $variables.rows.length > 0 ]]">
+        <div class="rw-grid-scroll">
+          <oj-table aria-label="Integration catalogue"
+                    data="[[ $variables.rowsADP ]]"
+                    layout="fixed"
+                    horizontal-grid-visible="enabled"
+                    selection-mode='{"row": "none", "column": "none"}'
+                    columns='[
+                      {"headerText":"ID","field":"integrationId","width":110},
+                      {"headerText":"Area","field":"area","width":140},
+                      {"headerText":"Fusion source","field":"fusionSource","weight":2,"minWidth":170},
+                      {"headerText":"Object / usage","field":"objectUsage","weight":2,"minWidth":170},
+                      {"headerText":"REST resource","field":"restResource","weight":3,"minWidth":220},
+                      {"headerText":"Load pattern","field":"loadPattern","width":150},
+                      {"headerText":"Notes","field":"notes","weight":3,"minWidth":220}
+                    ]'>
+          </oj-table>
+        </div>
+      </oj-bind-if>
+    </div>
+
+    <oj-bind-if test="[[ $variables.busy ]]">
+      <div class="oj-flex oj-sm-align-items-center oj-sm-gap-2x" role="status" aria-live="polite">
+        <oj-progress-circle size="sm" value="-1"></oj-progress-circle>
+        <span class="oj-typography-body-sm">Working…</span>
+      </div>
+    </oj-bind-if>
+
+  </div>
+</oj-sp-general-overview-page>

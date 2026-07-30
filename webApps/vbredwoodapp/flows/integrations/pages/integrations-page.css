@@ -1,0 +1,11 @@
+/* PAGE-012 Integrations — page-specific styles.
+
+   S2: no style="" attributes anywhere; every visual rule lives in a CSS
+   file. Classes are prefixed `intg-` to avoid clashing with the shared
+   design system in resources/css/o2ctime.css, which holds the cross-page
+   vocabulary (status capsules, flag chips, grid states) that all 11 pages
+   share and which would be duplicated logic (S4) if copied per page. */
+
+/* No page-specific rules yet — this page is built entirely from Redwood
+   layout classes and the shared design system. The file exists because S2
+   requires a <page-name>.css alongside every page. */

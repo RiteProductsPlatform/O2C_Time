@@ -1,0 +1,213 @@
+<!-- PAGE-002 Client Timesheets (PER-001, PER-002)
+
+     BRD 4.3 / PROC-011: signed customer timesheets are billing evidence, not
+     part of the approval workflow. There is deliberately no Submit and no
+     Approve on this page, and no dependency on the billing close date — sheets
+     routinely arrive one to two weeks after close. -->
+
+<oj-sp-general-overview-page
+  id="clientTimesheetsPage"
+  class="oj-sm-width-full rw-page-full"
+  display-options.responsive-padding="off"
+  page-title="Client Timesheets"
+  page-subtitle="Attach the customer-approved timesheet for a project and billing period. Several documents per period are fine, and there is no approval step.">
+
+  <div class="oj-flex oj-sm-flex-direction-column oj-sm-width-full oj-sm-gap-4x"
+       slot="main">
+
+    <!-- ══════════════════ Selection ══════════════════ -->
+    <div class="oj-sm-padding-4x rw-metric">
+      <oj-form-layout max-columns="3" direction="row" label-edge="top">
+        <oj-select-single label-hint="Project" required="true"
+                          data="[[ $variables.projectOptions ]]"
+                          value="{{ $variables.projectId }}"
+                          item-text="label"
+                          placeholder="Select project">
+        </oj-select-single>
+
+        <oj-select-single label-hint="Billing Period" required="true"
+                          data="[[ $application.variables.periodOptions ]]"
+                          value="{{ $variables.periodId }}"
+                          item-text="label"
+                          placeholder="Select period">
+        </oj-select-single>
+
+        <oj-select-single label-hint="Display"
+                          data="[[ $variables.displayModeOptions ]]"
+                          value="{{ $variables.displayMode }}"
+                          item-text="label">
+        </oj-select-single>
+      </oj-form-layout>
+    </div>
+
+    <!-- ══════════════════ Upload ══════════════════ -->
+    <div class="oj-sm-padding-4x rw-metric">
+      <h2 class="oj-typography-heading-xs oj-sm-margin-0 oj-sm-margin-3x-bottom">
+        Attach Customer Timesheet
+      </h2>
+
+      <oj-bind-if test="[[ !$variables.projectId || !$variables.periodId ]]">
+        <div class="oj-sm-padding-3x rw-notice" role="status">
+          Choose a project and a billing period first.
+        </div>
+      </oj-bind-if>
+
+      <oj-bind-if test="[[ $variables.projectId && $variables.periodId ]]">
+        <div class="oj-flex oj-sm-flex-direction-column oj-sm-gap-3x">
+          <!-- The accepted types mirror the server-side MIME whitelist and the
+               25MB ceiling, so the user is told before uploading rather than
+               after a rejected request. -->
+          <oj-file-picker accept='["application/pdf",".pdf",".doc",".docx",".xls",".xlsx",".png",".jpg",".jpeg"]'
+                          selection-mode="single"
+                          on-oj-select="[[ function(e){ $page.functions.fileSelected(e); } ]]">
+            <span>Drop a PDF, Word, Excel or image file here, or click to browse (max 25&nbsp;MB)</span>
+          </oj-file-picker>
+
+          <oj-bind-if test="[[ $variables.pendingFileName ]]">
+            <div class="oj-flex oj-sm-align-items-center oj-sm-gap-2x">
+              <span class="oj-ux-ico-file" aria-hidden="true"></span>
+              <strong><oj-bind-text value="[[ $variables.pendingFileName ]]"></oj-bind-text></strong>
+              <span class="rw-metric-label">
+                (<oj-bind-text value="[[ $variables.pendingSizeKb ]]"></oj-bind-text>&nbsp;KB)
+              </span>
+            </div>
+          </oj-bind-if>
+
+          <oj-bind-if test="[[ $variables.uploadHint ]]">
+            <div class="oj-sm-padding-3x rw-notice rw-notice-warning" role="alert">
+              <oj-bind-text value="[[ $variables.uploadHint ]]"></oj-bind-text>
+            </div>
+          </oj-bind-if>
+
+          <oj-form-layout max-columns="2" direction="row" label-edge="top">
+            <oj-bind-if test="[[ $variables.displayMode === 'Week-wise' ]]">
+              <oj-input-number label-hint="Week number" value="{{ $variables.weekIndex }}"
+                               min="1" max="6" step="1">
+              </oj-input-number>
+            </oj-bind-if>
+            <oj-input-text label-hint="Remarks" value="{{ $variables.remarks }}">
+            </oj-input-text>
+          </oj-form-layout>
+
+          <div class="oj-flex oj-sm-justify-content-flex-end">
+            <oj-button chroming="callToAction"
+                       disabled="[[ $variables.busy || !$variables.pendingBase64 ]]"
+                       on-oj-action="[[ $listeners.uploadDoc ]]">
+              <span slot="startIcon" :class="[[ $application.functions.busyIcon($variables.busy, 'oj-ux-ico-upload') ]]"></span>
+              <span>Attach document</span>
+            </oj-button>
+          </div>
+        </div>
+      </oj-bind-if>
+    </div>
+
+    <!-- ══════════════════ Documents ══════════════════ -->
+    <div class="oj-sm-padding-4x rw-metric">
+      <div class="oj-flex oj-sm-justify-content-space-between oj-sm-align-items-center oj-sm-margin-3x-bottom">
+        <h2 class="oj-typography-heading-xs oj-sm-margin-0">Attached documents</h2>
+        <oj-button chroming="borderless" on-oj-action="[[ $listeners.reloadDocs ]]">
+          <span slot="startIcon" class="oj-ux-ico-refresh"></span>
+          <span>Refresh</span>
+        </oj-button>
+      </div>
+
+      <oj-bind-if test="[[ $variables.docs.length === 0 ]]">
+        <div class="oj-typography-body-sm rw-metric-label" role="status">
+          No documents attached yet.
+        </div>
+      </oj-bind-if>
+
+      <oj-bind-if test="[[ $variables.docs.length > 0 ]]">
+        <div class="rw-grid-scroll">
+          <oj-table aria-label="Attached client timesheets"
+                    data="[[ $variables.docsADP ]]"
+                    layout="fixed"
+                    horizontal-grid-visible="enabled"
+                    selection-mode='{"row": "none", "column": "none"}'
+                    columns='[
+                      {"headerText":"Document","field":"docName","template":"nameCell","weight":3,"minWidth":200},
+                      {"headerText":"Coverage","field":"displayMode","template":"coverCell","width":150},
+                      {"headerText":"Size (KB)","field":"sizeKb","width":100},
+                      {"headerText":"Uploaded by","field":"uploadedBy","weight":2},
+                      {"headerText":"Uploaded","field":"uploadedOn","width":150},
+                      {"headerText":"Remarks","field":"remarks","weight":2},
+                      {"headerText":"","field":"docId","template":"actionCell","width":120,"sortable":"disabled"}
+                    ]'>
+
+            <template slot="nameCell" data-oj-as="row">
+              <span>
+                <span class="oj-ux-ico-file" aria-hidden="true"></span>&nbsp;
+                <oj-bind-text value="[[ row.data.docName ]]"></oj-bind-text>
+              </span>
+            </template>
+
+            <template slot="coverCell" data-oj-as="row">
+              <span>
+                <oj-bind-text value="[[ row.data.displayMode ]]"></oj-bind-text>
+                <oj-bind-if test="[[ row.data.weekIndex ]]">
+                  <span class="rw-flag rw-flag-advance">Week
+                    <oj-bind-text value="[[ row.data.weekIndex ]]"></oj-bind-text>
+                  </span>
+                </oj-bind-if>
+              </span>
+            </template>
+
+            <template slot="actionCell" data-oj-as="row">
+              <div class="oj-flex oj-sm-align-items-center oj-sm-gap-1x">
+                <!-- A plain anchor, not window.open: SES blocks browser globals
+                     in page modules, and the browser streams the file itself. -->
+                <a class="ctim-download-link"
+                   :href="[[ $page.functions.downloadUrl(row.data.docId) ]]"
+                   :aria-label="[[ $page.functions.downloadLabel(row.data.docName) ]]"
+                   target="_blank" rel="noopener">
+                  <span class="oj-ux-ico-download" aria-hidden="true"></span>
+                  <span>Download</span>
+                </a>
+                <oj-button chroming="borderless" display="icons"
+                           :aria-label="[[ $page.functions.removeLabel(row.data.docName) ]]"
+                           on-oj-action="[[ function(){ $page.functions.askRemoveDoc(row.data.docId); } ]]">
+                  <span slot="startIcon" class="oj-ux-ico-trash"></span>
+                  <span>Remove</span>
+                </oj-button>
+              </div>
+            </template>
+          </oj-table>
+        </div>
+      </oj-bind-if>
+    </div>
+
+    <oj-bind-if test="[[ $variables.busy ]]">
+      <div class="oj-flex oj-sm-align-items-center oj-sm-gap-2x" role="status" aria-live="polite">
+        <oj-progress-circle size="sm" value="-1"></oj-progress-circle>
+        <span class="oj-typography-body-sm">Working…</span>
+      </div>
+    </oj-bind-if>
+
+  </div>
+
+  <!-- ══════════════════ Remove confirmation ══════════════════ -->
+  <!-- Signed client timesheets are billing evidence under a 7-year retention
+       policy, so removal is a deliberate two-step action. An oj-dialog opened by
+       Actions.callComponentMethod, not window.confirm — SES blocks browser
+       globals in chains (knowledge/14 §7). -->
+  <oj-dialog id="removeDocDlg" dialog-title="Remove document" cancel-behavior="icon">
+    <div slot="body">
+      <p class="oj-typography-body-md">
+        <oj-bind-text value="[[ $variables.confirmMessage ]]"></oj-bind-text>
+      </p>
+      <p class="oj-typography-body-sm ctim-muted">
+        Signed client timesheets are billing evidence and are retained for audit.
+      </p>
+    </div>
+    <div slot="footer">
+      <oj-button on-oj-action="[[ $listeners.cancelRemoveDoc ]]">
+        <span>Cancel</span>
+      </oj-button>
+      <oj-button chroming="danger" disabled="[[ $variables.busy ]]"
+                 on-oj-action="[[ $listeners.confirmRemoveDoc ]]">
+        <span>Remove</span>
+      </oj-button>
+    </div>
+  </oj-dialog>
+
+</oj-sp-general-overview-page>

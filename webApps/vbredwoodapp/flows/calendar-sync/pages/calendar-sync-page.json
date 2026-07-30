@@ -1,0 +1,171 @@
+{
+  "description": "PAGE-009 Calendar (Fusion Sync) — the four calendar layers with precedence Shift > Client > Project > Corporate (PROC-013). Read-only display of what has been synced; calendars are authored in Oracle Fusion, not here (RA-005 closed).",
+  "variables": {
+    "layers": {
+      "type": "any[]",
+      "defaultValue": [],
+      "input": "none"
+    },
+    "layersADP": {
+      "type": "vb/ArrayDataProvider2",
+      "defaultValue": {
+        "itemType": "layerRowType",
+        "keyAttributes": "layer",
+        "data": "{{ $page.variables.layers }}"
+      }
+    },
+    "inspectLayer": {
+      "type": "string",
+      "defaultValue": "",
+      "input": "none"
+    },
+    "inspectScope": {
+      "type": "string",
+      "defaultValue": ""
+    },
+    "inspectFrom": {
+      "type": "string",
+      "defaultValue": ""
+    },
+    "inspectTo": {
+      "type": "string",
+      "defaultValue": ""
+    },
+    "showInspect": {
+      "type": "boolean",
+      "defaultValue": false,
+      "input": "none"
+    },
+    "days": {
+      "type": "any[]",
+      "defaultValue": [],
+      "input": "none"
+    },
+    "daysADP": {
+      "type": "vb/ArrayDataProvider2",
+      "defaultValue": {
+        "itemType": "dayRowType",
+        "keyAttributes": "calendarId",
+        "data": "{{ $page.variables.days }}"
+      }
+    },
+    "busy": {
+      "type": "boolean",
+      "defaultValue": false,
+      "input": "none"
+    }
+  },
+  "types": {
+    "layerRowType": {
+      "layer": "string",
+      "layerLabel": "string",
+      "sourceDescription": "string",
+      "precedence": "number",
+      "dayCount": "number",
+      "scopeCount": "number",
+      "fromDate": "string",
+      "toDate": "string",
+      "sourceSystem": "string",
+      "lastSyncedOn": "string",
+      "nonWorkingDays": "number",
+      "scopeHint": "string"
+    },
+    "dayRowType": {
+      "calendarId": "number",
+      "calDate": "string",
+      "dayName": "string",
+      "isWorkingDay": "string",
+      "stdHours": "number",
+      "holidayName": "string",
+      "shiftCode": "string",
+      "sourceSystem": "string",
+      "syncedOn": "string"
+    }
+  },
+  "chains": {},
+  "eventListeners": {
+    "vbEnter": {
+      "chains": [
+        {
+          "chain": "enterChain"
+        }
+      ]
+    },
+    "reload": {
+      "chains": [
+        {
+          "chain": "loadLayersChain"
+        }
+      ]
+    },
+    "loadDays": {
+      "chains": [
+        {
+          "chain": "loadDaysChain"
+        }
+      ]
+    },
+    "closeInspect": {
+      "chains": [
+        {
+          "chain": "closeInspectChain"
+        }
+      ]
+    },
+    "openInspect": {
+      "chains": [
+        {
+          "chain": "openInspectChain",
+          "parameters": {
+            "layer": "{{ $event.layer }}",
+            "scopeHint": "{{ $event.scopeHint }}"
+          }
+        }
+      ]
+    },
+    "syncLayer": {
+      "chains": [
+        {
+          "chain": "syncLayerChain",
+          "parameters": {
+            "layer": "{{ $event.layer }}"
+          }
+        }
+      ]
+    }
+  },
+  "imports": {
+    "components": {
+      "oj-sp-general-overview-page": {
+        "path": "oj-sp/general-overview-page/loader"
+      },
+      "oj-button": {
+        "path": "ojs/ojbutton"
+      },
+      "oj-input-text": {
+        "path": "ojs/ojinputtext"
+      },
+      "oj-input-date": {
+        "path": "ojs/ojdatetimepicker"
+      },
+      "oj-form-layout": {
+        "path": "ojs/ojformlayout"
+      },
+      "oj-table": {
+        "path": "ojs/ojtable"
+      },
+      "oj-dialog": {
+        "path": "ojs/ojdialog"
+      },
+      "oj-progress-circle": {
+        "path": "ojs/ojprogress-circle"
+      },
+      "oj-bind-if": {
+        "path": "ojs/ojbindif"
+      },
+      "oj-bind-text": {
+        "path": "ojs/ojbindtext"
+      }
+    }
+  }
+}

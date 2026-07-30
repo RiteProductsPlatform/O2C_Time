@@ -1,0 +1,246 @@
+{
+  "description": "PAGE-004 View Timesheet (Monthly Summary) — per-employee monthly summary for the selected project, multi-select approve/reject (ACT-012/013), and the single all-employees-at-once Confirm Month to accrual (ACT-020, gated by RULE-020).",
+  "variables": {
+    "employees": {
+      "type": "any[]",
+      "defaultValue": [],
+      "input": "none"
+    },
+    "employeesADP": {
+      "type": "vb/ArrayDataProvider2",
+      "defaultValue": {
+        "itemType": "empRowType",
+        "keyAttributes": "employeeId",
+        "data": "{{ $page.variables.employees }}"
+      }
+    },
+    "selectedKeys": {
+      "type": "any[]",
+      "defaultValue": [],
+      "description": "FLD-037 — employee ids ticked for a bulk approve/reject. Kept as a plain array, not a JET KeySet, because that is what the bulk endpoints take."
+    },
+    "totalEmployees": {
+      "type": "number",
+      "defaultValue": 0,
+      "input": "none"
+    },
+    "approvedEmployees": {
+      "type": "number",
+      "defaultValue": 0,
+      "input": "none"
+    },
+    "rejectedEmployees": {
+      "type": "number",
+      "defaultValue": 0,
+      "input": "none"
+    },
+    "pendingEmployees": {
+      "type": "number",
+      "defaultValue": 0,
+      "input": "none"
+    },
+    "confirmAllowed": {
+      "type": "boolean",
+      "defaultValue": false,
+      "input": "none",
+      "description": "RULE-020 — true only when EVERY employee on the project is Approved and the month has not already been confirmed."
+    },
+    "alreadyConfirmed": {
+      "type": "boolean",
+      "defaultValue": false,
+      "input": "none"
+    },
+    "confirmedOn": {
+      "type": "string",
+      "defaultValue": "",
+      "input": "none"
+    },
+    "accrualStatus": {
+      "type": "string",
+      "defaultValue": "",
+      "input": "none"
+    },
+    "accrualRows": {
+      "type": "number",
+      "defaultValue": 0,
+      "input": "none"
+    },
+    "showReject": {
+      "type": "boolean",
+      "defaultValue": false,
+      "input": "none"
+    },
+    "rejectReason": {
+      "type": "string",
+      "defaultValue": "",
+      "description": "FLD-057 — mandatory (RULE-013)."
+    },
+    "rejectRemarks": {
+      "type": "string",
+      "defaultValue": ""
+    },
+    "busy": {
+      "type": "boolean",
+      "defaultValue": false,
+      "input": "none"
+    },
+    "confirmMessage": {
+      "type": "string",
+      "defaultValue": "",
+      "input": "none",
+      "description": "Body text for the confirmation dialog. window.confirm cannot be used - SES blocks browser globals in chains (knowledge/14 §7)."
+    }
+  },
+  "types": {
+    "empRowType": {
+      "employeeId": "string",
+      "employeeName": "string",
+      "workerType": "string",
+      "billingStatus": "string",
+      "clientRole": "string",
+      "capType": "string",
+      "capHours": "number",
+      "capDisplay": "string",
+      "billableHours": "number",
+      "nonBillableHours": "number",
+      "leaveHours": "number",
+      "totalHours": "number",
+      "weekCount": "number",
+      "approvedWeeks": "number",
+      "rejectedWeeks": "number",
+      "monthStatus": "string",
+      "approvedOn": "string",
+      "overriddenFlag": "string",
+      "advanceClosureFlag": "string",
+      "lateSubmissionFlag": "string",
+      "defaultedFlag": "string"
+    }
+  },
+  "chains": {},
+  "eventListeners": {
+    "vbEnter": {
+      "chains": [
+        {
+          "chain": "enterChain"
+        }
+      ]
+    },
+    "reload": {
+      "chains": [
+        {
+          "chain": "loadSummaryChain"
+        }
+      ]
+    },
+    "goBack": {
+      "chains": [
+        {
+          "chain": "goBackChain"
+        }
+      ]
+    },
+    "approveSelected": {
+      "chains": [
+        {
+          "chain": "approveSelectedChain"
+        }
+      ]
+    },
+    "openReject": {
+      "chains": [
+        {
+          "chain": "openRejectChain"
+        }
+      ]
+    },
+    "closeReject": {
+      "chains": [
+        {
+          "chain": "closeRejectChain"
+        }
+      ]
+    },
+    "rejectSelected": {
+      "chains": [
+        {
+          "chain": "rejectSelectedChain"
+        }
+      ]
+    },
+    "confirmMonth": {
+      "chains": [
+        {
+          "chain": "askConfirmMonthChain"
+        }
+      ]
+    },
+    "openEmployee": {
+      "chains": [
+        {
+          "chain": "openEmployeeChain",
+          "parameters": {
+            "employeeId": "{{ $event.employeeId }}",
+            "employeeName": "{{ $event.employeeName }}"
+          }
+        }
+      ]
+    },
+    "confirmConfirmMonth": {
+      "chains": [
+        {
+          "chain": "confirmMonthChain"
+        }
+      ]
+    },
+    "cancelConfirmMonth": {
+      "chains": [
+        {
+          "chain": "cancelConfirmMonthChain"
+        }
+      ]
+    }
+  },
+  "imports": {
+    "components": {
+      "oj-sp-general-overview-page": {
+        "path": "oj-sp/general-overview-page/loader"
+      },
+      "oj-button": {
+        "path": "ojs/ojbutton"
+      },
+      "oj-text-area": {
+        "path": "ojs/ojinputtext"
+      },
+      "oj-select-single": {
+        "path": "ojs/ojselectsingle"
+      },
+      "oj-form-layout": {
+        "path": "ojs/ojformlayout"
+      },
+      "oj-label-value": {
+        "path": "ojs/ojlabelvalue"
+      },
+      "oj-table": {
+        "path": "ojs/ojtable"
+      },
+      "oj-dialog": {
+        "path": "ojs/ojdialog"
+      },
+      "oj-progress-circle": {
+        "path": "ojs/ojprogress-circle"
+      },
+      "oj-bind-if": {
+        "path": "ojs/ojbindif"
+      },
+      "oj-bind-text": {
+        "path": "ojs/ojbindtext"
+      },
+      "oj-checkboxset": {
+        "path": "ojs/ojcheckboxset"
+      },
+      "oj-option": {
+        "path": "ojs/ojoption"
+      }
+    }
+  }
+}

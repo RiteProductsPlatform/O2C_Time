@@ -1,0 +1,507 @@
+<!-- PAGE-005 Approval Detail (PER-003)
+
+     Two granularities, one page:
+
+       * weekly — tick weeks and approve/reject them wholesale (ACT-014/015).
+         Approving a week marks every one of its days approved.
+
+       * daily  — open one week and act on specific DATES (ACT-017). Selection is
+         by date, not by line: approving three of a day's five lines is not a
+         state the workflow models.
+
+     Override & approve (ACT-016) corrects a cell as the manager. It does not
+     approve anything by itself — the week is closed separately with
+     "Finish & approve", which is what makes the status 'Overridden and
+     approved' rather than a plain 'Approved'.
+
+     The change history sits at the end because it is evidence for the decision
+     being made above it. -->
+
+<oj-sp-general-overview-page
+  id="approvalDetailPage"
+  class="oj-sm-width-full rw-page-full"
+  display-options.responsive-padding="off"
+  page-title="Approval Detail"
+  page-subtitle="Approve or reject by week, or open a week and act on specific dates.">
+
+  <div class="oj-flex oj-sm-flex-direction-column oj-sm-width-full oj-sm-gap-4x"
+       slot="main">
+
+    <!-- ══════════════════ Context ══════════════════ -->
+    <div class="oj-sm-padding-4x rw-metric">
+      <div class="oj-flex oj-sm-justify-content-space-between oj-sm-align-items-start oj-sm-flex-wrap oj-sm-gap-3x">
+        <div class="oj-flex-item">
+          <oj-button chroming="borderless" on-oj-action="[[ $listeners.goBack ]]">
+            <span slot="startIcon" class="oj-ux-ico-arrow-left"></span>
+            <span>Monthly summary</span>
+          </oj-button>
+          <h2 class="oj-typography-heading-sm oj-sm-margin-0 oj-sm-margin-1x-top">
+            <oj-bind-text value="[[ $application.variables.selectedEmployeeName ]]"></oj-bind-text>
+          </h2>
+          <p class="oj-typography-body-sm rw-metric-label">
+            <oj-bind-text value="[[ $application.variables.selectedProjectName ]]"></oj-bind-text>
+            ·
+            <oj-bind-text value="[[ $application.variables.selectedPeriodName ]]"></oj-bind-text>
+          </p>
+        </div>
+        <oj-button chroming="borderless" on-oj-action="[[ $listeners.reload ]]">
+          <span slot="startIcon" class="oj-ux-ico-refresh"></span>
+          <span>Refresh</span>
+        </oj-button>
+      </div>
+    </div>
+
+    <!-- ══════════════════ WEEKLY VIEW ══════════════════ -->
+    <oj-bind-if test="[[ $variables.view === 'weekly' ]]">
+      <div class="oj-sm-padding-4x rw-metric">
+        <div class="oj-flex oj-sm-justify-content-space-between oj-sm-align-items-center oj-sm-flex-wrap oj-sm-gap-2x oj-sm-margin-3x-bottom">
+          <h2 class="oj-typography-heading-xs oj-sm-margin-0">Weeks</h2>
+          <div class="oj-flex oj-sm-align-items-center oj-sm-gap-2x oj-sm-flex-wrap">
+            <span class="oj-typography-body-sm rw-metric-label">
+              <oj-bind-text value="[[ $variables.selectedWeekKeys.length ]]"></oj-bind-text> selected
+            </span>
+            <oj-button chroming="borderless"
+                       on-oj-action="[[ function(){ $page.functions.selectPendingWeeks(); } ]]">
+              <span>Select all pending</span>
+            </oj-button>
+            <oj-button chroming="borderless"
+                       disabled="[[ $variables.selectedWeekKeys.length === 0 ]]"
+                       on-oj-action="[[ function(){ $page.functions.clearWeekSelection(); } ]]">
+              <span>Clear</span>
+            </oj-button>
+            <oj-button chroming="outlined"
+                       disabled="[[ $variables.busy || $variables.selectedWeekKeys.length === 0 ]]"
+                       on-oj-action="[[ $listeners.openRejectWeek ]]">
+              <span>Reject selected</span>
+            </oj-button>
+            <oj-button chroming="callToAction"
+                       disabled="[[ $variables.busy || $variables.selectedWeekKeys.length === 0 ]]"
+                       on-oj-action="[[ $listeners.approveWeeks ]]">
+              <span>Approve selected</span>
+            </oj-button>
+          </div>
+        </div>
+
+        <oj-bind-if test="[[ $variables.weeks.length === 0 && !$variables.busy ]]">
+          <div class="oj-typography-body-sm rw-metric-label" role="status">
+            No submitted weeks — this employee has no weeks on this project for this month.
+          </div>
+        </oj-bind-if>
+
+        <oj-bind-if test="[[ $variables.weeks.length > 0 ]]">
+          <div class="rw-grid-scroll">
+            <oj-table aria-label="Weeks for this employee"
+                      data="[[ $variables.weeksADP ]]"
+                      layout="fixed"
+                      horizontal-grid-visible="enabled"
+                      selection-mode='{"row": "none", "column": "none"}'
+                      columns='[
+                        {"headerText":"","field":"tsWeekId","template":"pickCell","width":44,"sortable":"disabled"},
+                        {"headerText":"Week","field":"weekIndex","template":"weekCell","weight":2,"minWidth":190},
+                        {"headerText":"Projects","field":"projects","weight":2},
+                        {"headerText":"Billable","field":"billableHours","template":"billCell","width":95},
+                        {"headerText":"Non-bill","field":"nonBillableHours","template":"nonBillCell","width":95},
+                        {"headerText":"Leave","field":"leaveHours","template":"leaveCell","width":85},
+                        {"headerText":"Billing loss","field":"billingLossHours","template":"lossCell","width":110},
+                        {"headerText":"Total","field":"totalHours","template":"totalCell","width":85},
+                        {"headerText":"Days","field":"daysApproved","template":"daysCell","width":130},
+                        {"headerText":"Status","field":"weekStatus","template":"statusCell","weight":2,"minWidth":190},
+                        {"headerText":"","field":"tsWeekId","template":"actionCell","width":100,"sortable":"disabled"}
+                      ]'>
+
+              <template slot="pickCell" data-oj-as="row">
+                <!-- A settled week has nothing to decide, so it cannot be ticked.
+                     oj-checkboxset rather than a raw HTML checkbox: Redwood standards
+                     forbid raw HTML form controls. -->
+                <oj-checkboxset class="apdt-row-pick"
+                                :aria-label="[[ $page.functions.weekPickLabel(row.data.weekIndex) ]]"
+                                :disabled="[[ $page.functions.isSettled(row.data.weekStatus) ]]"
+                                :value="[[ $page.functions.weekPickValue(row.data.tsWeekId) ]]"
+                                on-value-changed="[[ function(e){ $page.functions.toggleWeekPick(row.data.tsWeekId, e); } ]]">
+                  <oj-option value="on"></oj-option>
+                </oj-checkboxset>
+              </template>
+
+              <template slot="weekCell" data-oj-as="row">
+                <span>
+                  Week <oj-bind-text value="[[ row.data.weekIndex ]]"></oj-bind-text>
+                  <div class="oj-typography-body-xs rw-metric-label">
+                    <oj-bind-text value="[[ row.data.weekRange ]]"></oj-bind-text>
+                  </div>
+                </span>
+              </template>
+
+              <template slot="billCell" data-oj-as="row">
+                <span><oj-bind-text value="[[ $application.functions.fmtHours(row.data.billableHours) ]]"></oj-bind-text></span>
+              </template>
+              <template slot="nonBillCell" data-oj-as="row">
+                <span><oj-bind-text value="[[ $application.functions.fmtHours(row.data.nonBillableHours) ]]"></oj-bind-text></span>
+              </template>
+              <template slot="leaveCell" data-oj-as="row">
+                <span><oj-bind-text value="[[ $application.functions.fmtHours(row.data.leaveHours) ]]"></oj-bind-text></span>
+              </template>
+              <template slot="lossCell" data-oj-as="row">
+                <span><oj-bind-text value="[[ $application.functions.fmtHours(row.data.billingLossHours) ]]"></oj-bind-text></span>
+              </template>
+              <template slot="totalCell" data-oj-as="row">
+                <span class="oj-typography-semi-bold"><oj-bind-text value="[[ $application.functions.fmtHours(row.data.totalHours) ]]"></oj-bind-text></span>
+              </template>
+
+              <template slot="daysCell" data-oj-as="row">
+                <span>
+                  <oj-bind-text value="[[ row.data.daysApproved ]]"></oj-bind-text> /
+                  <oj-bind-text value="[[ row.data.daysTotal ]]"></oj-bind-text> appr.
+                  <oj-bind-if test="[[ row.data.daysRejected > 0 ]]">
+                    <span class="rw-flag rw-flag-reversal">
+                      <oj-bind-text value="[[ row.data.daysRejected ]]"></oj-bind-text> rej.
+                    </span>
+                  </oj-bind-if>
+                </span>
+              </template>
+
+              <template slot="statusCell" data-oj-as="row">
+                <span>
+                  <span :class="[[ $application.functions.statusClass(row.data.weekStatus) ]]">
+                    <oj-bind-text value="[[ row.data.weekStatus ]]"></oj-bind-text>
+                  </span>
+                  <!-- The 6 flags, derived from the raw row so this page and the
+                       employee's own page always say the same thing. -->
+                  <oj-bind-for-each data="[[ $application.functions.weekFlags(row.data) ]]">
+                    <template>
+                      <span :class="[[ $current.data.cls ]]" :title="[[ $current.data.title ]]">
+                        <oj-bind-text value="[[ $current.data.label ]]"></oj-bind-text>
+                      </span>
+                    </template>
+                  </oj-bind-for-each>
+                </span>
+              </template>
+
+              <template slot="actionCell" data-oj-as="row">
+                <oj-button chroming="outlined"
+                           :aria-label="[[ $page.functions.openWeekLabel(row.data.weekIndex) ]]"
+                           on-oj-action="[[ function(){
+                              $page.listeners.openWeek({
+                                tsWeekId: row.data.tsWeekId,
+                                label: $page.functions.weekLabelFor(row.data) }); } ]]">
+                  <span>Open</span>
+                </oj-button>
+              </template>
+            </oj-table>
+          </div>
+        </oj-bind-if>
+      </div>
+    </oj-bind-if>
+
+    <!-- ══════════════════ DAILY VIEW ══════════════════ -->
+    <oj-bind-if test="[[ $variables.view === 'daily' ]]">
+      <div class="oj-sm-padding-4x rw-metric">
+        <div class="oj-flex oj-sm-justify-content-space-between oj-sm-align-items-center oj-sm-flex-wrap oj-sm-gap-2x oj-sm-margin-3x-bottom">
+          <div>
+            <oj-button chroming="borderless" on-oj-action="[[ $listeners.showWeekly ]]">
+              <span slot="startIcon" class="oj-ux-ico-arrow-left"></span>
+              <span>All weeks</span>
+            </oj-button>
+            <h2 class="oj-typography-heading-xs oj-sm-margin-0 oj-sm-margin-1x-top">
+              <oj-bind-text value="[[ $variables.weekLabel ]]"></oj-bind-text>
+              <span :class="[[ $application.functions.statusClass($variables.weekStatus) ]]">
+                <oj-bind-text value="[[ $variables.weekStatus ]]"></oj-bind-text>
+              </span>
+            </h2>
+          </div>
+
+          <div class="oj-flex oj-sm-align-items-center oj-sm-gap-2x oj-sm-flex-wrap">
+            <span class="oj-typography-body-sm rw-metric-label">
+              <oj-bind-text value="[[ $variables.selectedDates.length ]]"></oj-bind-text> dates selected
+            </span>
+            <oj-button chroming="borderless"
+                       on-oj-action="[[ function(){ $page.functions.selectAllDates(); } ]]">
+              <span>Select all dates</span>
+            </oj-button>
+            <oj-button chroming="borderless"
+                       disabled="[[ $variables.selectedDates.length === 0 ]]"
+                       on-oj-action="[[ function(){ $page.functions.clearDateSelection(); } ]]">
+              <span>Clear</span>
+            </oj-button>
+            <oj-button chroming="outlined"
+                       disabled="[[ $variables.busy || $variables.selectedDates.length === 0 ]]"
+                       on-oj-action="[[ $listeners.openRejectDates ]]">
+              <span>Reject dates</span>
+            </oj-button>
+            <oj-button chroming="callToAction"
+                       disabled="[[ $variables.busy || $variables.selectedDates.length === 0 ]]"
+                       on-oj-action="[[ $listeners.approveDates ]]">
+              <span>Approve dates</span>
+            </oj-button>
+          </div>
+        </div>
+
+        <!-- After an override the week must be closed explicitly, so the status
+             records that a manager changed the hours. -->
+        <oj-bind-if test="[[ $variables.overrideCount > 0 ]]">
+          <div class="oj-sm-padding-3x oj-sm-margin-3x-bottom rw-notice rw-notice-warning" role="status">
+            <div class="oj-flex oj-sm-justify-content-space-between oj-sm-align-items-center oj-sm-gap-3x oj-sm-flex-wrap">
+              <span>
+                <oj-bind-text value="[[ $variables.overrideCount ]]"></oj-bind-text>
+                cell(s) corrected in this sitting. Close the week with
+                <strong>Finish &amp; approve</strong> so it is recorded as
+                "Overridden and approved" rather than a plain approval.
+              </span>
+              <oj-button chroming="callToAction" disabled="[[ $variables.busy ]]"
+                         on-oj-action="[[ $listeners.finishOverride ]]">
+                <span>Finish &amp; approve</span>
+              </oj-button>
+            </div>
+          </div>
+        </oj-bind-if>
+
+        <oj-bind-if test="[[ $variables.days.length === 0 && !$variables.busy ]]">
+          <div class="oj-typography-body-sm rw-metric-label" role="status">
+            No time lines on this week.
+          </div>
+        </oj-bind-if>
+
+        <oj-bind-if test="[[ $variables.days.length > 0 ]]">
+          <div class="rw-grid-scroll">
+            <oj-table aria-label="Daily lines for the open week"
+                      data="[[ $variables.daysADP ]]"
+                      layout="fixed"
+                      horizontal-grid-visible="enabled"
+                      selection-mode='{"row": "none", "column": "none"}'
+                      columns='[
+                        {"headerText":"","field":"tsEntryId","template":"pickCell","width":44,"sortable":"disabled"},
+                        {"headerText":"Date","field":"entryDate","template":"dateCell","width":140},
+                        {"headerText":"Project","field":"projectName","weight":2,"minWidth":150},
+                        {"headerText":"Task","field":"taskName","template":"taskCell","weight":2,"minWidth":150},
+                        {"headerText":"Hours","field":"hours","template":"hoursCell","width":90},
+                        {"headerText":"Type","field":"billableType","template":"typeCell","width":130},
+                        {"headerText":"Shift","field":"shiftCode","width":90},
+                        {"headerText":"Day status","field":"dayStatus","template":"dayStatusCell","width":140},
+                        {"headerText":"Source","field":"source","width":100},
+                        {"headerText":"","field":"tsEntryId","template":"actionCell","width":110,"sortable":"disabled"}
+                      ]'>
+
+              <template slot="pickCell" data-oj-as="row">
+                <!-- Ticking any line ticks the whole DATE — approval is by day. -->
+                <oj-checkboxset class="apdt-row-pick"
+                                :aria-label="[[ $page.functions.datePickLabel(row.data.entryDate) ]]"
+                                :value="[[ $page.functions.datePickValue(row.data.entryDate) ]]"
+                                on-value-changed="[[ function(e){ $page.functions.toggleDatePick(row.data.entryDate, e); } ]]">
+                  <oj-option value="on"></oj-option>
+                </oj-checkboxset>
+              </template>
+
+              <template slot="dateCell" data-oj-as="row">
+                <span>
+                  <oj-bind-text value="[[ $application.functions.fmtDate(row.data.entryDate) ]]"></oj-bind-text>
+                  <div class="oj-typography-body-xs rw-metric-label">
+                    <oj-bind-text value="[[ row.data.dayName ]]"></oj-bind-text>
+                  </div>
+                </span>
+              </template>
+
+              <template slot="taskCell" data-oj-as="row">
+                <span>
+                  <oj-bind-text value="[[ row.data.taskName ]]"></oj-bind-text>
+                  <oj-bind-if test="[[ row.data.isLeave === 'Y' ]]">
+                    <span class="rw-flag rw-flag-advance"
+                          :title="[[ $page.functions.leaveTitle(row.data.absenceType) ]]">Leave</span>
+                  </oj-bind-if>
+                  <oj-bind-if test="[[ row.data.entryType === 'Reversal' ]]">
+                    <span class="rw-flag rw-flag-reversal">Reversal</span>
+                  </oj-bind-if>
+                  <oj-bind-if test="[[ row.data.entryType === 'Adjustment' ]]">
+                    <span class="rw-flag rw-flag-adjustment">Adjustment</span>
+                  </oj-bind-if>
+                  <oj-bind-if test="[[ row.data.entryType === 'Default' ]]">
+                    <span class="rw-flag rw-flag-defaulted">Default hours</span>
+                  </oj-bind-if>
+                </span>
+              </template>
+
+              <template slot="hoursCell" data-oj-as="row">
+                <span class="oj-typography-semi-bold">
+                  <oj-bind-text value="[[ $application.functions.fmtHours(row.data.hours) ]]"></oj-bind-text>
+                </span>
+              </template>
+
+              <!-- FLD-012 Billable Type is manager-only; it is deliberately not
+                   on the employee's own page. -->
+              <template slot="typeCell" data-oj-as="row">
+                <span>
+                  <oj-bind-text value="[[ row.data.billableType ]]"></oj-bind-text>
+                  <oj-bind-if test="[[ row.data.billableType === 'Non-billable'
+                                    && row.data.unbilledReason
+                                    && row.data.unbilledReason !== '—' ]]">
+                    <div class="oj-typography-body-xs rw-metric-label">
+                      <oj-bind-text value="[[ row.data.unbilledReason ]]"></oj-bind-text>
+                    </div>
+                  </oj-bind-if>
+                </span>
+              </template>
+
+              <template slot="dayStatusCell" data-oj-as="row">
+                <span :class="[[ $application.functions.statusClass(row.data.dayStatus) ]]"
+                      :title="[[ $page.functions.rejectTitle(row.data) ]]">
+                  <oj-bind-text value="[[ row.data.dayStatus ]]"></oj-bind-text>
+                </span>
+              </template>
+
+              <template slot="actionCell" data-oj-as="row">
+                <!-- Leave comes from HCM and is not the manager's to retype
+                     (RULE-008); everything else can be corrected. -->
+                <oj-bind-if test="[[ row.data.isLeave !== 'Y' ]]">
+                  <oj-button chroming="borderless"
+                             disabled="[[ $variables.busy ]]"
+                             :aria-label="[[ $page.functions.correctLabel(row.data.taskName) ]]"
+                             on-oj-action="[[ function(){
+                                $page.listeners.openOverride({
+                                  tsEntryId: row.data.tsEntryId,
+                                  label: $page.functions.overrideLabelFor(row.data),
+                                  hours: row.data.hours }); } ]]">
+                    <span>Correct</span>
+                  </oj-button>
+                </oj-bind-if>
+              </template>
+            </oj-table>
+          </div>
+        </oj-bind-if>
+      </div>
+
+      <!-- ══════════════════ Change history (REP-007 / NFR-010) ══════════════════ -->
+      <div class="oj-sm-padding-4x rw-metric">
+        <h2 class="oj-typography-heading-xs oj-sm-margin-0">Change history</h2>
+        <p class="oj-typography-body-sm rw-metric-label oj-sm-margin-1x-top">
+          Every manager correction and retro adjustment on this week, with the
+          employee's original value retained.
+        </p>
+
+        <oj-bind-if test="[[ $variables.auditRows.length === 0 ]]">
+          <div class="oj-typography-body-sm rw-metric-label oj-sm-margin-2x-top" role="status">
+            Nothing has been changed on this week.
+          </div>
+        </oj-bind-if>
+
+        <oj-bind-if test="[[ $variables.auditRows.length > 0 ]]">
+          <div class="rw-grid-scroll oj-sm-margin-3x-top">
+            <oj-table aria-label="Change history for this week"
+                      data="[[ $variables.auditADP ]]"
+                      layout="fixed"
+                      horizontal-grid-visible="enabled"
+                      selection-mode='{"row": "none", "column": "none"}'
+                      columns='[
+                        {"headerText":"Date","field":"entryDate","template":"aDateCell","width":130},
+                        {"headerText":"Change","field":"changeType","width":140},
+                        {"headerText":"From","field":"oldProjectName","template":"fromCell","weight":2},
+                        {"headerText":"To","field":"newProjectName","template":"toCell","weight":2},
+                        {"headerText":"Delta","field":"deltaHours","template":"deltaCell","width":90},
+                        {"headerText":"Reason","field":"changeReason","weight":2},
+                        {"headerText":"By","field":"changedBy","weight":2},
+                        {"headerText":"When","field":"changedOn","width":160}
+                      ]'>
+              <template slot="aDateCell" data-oj-as="row">
+                <span><oj-bind-text value="[[ $application.functions.fmtDate(row.data.entryDate) ]]"></oj-bind-text></span>
+              </template>
+              <template slot="fromCell" data-oj-as="row">
+                <span>
+                  <oj-bind-text value="[[ row.data.oldProjectName ]]"></oj-bind-text>
+                  <oj-bind-if test="[[ row.data.oldTaskCode ]]">
+                    / <oj-bind-text value="[[ row.data.oldTaskCode ]]"></oj-bind-text>
+                  </oj-bind-if>
+                  (<oj-bind-text value="[[ $application.functions.fmtHours(row.data.oldHours) ]]"></oj-bind-text>)
+                </span>
+              </template>
+              <template slot="toCell" data-oj-as="row">
+                <span>
+                  <oj-bind-text value="[[ row.data.newProjectName ]]"></oj-bind-text>
+                  <oj-bind-if test="[[ row.data.newTaskCode ]]">
+                    / <oj-bind-text value="[[ row.data.newTaskCode ]]"></oj-bind-text>
+                  </oj-bind-if>
+                  (<oj-bind-text value="[[ $application.functions.fmtHours(row.data.newHours) ]]"></oj-bind-text>)
+                </span>
+              </template>
+              <template slot="deltaCell" data-oj-as="row">
+                <span><oj-bind-text value="[[ $application.functions.fmtHours(row.data.deltaHours) ]]"></oj-bind-text></span>
+              </template>
+            </oj-table>
+          </div>
+        </oj-bind-if>
+      </div>
+    </oj-bind-if>
+
+    <oj-bind-if test="[[ $variables.busy ]]">
+      <div class="oj-flex oj-sm-align-items-center oj-sm-gap-2x" role="status" aria-live="polite">
+        <oj-progress-circle size="sm" value="-1"></oj-progress-circle>
+        <span class="oj-typography-body-sm">Working…</span>
+      </div>
+    </oj-bind-if>
+
+  </div>
+
+  <!-- ══════════════════ Reject dialog (RULE-013) ══════════════════ -->
+  <oj-dialog id="rejectDlg" dialog-title="Reject" cancel-behavior="icon"
+             opened="{{ $variables.showReject }}">
+    <div slot="body">
+      <p class="oj-typography-body-sm rw-metric-label">
+        <oj-bind-text value="[[ $page.functions.rejectScopeNote($variables.rejectScope) ]]"></oj-bind-text>
+      </p>
+      <oj-form-layout label-edge="top" max-columns="1">
+        <oj-select-single label-hint="Rejection reason" required="true"
+                          data="[[ $application.variables.rejectReasonOptions ]]"
+                          value="{{ $variables.rejectReason }}"
+                          item-text="label"
+                          placeholder="Select a reason">
+        </oj-select-single>
+        <oj-text-area label-hint="Remarks" rows="3"
+                      value="{{ $variables.rejectRemarks }}"
+                      placeholder="What needs to change?">
+        </oj-text-area>
+      </oj-form-layout>
+    </div>
+    <div slot="footer">
+      <oj-button on-oj-action="[[ $listeners.closeReject ]]">
+        <span>Cancel</span>
+      </oj-button>
+      <oj-button chroming="callToAction"
+                 disabled="[[ $variables.busy || !$variables.rejectReason ]]"
+                 on-oj-action="[[ $listeners.doReject ]]">
+        <span>Reject</span>
+      </oj-button>
+    </div>
+  </oj-dialog>
+
+  <!-- ══════════════════ Override dialog (ACT-016) ══════════════════ -->
+  <oj-dialog id="overrideDlg" dialog-title="Correct hours" cancel-behavior="icon"
+             opened="{{ $variables.showOverride }}">
+    <div slot="body">
+      <p class="oj-typography-body-sm rw-metric-label">
+        <oj-bind-text value="[[ $variables.overrideLabel ]]"></oj-bind-text>
+      </p>
+      <p class="oj-typography-body-sm rw-metric-label">
+        The employee's original value is kept in the change history. This corrects
+        the cell only — close the week with <strong>Finish &amp; approve</strong>
+        when you are done.
+      </p>
+      <oj-form-layout label-edge="top" max-columns="1">
+        <oj-input-number label-hint="Corrected hours" required="true"
+                         value="{{ $variables.overrideHours }}"
+                         min="0" max="24" step="0.25">
+        </oj-input-number>
+        <oj-text-area label-hint="Reason for the correction" rows="2" required="true"
+                      value="{{ $variables.overrideReason }}"
+                      placeholder="Kept in the audit trail">
+        </oj-text-area>
+      </oj-form-layout>
+    </div>
+    <div slot="footer">
+      <oj-button on-oj-action="[[ $listeners.closeOverride ]]">
+        <span>Cancel</span>
+      </oj-button>
+      <oj-button chroming="callToAction"
+                 disabled="[[ $variables.busy || !$variables.overrideReason ]]"
+                 on-oj-action="[[ $listeners.doOverride ]]">
+        <span>Apply correction</span>
+      </oj-button>
+    </div>
+  </oj-dialog>
+
+</oj-sp-general-overview-page>

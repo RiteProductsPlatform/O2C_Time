@@ -1,0 +1,9 @@
+{
+  "id": "my-timesheet",
+  "description": "PAGE-001 My Timesheet — weekly time entry, submit, retro adjustments (PER-001, PER-002).",
+  "defaultPage": "my-timesheet",
+  "chains": {},
+  "services": {},
+  "types": {},
+  "variables": {}
+}

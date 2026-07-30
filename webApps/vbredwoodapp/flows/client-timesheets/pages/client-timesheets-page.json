@@ -1,0 +1,241 @@
+{
+  "description": "PAGE-002 Client Timesheets — upload customer-approved (signed) timesheets per Project + Billing Period. Deliberately independent of the billing close date: signed sheets often arrive 1-2 weeks after close, there may be several per period, and there is no approval step (PROC-011 / BRD 4.3).",
+  "variables": {
+    "projectId": {
+      "type": "number",
+      "defaultValue": null,
+      "onValueChanged": {
+        "chains": [
+          {
+            "chain": "loadDocsChain"
+          }
+        ]
+      }
+    },
+    "periodId": {
+      "type": "number",
+      "defaultValue": null,
+      "onValueChanged": {
+        "chains": [
+          {
+            "chain": "loadDocsChain"
+          }
+        ]
+      }
+    },
+    "displayMode": {
+      "type": "string",
+      "defaultValue": "Whole month",
+      "description": "FLD-021 — Week-wise or Whole month."
+    },
+    "weekIndex": {
+      "type": "number",
+      "defaultValue": null,
+      "description": "Only meaningful when displayMode is Week-wise."
+    },
+    "projectOptionsArray": {
+      "type": "any[]",
+      "defaultValue": [],
+      "input": "none"
+    },
+    "projectOptions": {
+      "type": "vb/ArrayDataProvider2",
+      "defaultValue": {
+        "itemType": "lovOptType",
+        "keyAttributes": "value",
+        "data": "{{ $page.variables.projectOptionsArray }}"
+      }
+    },
+    "displayModeOptions": {
+      "type": "vb/ArrayDataProvider2",
+      "defaultValue": {
+        "itemType": "strLovType",
+        "keyAttributes": "value",
+        "data": [
+          {
+            "value": "Whole month",
+            "label": "Whole month"
+          },
+          {
+            "value": "Week-wise",
+            "label": "Week-wise"
+          }
+        ]
+      }
+    },
+    "docs": {
+      "type": "any[]",
+      "defaultValue": [],
+      "input": "none"
+    },
+    "docsADP": {
+      "type": "vb/ArrayDataProvider2",
+      "defaultValue": {
+        "itemType": "docRowType",
+        "keyAttributes": "docId",
+        "data": "{{ $page.variables.docs }}"
+      }
+    },
+    "pendingFileName": {
+      "type": "string",
+      "defaultValue": "",
+      "input": "none"
+    },
+    "pendingMimeType": {
+      "type": "string",
+      "defaultValue": "",
+      "input": "none"
+    },
+    "pendingBase64": {
+      "type": "string",
+      "defaultValue": "",
+      "input": "none",
+      "description": "The selected file, base64-encoded in the browser. Sent to ORDS which decodes it in chunks and enforces the 25MB ceiling and MIME whitelist server-side."
+    },
+    "pendingSize": {
+      "type": "number",
+      "defaultValue": 0,
+      "input": "none"
+    },
+    "pendingSizeKb": {
+      "type": "number",
+      "defaultValue": 0,
+      "input": "none",
+      "description": "Precomputed for display — the markup stays free of arithmetic."
+    },
+    "remarks": {
+      "type": "string",
+      "defaultValue": ""
+    },
+    "busy": {
+      "type": "boolean",
+      "defaultValue": false,
+      "input": "none"
+    },
+    "uploadHint": {
+      "type": "string",
+      "defaultValue": "",
+      "input": "none"
+    },
+    "//confirm": "State for the remove-confirmation dialog. window.confirm cannot be used — SES blocks browser globals in chains (knowledge/14 §7).",
+    "confirmDocId": {
+      "type": "number",
+      "defaultValue": null,
+      "input": "none"
+    },
+    "confirmMessage": {
+      "type": "string",
+      "defaultValue": "",
+      "input": "none"
+    }
+  },
+  "types": {
+    "lovOptType": {
+      "value": "number",
+      "label": "string"
+    },
+    "strLovType": {
+      "value": "string",
+      "label": "string"
+    },
+    "docRowType": {
+      "docId": "number",
+      "docName": "string",
+      "mimeType": "string",
+      "sizeKb": "number",
+      "displayMode": "string",
+      "weekIndex": "number",
+      "uploadedBy": "string",
+      "uploadedOn": "string",
+      "remarks": "string"
+    }
+  },
+  "chains": {},
+  "eventListeners": {
+    "vbEnter": {
+      "chains": [
+        {
+          "chain": "enterChain"
+        }
+      ]
+    },
+    "uploadDoc": {
+      "chains": [
+        {
+          "chain": "uploadDocChain"
+        }
+      ]
+    },
+    "reloadDocs": {
+      "chains": [
+        {
+          "chain": "loadDocsChain"
+        }
+      ]
+    },
+    "askRemoveDoc": {
+      "chains": [
+        {
+          "chain": "askRemoveDocChain",
+          "parameters": {
+            "docId": "{{ $event.docId }}"
+          }
+        }
+      ]
+    },
+    "confirmRemoveDoc": {
+      "chains": [
+        {
+          "chain": "removeDocChain"
+        }
+      ]
+    },
+    "cancelRemoveDoc": {
+      "chains": [
+        {
+          "chain": "cancelRemoveDocChain"
+        }
+      ]
+    }
+  },
+  "imports": {
+    "components": {
+      "oj-sp-general-overview-page": {
+        "path": "oj-sp/general-overview-page/loader"
+      },
+      "oj-button": {
+        "path": "ojs/ojbutton"
+      },
+      "oj-file-picker": {
+        "path": "ojs/ojfilepicker"
+      },
+      "oj-input-text": {
+        "path": "ojs/ojinputtext"
+      },
+      "oj-input-number": {
+        "path": "ojs/ojinputnumber"
+      },
+      "oj-select-single": {
+        "path": "ojs/ojselectsingle"
+      },
+      "oj-form-layout": {
+        "path": "ojs/ojformlayout"
+      },
+      "oj-table": {
+        "path": "ojs/ojtable"
+      },
+      "oj-progress-circle": {
+        "path": "ojs/ojprogress-circle"
+      },
+      "oj-bind-if": {
+        "path": "ojs/ojbindif"
+      },
+      "oj-bind-text": {
+        "path": "ojs/ojbindtext"
+      },
+      "oj-dialog": {
+        "path": "ojs/ojdialog"
+      }
+    }
+  }
+}

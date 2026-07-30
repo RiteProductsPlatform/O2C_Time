@@ -1,0 +1,217 @@
+<!-- PAGE-010 Sync Status (PER-004 admin)
+
+     Two questions, in order:
+       1. Did the jobs run, and did they fit their window?  (NFR-003)
+       2. What did they fail on, and can it be retried?     (ACT-032)
+
+     The three run buttons exist because the jobs are normally scheduled: after
+     fixing a cause at source an admin wants the repair now, not at the next
+     scheduled run. Population is safe to re-run — it never overwrites an entry
+     that already exists, so employee input is preserved. -->
+
+<oj-sp-general-overview-page
+  id="syncStatusPage"
+  class="oj-sm-width-full rw-page-full"
+  display-options.responsive-padding="off"
+  page-title="Sync Status"
+  page-subtitle="Population, daily action-date and defaulting jobs, and the records they could not process.">
+
+  <div class="oj-flex oj-sm-flex-direction-column oj-sm-width-full oj-sm-gap-4x"
+       slot="main">
+
+    <!-- ══════════════════ Manual runs ══════════════════ -->
+    <div class="oj-sm-padding-4x rw-metric">
+      <div class="oj-flex oj-sm-justify-content-space-between oj-sm-align-items-start oj-sm-flex-wrap oj-sm-gap-3x">
+        <oj-form-layout max-columns="2" direction="row" label-edge="top" class="oj-flex-item">
+          <oj-select-single label-hint="Period for the job"
+                            data="[[ $application.variables.periodOptions ]]"
+                            value="{{ $variables.runJobPeriodId }}"
+                            item-text="label"
+                            placeholder="Select period">
+          </oj-select-single>
+        </oj-form-layout>
+
+        <div class="oj-flex oj-sm-gap-2x oj-sm-flex-wrap">
+          <oj-button chroming="borderless" on-oj-action="[[ $listeners.reload ]]">
+            <span slot="startIcon" class="oj-ux-ico-refresh"></span>
+            <span>Refresh</span>
+          </oj-button>
+          <oj-button chroming="outlined" disabled="[[ $variables.busy ]]"
+                     on-oj-action="[[ $listeners.runDaily ]]">
+            <span>Run daily process</span>
+          </oj-button>
+          <oj-button chroming="outlined"
+                     disabled="[[ $variables.busy || !$variables.runJobPeriodId ]]"
+                     on-oj-action="[[ $listeners.runDefaulting ]]">
+            <span>Run defaulting</span>
+          </oj-button>
+          <oj-button chroming="callToAction"
+                     disabled="[[ $variables.busy || !$variables.runJobPeriodId ]]"
+                     on-oj-action="[[ $listeners.runPopulation ]]">
+            <span>Run population</span>
+          </oj-button>
+        </div>
+      </div>
+
+      <oj-bind-if test="[[ $variables.openFailures > 0 ]]">
+        <div class="oj-sm-padding-3x oj-sm-margin-3x-top rw-notice rw-notice-warning" role="status">
+          <oj-bind-text value="[[ $variables.openFailures ]]"></oj-bind-text>
+          record(s) still failing. A retry only succeeds once the cause is fixed
+          at source — an allocation created, a shift calendar loaded.
+        </div>
+      </oj-bind-if>
+    </div>
+
+    <!-- ══════════════════ Job cards ══════════════════ -->
+    <div class="oj-sm-padding-4x rw-metric">
+      <h2 class="oj-typography-heading-xs oj-sm-margin-0 oj-sm-margin-3x-bottom">
+        Latest run per job
+      </h2>
+
+      <oj-bind-if test="[[ $variables.jobs.length === 0 && !$variables.busy ]]">
+        <div class="oj-typography-body-sm rw-metric-label" role="status">
+          No job has run yet.
+        </div>
+      </oj-bind-if>
+
+      <oj-bind-if test="[[ $variables.jobs.length > 0 ]]">
+        <div class="rw-grid-scroll">
+          <oj-table aria-label="Job runs"
+                    data="[[ $variables.jobsADP ]]"
+                    layout="fixed"
+                    horizontal-grid-visible="enabled"
+                    selection-mode='{"row": "none", "column": "none"}'
+                    scroll-policy="loadMoreOnScroll"
+                    scroll-policy-options='{"fetchSize": 25}'
+                    columns='[
+                      {"headerText":"Job","field":"jobName","template":"jobCell","weight":3,"minWidth":210},
+                      {"headerText":"Scope","field":"scopeKey","width":130},
+                      {"headerText":"Status","field":"jobStatus","template":"statusCell","width":130},
+                      {"headerText":"Last run","field":"lastRun","width":170},
+                      {"headerText":"Duration","field":"durationText","width":110},
+                      {"headerText":"Read","field":"recordsRead","width":85},
+                      {"headerText":"Upserted","field":"recordsUpserted","width":100},
+                      {"headerText":"Failed","field":"recordsFailed","template":"failedCell","width":95},
+                      {"headerText":"Message","field":"message","weight":3,"minWidth":220}
+                    ]'>
+
+            <template slot="jobCell" data-oj-as="row">
+              <span>
+                <oj-bind-text value="[[ row.data.jobName ]]"></oj-bind-text>
+                <div class="oj-typography-body-xs rw-metric-label">
+                  <oj-bind-text value="[[ row.data.periodName || row.data.actionDate || row.data.jobType ]]"></oj-bind-text>
+                </div>
+              </span>
+            </template>
+
+            <template slot="statusCell" data-oj-as="row">
+              <span :class="[[ $page.functions.jobStatusClass(row.data.jobStatus) ]]">
+                <oj-bind-text value="[[ row.data.jobStatus ]]"></oj-bind-text>
+              </span>
+            </template>
+
+            <template slot="failedCell" data-oj-as="row">
+              <span :class="[[ $page.functions.failedClass(row.data.recordsFailed) ]]">
+                <oj-bind-text value="[[ row.data.recordsFailed ]]"></oj-bind-text>
+              </span>
+            </template>
+          </oj-table>
+        </div>
+      </oj-bind-if>
+    </div>
+
+    <!-- ══════════════════ Failed-record queue ══════════════════ -->
+    <div class="oj-sm-padding-4x rw-metric">
+      <div class="oj-flex oj-sm-justify-content-space-between oj-sm-align-items-center oj-sm-flex-wrap oj-sm-gap-2x oj-sm-margin-3x-bottom">
+        <h2 class="oj-typography-heading-xs oj-sm-margin-0">Failed records</h2>
+        <oj-switch label-hint="Show resolved too"
+                   value="{{ $variables.showResolved }}">
+        </oj-switch>
+      </div>
+
+      <oj-bind-if test="[[ $variables.failed.length === 0 && !$variables.busy ]]">
+        <div class="oj-typography-body-sm rw-metric-label" role="status">
+          No failed records.
+        </div>
+      </oj-bind-if>
+
+      <oj-bind-if test="[[ $variables.failed.length > 0 ]]">
+        <div class="rw-grid-scroll">
+          <oj-table aria-label="Failed records"
+                    data="[[ $variables.failedADP ]]"
+                    layout="fixed"
+                    horizontal-grid-visible="enabled"
+                    selection-mode='{"row": "none", "column": "none"}'
+                    scroll-policy="loadMoreOnScroll"
+                    scroll-policy-options='{"fetchSize": 25}'
+                    columns='[
+                      {"headerText":"Job","field":"jobName","weight":2,"minWidth":160},
+                      {"headerText":"Entity","field":"entityType","template":"entityCell","weight":2,"minWidth":170},
+                      {"headerText":"Employee","field":"employeeName","weight":2,"minWidth":170},
+                      {"headerText":"Reason","field":"failureReason","weight":3,"minWidth":240},
+                      {"headerText":"Retries","field":"retryCount","width":90},
+                      {"headerText":"First seen","field":"firstSeenOn","width":160},
+                      {"headerText":"State","field":"resolvedFlag","template":"stateCell","width":120},
+                      {"headerText":"","field":"failedId","template":"actionCell","width":100,"sortable":"disabled"}
+                    ]'>
+
+            <template slot="entityCell" data-oj-as="row">
+              <span>
+                <oj-bind-text value="[[ row.data.entityType ]]"></oj-bind-text>
+                <div class="oj-typography-body-xs rw-metric-label">
+                  <oj-bind-text value="[[ row.data.entityKey ]]"></oj-bind-text>
+                </div>
+              </span>
+            </template>
+
+            <template slot="stateCell" data-oj-as="row">
+              <span :class="[[ $application.functions.yesNo(row.data.resolvedFlag, 'rw-status rw-status-approved', 'rw-status rw-status-rejected') ]]">
+                <oj-bind-text value="[[ $application.functions.yesNo(row.data.resolvedFlag, 'Resolved', 'Open') ]]"></oj-bind-text>
+              </span>
+            </template>
+
+            <template slot="actionCell" data-oj-as="row">
+              <oj-bind-if test="[[ row.data.resolvedFlag !== 'Y' ]]">
+                <oj-button chroming="outlined" disabled="[[ $variables.busy ]]"
+                           :aria-label="[[ $page.functions.retryLabel(row.data.entityKey) ]]"
+                           on-oj-action="[[ function(){
+                              $page.listeners.retryRecord({ failedId: row.data.failedId }); } ]]">
+                  <span>Retry</span>
+                </oj-button>
+              </oj-bind-if>
+            </template>
+          </oj-table>
+        </div>
+      </oj-bind-if>
+    </div>
+
+    <oj-bind-if test="[[ $variables.busy ]]">
+      <div class="oj-flex oj-sm-align-items-center oj-sm-gap-2x" role="status" aria-live="polite">
+        <oj-progress-circle size="sm" value="-1"></oj-progress-circle>
+        <span class="oj-typography-body-sm">Working…</span>
+      </div>
+    </oj-bind-if>
+
+  </div>
+
+  <!-- ══════════════════ Confirmation ══════════════════ -->
+  <!-- oj-dialog opened via Actions.callComponentMethod, not window.confirm:
+       SES blocks browser globals inside chains (knowledge/14 §7). -->
+  <oj-dialog id="runDefaultingDlg" dialog-title="Run the defaulting job" cancel-behavior="icon">
+    <div slot="body">
+      <p class="oj-typography-body-md">
+        <oj-bind-text value="[[ $variables.confirmMessage ]]"></oj-bind-text>
+      </p>
+    </div>
+    <div slot="footer">
+      <oj-button on-oj-action="[[ $listeners.cancelRunDefaulting ]]">
+        <span>Cancel</span>
+      </oj-button>
+      <oj-button chroming="danger" disabled="[[ $variables.busy ]]"
+                 on-oj-action="[[ $listeners.confirmRunDefaulting ]]">
+        <span>Run defaulting</span>
+      </oj-button>
+    </div>
+  </oj-dialog>
+
+</oj-sp-general-overview-page>

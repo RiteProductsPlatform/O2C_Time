@@ -1,0 +1,253 @@
+{
+  "description": "PAGE-003 Team Approvals (landing) — the projects this manager owns for the selected month, the all-cut-offs panel (FLD-036), the pending retro-adjustment approval panel (ACT-021), and advance approval of a future month (ACT-024).",
+  "variables": {
+    "periodId": {
+      "type": "number",
+      "defaultValue": null,
+      "onValueChanged": {
+        "chains": [
+          {
+            "chain": "loadProjectsChain"
+          }
+        ]
+      }
+    },
+    "projectFilter": {
+      "type": "string",
+      "defaultValue": "",
+      "description": "FLD-028 client-side filter over the projects table. Re-filters on every keystroke from the cached rows, so it costs no REST round-trip.",
+      "onValueChanged": {
+        "chains": [
+          {
+            "chain": "filterProjectsChain"
+          }
+        ]
+      }
+    },
+    "projectsRaw": {
+      "type": "any[]",
+      "defaultValue": [],
+      "input": "none",
+      "description": "Every project the manager owns this month, unfiltered. Kept so the filter and the advance-approval selector work off one fetch."
+    },
+    "projects": {
+      "type": "any[]",
+      "defaultValue": [],
+      "input": "none",
+      "description": "projectsRaw after the FLD-028 filter — what the table shows."
+    },
+    "projectsADP": {
+      "type": "vb/ArrayDataProvider2",
+      "defaultValue": {
+        "itemType": "projRowType",
+        "keyAttributes": "projectId",
+        "data": "{{ $page.variables.projects }}"
+      }
+    },
+    "projectsAllADP": {
+      "type": "vb/ArrayDataProvider2",
+      "defaultValue": {
+        "itemType": "projRowType",
+        "keyAttributes": "projectId",
+        "data": "{{ $page.variables.projectsRaw }}"
+      },
+      "description": "Bound to the unfiltered rows: typing in the table filter must not silently remove the project the advance-approval selector is pointing at."
+    },
+    "cutoffs": {
+      "type": "any",
+      "defaultValue": null,
+      "input": "none",
+      "description": "FLD-036 — every cut-off the Period Definition doc defines, shown to the manager."
+    },
+    "showCutoffs": {
+      "type": "boolean",
+      "defaultValue": false,
+      "input": "none"
+    },
+    "adjustments": {
+      "type": "any[]",
+      "defaultValue": [],
+      "input": "none"
+    },
+    "adjustmentsADP": {
+      "type": "vb/ArrayDataProvider2",
+      "defaultValue": {
+        "itemType": "adjRowType",
+        "keyAttributes": "adjustmentId",
+        "data": "{{ $page.variables.adjustments }}"
+      }
+    },
+    "isFuturePeriod": {
+      "type": "boolean",
+      "defaultValue": false,
+      "input": "none",
+      "description": "PROC-010 — a future month offers the advance-approval panel."
+    },
+    "advanceProjectId": {
+      "type": "number",
+      "defaultValue": null
+    },
+    "busy": {
+      "type": "boolean",
+      "defaultValue": false,
+      "input": "none"
+    },
+    "confirmMessage": {
+      "type": "string",
+      "defaultValue": "",
+      "input": "none",
+      "description": "Body text for the confirmation dialog. window.confirm cannot be used - SES blocks browser globals in chains (knowledge/14 §7)."
+    }
+  },
+  "types": {
+    "projRowType": {
+      "projectId": "number",
+      "projectNumber": "string",
+      "projectName": "string",
+      "customerName": "string",
+      "revenueModel": "string",
+      "leaveLossFlag": "string",
+      "periodName": "string",
+      "tsStart": "string",
+      "tsEnd": "string",
+      "employees": "number",
+      "approvedEmployees": "number",
+      "rejectedEmployees": "number",
+      "pendingEmployees": "number",
+      "monthStatus": "string",
+      "approvedOn": "string",
+      "billableHours": "number",
+      "nonBillableHours": "number",
+      "leaveHours": "number",
+      "confirmAllowed": "string",
+      "confirmId": "number",
+      "confirmType": "string",
+      "confirmedOn": "string",
+      "accrualStatus": "string",
+      "pendingAdjustments": "number"
+    },
+    "adjRowType": {
+      "adjustmentId": "number",
+      "employeeId": "string",
+      "employeeName": "string",
+      "workDate": "string",
+      "adjKind": "string",
+      "oldProjectName": "string",
+      "oldTaskCode": "string",
+      "oldHours": "number",
+      "newProjectName": "string",
+      "newTaskCode": "string",
+      "newHours": "number",
+      "netHours": "number",
+      "status": "string",
+      "reason": "string",
+      "isOldProjectManager": "string",
+      "isNewProjectManager": "string",
+      "oldMgrApprovedBy": "string",
+      "newMgrApprovedBy": "string"
+    }
+  },
+  "chains": {},
+  "eventListeners": {
+    "vbEnter": {
+      "chains": [
+        {
+          "chain": "enterChain"
+        }
+      ]
+    },
+    "reload": {
+      "chains": [
+        {
+          "chain": "loadProjectsChain"
+        }
+      ]
+    },
+    "toggleCutoffs": {
+      "chains": [
+        {
+          "chain": "toggleCutoffsChain"
+        }
+      ]
+    },
+    "advanceApprove": {
+      "chains": [
+        {
+          "chain": "askAdvanceApproveChain"
+        }
+      ]
+    },
+    "approveAdjustment": {
+      "chains": [
+        {
+          "chain": "approveAdjustmentChain",
+          "parameters": {
+            "adjustmentId": "{{ $event.adjustmentId }}"
+          }
+        }
+      ]
+    },
+    "openProject": {
+      "chains": [
+        {
+          "chain": "openProjectChain",
+          "parameters": {
+            "projectId": "{{ $event.projectId }}",
+            "projectName": "{{ $event.projectName }}"
+          }
+        }
+      ]
+    },
+    "confirmAdvanceApprove": {
+      "chains": [
+        {
+          "chain": "advanceApproveChain"
+        }
+      ]
+    },
+    "cancelAdvanceApprove": {
+      "chains": [
+        {
+          "chain": "cancelAdvanceApproveChain"
+        }
+      ]
+    }
+  },
+  "imports": {
+    "components": {
+      "oj-sp-general-overview-page": {
+        "path": "oj-sp/general-overview-page/loader"
+      },
+      "oj-button": {
+        "path": "ojs/ojbutton"
+      },
+      "oj-input-text": {
+        "path": "ojs/ojinputtext"
+      },
+      "oj-select-single": {
+        "path": "ojs/ojselectsingle"
+      },
+      "oj-form-layout": {
+        "path": "ojs/ojformlayout"
+      },
+      "oj-label-value": {
+        "path": "ojs/ojlabelvalue"
+      },
+      "oj-table": {
+        "path": "ojs/ojtable"
+      },
+      "oj-progress-circle": {
+        "path": "ojs/ojprogress-circle"
+      },
+      "oj-bind-if": {
+        "path": "ojs/ojbindif"
+      },
+      "oj-bind-text": {
+        "path": "ojs/ojbindtext"
+      },
+      "oj-dialog": {
+        "path": "ojs/ojdialog"
+      }
+    }
+  }
+}
