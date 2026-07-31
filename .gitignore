@@ -8,3 +8,7 @@ private/
 __pycache__/
 *.py[cod]
 .venv/
+
+# BIP extract output — contains real worker names and email addresses
+integration/bip/extracts/
+integration/bip/tmp/

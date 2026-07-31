@@ -8,13 +8,35 @@
 -- Every script is idempotent, so re-running the installer is safe and is the
 -- normal way to apply changes. Nothing is dropped.
 --
--- To publish the ORDS modules the schema must already be REST-enabled:
---     BEGIN ORDS.ENABLE_SCHEMA(p_enabled => TRUE,
---                              p_schema  => 'O2C_TIME',
---                              p_url_mapping_type    => 'BASE_PATH',
---                              p_url_mapping_pattern => 'o2c_time',
---                              p_auto_rest_auth      => FALSE); COMMIT; END;
+-- ── Prerequisites, both run as ADMIN (not as O2C_TIME) ───────
+--
+-- 1. Privileges. RESOURCE does NOT include CREATE VIEW, and this module builds
+--    24 of them — without the explicit grant the install dies at 01 step [7/8]
+--    with ORA-01031 after the tables have already succeeded.
+--
+--     GRANT CONNECT, RESOURCE TO O2C_TIME;
+--     GRANT CREATE VIEW       TO O2C_TIME;
+--     ALTER USER O2C_TIME QUOTA UNLIMITED ON DATA;   -- ADB tablespace is DATA
+--
+-- 2. REST-enable the schema, or the ORDS modules in 11..13 cannot publish and
+--    every endpoint 404s. On Autonomous Database use ORDS_ADMIN as ADMIN —
+--    the classic ORDS.ENABLE_SCHEMA cannot enable a schema other than the
+--    caller's own unless the caller holds ORDS_ADMINISTRATOR_ROLE, which is
+--    why it raises ORA-01031 there.
+--
+--     BEGIN
+--       ORDS_ADMIN.ENABLE_SCHEMA(p_enabled => TRUE,
+--                                p_schema  => 'O2C_TIME',
+--                                p_url_mapping_type    => 'BASE_PATH',
+--                                p_url_mapping_pattern => 'o2c_time',
+--                                p_auto_rest_auth      => FALSE);
+--       COMMIT;
+--     END;
 --     /
+--
+--    On a non-Autonomous ORDS install the equivalent is ORDS.ENABLE_SCHEMA,
+--    run either as the schema owner or by a caller with ORDS_ADMINISTRATOR_ROLE.
+--
 -- RA-002: p_auto_rest_auth FALSE plus anonymous access is acceptable in lower
 -- environments only. Harden to https + API key / OAuth2 before PROD.
 --==============================================================
@@ -29,6 +51,64 @@ PROMPT ##############################################################
 PROMPT #  O2C TIMESHEET MODULE - INSTALL
 PROMPT ##############################################################
 PROMPT
+
+-- ── Pre-flight: privileges ───────────────────────────────────
+-- Checked up front because the failure is otherwise misleading: RESOURCE grants
+-- CREATE TABLE but not CREATE VIEW, so scripts 01 and 02 build their tables,
+-- then 01 step [7/8] dies on the first view with a bare ORA-01031 — by which
+-- point it looks like the DDL is at fault rather than the grant.
+DECLARE
+  v_missing VARCHAR2(400);
+  PROCEDURE need(p_priv IN VARCHAR2) IS
+    v_n PLS_INTEGER;
+  BEGIN
+    SELECT COUNT(*) INTO v_n FROM session_privs WHERE privilege = p_priv;
+    IF v_n = 0 THEN v_missing := v_missing || p_priv || ', '; END IF;
+  END;
+BEGIN
+  need('CREATE TABLE');
+  need('CREATE VIEW');
+  need('CREATE SEQUENCE');
+  need('CREATE TRIGGER');
+  need('CREATE PROCEDURE');
+
+  IF v_missing IS NOT NULL THEN
+    RAISE_APPLICATION_ERROR(-20900,
+      CHR(10) || 'Install stopped: ' || USER || ' is missing ' ||
+      RTRIM(v_missing, ', ') || CHR(10) ||
+      'Run as ADMIN, then re-run this installer:' || CHR(10) ||
+      '  GRANT CONNECT, RESOURCE TO ' || USER || ';' || CHR(10) ||
+      '  GRANT CREATE VIEW       TO ' || USER || ';' || CHR(10) ||
+      '  ALTER USER ' || USER || ' QUOTA UNLIMITED ON DATA;');
+  END IF;
+
+  DBMS_OUTPUT.PUT_LINE('Privileges OK for ' || USER || '.');
+END;
+/
+
+-- ── Pre-flight: REST enablement ──────────────────────────────
+-- A warning, not a failure. The schema objects install perfectly well without
+-- ORDS; only the modules in 11..13 need it, and they are the last thing to run.
+DECLARE
+  v_n PLS_INTEGER := 0;
+BEGIN
+  EXECUTE IMMEDIATE 'SELECT COUNT(*) FROM user_ords_schemas' INTO v_n;
+  IF v_n = 0 THEN
+    DBMS_OUTPUT.PUT_LINE(
+      'WARNING: ' || USER || ' is not REST-enabled, so the ORDS modules will '
+      || 'not publish and every endpoint will return 404.');
+    DBMS_OUTPUT.PUT_LINE(
+      '         As ADMIN: ORDS_ADMIN.ENABLE_SCHEMA(p_schema => ''' || USER
+      || ''', ...) — see the header.');
+  ELSE
+    DBMS_OUTPUT.PUT_LINE('Schema is REST-enabled.');
+  END IF;
+EXCEPTION WHEN OTHERS THEN
+  -- USER_ORDS_SCHEMAS is absent when ORDS is not installed at all. Not fatal.
+  DBMS_OUTPUT.PUT_LINE(
+    'NOTE: could not read USER_ORDS_SCHEMAS — REST enablement unverified.');
+END;
+/
 
 -- ── Schema objects ───────────────────────────────────────────
 PROMPT >>> 01 reference (lookup, period, calendar, config)
