@@ -67,9 +67,22 @@ define([
           worker = resp.body.items[0];
         } else if (!resp.ok) {
           $application.variables.currentRole = 'ROLE_TIME_NONE';
-          $page.variables.signInError =
-            'The timesheet service refused the sign-in lookup (' +
-            (resp.status || 'no status') + '). Please contact your administrator.';
+
+          // A 404 cannot mean "unknown user" — getMe is a collection feed, so an
+          // unrecognised email comes back 200 with an empty items array and is
+          // handled below. 404 means the route itself is not there: the schema
+          // has not been REST-enabled, install_time.sql has not been run, or the
+          // catalog.json backend URL points somewhere else. Say so, because
+          // "contact your administrator" sends people hunting for a permissions
+          // problem that does not exist.
+          $page.variables.signInError = (resp.status === 404)
+            ? 'The timesheet service is not deployed at the configured address. ' +
+              'The ORDS endpoint /oc/time/me was not found — check that the ' +
+              'O2C_TIME schema is REST-enabled, that db/install_time.sql has been ' +
+              'run, and that services/catalog.json points at the right host.'
+            : 'The timesheet service refused the sign-in lookup (' +
+              (resp.status || 'no status') + '). Please contact your administrator.';
+
           $page.variables.navItemsArray = [];
           $page.variables.navReady = true;
           return;

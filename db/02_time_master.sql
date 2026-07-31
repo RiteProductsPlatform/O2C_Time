@@ -357,6 +357,82 @@ BEGIN
 END;
 /
 
+PROMPT ============================================================
+PROMPT [7/7] Master caches — sync provenance columns
+PROMPT ============================================================
+
+-- Which transport last wrote each cached row, and on which run.
+--
+-- FUSION_SYNCED_ON already recorded *when*. With master data arriving by two
+-- routes -- a monthly BIP bulk extract and a daily REST delta (RA-007) -- the
+-- *how* and *which run* are what make a stale or wrong row diagnosable. Without
+-- them "this allocation looks wrong" has no audit trail back to a job.
+--
+-- SYNC_JOB_RUN_ID is deliberately a soft reference, not a foreign key:
+--   * OC_TIME_SYNC_JOB is created later (06), so an FK would force a reordering
+--     of the installer for no functional gain;
+--   * job telemetry is purgeable. An FK would either block a purge or null out
+--     provenance across millions of master rows when one ran.
+--
+-- Idempotent: ORA-01430 is "column already exists", so a re-run is a no-op.
+DECLARE
+  TYPE t_tab IS TABLE OF VARCHAR2(30);
+  v_tables t_tab := t_tab('OC_TIME_WORKER','OC_TIME_PROJECT','OC_TIME_TASK',
+                          'OC_TIME_ALLOCATION','OC_TIME_ABSENCE');
+  TYPE t_col IS RECORD (name VARCHAR2(30), defn VARCHAR2(60));
+  TYPE t_cols IS TABLE OF t_col;
+  v_cols t_cols := t_cols(
+    t_col('SOURCE_SYSTEM',   'VARCHAR2(30 CHAR)'),
+    t_col('SOURCE_METHOD',   'VARCHAR2(10 CHAR)'),
+    t_col('SYNC_JOB_RUN_ID', 'NUMBER'));
+  v_added PLS_INTEGER := 0;
+BEGIN
+  FOR t IN 1 .. v_tables.COUNT LOOP
+    FOR c IN 1 .. v_cols.COUNT LOOP
+      BEGIN
+        EXECUTE IMMEDIATE 'ALTER TABLE ' || v_tables(t) ||
+                          ' ADD ' || v_cols(c).name || ' ' || v_cols(c).defn;
+        v_added := v_added + 1;
+      EXCEPTION WHEN OTHERS THEN
+        IF SQLCODE = -1430 THEN NULL; ELSE RAISE; END IF;
+      END;
+    END LOOP;
+  END LOOP;
+  DBMS_OUTPUT.PUT_LINE('provenance columns added: ' || v_added);
+END;
+/
+
+-- Constrain the transport to the two we actually use, so a typo in an OIC
+-- mapping fails loudly instead of quietly producing an un-groupable value.
+DECLARE
+  TYPE t_tab IS TABLE OF VARCHAR2(30);
+  v_tables t_tab := t_tab('OC_TIME_WORKER','OC_TIME_PROJECT','OC_TIME_TASK',
+                          'OC_TIME_ALLOCATION','OC_TIME_ABSENCE');
+BEGIN
+  FOR t IN 1 .. v_tables.COUNT LOOP
+    BEGIN
+      EXECUTE IMMEDIATE 'ALTER TABLE ' || v_tables(t) ||
+        ' ADD CONSTRAINT chk_' || LOWER(SUBSTR(v_tables(t), 4, 24)) || '_method' ||
+        ' CHECK (source_method IN (''BIP'',''REST''))';
+    EXCEPTION WHEN OTHERS THEN
+      -- 2264/2275 = constraint name already used; 1430 handled above
+      IF SQLCODE IN (-2264, -2275, -2261) THEN NULL; ELSE RAISE; END IF;
+    END;
+  END LOOP;
+  DBMS_OUTPUT.PUT_LINE('source_method checks in place.');
+END;
+/
+
+-- Reporting index: which rows did a given sync run touch?
+BEGIN EXECUTE IMMEDIATE
+  'CREATE INDEX ix_oc_tw_sync ON oc_time_worker(sync_job_run_id)';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE = -955 THEN NULL; ELSE RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE
+  'CREATE INDEX ix_oc_tal_sync ON oc_time_allocation(sync_job_run_id)';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE = -955 THEN NULL; ELSE RAISE; END IF; END;
+/
+
 PROMPT
 PROMPT ============================================================
 PROMPT time/02_time_master complete.

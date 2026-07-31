@@ -3,3 +3,8 @@
 node_modules/
 build/
 private/
+
+# Python (integration/ helper scripts)
+__pycache__/
+*.py[cod]
+.venv/
