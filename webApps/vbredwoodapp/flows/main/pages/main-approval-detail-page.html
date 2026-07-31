@@ -79,6 +79,21 @@
                        on-oj-action="[[ $listeners.approveWeeks ]]">
               <span>Approve selected</span>
             </oj-button>
+
+            <!-- ACT-019 approve every pending week for this employee on this
+                 project, without selecting them one by one. A convenience
+                 roll-up over the same rule set: the server still applies
+                 RULE-015, so a manager cannot sweep up their own week here.
+                 Confirmed first, because it acts on rows that are not on
+                 screen once the list scrolls. -->
+            <oj-button chroming="outlined"
+                       disabled="[[ $variables.busy || $variables.pendingWeekCount === 0 ]]"
+                       on-oj-action="[[ $listeners.askApproveAllWeeks ]]">
+              <span slot="startIcon" class="oj-ux-ico-check-all"></span>
+              <span>
+                <oj-bind-text value="[[ $page.functions.approveAllLabel($variables.pendingWeekCount) ]]"></oj-bind-text>
+              </span>
+            </oj-button>
           </div>
         </div>
 
@@ -500,6 +515,25 @@
                  disabled="[[ $variables.busy || !$variables.overrideReason ]]"
                  on-oj-action="[[ $listeners.doOverride ]]">
         <span>Apply correction</span>
+      </oj-button>
+    </div>
+  </oj-dialog>
+
+  <!-- ACT-019 confirm approving every pending week at once -->
+  <oj-dialog id="approveAllDlg" dialog-title="Approve all pending weeks"
+             cancel-behavior="icon">
+    <div slot="body">
+      <p class="oj-typography-body-md">
+        <oj-bind-text value="[[ $variables.confirmMessage ]]"></oj-bind-text>
+      </p>
+    </div>
+    <div slot="footer">
+      <oj-button on-oj-action="[[ $listeners.cancelApproveAllWeeks ]]">
+        <span>Cancel</span>
+      </oj-button>
+      <oj-button chroming="callToAction" disabled="[[ $variables.busy ]]"
+                 on-oj-action="[[ $listeners.confirmApproveAllWeeks ]]">
+        <span>Approve all</span>
       </oj-button>
     </div>
   </oj-dialog>

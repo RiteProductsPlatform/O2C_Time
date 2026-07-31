@@ -29,10 +29,22 @@
                             item-text="label">
           </oj-select-single>
         </oj-form-layout>
-        <oj-button chroming="borderless" on-oj-action="[[ $listeners.reload ]]">
-          <span slot="startIcon" class="oj-ux-ico-refresh"></span>
-          <span>Refresh</span>
-        </oj-button>
+        <div class="oj-flex oj-sm-align-items-center oj-sm-gap-2x oj-sm-flex-wrap">
+          <!-- ACT-033. Not a re-send: confirm_month already wrote the month's
+               rows. This posts the retro adjustments approved SINCE, which have
+               entries but no interface rows and would otherwise never reach
+               accrual at all. Idempotent, so running it twice is harmless. -->
+          <oj-button chroming="outlined"
+                     disabled="[[ $variables.busy || $variables.confirmed.length === 0 ]]"
+                     on-oj-action="[[ $listeners.runAccrualJob ]]">
+            <span slot="startIcon" class="oj-ux-ico-data-flow"></span>
+            <span>Post approved adjustments</span>
+          </oj-button>
+          <oj-button chroming="borderless" on-oj-action="[[ $listeners.reload ]]">
+            <span slot="startIcon" class="oj-ux-ico-refresh"></span>
+            <span>Refresh</span>
+          </oj-button>
+        </div>
       </div>
 
       <div class="oj-sm-padding-3x oj-sm-margin-3x-top rw-notice" role="status">
@@ -40,6 +52,17 @@
         after month-end approval and acknowledges each batch. Rows shown as
         pending have been written and are waiting to be collected — nothing is
         pushed from this screen.
+      </div>
+
+      <!-- Retro adjustments are the one thing month confirmation cannot have
+           captured, because they are approved after it. Saying so here is what
+           makes the button above make sense. -->
+      <div class="oj-sm-padding-3x oj-sm-margin-2x-top rw-notice rw-notice-warning"
+           role="status">
+        A retro adjustment approved after its month was confirmed writes a
+        day-wise Reversal(&minus;) and Adjustment(+) pair, but the month's
+        extract was already built. Use <strong>Post approved
+        adjustments</strong> to add them to the interface.
       </div>
     </div>
 

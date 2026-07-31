@@ -87,6 +87,11 @@ define([
         }));
 
         $page.variables.weeks = rows;
+        // Kept beside the rows rather than computed in the binding (S1), and
+        // recomputed on every load so ACT-019's button cannot offer to approve
+        // weeks that were settled since the page opened.
+        $page.variables.pendingWeekCount =
+          $page.functions.pendingWeeks(rows).length;
 
         // If a week was open, keep it open and refresh its detail. If it has
         // vanished (period changed underneath us) fall back to the week list.

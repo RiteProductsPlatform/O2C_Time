@@ -271,6 +271,18 @@ CREATE OR REPLACE PACKAGE oc_time_pkg AS
     p_message  IN VARCHAR2 DEFAULT NULL,
     p_actor    IN VARCHAR2 DEFAULT 'ACCRUAL');
 
+  -- ACT-033. Posts retro adjustments approved AFTER their month was confirmed.
+  --
+  -- confirm_month fills the interface once, at confirmation. An adjustment
+  -- approved later writes its Reversal(-)/Adjustment(+) pair to OC_TS_ENTRY but
+  -- nothing carries it across, so it would never reach accrual. This is the job
+  -- that carries it — PAGE-011's "retro adjustments post day-wise after
+  -- approval".
+  FUNCTION run_accrual_top_up(
+    p_period_id IN NUMBER,
+    p_actor     IN VARCHAR2 DEFAULT 'VBCS_USER',
+    p_trace_id  IN VARCHAR2 DEFAULT NULL) RETURN NUMBER;            -- job_run_id
+
 END oc_time_pkg;
 /
 
@@ -2109,6 +2121,118 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
                                WHERE batch_id = p_batch_id);
     END IF;
   END mark_accrual_pulled;
+
+
+  -- ═══════════════════════════════════════════════════════════
+  -- ACT-033 accrual top-up
+  -- ═══════════════════════════════════════════════════════════
+
+  FUNCTION run_accrual_top_up(
+    p_period_id IN NUMBER,
+    p_actor     IN VARCHAR2 DEFAULT 'VBCS_USER',
+    p_trace_id  IN VARCHAR2 DEFAULT NULL) RETURN NUMBER
+  IS
+    v_job   NUMBER;
+    v_read  NUMBER := 0;
+    v_rows  NUMBER := 0;
+    v_fail  NUMBER := 0;
+    v_batch VARCHAR2(40);
+  BEGIN
+    v_job := start_job('Accrual Top-up', 'AccrualTopUp',
+                       p_period_id, TRUNC(SYSDATE), NULL, p_actor);
+
+    -- One batch id for the whole run, so the consumer can acknowledge
+    -- everything this job posted in a single call, exactly as it does for the
+    -- batch confirm_month writes.
+    v_batch := 'TOPUP-' || p_period_id || '-' ||
+               TO_CHAR(SYSTIMESTAMP, 'YYYYMMDDHH24MISS');
+
+    FOR c IN (SELECT confirm_id, project_id, period_id
+                FROM oc_ts_month_confirm
+               WHERE period_id = p_period_id)
+    LOOP
+      v_read := v_read + 1;
+      BEGIN
+        -- Deliberately the Reversal/Adjustment types only. An Actual or Default
+        -- row that is not already in the interface was not approved when the
+        -- month was confirmed, and posting it here would slip hours into
+        -- accrual without the RULE-020 gate confirm_month applies.
+        --
+        -- The NOT EXISTS is the same three-column guard confirm_month uses, so
+        -- running this twice posts nothing the second time.
+        INSERT INTO xx_o2c_timesheet_accrual_if (
+          period, period_year, period_month, confirm_id,
+          employee_id, employee_name, worker_type,
+          project_number, project_name, customer_name, revenue_model,
+          wbs_task, wbs_task_name, work_date,
+          billable_hours, non_billable_hours, leave_hours, unbilled_reason,
+          entry_type, flag, action_date,
+          source_ts_id, source_adj_id, batch_id, trace_id)
+        SELECT pe.period_name, pe.period_year, pe.period_month, c.confirm_id,
+               w.employee_id, wk.employee_name, wk.worker_type,
+               p.project_number, p.project_name, p.customer_name, p.revenue_model,
+               t.task_code, t.task_name, e.entry_date,
+               CASE WHEN e.billable_type = 'Billable'     AND e.is_leave = 'N'
+                    THEN e.hours ELSE 0 END,
+               CASE WHEN e.billable_type = 'Non-billable' AND e.is_leave = 'N'
+                    THEN e.hours ELSE 0 END,
+               CASE WHEN e.is_leave = 'Y' THEN e.hours ELSE 0 END,
+               e.unbilled_reason,
+               e.entry_type,
+               e.entry_type,          -- Reversal / Adjustment, its own flag
+               -- ACTION_DATE, not the work date: RULE-019 makes the action date
+               -- the thing accrual posts against, so a retro adjustment lands in
+               -- the period it was decided in rather than the one it corrects.
+               -- Falls back to the posting timestamp, then today, so the column
+               -- is never null for a consumer that keys on it.
+               NVL(a.action_date,
+                   NVL(TRUNC(CAST(a.posted_on AS DATE)), TRUNC(SYSDATE))),
+               e.ts_entry_id, e.adjustment_id, v_batch, p_trace_id
+          FROM oc_ts_entry      e
+          JOIN oc_ts_week       w  ON w.ts_week_id  = e.ts_week_id
+          JOIN oc_ts_adjustment a  ON a.adjustment_id = e.adjustment_id
+          JOIN oc_time_project  p  ON p.project_id  = e.project_id
+          JOIN oc_time_task     t  ON t.task_id     = e.task_id
+          JOIN oc_time_worker   wk ON wk.employee_id = w.employee_id
+          JOIN oc_time_period   pe ON pe.period_id  = c.period_id
+         WHERE w.period_id  = c.period_id
+           AND e.project_id = c.project_id
+           AND e.entry_type IN ('Reversal', 'Adjustment')
+           AND e.hours     <> 0
+           AND a.status     = 'Approved'
+           AND NOT EXISTS (SELECT 1 FROM xx_o2c_timesheet_accrual_if i
+                            WHERE i.confirm_id   = c.confirm_id
+                              AND i.source_ts_id = e.ts_entry_id
+                              AND i.entry_type   = e.entry_type);
+
+        v_rows := v_rows + SQL%ROWCOUNT;
+
+        -- Refresh the confirmation's own totals so the Accrual Integration page
+        -- reports what the interface actually holds. adjustment_hours sums the
+        -- signed values, so a Reversal(-) and its Adjustment(+) net off exactly
+        -- as they will for the consumer.
+        UPDATE oc_ts_month_confirm mc
+           SET mc.adjustment_hours =
+                 (SELECT NVL(SUM(CASE WHEN i.entry_type IN ('Reversal','Adjustment')
+                                      THEN i.billable_hours + i.non_billable_hours
+                                           + i.leave_hours END), 0)
+                    FROM xx_o2c_timesheet_accrual_if i
+                   WHERE i.confirm_id = mc.confirm_id),
+               mc.accrual_rows =
+                 (SELECT COUNT(*) FROM xx_o2c_timesheet_accrual_if i
+                   WHERE i.confirm_id = mc.confirm_id)
+         WHERE mc.confirm_id = c.confirm_id;
+
+      EXCEPTION WHEN OTHERS THEN
+        fail_record(v_job, 'MONTH_CONFIRM', TO_CHAR(c.confirm_id), NULL, SQLERRM);
+        v_fail := v_fail + 1;
+      END;
+    END LOOP;
+
+    finish_job(v_job, v_read, v_rows, v_fail);
+    COMMIT;
+    RETURN v_job;
+  END run_accrual_top_up;
 
 END oc_time_pkg;
 /

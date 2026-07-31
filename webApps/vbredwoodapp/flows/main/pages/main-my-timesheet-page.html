@@ -146,7 +146,9 @@
     </oj-bind-if>
 
     <!-- ══════════════════ Day / shift row ══════════════════ -->
-    <!-- FLD-008 shift and FLD-011 standard hours per day, both read-only. -->
+    <!-- ACT-006 / FLD-008 shift and FLD-011 standard hours per day. Rendered,
+         never edited: RULE-011 sources the shift from HCM, so "Set Day Shift"
+         is a display action here and the row is deliberately read-only. -->
     <div class="oj-sm-padding-4x rw-metric">
       <h2 class="oj-typography-heading-xs oj-sm-margin-0 oj-sm-margin-3x-bottom">
         Week <oj-bind-text value="[[ $variables.weekRange ]]"></oj-bind-text>
@@ -221,9 +223,9 @@
         </oj-bind-if>
       </div>
 
-      <!-- Hours are entered in 15-minute blocks (RULE-005): step 0.25, min 0,
-           max 24. The stepper enforces the increment client-side and the server
-           re-checks it, so a pasted value cannot get through. -->
+      <!-- ACT-005. Hours are entered in 15-minute blocks (RULE-005): step 0.25,
+           min 0, max 24. The stepper enforces the increment client-side and the
+           server re-checks it, so a pasted value cannot get through. -->
       <div class="rw-grid-scroll">
         <oj-table id="tsGrid"
                   aria-label="Weekly hours by project and task"
@@ -331,7 +333,8 @@
           </template>
 
           <template slot="actionCell" data-oj-as="row">
-            <!-- An HR-sourced leave row is not the employee's to remove. -->
+            <!-- ACT-004 remove line. An HR-sourced leave row is not the
+                 employee's to remove — it came from Absence (RULE-008). -->
             <oj-bind-if test="[[ $variables.editable && row.data.isLeave !== 'Y' ]]">
               <oj-button chroming="borderless" display="icons"
                          :aria-label="[[ $page.functions.removeLineLabel(row.data.taskName) ]]"
@@ -509,6 +512,10 @@
   </oj-dialog>
 
   <!-- ══════════════════ Add line dialog ══════════════════ -->
+  <!-- ACT-003 add line, and ACT-007 set its project and task. The pair is set
+       here rather than edited in the grid: RULE-010 constrains the task to the
+       project's WBS or a common non-billable task, so the two have to be chosen
+       together to be validated together. The grid then shows them read-only. -->
   <oj-dialog id="addLineDlg" dialog-title="Add a line"
              cancel-behavior="icon"
              opened="{{ $variables.showAddLine }}">

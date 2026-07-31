@@ -425,6 +425,37 @@ BEGIN
 END;
 /
 
+-- ── POST jobs/accrual/:periodId  (ACT-033) ───────────────────
+-- Posts retro adjustments approved after their month was confirmed. Safe to
+-- run repeatedly: the insert guards on (confirm_id, source_ts_id, entry_type),
+-- so a second run posts nothing.
+BEGIN
+  ORDS.DEFINE_TEMPLATE(p_module_name => 'oc.time.admin',
+                       p_pattern => 'jobs/accrual/:periodId');
+  ORDS.DEFINE_HANDLER(
+    p_module_name => 'oc.time.admin', p_pattern => 'jobs/accrual/:periodId',
+    p_method => 'POST',
+    p_source_type => ORDS.source_type_plsql,
+    p_source => q'~
+      DECLARE v_job NUMBER; v_rows NUMBER; v_read NUMBER;
+      BEGIN
+        v_job := oc_time_pkg.run_accrual_top_up(
+                   :periodId, NVL(:actor,'VBCS_USER'), :traceId);
+        SELECT records_read, records_upserted INTO v_read, v_rows
+          FROM oc_time_sync_job WHERE job_run_id = v_job;
+        :status_code := 200;
+        HTP.P('{"jobRunId":' || v_job ||
+              ',"monthsChecked":' || v_read ||
+              ',"rowsPosted":'    || v_rows || '}');
+      EXCEPTION WHEN OTHERS THEN
+        :status_code := 400;
+        HTP.P('{"error":"' || REPLACE(SQLERRM,'"','\"') || '"}');
+      END;
+    ~');
+  COMMIT;
+END;
+/
+
 -- ── GET accrual/confirmed/:periodId  (PAGE-011) ──────────────
 BEGIN
   ORDS.DEFINE_TEMPLATE(p_module_name => 'oc.time.admin',

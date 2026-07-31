@@ -160,6 +160,13 @@
           "chain": "cancelRunDefaultingChain"
         }
       ]
+    },
+    "runDeliveryDefaulting": {
+      "chains": [
+        {
+          "chain": "runDeliveryDefaultingChain"
+        }
+      ]
     }
   },
   "imports": {

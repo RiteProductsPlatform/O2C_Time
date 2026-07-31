@@ -4,10 +4,19 @@
     "periodId": {
       "type": "number",
       "defaultValue": null,
-      "onValueChanged": { "chains": [ { "chain": "loadConfirmedChain" } ] }
+      "onValueChanged": {
+        "chains": [
+          {
+            "chain": "loadConfirmedChain"
+          }
+        ]
+      }
     },
-
-    "confirmed": { "type": "any[]", "defaultValue": [], "input": "none" },
+    "confirmed": {
+      "type": "any[]",
+      "defaultValue": [],
+      "input": "none"
+    },
     "confirmedADP": {
       "type": "vb/ArrayDataProvider2",
       "defaultValue": {
@@ -16,11 +25,26 @@
         "data": "{{ $page.variables.confirmed }}"
       }
     },
-
-    "confirmId":    { "type": "number", "defaultValue": null, "input": "none" },
-    "extractLabel": { "type": "string", "defaultValue": "", "input": "none" },
-    "extractRaw":   { "type": "any[]",  "defaultValue": [], "input": "none" },
-    "extract":      { "type": "any[]",  "defaultValue": [], "input": "none" },
+    "confirmId": {
+      "type": "number",
+      "defaultValue": null,
+      "input": "none"
+    },
+    "extractLabel": {
+      "type": "string",
+      "defaultValue": "",
+      "input": "none"
+    },
+    "extractRaw": {
+      "type": "any[]",
+      "defaultValue": [],
+      "input": "none"
+    },
+    "extract": {
+      "type": "any[]",
+      "defaultValue": [],
+      "input": "none"
+    },
     "extractADP": {
       "type": "vb/ArrayDataProvider2",
       "defaultValue": {
@@ -33,15 +57,39 @@
       "type": "string",
       "defaultValue": "all",
       "description": "all | actual | adjustment — the extract mixes actual/default rows with Reversal/Adjustment rows and they answer different questions.",
-      "onValueChanged": { "chains": [ { "chain": "filterExtractChain" } ] }
+      "onValueChanged": {
+        "chains": [
+          {
+            "chain": "filterExtractChain"
+          }
+        ]
+      }
     },
-
-    "sumBilled":     { "type": "number", "defaultValue": 0, "input": "none" },
-    "sumUnbilled":   { "type": "number", "defaultValue": 0, "input": "none" },
-    "sumLeave":      { "type": "number", "defaultValue": 0, "input": "none" },
-    "sumAdjustment": { "type": "number", "defaultValue": 0, "input": "none" },
-
-    "annexure": { "type": "any[]", "defaultValue": [], "input": "none" },
+    "sumBilled": {
+      "type": "number",
+      "defaultValue": 0,
+      "input": "none"
+    },
+    "sumUnbilled": {
+      "type": "number",
+      "defaultValue": 0,
+      "input": "none"
+    },
+    "sumLeave": {
+      "type": "number",
+      "defaultValue": 0,
+      "input": "none"
+    },
+    "sumAdjustment": {
+      "type": "number",
+      "defaultValue": 0,
+      "input": "none"
+    },
+    "annexure": {
+      "type": "any[]",
+      "defaultValue": [],
+      "input": "none"
+    },
     "annexureADP": {
       "type": "vb/ArrayDataProvider2",
       "defaultValue": {
@@ -50,75 +98,170 @@
         "data": "{{ $page.variables.annexure }}"
       }
     },
-
-    "busy": { "type": "boolean", "defaultValue": false, "input": "none" }
-  },
-
-  "types": {
-    "confRowType": {
-      "confirmId": "number", "projectNumber": "string", "projectName": "string",
-      "customerName": "string", "revenueModel": "string", "periodName": "string",
-      "employeeCount": "number", "billableHours": "number",
-      "nonBillableHours": "number", "leaveHours": "number",
-      "adjustmentHours": "number", "confirmType": "string",
-      "confirmedBy": "string", "confirmedOn": "string",
-      "otlStatus": "string", "otlPushedOn": "string", "otlMessage": "string",
-      "accrualStatus": "string", "accrualRows": "number",
-      "accrualPushedOn": "string", "accrualMessage": "string",
-      "partnerStatus": "string",
-      "rowsPulled": "number", "rowsPending": "number", "traceId": "string"
-    },
-    "extRowType": {
-      "ifId": "number", "employeeId": "string", "employeeName": "string",
-      "workerType": "string", "projectNumber": "string", "projectName": "string",
-      "wbsTask": "string", "wbsTaskName": "string", "workDate": "string",
-      "billed": "number", "unbilled": "number", "leaveHours": "number",
-      "unbilledReason": "string", "entryType": "string", "approval": "string",
-      "flag": "string", "actionDate": "string",
-      "batchId": "string", "processedFlag": "string", "pulledOn": "string"
-    },
-    "annexRowType": {
-      "llcId": "number", "projectNumber": "string", "projectName": "string",
-      "customerName": "string", "periodName": "string",
-      "absentEmployeeId": "string", "absentEmployeeName": "string",
-      "absenceDate": "string", "absenceType": "string",
-      "coveredBilledHours": "number",
-      "coverEmployeeId": "string", "coverEmployeeName": "string",
-      "approvedBy": "string", "approvedOn": "string"
+    "busy": {
+      "type": "boolean",
+      "defaultValue": false,
+      "input": "none"
     }
   },
-
+  "types": {
+    "confRowType": {
+      "confirmId": "number",
+      "projectNumber": "string",
+      "projectName": "string",
+      "customerName": "string",
+      "revenueModel": "string",
+      "periodName": "string",
+      "employeeCount": "number",
+      "billableHours": "number",
+      "nonBillableHours": "number",
+      "leaveHours": "number",
+      "adjustmentHours": "number",
+      "confirmType": "string",
+      "confirmedBy": "string",
+      "confirmedOn": "string",
+      "otlStatus": "string",
+      "otlPushedOn": "string",
+      "otlMessage": "string",
+      "accrualStatus": "string",
+      "accrualRows": "number",
+      "accrualPushedOn": "string",
+      "accrualMessage": "string",
+      "partnerStatus": "string",
+      "rowsPulled": "number",
+      "rowsPending": "number",
+      "traceId": "string"
+    },
+    "extRowType": {
+      "ifId": "number",
+      "employeeId": "string",
+      "employeeName": "string",
+      "workerType": "string",
+      "projectNumber": "string",
+      "projectName": "string",
+      "wbsTask": "string",
+      "wbsTaskName": "string",
+      "workDate": "string",
+      "billed": "number",
+      "unbilled": "number",
+      "leaveHours": "number",
+      "unbilledReason": "string",
+      "entryType": "string",
+      "approval": "string",
+      "flag": "string",
+      "actionDate": "string",
+      "batchId": "string",
+      "processedFlag": "string",
+      "pulledOn": "string"
+    },
+    "annexRowType": {
+      "llcId": "number",
+      "projectNumber": "string",
+      "projectName": "string",
+      "customerName": "string",
+      "periodName": "string",
+      "absentEmployeeId": "string",
+      "absentEmployeeName": "string",
+      "absenceDate": "string",
+      "absenceType": "string",
+      "coveredBilledHours": "number",
+      "coverEmployeeId": "string",
+      "coverEmployeeName": "string",
+      "approvedBy": "string",
+      "approvedOn": "string"
+    }
+  },
   "chains": {},
-
   "eventListeners": {
-    "vbEnter":        { "chains": [ { "chain": "enterChain" } ] },
-    "reload":         { "chains": [ { "chain": "loadConfirmedChain" } ] },
-    "showAll":        { "chains": [ { "chain": "setViewChain", "parameters": { "view": "all" } } ] },
-    "showActual":     { "chains": [ { "chain": "setViewChain", "parameters": { "view": "actual" } } ] },
-    "showAdjustment": { "chains": [ { "chain": "setViewChain", "parameters": { "view": "adjustment" } } ] },
+    "vbEnter": {
+      "chains": [
+        {
+          "chain": "enterChain"
+        }
+      ]
+    },
+    "reload": {
+      "chains": [
+        {
+          "chain": "loadConfirmedChain"
+        }
+      ]
+    },
+    "showAll": {
+      "chains": [
+        {
+          "chain": "setViewChain",
+          "parameters": {
+            "view": "all"
+          }
+        }
+      ]
+    },
+    "showActual": {
+      "chains": [
+        {
+          "chain": "setViewChain",
+          "parameters": {
+            "view": "actual"
+          }
+        }
+      ]
+    },
+    "showAdjustment": {
+      "chains": [
+        {
+          "chain": "setViewChain",
+          "parameters": {
+            "view": "adjustment"
+          }
+        }
+      ]
+    },
     "openExtract": {
       "chains": [
         {
           "chain": "openExtractChain",
           "parameters": {
             "confirmId": "{{ $event.confirmId }}",
-            "label":     "{{ $event.label }}"
+            "label": "{{ $event.label }}"
           }
+        }
+      ]
+    },
+    "runAccrualJob": {
+      "chains": [
+        {
+          "chain": "runAccrualJobChain"
         }
       ]
     }
   },
-
   "imports": {
     "components": {
-      "oj-sp-general-overview-page": { "path": "oj-sp/general-overview-page/loader" },
-      "oj-button":          { "path": "ojs/ojbutton" },
-      "oj-select-single":   { "path": "ojs/ojselectsingle" },
-      "oj-form-layout":     { "path": "ojs/ojformlayout" },
-      "oj-table":           { "path": "ojs/ojtable" },
-      "oj-progress-circle": { "path": "ojs/ojprogress-circle" },
-      "oj-bind-if":         { "path": "ojs/ojbindif" },
-      "oj-bind-text":       { "path": "ojs/ojbindtext" }
+      "oj-sp-general-overview-page": {
+        "path": "oj-sp/general-overview-page/loader"
+      },
+      "oj-button": {
+        "path": "ojs/ojbutton"
+      },
+      "oj-select-single": {
+        "path": "ojs/ojselectsingle"
+      },
+      "oj-form-layout": {
+        "path": "ojs/ojformlayout"
+      },
+      "oj-table": {
+        "path": "ojs/ojtable"
+      },
+      "oj-progress-circle": {
+        "path": "ojs/ojprogress-circle"
+      },
+      "oj-bind-if": {
+        "path": "ojs/ojbindif"
+      },
+      "oj-bind-text": {
+        "path": "ojs/ojbindtext"
+      }
     }
   }
 }

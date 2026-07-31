@@ -43,7 +43,16 @@
           <oj-button chroming="outlined"
                      disabled="[[ $variables.busy || !$variables.runJobPeriodId ]]"
                      on-oj-action="[[ $listeners.runDefaulting ]]">
-            <span>Run defaulting</span>
+            <span>Run weekly defaulting</span>
+          </oj-button>
+          <!-- The manager side of the pair (RULE-007). Separate button, not a
+               mode of the one above, because they run at different times and
+               have opposite consequences for the employee's pay: weekly
+               defaulting holds it, delivery defaulting must never. -->
+          <oj-button chroming="outlined"
+                     disabled="[[ $variables.busy || !$variables.runJobPeriodId ]]"
+                     on-oj-action="[[ $listeners.runDeliveryDefaulting ]]">
+            <span>Run delivery defaulting</span>
           </oj-button>
           <oj-button chroming="callToAction"
                      disabled="[[ $variables.busy || !$variables.runJobPeriodId ]]"

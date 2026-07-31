@@ -3003,6 +3003,106 @@
           }
         ]
       }
+    },
+    "/oc/time/admin/jobs/delivery-defaulting/{periodId}": {
+      "post": {
+        "operationId": "runDeliveryDefaulting",
+        "summary": "Run the delivery cut-off defaulting job (RULE-007). Defaults submitted weeks the manager never decided on; DEFAULTED_BY=MANAGER, week not locked, never holds salary.",
+        "x-vb": {
+          "actionHint": "create"
+        },
+        "parameters": [
+          {
+            "name": "periodId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DefaultingPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Job run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DefaultingResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/oc/time/admin/jobs/accrual/{periodId}": {
+      "post": {
+        "operationId": "runAccrualJob",
+        "summary": "ACT-033. Post retro adjustments approved after their month was confirmed. Idempotent.",
+        "x-vb": {
+          "actionHint": "create"
+        },
+        "parameters": [
+          {
+            "name": "periodId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccrualTopUpPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Job run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccrualTopUpResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3887,6 +3987,31 @@
           },
           "rowsAcknowledged": {
             "type": "integer"
+          }
+        }
+      },
+      "AccrualTopUpResponse": {
+        "type": "object",
+        "properties": {
+          "jobRunId": {
+            "type": "integer"
+          },
+          "monthsChecked": {
+            "type": "integer"
+          },
+          "rowsPosted": {
+            "type": "integer"
+          }
+        }
+      },
+      "AccrualTopUpPayload": {
+        "type": "object",
+        "properties": {
+          "actor": {
+            "type": "string"
+          },
+          "traceId": {
+            "type": "string"
           }
         }
       }

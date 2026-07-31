@@ -123,6 +123,18 @@
       "type": "boolean",
       "defaultValue": false,
       "input": "none"
+    },
+    "pendingWeekCount": {
+      "type": "number",
+      "defaultValue": 0,
+      "input": "none",
+      "description": "How many weeks are still awaiting a decision. Drives the ACT-019 button label and its disabled state, so the manager is told what \"all\" means before pressing it."
+    },
+    "confirmMessage": {
+      "type": "string",
+      "defaultValue": "",
+      "input": "none",
+      "description": "Body text of the ACT-019 confirmation, built by the chain so the count and the employee name are named in the sentence rather than left to a generic \"Are you sure?\"."
     }
   },
   "types": {
@@ -321,6 +333,27 @@
             "label": "{{ $event.label }}",
             "hours": "{{ $event.hours }}"
           }
+        }
+      ]
+    },
+    "askApproveAllWeeks": {
+      "chains": [
+        {
+          "chain": "askApproveAllWeeksChain"
+        }
+      ]
+    },
+    "cancelApproveAllWeeks": {
+      "chains": [
+        {
+          "chain": "cancelApproveAllWeeksChain"
+        }
+      ]
+    },
+    "confirmApproveAllWeeks": {
+      "chains": [
+        {
+          "chain": "approveAllWeeksChain"
         }
       ]
     }

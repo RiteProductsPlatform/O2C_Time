@@ -2,9 +2,36 @@ define([], () => {
   'use strict';
 
   /**
+   * A week nobody needs to decide on any more. Everything else is "pending",
+   * including Rejected and Defaulted — a defaulted week still needs the manager
+   * to edit or approve it, and a rejected one is back with the employee but has
+   * not reached an outcome.
+   *
+   * The same three values as approve_employee_month's WHERE clause. If the two
+   * ever disagree, "Approve all pending" would report a different number from
+   * the one the server acts on.
+   */
+  const SETTLED = ['Approved', 'Overridden and approved', 'Closed'];
+
+  /**
    * PAGE-005 Approval Detail — page module functions.
    */
   class PageModule {
+
+    /** The weeks still awaiting a decision. */
+    pendingWeeks(weeks) {
+      return (weeks || []).filter((w) => SETTLED.indexOf(w.weekStatus) === -1);
+    }
+
+    /**
+     * ACT-019 button label. Carries the count, so the manager knows the size of
+     * what they are about to approve before they open the confirmation.
+     */
+    approveAllLabel(count) {
+      if (!count)      { return 'No pending weeks'; }
+      if (count === 1) { return 'Approve the 1 pending week'; }
+      return 'Approve all ' + count + ' pending weeks';
+    }
 
     /**
      * Selects or clears a whole DATE in the daily view.
@@ -67,10 +94,7 @@ define([], () => {
      */
     selectPendingWeeks() {
       const page = this.$page.variables;
-      const SETTLED = ['Approved', 'Overridden and approved', 'Closed'];
-      page.selectedWeekKeys = (page.weeks || [])
-        .filter((w) => SETTLED.indexOf(w.weekStatus) === -1)
-        .map((w) => w.tsWeekId);
+      page.selectedWeekKeys = this.pendingWeeks(page.weeks).map((w) => w.tsWeekId);
     }
 
     clearWeekSelection() {
