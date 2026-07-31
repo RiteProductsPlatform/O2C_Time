@@ -207,18 +207,96 @@
   .form-row-3 { grid-template-columns:1fr 1fr 1fr; }
   .required { color:var(--rw-danger); margin-left:2px; }
 
-  /* Status chips — one per timesheet status in the 7-status model. */
-  .chip { display:inline-flex; align-items:center; padding:2px 8px; border-radius:3px;
-          font-size:11px; font-weight:600; white-space:nowrap; letter-spacing:.02em; }
-  .chip-draft     { background:#eceae6; color:#5b5d65; }
-  .chip-submitted { background:#dbe7f4; color:#1f4a7a; }
-  .chip-approved  { background:#e2f1ea; color:#1f6a4a; }
-  .chip-rejected  { background:#f4dad6; color:#8a2f23; }
-  .chip-confirmed { background:#e4dbf2; color:#4a2a7a; }
-  .chip-cancelled { background:#f0eadb; color:#6b5b1f; }
-  .chip-pending   { background:#fbf3d8; color:#7a5a00; }
-  .chip-yes       { background:#e2f1ea; color:#1f6a4a; }
-  .chip-no        { background:#eceae6; color:#5b5d65; }
+  /* ══ Status capsules — the 7 week statuses ═══════════════════
+     Colour is never the only signal: every capsule renders its status text, so
+     the meaning survives greyscale and colour blindness (WCAG-AA, Pages sheet).
+     The palette is the prototype's, so the built screens and
+     doc/STATUS_MODEL.html read as the same product. */
+  .rw-status { border-radius:12px; padding:2px 10px; display:inline-block;
+               font-weight:600; font-size:0.8125rem; white-space:nowrap; }
+
+  /* Not yet submitted — neutral: nothing has gone wrong yet. */
+  .rw-status-notsubmitted { background:#f0f0f0; color:#5a5a5a; }
+  /* Submitted — informational: waiting on someone else. */
+  .rw-status-submitted    { background:#e8f1fa; color:#04528f; }
+  /* Approved / Overridden and approved / Closed — resolved. */
+  .rw-status-approved,
+  .rw-status-overridden,
+  .rw-status-closed       { background:#e6f4ee; color:#0d4f31; }
+  /* Closed is terminal, so it reads a shade quieter than a fresh approval. */
+  .rw-status-closed       { opacity:0.85; }
+  /* Rejected — needs the employee to act. */
+  .rw-status-rejected     { background:#fdeceb; color:#8c1d18; }
+  /* Defaulted — a cut-off was missed. Warning, not error: the hours exist. */
+  .rw-status-defaulted    { background:#fdf1e0; color:#6b4100; }
+
+  /* ══ Flag chips — the 6 workflow flags ═══════════════════════
+     Flags are independent of status and several can be set at once, so they are
+     a row of chips rather than one badge. */
+  .rw-flag { border-radius:4px; padding:1px 6px; display:inline-block;
+             font-size:0.75rem; font-weight:600; border:1px solid transparent;
+             white-space:nowrap; }
+  .rw-flag-defaulted,
+  .rw-flag-late       { background:#fdf1e0; border-color:#a3651a; color:#6b4100; }
+  .rw-flag-advance,
+  .rw-flag-overridden { background:#e8f1fa; border-color:#2563a8; color:#04528f; }
+  /* Reversal carries the negative hours; Adjustment the positive half of the
+     pair — opposite colours because they net off against each other. */
+  .rw-flag-reversal   { background:#fdeceb; border-color:#b3352c; color:#8c1d18; }
+  .rw-flag-adjustment { background:#e6f4ee; border-color:#17795e; color:#0d4f31; }
+
+  /* ══ Weekly entry grid (PAGE-001) ════════════════════════════ */
+
+  /* Day columns are sized in ch so they track the font rather than a fixed
+     pixel width, and the table scrolls inside its own container. */
+  .rw-grid-scroll { overflow-x:auto; width:100%; }
+  .rw-grid-day    { min-width:7ch; text-align:center; }
+
+  /* Non-working days stay enterable — RULE-012 makes Sat/Sun editable with a
+     default of zero. The tint marks them unusual; it does not disable them. */
+  .rw-grid-nonworking { background:#f4f4f4; }
+
+  /* A cell the server refused, so the reason can sit next to the value. */
+  .rw-grid-invalid input { border-color:#c12e2a; }
+
+  .rw-grid-total { font-weight:700; background:#fafafa; }
+  /* A day whose total across lines breaks RULE-003 (24h). Surfaced on the
+     column total because no single cell is individually at fault. */
+  .rw-grid-total-over { color:#c12e2a; }
+
+  /* The entry grid itself. A plain table, not oj-table: every cell is an input
+     and the row set is a fixed seven days, so a data grid would add virtual
+     scrolling and selection machinery for no benefit. */
+  .rw-shift-table { width:100%; border-collapse:collapse; font-size:13px; }
+  .rw-shift-table thead th { background:#f5f4f0; padding:6px 8px; text-align:left;
+                             font-size:11px; font-weight:600; color:var(--rw-slate);
+                             text-transform:uppercase; letter-spacing:0.5px;
+                             border-bottom:1px solid var(--rw-border); white-space:nowrap; }
+  .rw-shift-table tbody td { padding:6px 8px; border-bottom:1px solid var(--rw-border-2);
+                             color:var(--rw-ink-2); vertical-align:middle; }
+  .rw-shift-table tbody tr:last-child td { border-bottom:none; }
+  .rw-shift-table tfoot td { padding:6px 8px; border-top:2px solid var(--rw-border);
+                             font-weight:600; }
+
+  /* Read-only shift row (RULE-011 — one shift per day, sourced from HCM). */
+  .rw-shift-row { background:#fafafa; color:#5a5a5a; font-size:0.8125rem; }
+
+  /* ══ Metric strip ════════════════════════════════════════════ */
+  .rw-metric       { background:#fff; border:1px solid var(--rw-border); border-radius:8px; }
+  .rw-metric-value { font-size:1.5rem; font-weight:700; line-height:1.1; }
+  .rw-metric-label { color:var(--rw-slate); font-size:0.8125rem; }
+
+  /* ══ Cut-off / rule notice ═══════════════════════════════════ */
+  .rw-notice { background:#e8f1fa; border-inline-start:3px solid #2563a8;
+               border-radius:4px; color:#04528f; font-size:0.8125rem;
+               padding:10px 14px; }
+  .rw-notice-warning { background:#fdf1e0; border-inline-start-color:#a3651a;
+                       color:#6b4100; }
+
+  /* oj-sp-general-overview-page constrains its own max width, which crops the
+     wide grids. Applied by class so it is opt-in per page, not global. */
+  .rw-page-full { --oj-sp-general-overview-page-max-width: 100% !important;
+                  max-width: 100% !important; }
 
   .stat-card  { background:#fff; border:1px solid var(--rw-border); border-radius:4px; padding:16px 18px; }
   .stat-label { font-size:11px; font-weight:600; color:var(--rw-slate); text-transform:uppercase;

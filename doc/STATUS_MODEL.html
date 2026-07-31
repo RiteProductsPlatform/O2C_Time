@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>O2C Time — Timesheet Statuses</title>
+<style>
+  :root {
+    --ink:#12161c; --paper:#fcfcfd; --surface:#ffffff; --surface-2:#f4f6f8;
+    --border:#dde2e8; --slate:#5a6673; --slate-dim:#7d8894;
+    --flight:#2563a8;  --flight-bg:#e8f1fa;
+    --settled:#17795e; --settled-bg:#e6f4ee;
+    --missed:#a3651a;  --missed-bg:#fdf1e0;
+    --rework:#b3352c;  --rework-bg:#fdeceb;
+    --neutral:#5a6673; --neutral-bg:#eef1f4;
+    --mono: ui-monospace,"SF Mono","Cascadia Mono","JetBrains Mono",Consolas,"Liberation Mono",monospace;
+    --sans: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink:#e8ecf1; --paper:#14181e; --surface:#1b2028; --surface-2:#232933;
+      --border:#333c48; --slate:#a3aeba; --slate-dim:#85909d;
+      --flight:#7fb3e8;  --flight-bg:#17304a;
+      --settled:#6fcaa8; --settled-bg:#10382c;
+      --missed:#e0b070;  --missed-bg:#3d2c12;
+      --rework:#ec8b83;  --rework-bg:#3d1d1a;
+      --neutral:#a3aeba; --neutral-bg:#262d37;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:var(--sans); font-size:15px; line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap { max-width:1060px; margin:0 auto; padding:44px 24px 80px; }
+
+  h1 { font-size:29px; line-height:1.2; font-weight:700; letter-spacing:-0.02em; margin:0 0 10px; text-wrap:balance; }
+  h2 { font-size:20px; line-height:1.25; font-weight:700; letter-spacing:-0.01em; margin:0 0 8px; text-wrap:balance; }
+  h3 { font-size:15px; font-weight:700; margin:0 0 6px; }
+  p  { margin:0 0 12px; max-width:68ch; }
+
+  .eyebrow { font-family:var(--mono); font-size:10.5px; font-weight:700;
+             text-transform:uppercase; letter-spacing:.14em; color:var(--slate-dim); margin:0 0 8px; }
+  .lede { font-size:16.5px; color:var(--slate); max-width:66ch; }
+
+  header { border-bottom:2px solid var(--ink); padding-bottom:22px; margin-bottom:8px; }
+  nav.kin { display:flex; gap:8px; flex-wrap:wrap; margin-top:18px; font-family:var(--mono); font-size:11.5px; }
+  nav.kin a, nav.kin span.here {
+    padding:4px 10px; border:1px solid var(--border); border-radius:4px;
+    text-decoration:none; color:var(--slate);
+  }
+  nav.kin span.here { background:var(--ink); color:var(--paper); border-color:var(--ink); font-weight:700; }
+  nav.kin a:hover { border-color:var(--flight); color:var(--flight); }
+  nav.kin a:focus-visible { outline:2px solid var(--flight); outline-offset:2px; }
+
+  section { margin-top:40px; }
+  .num { font-family:var(--mono); font-size:11px; font-weight:700; color:var(--flight); letter-spacing:.08em; }
+
+  .tw { overflow-x:auto; margin:18px 0; border:1px solid var(--border); border-radius:6px; }
+  table { border-collapse:collapse; width:100%; font-size:13.5px; min-width:640px; }
+  th { background:var(--surface-2); text-align:left; font-family:var(--mono); font-size:10px;
+       font-weight:700; text-transform:uppercase; letter-spacing:.09em; color:var(--slate);
+       padding:10px 13px; border-bottom:1px solid var(--border); white-space:nowrap; }
+  td { padding:10px 13px; border-bottom:1px solid var(--border); vertical-align:top; }
+  tbody tr:last-child td { border-bottom:none; }
+  td.c { text-align:center; font-family:var(--mono); }
+
+  .chip { display:inline-block; font-family:var(--mono); font-size:12px; font-weight:600;
+          padding:2px 8px; border-radius:4px; white-space:nowrap; border:1px solid transparent; }
+  .s-neutral{background:var(--neutral-bg);color:var(--neutral);border-color:var(--neutral);}
+  .s-flight {background:var(--flight-bg); color:var(--flight); border-color:var(--flight);}
+  .s-settled{background:var(--settled-bg);color:var(--settled);border-color:var(--settled);}
+  .s-missed {background:var(--missed-bg); color:var(--missed); border-color:var(--missed);}
+  .s-rework {background:var(--rework-bg); color:var(--rework); border-color:var(--rework);}
+  .strike { text-decoration:line-through; text-decoration-color:var(--rework); }
+
+  code { font-family:var(--mono); font-size:12.5px; background:var(--surface-2);
+         padding:1px 5px; border-radius:3px; }
+
+  .callout { border:1px solid var(--border); border-left:3px solid var(--missed);
+             background:var(--missed-bg); border-radius:6px; padding:16px 18px; margin:18px 0; }
+  .callout.decision { border-left-color:var(--flight); background:var(--flight-bg); }
+  .callout p:last-child { margin-bottom:0; }
+
+  .key { font-family:var(--mono); font-size:11px; color:var(--slate-dim);
+         display:flex; gap:16px; flex-wrap:wrap; margin:12px 0 0; }
+  .key span { display:flex; align-items:center; gap:5px; }
+  .dot { width:9px; height:9px; border-radius:2px; display:inline-block; }
+
+  .moved { display:grid; gap:12px; margin:18px 0; }
+  .moved-row { display:grid; grid-template-columns:200px 1fr; gap:16px; border:1px solid var(--border);
+               border-radius:6px; padding:13px 15px; background:var(--surface); }
+
+  /* Diagram plate: deliberately light in BOTH themes. A schematic reads as an
+     inset drawing plate, and the semantic arrow/box colours are tuned for a
+     light ground — inverting them would cost legibility for no gain. */
+  .plate { background:#fbfcfd; border:1px solid #d5dbe2; border-radius:6px;
+           padding:16px 10px 6px; margin:18px 0 6px; overflow-x:auto; }
+  .plate svg.diagram { display:block; width:100%; min-width:820px; height:auto; }
+  .plate-cap { font-family:var(--mono); font-size:10.5px; text-transform:uppercase;
+               letter-spacing:.1em; color:var(--slate-dim); margin:0 0 18px; }
+
+  .foot { margin-top:52px; padding-top:18px; border-top:1px solid var(--border);
+          font-size:13px; color:var(--slate-dim); }
+
+  @media (max-width:680px) {
+    .wrap { padding:28px 16px 60px; }
+    h1 { font-size:24px; }
+    .moved-row { grid-template-columns:1fr; gap:8px; }
+  }
+  @media print {
+    body { background:#fff; color:#000; }
+    nav.kin, .foot { display:none; }
+    .wrap { max-width:none; padding:0; }
+    section { break-inside:avoid; }
+    .plate { break-inside:avoid; border-color:#bbb; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <p class="eyebrow">O2C Timesheet Module &middot; revision 2 &middot; for sign-off</p>
+    <h1>Timesheet Statuses</h1>
+    <p class="lede">
+      Seven statuses, down from nine. A week has exactly one at any time, enforced
+      as a <code>CHECK</code> constraint so an invalid value cannot be stored &mdash;
+      not by the app, not by a direct API call.
+    </p>
+    <nav class="kin"><span class="here">Statuses</span>
+    <a href="FLAG_MODEL.html">Flags</a>
+    <a href="TIMESHEET_FLOW.html">Flow chart</a></nav>
+  </header>
+
+  <section>
+    <p class="eyebrow"><span class="num">01</span> &nbsp;The seven</p>
+    <h2>Who sets each one, and what it permits</h2>
+    <div class="key">
+      <span><i class="dot" style="background:var(--neutral)"></i> untouched</span>
+      <span><i class="dot" style="background:var(--flight)"></i> in flight</span>
+      <span><i class="dot" style="background:var(--settled)"></i> settled</span>
+      <span><i class="dot" style="background:var(--missed)"></i> SLA missed</span>
+      <span><i class="dot" style="background:var(--rework)"></i> needs rework</span>
+    </div>
+
+    <div class="tw">
+      <table>
+        <thead>
+          <tr><th>Status</th><th>Means</th><th>Set by</th>
+              <th>Employee<br>may edit</th><th>Week<br>locked</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="chip s-neutral">Not yet submitted</span></td>
+            <td>Pre-populated from allocation; the employee has not submitted</td>
+            <td>Population job</td><td class="c">Yes</td><td class="c">&mdash;</td>
+          </tr>
+          <tr>
+            <td><span class="chip s-flight">Submitted</span></td>
+            <td>With the manager, awaiting a decision</td>
+            <td>Employee</td><td class="c">&mdash;</td><td class="c">&mdash;</td>
+          </tr>
+          <tr>
+            <td><span class="chip s-settled">Approved</span></td>
+            <td>Manager approved it as submitted</td>
+            <td>Manager</td><td class="c">&mdash;</td><td class="c">&mdash;</td>
+          </tr>
+          <tr>
+            <td><span class="chip s-rework">Rejected</span></td>
+            <td>Rejected with a mandatory reason; back with the employee to fix</td>
+            <td>Manager</td><td class="c">Yes</td><td class="c">&mdash;</td>
+          </tr>
+          <tr>
+            <td><span class="chip s-missed">Defaulted</span></td>
+            <td>A cut-off was missed. <code>DEFAULTED_BY</code> records whether the
+                employee missed the weekly cut-off or the manager missed delivery</td>
+            <td><strong>Defaulting jobs only</strong></td>
+            <td class="c">&mdash;</td><td class="c">If employee-caused</td>
+          </tr>
+          <tr>
+            <td><span class="chip s-settled">Overridden and approved</span></td>
+            <td>Manager changed the hours, then approved. The employee's original is
+                kept in the audit trail</td>
+            <td>Manager</td><td class="c">&mdash;</td><td class="c">&mdash;</td>
+          </tr>
+          <tr>
+            <td><span class="chip s-settled">Closed</span></td>
+            <td>Month confirmed and handed to accrual</td>
+            <td>Month confirmation</td><td class="c">&mdash;</td><td class="c">Yes</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout decision">
+      <h3>The consequence worth stating</h3>
+      <p>
+        <span class="chip s-missed">Defaulted</span> is now produced
+        <strong>only</strong> by the two defaulting jobs. Nothing an employee does
+        can put their own week into a defaulted state &mdash; submitting late gets
+        them <span class="chip s-flight">Submitted</span> plus a
+        <span class="chip s-missed">Late&nbsp;submission</span> flag, never
+        <span class="chip s-missed">Defaulted</span>.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow"><span class="num">02</span> &nbsp;Transitions</p>
+    <h2>Every legal move, per status</h2>
+    <p>Anything not listed here is not a legal transition.</p>
+
+    <div class="tw">
+      <table>
+        <thead><tr><th>From</th><th>To</th><th>Trigger</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><span class="chip s-neutral">Not yet submitted</span></td>
+            <td><span class="chip s-flight">Submitted</span></td>
+            <td>Employee submits</td>
+          </tr>
+          <tr>
+            <td><span class="chip s-neutral">Not yet submitted</span></td>
+            <td><span class="chip s-missed">Defaulted</span></td>
+            <td>Weekly cut-off passes. Auto-submits default hours, <strong>locks</strong>,
+                <code>DEFAULTED_BY = 'EMPLOYEE'</code></td>
+          </tr>
+          <tr>
+            <td><span class="chip s-flight">Submitted</span></td>
+            <td><span class="chip s-settled">Approved</span></td>
+            <td>Manager approves</td>
+          </tr>
+          <tr>
+            <td><span class="chip s-flight">Submitted</span></td>
+            <td><span class="chip s-settled">Overridden and approved</span></td>
+            <td>Manager changes the hours, then approves</td>
+          </tr>
+          <tr>
+            <td><span class="chip s-flight">Submitted</span></td>
+            <td><span class="chip s-rework">Rejected</span></td>
+            <td>Manager rejects &mdash; reason is mandatory</td>
+          </tr>
+          <tr>
+            <td><span class="chip s-flight">Submitted</span></td>
+            <td><span class="chip s-missed">Defaulted</span></td>
+            <td>Delivery cut-off passes. <strong>No lock</strong> &mdash; the manager can
+                still approve it. <code>DEFAULTED_BY = 'MANAGER'</code></td>
+          </tr>
+          <tr>
+            <td><span class="chip s-rework">Rejected</span></td>
+            <td><span class="chip s-flight">Submitted</span></td>
+            <td>Employee resubmits. Adds the
+                <span class="chip s-missed">Late&nbsp;submission</span> flag if it lands
+                after the weekly cut-off &mdash; the status is the same either way</td>
+          </tr>
+          <tr>
+            <td><span class="chip s-missed">Defaulted</span></td>
+            <td><span class="chip s-settled">Approved</span></td>
+            <td>Manager edits the locked week and approves, or approves late</td>
+          </tr>
+          <tr>
+            <td><span class="chip s-missed">Defaulted</span></td>
+            <td><span class="chip s-rework">Rejected</span></td>
+            <td>Manager rejects it instead</td>
+          </tr>
+          <tr>
+            <td><span class="chip s-settled">Approved</span></td>
+            <td><span class="chip s-settled">Closed</span></td>
+            <td>Month confirmed to accrual</td>
+          </tr>
+          <tr>
+            <td><span class="chip s-settled">Overridden and approved</span></td>
+            <td><span class="chip s-settled">Closed</span></td>
+            <td>Month confirmed to accrual</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow"><span class="num">03</span> &nbsp;Removed</p>
+    <h2>Two statuses went, for different reasons</h2>
+
+    <div class="moved">
+      <div class="moved-row">
+        <div><span class="chip s-missed strike">Late submission</span></div>
+        <div>
+          Became a <strong>flag</strong>, not a status. A week submitted after the
+          weekly cut-off is still <span class="chip s-flight">Submitted</span>,
+          because the manager has to act on it either way. The SLA miss is recorded
+          on the flag.
+        </div>
+      </div>
+      <div class="moved-row">
+        <div><span class="chip s-missed strike">Manager Defaulted</span></div>
+        <div>
+          Folded into <span class="chip s-missed">Defaulted</span> with
+          <code>DEFAULTED_BY = 'MANAGER'</code>. One badge on screen; the
+          distinction kept where it matters.
+        </div>
+      </div>
+    </div>
+
+    <div class="callout">
+      <h3>Which is why <code>DEFAULTED_BY</code> exists</h3>
+      <p>
+        RULE-016 says only <span class="chip s-missed">Defaulted</span> stops salary,
+        and the requirements are explicit that &ldquo;awaiting approval does
+        <strong>not</strong> stop salary&rdquo;. Now that a manager missing the
+        delivery cut-off <em>also</em> produces
+        <span class="chip s-missed">Defaulted</span>, a literal reading would hold an
+        employee's pay because their <em>manager</em> was slow. Salary stopping
+        therefore acts only on <code>DEFAULTED_BY = 'EMPLOYEE'</code>.
+      </p>
+    </div>
+  </section>
+
+
+<p class="foot">
+  O2C Timesheet Module &middot; status &amp; flag model revision 2 &middot; 30 July 2026 &middot;
+  canonical copy at <code>Time&nbsp;Module/STATUS_AND_FLAG_MODEL.md</code>
+</p>
+</div>
+</body>
+</html>

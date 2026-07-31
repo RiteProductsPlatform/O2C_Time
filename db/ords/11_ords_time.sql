@@ -123,8 +123,9 @@ BEGIN
              week_status, locked_flag,
              billable_hours, non_billable_hours, leave_hours,
              billing_loss_hours, total_hours, standard_hours,
-             defaulted_flag, late_submission_flag,
+             defaulted_flag, defaulted_by, late_submission_flag,
              advance_closure_flag, overridden_flag,
+             has_reversal_flag, has_adjustment_flag,
              reject_reason, reject_remarks, submitted_on, approved_on,
              days_total, days_pending, days_approved, days_rejected
         FROM v_oc_ts_week_detail

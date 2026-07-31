@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>O2C Time — Workflow Flags</title>
+<style>
+  :root {
+    --ink:#12161c; --paper:#fcfcfd; --surface:#ffffff; --surface-2:#f4f6f8;
+    --border:#dde2e8; --slate:#5a6673; --slate-dim:#7d8894;
+    --flight:#2563a8;  --flight-bg:#e8f1fa;
+    --settled:#17795e; --settled-bg:#e6f4ee;
+    --missed:#a3651a;  --missed-bg:#fdf1e0;
+    --rework:#b3352c;  --rework-bg:#fdeceb;
+    --neutral:#5a6673; --neutral-bg:#eef1f4;
+    --mono: ui-monospace,"SF Mono","Cascadia Mono","JetBrains Mono",Consolas,"Liberation Mono",monospace;
+    --sans: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink:#e8ecf1; --paper:#14181e; --surface:#1b2028; --surface-2:#232933;
+      --border:#333c48; --slate:#a3aeba; --slate-dim:#85909d;
+      --flight:#7fb3e8;  --flight-bg:#17304a;
+      --settled:#6fcaa8; --settled-bg:#10382c;
+      --missed:#e0b070;  --missed-bg:#3d2c12;
+      --rework:#ec8b83;  --rework-bg:#3d1d1a;
+      --neutral:#a3aeba; --neutral-bg:#262d37;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:var(--sans); font-size:15px; line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap { max-width:1060px; margin:0 auto; padding:44px 24px 80px; }
+
+  h1 { font-size:29px; line-height:1.2; font-weight:700; letter-spacing:-0.02em; margin:0 0 10px; text-wrap:balance; }
+  h2 { font-size:20px; line-height:1.25; font-weight:700; letter-spacing:-0.01em; margin:0 0 8px; text-wrap:balance; }
+  h3 { font-size:15px; font-weight:700; margin:0 0 6px; }
+  p  { margin:0 0 12px; max-width:68ch; }
+
+  .eyebrow { font-family:var(--mono); font-size:10.5px; font-weight:700;
+             text-transform:uppercase; letter-spacing:.14em; color:var(--slate-dim); margin:0 0 8px; }
+  .lede { font-size:16.5px; color:var(--slate); max-width:66ch; }
+
+  header { border-bottom:2px solid var(--ink); padding-bottom:22px; margin-bottom:8px; }
+  nav.kin { display:flex; gap:8px; flex-wrap:wrap; margin-top:18px; font-family:var(--mono); font-size:11.5px; }
+  nav.kin a, nav.kin span.here {
+    padding:4px 10px; border:1px solid var(--border); border-radius:4px;
+    text-decoration:none; color:var(--slate);
+  }
+  nav.kin span.here { background:var(--ink); color:var(--paper); border-color:var(--ink); font-weight:700; }
+  nav.kin a:hover { border-color:var(--flight); color:var(--flight); }
+  nav.kin a:focus-visible { outline:2px solid var(--flight); outline-offset:2px; }
+
+  section { margin-top:40px; }
+  .num { font-family:var(--mono); font-size:11px; font-weight:700; color:var(--flight); letter-spacing:.08em; }
+
+  .tw { overflow-x:auto; margin:18px 0; border:1px solid var(--border); border-radius:6px; }
+  table { border-collapse:collapse; width:100%; font-size:13.5px; min-width:640px; }
+  th { background:var(--surface-2); text-align:left; font-family:var(--mono); font-size:10px;
+       font-weight:700; text-transform:uppercase; letter-spacing:.09em; color:var(--slate);
+       padding:10px 13px; border-bottom:1px solid var(--border); white-space:nowrap; }
+  td { padding:10px 13px; border-bottom:1px solid var(--border); vertical-align:top; }
+  tbody tr:last-child td { border-bottom:none; }
+  td.c { text-align:center; font-family:var(--mono); }
+
+  .chip { display:inline-block; font-family:var(--mono); font-size:12px; font-weight:600;
+          padding:2px 8px; border-radius:4px; white-space:nowrap; border:1px solid transparent; }
+  .s-neutral{background:var(--neutral-bg);color:var(--neutral);border-color:var(--neutral);}
+  .s-flight {background:var(--flight-bg); color:var(--flight); border-color:var(--flight);}
+  .s-settled{background:var(--settled-bg);color:var(--settled);border-color:var(--settled);}
+  .s-missed {background:var(--missed-bg); color:var(--missed); border-color:var(--missed);}
+  .s-rework {background:var(--rework-bg); color:var(--rework); border-color:var(--rework);}
+  .strike { text-decoration:line-through; text-decoration-color:var(--rework); }
+
+  code { font-family:var(--mono); font-size:12.5px; background:var(--surface-2);
+         padding:1px 5px; border-radius:3px; }
+
+  .callout { border:1px solid var(--border); border-left:3px solid var(--missed);
+             background:var(--missed-bg); border-radius:6px; padding:16px 18px; margin:18px 0; }
+  .callout.decision { border-left-color:var(--flight); background:var(--flight-bg); }
+  .callout p:last-child { margin-bottom:0; }
+
+  .key { font-family:var(--mono); font-size:11px; color:var(--slate-dim);
+         display:flex; gap:16px; flex-wrap:wrap; margin:12px 0 0; }
+  .key span { display:flex; align-items:center; gap:5px; }
+  .dot { width:9px; height:9px; border-radius:2px; display:inline-block; }
+
+  .moved { display:grid; gap:12px; margin:18px 0; }
+  .moved-row { display:grid; grid-template-columns:200px 1fr; gap:16px; border:1px solid var(--border);
+               border-radius:6px; padding:13px 15px; background:var(--surface); }
+
+  /* Diagram plate: deliberately light in BOTH themes. A schematic reads as an
+     inset drawing plate, and the semantic arrow/box colours are tuned for a
+     light ground — inverting them would cost legibility for no gain. */
+  .plate { background:#fbfcfd; border:1px solid #d5dbe2; border-radius:6px;
+           padding:16px 10px 6px; margin:18px 0 6px; overflow-x:auto; }
+  .plate svg.diagram { display:block; width:100%; min-width:820px; height:auto; }
+  .plate-cap { font-family:var(--mono); font-size:10.5px; text-transform:uppercase;
+               letter-spacing:.1em; color:var(--slate-dim); margin:0 0 18px; }
+
+  .foot { margin-top:52px; padding-top:18px; border-top:1px solid var(--border);
+          font-size:13px; color:var(--slate-dim); }
+
+  @media (max-width:680px) {
+    .wrap { padding:28px 16px 60px; }
+    h1 { font-size:24px; }
+    .moved-row { grid-template-columns:1fr; gap:8px; }
+  }
+  @media print {
+    body { background:#fff; color:#000; }
+    nav.kin, .foot { display:none; }
+    .wrap { max-width:none; padding:0; }
+    section { break-inside:avoid; }
+    .plate { break-inside:avoid; border-color:#bbb; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <p class="eyebrow">O2C Timesheet Module &middot; revision 2 &middot; for sign-off</p>
+    <h1>Workflow Flags</h1>
+    <p class="lede">
+      Six flags, down from eight. Flags are independent of status and several can be
+      set at once &mdash; a week can be <span class="chip s-flight">Submitted</span>
+      while carrying both <span class="chip s-missed">Late&nbsp;submission</span> and
+      <span class="chip s-neutral">Adjustment</span>.
+    </p>
+    <nav class="kin"><a href="STATUS_MODEL.html">Statuses</a>
+    <span class="here">Flags</span>
+    <a href="TIMESHEET_FLOW.html">Flow chart</a></nav>
+  </header>
+
+  <section>
+    <p class="eyebrow"><span class="num">01</span> &nbsp;The six</p>
+    <h2>Sticky versus derived</h2>
+    <p>
+      The first four are <strong>sticky</strong>: once true they stay true, because
+      they record that something <em>happened</em> rather than the current state. A
+      week that defaulted in week 2 and was later approved still carries
+      <span class="chip s-missed">Defaulted</span> &mdash; that is the point of it.
+    </p>
+    <p>
+      The last two are <strong>derived</strong>, recomputed by trigger whenever the
+      week's entries change. They describe what the week currently contains, so they
+      can go back to false.
+    </p>
+
+    <div class="tw">
+      <table>
+        <thead><tr><th>Flag</th><th>Means</th><th>Set by</th><th>Sticky</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><span class="chip s-missed">Defaulted</span></td>
+            <td>The weekly or delivery cut-off was missed</td>
+            <td>Defaulting jobs</td><td class="c">Yes</td>
+          </tr>
+          <tr>
+            <td><span class="chip s-missed">Late submission</span></td>
+            <td>Submitted or resubmitted <strong>after</strong> the weekly cut-off.
+                The status stays <span class="chip s-flight">Submitted</span></td>
+            <td>Submit</td><td class="c">Yes</td>
+          </tr>
+          <tr>
+            <td><span class="chip s-flight">Advance closure</span></td>
+            <td>Month approved before the work happened, at month level</td>
+            <td>Advance approve</td><td class="c">Yes</td>
+          </tr>
+          <tr>
+            <td><span class="chip s-flight">Overridden &amp; approved</span></td>
+            <td>Manager changed the hours before approving</td>
+            <td>Override</td><td class="c">Yes</td>
+          </tr>
+          <tr>
+            <td><span class="chip s-neutral">Reversal</span></td>
+            <td>Week contains a <code>Reversal(&minus;)</code> entry</td>
+            <td>Entry rollup trigger</td><td class="c">Derived</td>
+          </tr>
+          <tr>
+            <td><span class="chip s-neutral">Adjustment</span></td>
+            <td>Week contains an <code>Adjustment(+)</code> entry</td>
+            <td>Entry rollup trigger</td><td class="c">Derived</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow"><span class="num">02</span> &nbsp;Renamed</p>
+    <h2>Cancel became Reversal</h2>
+    <div class="moved">
+      <div class="moved-row">
+        <div>
+          <span class="chip s-neutral strike">Cancel</span>
+          &nbsp;&rarr;&nbsp;
+          <span class="chip s-neutral">Reversal</span>
+        </div>
+        <div>
+          &ldquo;Cancel&rdquo; read like a button a user presses. This is an
+          accounting reversal: it carries <strong>negative</strong> hours and nets
+          off against its paired <code>Adjustment(+)</code> row, which is how a
+          backdated project change reaches accrual without reopening a closed book.
+        </div>
+      </div>
+    </div>
+    <p>
+      The rename runs all the way through: <code>ENTRY_TYPE</code> on the entry
+      table, the accrual interface, and the sign rule that keys off it
+      (<code>Reversal</code> rows must be &le;&nbsp;0, everything else
+      &ge;&nbsp;0, so a consumer can <code>SUM()</code> without sign handling).
+    </p>
+  </section>
+
+  <section>
+    <p class="eyebrow"><span class="num">03</span> &nbsp;Removed</p>
+    <h2>Two flags went, and nothing was lost</h2>
+
+    <div class="moved">
+      <div class="moved-row">
+        <div><span class="chip s-flight strike">Correction</span></div>
+        <div>
+          Dropped. <code>OC_TS_APPROVAL</code> already logs a <code>Resubmit</code>
+          action whenever a rejected week is resubmitted &mdash; <strong>that is the
+          audit trail</strong>. The flag was a second, weaker copy of information the
+          log already held precisely.
+        </div>
+      </div>
+      <div class="moved-row">
+        <div><span class="chip s-missed strike">Contractor Unbilled hours</span></div>
+        <div>
+          Dropped &mdash; out of scope for the time module. Contractors still exist
+          as workers with their own role and their own non-billable time; we simply
+          no longer raise a flag about it here.
+        </div>
+      </div>
+    </div>
+
+    <div class="callout">
+      <h3>One redundancy left deliberately in place</h3>
+      <p>
+        <span class="chip s-missed">Defaulted</span> and
+        <span class="chip s-flight">Overridden &amp; approved</span> exist as
+        <strong>both</strong> a status and a flag. That came from the original
+        requirements and has been kept. The flag is the more useful of the two,
+        because it survives the week later becoming
+        <span class="chip s-settled">Approved</span> &mdash; whereas the status is
+        overwritten. Worth deciding whether to keep both.
+      </p>
+    </div>
+  </section>
+
+
+<p class="foot">
+  O2C Timesheet Module &middot; status &amp; flag model revision 2 &middot; 30 July 2026 &middot;
+  canonical copy at <code>Time&nbsp;Module/STATUS_AND_FLAG_MODEL.md</code>
+</p>
+</div>
+</body>
+</html>

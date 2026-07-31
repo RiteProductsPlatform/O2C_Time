@@ -1,0 +1,434 @@
+<title>O2C Timesheet — User Journeys & Decisions</title>
+<style>
+:root{
+  --paper:#f7f6f3; --card:#ffffff; --ink:#26272c; --ink-2:#54565f; --muted:#8a8b92;
+  --line:#e2e0da; --line-2:#eeece7;
+  --emp:#1f5d83; --emp-bg:#e9f1f7; --mgr:#1f6a4a; --mgr-bg:#e6f2ec; --fin:#a2670c; --fin-bg:#f8efdd;
+  --ok:#1f6a4a; --warn:#a2670c; --stop:#a73d2f;
+  --rejbg:#f6ddd8;
+}
+:root[data-theme="dark"]{
+  --paper:#17181b; --card:#212227; --ink:#ecebe7; --ink-2:#a9aab1; --muted:#7d7e86;
+  --line:#33343a; --line-2:#26272c;
+  --emp:#7fb4d6; --emp-bg:#17303f; --mgr:#7cc4a1; --mgr-bg:#163329; --fin:#d9a552; --fin-bg:#332916;
+  --ok:#7cc4a1; --warn:#d9a552; --stop:#e08c7d; --rejbg:#3a201d;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#17181b; --card:#212227; --ink:#ecebe7; --ink-2:#a9aab1; --muted:#7d7e86;
+  --line:#33343a; --line-2:#26272c;
+  --emp:#7fb4d6; --emp-bg:#17303f; --mgr:#7cc4a1; --mgr-bg:#163329; --fin:#d9a552; --fin-bg:#332916;
+  --ok:#7cc4a1; --warn:#d9a552; --stop:#e08c7d; --rejbg:#3a201d;
+}}
+*{ box-sizing:border-box; }
+html,body{ margin:0; padding:0; }
+body{ background:var(--paper); color:var(--ink); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif; line-height:1.5; }
+.wrap{ max-width:1120px; margin:0 auto; padding:44px 26px 72px; }
+.eyebrow{ font-size:11px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:var(--emp); margin:0 0 10px; }
+h1{ font-family:Georgia,"Times New Roman",serif; font-weight:500; font-size:34px; letter-spacing:-.4px; margin:0 0 10px; text-wrap:balance; }
+.lede{ font-size:15px; color:var(--ink-2); max-width:72ch; margin:0 0 8px; }
+.meta{ font-size:12px; color:var(--muted); margin:0 0 26px; }
+.toc{ display:flex; flex-wrap:wrap; gap:8px; margin:0 0 30px; }
+.toc a{ font-size:12px; font-weight:600; text-decoration:none; color:var(--ink-2); background:var(--card); border:1px solid var(--line); border-radius:20px; padding:5px 13px; }
+.toc a:hover{ border-color:var(--emp); color:var(--emp); }
+.legend{ display:flex; flex-wrap:wrap; gap:8px 18px; margin:0 0 30px; padding:14px 16px; background:var(--card); border:1px solid var(--line); border-radius:10px; }
+.legend b{ font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin-right:6px; }
+.pill{ display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-weight:600; padding:3px 10px; border-radius:20px; }
+.pill.draft{ background:var(--line-2); color:var(--ink-2); }
+.pill.sub{ background:var(--emp-bg); color:var(--emp); }
+.pill.ok{ background:var(--mgr-bg); color:var(--ok); }
+.pill.rej{ background:var(--rejbg); color:var(--stop); }
+.pill.def{ background:var(--fin-bg); color:var(--warn); }
+.lane{ background:var(--card); border:1px solid var(--line); border-radius:14px; margin-bottom:26px; overflow:hidden; box-shadow:0 1px 2px rgba(0,0,0,.04); }
+.lane-hd{ padding:16px 22px; display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; border-bottom:1px solid var(--line); }
+.lane-hd .role{ font-size:19px; font-weight:700; }
+.lane-hd .tag{ font-size:12.5px; color:var(--ink-2); }
+.lane.emp .lane-hd{ background:var(--emp-bg); } .lane.emp .role{ color:var(--emp); }
+.lane.mgr .lane-hd{ background:var(--mgr-bg); } .lane.mgr .role{ color:var(--mgr); }
+.lane.fin .lane-hd{ background:var(--fin-bg); } .lane.fin .role{ color:var(--fin); }
+.steps{ display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); }
+.step{ padding:18px 20px; border-right:1px solid var(--line-2); border-bottom:1px solid var(--line-2); }
+.step .n{ display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px; border-radius:50%; font-size:12px; font-weight:700; color:#fff; margin-bottom:10px; }
+.lane.emp .n{ background:var(--emp); } .lane.mgr .n{ background:var(--mgr); } .lane.fin .n{ background:var(--fin); }
+.step h4{ margin:0 0 6px; font-size:13.5px; color:var(--ink); }
+.step p{ margin:0 0 10px; font-size:12px; color:var(--ink-2); }
+.note{ padding:16px 22px; font-size:12.5px; color:var(--ink-2); background:var(--line-2); }
+.note strong{ color:var(--ink); }
+.section-h{ font-size:20px; font-family:Georgia,serif; font-weight:500; color:var(--ink); margin:44px 0 6px; padding-top:10px; }
+.section-sub{ font-size:13px; color:var(--ink-2); margin:0 0 18px; max-width:72ch; }
+.brd{ display:inline-block; font-size:10px; font-weight:700; color:var(--ok); background:var(--mgr-bg); border-radius:3px; padding:1px 6px; }
+.q{ display:inline-block; font-size:10px; font-weight:700; color:var(--stop); background:var(--rejbg); border-radius:3px; padding:1px 6px; }
+.qa-grp{ font-size:11.5px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--muted); margin:24px 0 10px; }
+.qa{ display:flex; flex-direction:column; gap:10px; }
+.qa-item{ background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; border-left:4px solid var(--line); }
+.qa-item.confirmed{ border-left-color:var(--ok); }
+.qa-item.deferred{ border-left-color:var(--warn); }
+.qa-item.open{ border-left-color:var(--stop); }
+.qa-top{ display:flex; align-items:flex-start; gap:10px; justify-content:space-between; }
+.qa-q{ font-size:13.5px; font-weight:700; color:var(--ink); margin:0 0 6px; }
+.qa-a{ font-size:12.5px; color:var(--ink-2); margin:0; }
+.qa-a b{ color:var(--ink); }
+.st{ flex-shrink:0; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; padding:3px 9px; border-radius:20px; white-space:nowrap; }
+.st.confirmed{ background:var(--mgr-bg); color:var(--ok); }
+.st.deferred{ background:var(--fin-bg); color:var(--warn); }
+.st.open{ background:var(--rejbg); color:var(--stop); }
+.src{ font-size:11px; color:var(--muted); margin-top:6px; }
+footer{ margin-top:44px; padding-top:16px; border-top:1px solid var(--line); font-size:11.5px; color:var(--muted); }
+</style>
+
+<div class="wrap">
+  <p class="eyebrow">Opportunity to Cash · Timesheet Module</p>
+  <h1>User Journeys, Decisions &amp; Open Questions</h1>
+  <p class="lede">How the Employee, Manager and Admin roles move time from a blank week to accrual-ready, plus every question raised while building the prototype — with the answers that have been settled and the ones still open (including gaps found in the BRD). <strong>This is now the single home for all screen-level discussion</strong> — the prototype pages point here instead of listing questions inline.</p>
+  <p class="meta">Grounded in <em>O2C Time V0.3</em> and <em>O2C Period Definition V3</em>. Companion to the working prototype.</p>
+
+  <div class="toc">
+    <a href="#journeys">Journeys</a><a href="#decisions">Decisions (resolved)</a><a href="#open">Open questions</a><a href="#brd">BRD gaps</a><a href="#scenarios">Scenarios</a><a href="#flags">Flags &amp; actions</a><a href="#flagflow">Flag flow</a><a href="#fusion">Fusion integration</a><a href="#intflow">Integration flow</a><a href="#changelog">Change log</a>
+  </div>
+
+  <div class="legend">
+    <span><b>Status</b></span>
+    <span class="pill draft">Not yet submitted</span>
+    <span class="pill sub">Submitted</span>
+    <span class="pill ok">Approved</span>
+    <span class="pill rej">Rejected</span>
+    <span class="pill def">Defaulted</span>
+  </div>
+
+  <h2 class="section-h" id="journeys">The journeys</h2>
+  <p class="section-sub">Three roles: Employee and Manager operate the timesheet; Admin owns the setup &amp; integration back-office. The Period Control Table is <strong>reference data</strong>, not an Admin screen.</p>
+
+  <!-- EMPLOYEE -->
+  <div class="lane emp">
+    <div class="lane-hd"><span class="role">Employee</span><span class="tag">submit · save draft · correct on rejection · resubmit &nbsp;<span class="brd">BRD 4.2</span></span></div>
+    <div class="steps">
+      <div class="step"><span class="n">1</span><h4>Time pre-populated</h4><p>The week is seeded from Fusion allocation, WBS % and standard hours. A <strong>50/50 split</strong> gets lines for <strong>both</strong> projects. <strong>Shift is shown per day, read-only (from HCM)</strong>; standard hours show per day; <strong>Sat &amp; Sun are editable</strong> (default 0). <em>Allocation</em> opens in a pop-up.</p><span class="pill draft">Not yet submitted</span></div>
+      <div class="step"><span class="n">2</span><h4>Review &amp; correct</h4><p>Enter hours per task per day in 15-min blocks; pick Project &amp; Task. <strong>Onboarding, Training, Travel &amp; Client Holiday are common non-billable tasks</strong> in every project and in the <strong>Organization (Non-Billable) project</strong>; billable staff use them in-project, non-billable staff use the org project. <strong>Leave is not selectable</strong> (from HR). Billable <strong>type is hidden</strong> &mdash; the manager owns it. Save draft anytime.</p><span class="pill draft">editing</span></div>
+      <div class="step"><span class="n">3</span><h4>Submit weekly</h4><p>Before the <strong>weekly cut-off</strong> (shown on screen; Mon 5 PM base-location time). Each project-line routes to <strong>that project&rsquo;s manager</strong>. Miss the cut-off &rarr; Defaulted.</p><span class="pill sub">Submitted</span></div>
+      <div class="step"><span class="n">4</span><h4>Track the workflow</h4><p>A workflow strip shows the state per project-line: <em>pending with &lt;manager&gt;</em>, or the rejection reason if sent back. Managers act independently, so one project can be approved while another is still pending.</p><span class="pill ok">Approved</span> <span class="pill rej">Rejected</span></div>
+      <div class="step"><span class="n">5</span><h4>Correct &amp; resubmit</h4><p>If rejected at <strong>day / week / month</strong>, a banner shows the manager&rsquo;s <strong>reason, remarks and the exact dates sent back</strong>; edit and resubmit before the delivery cut-off. Bill rate &amp; revenue are hidden from the employee.</p><span class="pill def">Late submission</span></div>
+    </div>
+    <div class="note"><strong>Also here:</strong> an "Logged in as" switcher lets you view any employee&rsquo;s timesheet for demo. <strong>Client Timesheets</strong> (upload customer-signed sheets) lives under Employee. Salary Stopping is <em>not</em> on the Employee menu anymore &mdash; it moved to Manager.</div>
+  </div>
+
+  <!-- MANAGER -->
+  <div class="lane mgr">
+    <div class="lane-hd"><span class="role">Manager</span><span class="tag">team approvals + leave-loss + salary stopping &nbsp;<span class="brd">BRD 4.2 / 4.4</span></span></div>
+    <div class="steps">
+      <div class="step"><span class="n">1</span><h4>Team landing</h4><p>Projects you manage (each project has its own manager). Filter by month/project. An <strong>all cut-offs</strong> panel shows weekly, delivery, finance, book, MEC, payroll &amp; client dates.</p><span class="pill draft">Pending</span></div>
+      <div class="step"><span class="n">2</span><h4>Monthly summary</h4><p>One row per employee (billable / non-billable / leave / total / cap). <strong>Tick multiple employees</strong> and Approve or Reject together, for the whole month.</p><span class="pill sub">multi-select</span></div>
+      <div class="step"><span class="n">3</span><h4>Weekly detail</h4><p>Open an employee &rarr; <strong>Weekly</strong> tab: each week with status; approve/reject per week, or tick several weeks and act in bulk. Full month of July is shown.</p><span class="pill ok">weekly</span></div>
+      <div class="step"><span class="n">4</span><h4>Daily detail</h4><p><strong>Daily</strong> tab: billable/non-billable shown <strong>line-wise</strong> (row per task line); tick dates and "Approve selected dates". A week closes when all its working days are approved.</p><span class="pill ok">date-wise</span></div>
+      <div class="step"><span class="n">5</span><h4>Reject or override</h4><p><strong>Reject</strong> with a reason (Manager / Client / Absence) + remarks &mdash; the item goes <strong>back to the employee</strong>, who sees the reason. Or <strong>Override &amp; approve</strong>: correct the hours yourself and approve; the original is kept in the audit trail and the week is tagged <span class="pill def">Overridden &amp; approved</span>.</p><span class="pill rej">Rejected</span> <span class="pill def">Overridden</span></div>
+      <div class="step"><span class="n">6</span><h4>Leave-loss &amp; salary stopping</h4><p>For FCP + Leave-Loss projects, assign unbilled cover to absentees (feeds the invoice annexure). At payroll cut-off, release held salaries from the salary-stopping bucket.</p><span class="pill def">payroll hold</span></div>
+      <div class="step"><span class="n">7</span><h4>Approve retro changes</h4><p>When an employee makes a <strong>retrospective Project / WBS change after the cut-off</strong>, it lands here for approval (routed to the old <em>and</em> new project&rsquo;s manager). Only after the manager approves do the <span class="pill rej">Cancel</span> (&minus;) / <span class="pill ok">Adjustment</span> (+) rows post to the open accrual period.</p><span class="pill sub">manager approval</span></div>
+      <div class="step"><span class="n">8</span><h4>Advance-close a month</h4><p>For a <strong>future month</strong> (e.g. August) shown frozen with defaults, the manager can <strong>advance-approve the whole month now</strong> (select-all + approve) before the delivery cut-off &mdash; tagged Advance closure at the <strong>month level</strong>.</p><span class="pill sub">Advance closure</span></div>
+    </div>
+    <div class="note"><strong>Own time:</strong> a manager logs their own timesheet via the Employee role; it is approved by their <strong>reporting manager (never themselves)</strong>. My Timesheet &amp; Client Timesheets were removed from the Manager menu (they live under Employee). A <strong>manager switcher</strong> (Priya &harr; David) lets you review each manager&rsquo;s own team &mdash; useful for a split employee whose two project-lines route to different managers.</div>
+  </div>
+
+  <!-- ADMIN -->
+  <div class="lane fin">
+    <div class="lane-hd"><span class="role">Admin</span><span class="tag">setup &amp; integration back-office</span></div>
+    <div class="steps">
+      <div class="step"><span class="n">1</span><h4>Calendar (Fusion sync)</h4><p>Sync the calendar layers &mdash; Corporate + standard hours, Client Holiday, Project Standard Hours, Shift &mdash; with precedence Shift &rarr; Client &rarr; Project &rarr; Corporate.</p><span class="pill def">Fusion sync</span></div>
+      <div class="step"><span class="n">2</span><h4>Sync Status</h4><p>Health of the monthly population job and the daily action-date process; surfaces failed records (new hire without allocation, missing shift calendar) for retry.</p><span class="pill def">monitor</span></div>
+      <div class="step"><span class="n">3</span><h4>Accrual Integration</h4><p>On confirmation, <strong>fills the accrual schema interface table</strong> (<code>ACCRUAL.XX_O2C_TIMESHEET_ACCRUAL_IF</code>) with the <strong>consolidated timesheet</strong> (employee × WBS × day), the Leave-Loss annexure, and <strong>manager-approved</strong> day-wise adjustment rows.</p><span class="pill ok">Accrual</span></div>
+      <div class="step"><span class="n">4</span><h4>Integrations (OTL-centric)</h4><p>Prepopulate from HCM &amp; Projects; push approved time to <strong>Oracle Time &amp; Labor (OTL)</strong> &mdash; the system of record &mdash; which feeds Project Costing &amp; Payroll natively.</p><span class="pill def">OTL</span></div>
+    </div>
+    <div class="note"><strong>Note:</strong> the <em>Period Control Table</em> is <strong>reference data only</strong> (removed as an Admin screen). Its cut-off dates still drive the employee cut-off display and the manager &ldquo;all cut-offs&rdquo; panel behind the scenes.</div>
+  </div>
+
+  <!-- DECISIONS -->
+  <h2 class="section-h" id="decisions">Decisions &mdash; questions that are settled</h2>
+  <p class="section-sub">Questions raised while building the screens, and the answers now agreed. These are reflected in the prototype.</p>
+  <div class="qa">
+    <div class="qa-item confirmed"><div class="qa-top"><p class="qa-q">Split employee &rarr; whole weekly submit at once, and can Manager A approve while Manager B is pending?</p><span class="st confirmed">Confirmed</span></div><p class="qa-a"><b>Yes.</b> Each project-line routes to its own project manager and they act <b>independently</b> &mdash; A can approve their week while B&rsquo;s stays pending.</p><p class="src">Employee &middot; My Timesheet</p></div>
+    <div class="qa-item confirmed"><div class="qa-top"><p class="qa-q">Approval granularity &mdash; the BRD says "confirm once a month"; can the manager approve per week?</p><span class="st confirmed">Confirmed</span></div><p class="qa-a">Manager gets <b>both</b>: monthly summary bulk approve/reject, weekly approve/reject, and date-wise approval in the daily view.</p><p class="src">Manager &middot; Team Approvals</p></div>
+    <div class="qa-item confirmed"><div class="qa-top"><p class="qa-q">Is the mobile app in scope?</p><span class="st confirmed">Confirmed</span></div><p class="qa-a"><b>Web-first</b> for this phase; the mobile app comes later.</p><p class="src">Employee &middot; BRD 4.2 sample screens</p></div>
+    <div class="qa-item confirmed"><div class="qa-top"><p class="qa-q">"Maintained separately from the main application" &mdash; what does it mean for Client Timesheets?</p><span class="st confirmed">Confirmed</span></div><p class="qa-a">A <b>separate page with no link to the billing-close date</b> &mdash; customer-signed sheets are collected here independently, even 1&ndash;2 weeks after close.</p><p class="src">Employee &middot; Client Timesheets · BRD 4.3</p></div>
+    <div class="qa-item confirmed"><div class="qa-top"><p class="qa-q">Manager&rarr;project mapping &mdash; sourced from Fusion or maintained in O2C?</p><span class="st confirmed">Confirmed</span></div><p class="qa-a"><b>All master data</b> &mdash; manager&rarr;project mapping, projects, WBS, employees, clients &mdash; is <b>sourced from Oracle Fusion</b>.</p><p class="src">Manager &middot; Integrations</p></div>
+    <div class="qa-item confirmed"><div class="qa-top"><p class="qa-q">Who approves a manager&rsquo;s own timesheet?</p><span class="st confirmed">Confirmed</span></div><p class="qa-a">A manager&rsquo;s own timesheet is approved by their <b>reporting manager &mdash; never themselves</b>.</p><p class="src">Correction #1</p></div>
+    <div class="qa-item confirmed"><div class="qa-top"><p class="qa-q">Is the Period Control Table an Admin screen?</p><span class="st confirmed">Decided</span></div><p class="qa-a"><b>No &mdash; reference data only.</b> The Period Control Table (MEC, client, timesheet, payroll cut-offs, revision window) is maintained as reference/config and <b>removed from the Admin side</b>. Its cut-off dates still drive the employee cut-off display and the manager &ldquo;all cut-offs&rdquo; panel.</p><p class="src">Admin (removed 29 Jul)</p></div>
+    <div class="qa-item confirmed"><div class="qa-top"><p class="qa-q">Retrospective Project / WBS change after the cut-off &mdash; who approves it, and at what granularity?</p><span class="st confirmed">Confirmed</span></div><p class="qa-a">Captured <b>day-wise</b> (each affected day is cancelled on the old line and re-added on the new one) &mdash; <b>not</b> one consolidated lump. The employee enters the change; it is <b>routed to the manager</b> (old and new project managers) to approve. Only after approval do the per-day Reversal (&minus;) / Adjustment(+) rows post to the open accrual period.</p><p class="src">Employee &amp; Manager &middot; retro change · #10</p></div>
+    <div class="qa-item confirmed"><div class="qa-top"><p class="qa-q">How are non-billable activities (Onboarding, Training, Travel, Client Holiday, Leave) captured?</p><span class="st confirmed">Confirmed</span></div><p class="qa-a"><b>As common tasks</b> present in <b>every project</b> AND in an <b>Organization (Non-Billable) project assigned to all employees</b>. <b>Billable</b> staff log them inside their own project; <b>non-billable</b> staff log them on the Organization project. The task <b>is</b> the unbilled reason (project- or day-level). <b>Leave is not selectable</b> &mdash; it comes from HR (Absence) only. A client-holiday day can carry a second line so partial billable + un-billable sit on the same day.</p><p class="src">Employee &middot; My Timesheet · common tasks + org project</p></div>
+    <div class="qa-item confirmed"><div class="qa-top"><p class="qa-q">Can the manager correct an employee&rsquo;s hours instead of rejecting?</p><span class="st confirmed">Confirmed</span></div><p class="qa-a"><b>Yes &mdash; Override &amp; approve.</b> The manager edits the hours and approves in one step; the original values are kept in the audit trail and the week is tagged <b>Overridden &amp; approved</b>.</p><p class="src">Manager &middot; Approval detail</p></div>
+    <div class="qa-item confirmed"><div class="qa-top"><p class="qa-q">Is the shift editable by the employee?</p><span class="st confirmed">Confirmed</span></div><p class="qa-a"><b>No &mdash; read-only, per day, sourced from Oracle HCM</b> (one shift per employee per day, so they can&rsquo;t be in two shifts the same day). Billable <b>type</b> is also hidden from the employee &mdash; the manager owns the classification.</p><p class="src">Employee &middot; My Timesheet</p></div>
+    <div class="qa-item confirmed"><div class="qa-top"><p class="qa-q">What does Salary Stopping show for a partially-defaulted month?</p><span class="st confirmed">Confirmed</span></div><p class="qa-a">A per-employee split of <b>weeks submitted vs defaulted</b> with <b>applied hours</b> and <b>default hours</b> (e.g. 2 of 4 weeks submitted, 2 defaulted). Only the defaulted weeks hold salary; the submitted weeks are unaffected.</p><p class="src">Manager &middot; Salary Stopping · #3</p></div>
+    <div class="qa-item confirmed"><div class="qa-top"><p class="qa-q">Is the month sent to accrual per employee or all at once?</p><span class="st confirmed">Confirmed</span></div><p class="qa-a"><b>All employees at once</b> &mdash; accrual is confirmed at the <b>project-month</b> level and only once <b>every</b> employee&rsquo;s month is Approved. There is no per-employee &ldquo;sent to accrual&rdquo; status.</p><p class="src">Manager &middot; View Timesheet &rarr; Accrual</p></div>
+    <div class="qa-item confirmed"><div class="qa-top"><p class="qa-q">How is the timesheet sent to the accrual system?</p><span class="st confirmed">Confirmed</span></div><p class="qa-a">By <b>filling a table in the accrual system&rsquo;s schema</b> (interface table <code>ACCRUAL.XX_O2C_TIMESHEET_ACCRUAL_IF</code>) with the <b>consolidated timesheet</b> (employee × project × WBS × day &mdash; billed/unbilled/leave) <b>plus the day-wise Reversal (&minus;)/Adjustment(+) rows</b>. Loaded only for manager-confirmed months.</p><p class="src">Admin &middot; Accrual Integration (new integration)</p></div>
+    <div class="qa-item confirmed"><div class="qa-top"><p class="qa-q">A defaulted week&rsquo;s default hours already went to accrual; the employee later submits actuals and the manager approves after the cut-off. Does the correction go as an adjustment? <span class="q">BRD open question</span></p><span class="st confirmed">Confirmed &mdash; yes</span></div><p class="qa-a"><b>Yes, correct.</b> The default hours already sent are corrected by a <b>day-wise Reversal (&minus;)/Adjustment(+) net-off</b> written to the accrual table in the open period (BRD 4.2.1 &ldquo;Default corrections&rdquo;) &mdash; the same mechanism as a retro Project/WBS change; the manager approves it.</p><p class="src">Accrual &middot; BRD 4.2.1 (answered 29 Jul)</p></div>
+    <div class="qa-item confirmed"><div class="qa-top"><p class="qa-q">Are calendars created in the Time module or sourced from Fusion?</p><span class="st confirmed">Decided</span></div><p class="qa-a"><b>Pulled from Oracle Fusion</b> (BRD 4.1 updated: &ldquo;going to pull it from Oracle Fusion&rdquo;) &mdash; no calendar authoring in the Time module. Closes the earlier open question.</p><p class="src">Admin &middot; Calendar (Fusion Sync)</p></div>
+    <div class="qa-item deferred"><div class="qa-top"><p class="qa-q">Billing-Loss auto-distribution across days/projects &mdash; even or weighted?</p><span class="st deferred">De-scoped</span></div><p class="qa-a">Not needed for now.</p><p class="src">Employee &middot; BRD 4.1</p></div>
+    <div class="qa-item deferred"><div class="qa-top"><p class="qa-q">File retention, max size, virus-scan policy for customer timesheet uploads?</p><span class="st deferred">Parked</span></div><p class="qa-a">Parked for now &mdash; to be defined later.</p><p class="src">Employee &middot; Client Timesheets</p></div>
+    <div class="qa-item deferred"><div class="qa-top"><p class="qa-q">Salary Stopping &mdash; where does it live?</p><span class="st deferred">Partly open</span></div><p class="qa-a"><b>Manager-only</b> per direction. But BRD 4.4 also describes an <b>employee self-view</b> (see un-submitted dates &amp; resubmit) &mdash; needs reconciling (see open questions).</p><p class="src">Manager &middot; Salary Stopping · BRD 4.4</p></div>
+  </div>
+
+  <!-- OPEN QUESTIONS (from the app) -->
+  <h2 class="section-h" id="open">Open questions &mdash; still to resolve</h2>
+  <p class="section-sub">Surfaced while building the screens; not yet decided.</p>
+
+  <p class="qa-grp">Approvals &amp; workflow</p>
+  <div class="qa">
+    <div class="qa-item open"><div class="qa-top"><p class="qa-q">Date-wise partial approval</p><span class="st open">Open</span></div><p class="qa-a">If a manager approves some dates but rejects others in the same week, what status does the week carry downstream (accrual / billing)?</p></div>
+    <div class="qa-item open"><div class="qa-top"><p class="qa-q">Contractor exception approval</p><span class="st open">Open</span></div><p class="qa-a">Contractors with unbilled hours need an exception approval &mdash; who is the approver, and what is the workflow? <span class="q">BRD 4.2 "provision for workflow"</span></p></div>
+    <div class="qa-item open"><div class="qa-top"><p class="qa-q">Salary Stopping &mdash; employee self-view</p><span class="st open">Open</span></div><p class="qa-a">BRD 4.4 gives the employee a screen to view un-submitted dates and resubmit with a reason. Reconcile with the Manager-only decision &mdash; keep, drop, or move it?</p></div>
+    <div class="qa-item open"><div class="qa-top"><p class="qa-q">Salary hold &mdash; contractors &amp; window expiry</p><span class="st open">Open</span></div><p class="qa-a">Does the hold apply the same to contractors (invoice-driven pay)? If the 60-day resubmit window expires, is pay forfeited or escalated?</p></div>
+  </div>
+
+  <p class="qa-grp">Leave Loss Coverage</p>
+  <div class="qa">
+    <div class="qa-item open"><div class="qa-top"><p class="qa-q">No eligible cover</p><span class="st open">Open</span></div><p class="qa-a">When no unbilled employee is available to cover an absence, how are the FCP billed hours treated for that line?</p></div>
+    <div class="qa-item open"><div class="qa-top"><p class="qa-q">Partial-day coverage</p><span class="st open">Open</span></div><p class="qa-a">Can a partial-day absence be covered, or full days only? BRD shows full-day hours.</p></div>
+  </div>
+
+  <p class="qa-grp">Integrations</p>
+  <div class="qa">
+    <div class="qa-item open"><div class="qa-top"><p class="qa-q">Auth model per source</p><span class="st open">Open</span></div><p class="qa-a">FSCM/CRM use basic auth; HCM userAccounts is an RBAC service &mdash; is there a middleware/proxy layer, or does O2C call each directly?</p></div>
+    <div class="qa-item open"><div class="qa-top"><p class="qa-q">Sync cadence</p><span class="st open">Open</span></div><p class="qa-a">Batch vs on-demand per endpoint, and how mid-period allocation / WBS changes propagate.</p></div>
+    <div class="qa-item open"><div class="qa-top"><p class="qa-q">Calendar storage shape</p><span class="st open">Open</span></div><p class="qa-a">One unified calendar object with layered overrides, or four separate synced masters? Which Fusion object feeds each layer?</p></div>
+  </div>
+
+  <!-- OPEN QUESTIONS (from the BRD) -->
+  <h2 class="section-h" id="brd">BRD gaps &mdash; open in O2C Time V0.3</h2>
+  <p class="section-sub">Items the BRD itself leaves open (reviewer comments, "Points not covered", and empty placeholder sections).</p>
+
+  <p class="qa-grp">Population of time (BRD 4.1)</p>
+  <div class="qa">
+    <div class="qa-item open"><div class="qa-top"><p class="qa-q">Daily process scope</p><span class="st open">Open</span></div><p class="qa-a">The daily action-date process runs for &mdash; "<b>only one day or the rest of the open period?</b>" <span class="q">BRD 4.1 verbatim</span></p></div>
+    <div class="qa-item open"><div class="qa-top"><p class="qa-q">Unbilled hours &rarr; default project</p><span class="st open">Open</span></div><p class="qa-a">Balance hours vs standard hours should go to a <b>default project</b>; resources marked Billed/Unbilled; absence is unbilled for revenue but not cost; contractors always billed unless exception. Rules &amp; the default project need defining. <span class="q">BRD "Points not covered"</span></p></div>
+    <div class="qa-item open"><div class="qa-top"><p class="qa-q">Country-based time</p><span class="st open">Open</span></div><p class="qa-a">Handle local time, shift, work-days, and <b>deputation / transfer</b> (short/long-term, spanning periods). <span class="q">BRD "Points not covered"</span></p></div>
+    <div class="qa-item open"><div class="qa-top"><p class="qa-q">Weekend defaulting</p><span class="st open">Open</span></div><p class="qa-a">Confirm weekend hours default to <b>0</b>. <span class="q">reviewer comment (GR)</span></p></div>
+    <div class="qa-item open"><div class="qa-top"><p class="qa-q">Failed-record retry &amp; alerting</p><span class="st open">Open</span></div><p class="qa-a">For records the population job can&rsquo;t place (new hire without allocation, missing shift calendar) &mdash; who is notified, and does a failed record <b>block the accrual hand-off</b>? <span class="q">Error Handling section is an empty placeholder</span></p><p class="src">Admin &middot; Sync Status</p></div>
+    <div class="qa-item open"><div class="qa-top"><p class="qa-q">Backdated change re-trigger</p><span class="st open">Open</span></div><p class="qa-a">Backdated changes up to 3 months re-trigger population &mdash; is that reconciled in the <b>daily job</b> or a <b>separate adjustment run</b>? <span class="q">to confirm</span></p><p class="src">Admin &middot; Sync Status</p></div>
+  </div>
+
+  <p class="qa-grp">Cut-offs &amp; control</p>
+  <div class="qa">
+    <div class="qa-item open"><div class="qa-top"><p class="qa-q">Weekly cut-off vs delivery cut-off</p><span class="st open">Open</span></div><p class="qa-a">Can the weekly timesheet cut-off be the same as the delivery cut-off, or are separate weekly controls needed? <span class="q">reviewer comment (GR)</span></p></div>
+    <div class="qa-item open"><div class="qa-top"><p class="qa-q">City-level corporate holidays</p><span class="st open">Open</span></div><p class="qa-a">Corporate holidays "may be at a city level, if required" &mdash; is city an optional dimension on the corporate calendar or a separate override table?</p></div>
+    <div class="qa-item open"><div class="qa-top"><p class="qa-q">Revision window granularity</p><span class="st open">Open</span></div><p class="qa-a">Is the adjustment/backdating window (up to 3 months) a single org-wide value, or configurable per country / client / project?</p></div>
+    <div class="qa-item open"><div class="qa-top"><p class="qa-q">Auto-close mechanism</p><span class="st open">Open</span></div><p class="qa-a">The period auto-closes &ldquo;when the accounting date is over&rdquo; &mdash; is that a nightly job? Does it <b>block</b> late corrections or <b>route them to JV / adjustments</b>? <span class="q">mechanism not detailed</span></p><p class="src">Admin &middot; Period Control &middot; Revision Controls</p></div>
+  </div>
+
+  <p class="qa-grp">Additional features (BRD &mdash; logic not fully specified)</p>
+  <div class="qa">
+    <div class="qa-item open"><div class="qa-top"><p class="qa-q">Holiday working</p><span class="st open">Open</span></div><p class="qa-a">Revenue impact per policy (internal &amp; statutory) with cost from payroll &mdash; the actual policy / multiplier is undefined.</p></div>
+    <div class="qa-item open"><div class="qa-top"><p class="qa-q">Shift &amp; OT</p><span class="st open">Open</span></div><p class="qa-a">Both feed revenue (per client setup) and payroll &mdash; the calculation rules are not specified.</p></div>
+    <div class="qa-item open"><div class="qa-top"><p class="qa-q">Capping</p><span class="st open">Open</span></div><p class="qa-a">Set up at the <b>opportunity level</b>, displayed on the manager screen for corrections &mdash; source and any validation to confirm (info-only today).</p></div>
+  </div>
+
+  <p class="qa-grp">Adjustments &amp; accrual</p>
+  <div class="qa">
+    <div class="qa-item open"><div class="qa-top"><p class="qa-q">Email intimations on reversals</p><span class="st open">Open</span></div><p class="qa-a">For +/- reversal entries on prior-period corrections &mdash; "<b>(Do we need email intimations)</b>?" <span class="q">BRD 4.2.1 verbatim</span></p></div>
+    <div class="qa-item open"><div class="qa-top"><p class="qa-q">Accrual hand-off &mdash; source of truth</p><span class="st open">Open</span></div><p class="qa-a">Is the accrual integration detailed in the <b>Accrual Confirmation doc</b> instead? Confirm which document owns the payload. <span class="q">reviewer comment (RV)</span></p></div>
+  </div>
+
+  <p class="qa-grp">Not-yet-authored BRD sections (empty placeholders)</p>
+  <div class="qa">
+    <div class="qa-item open"><div class="qa-top"><p class="qa-q">Placeholders to be written</p><span class="st open">Open</span></div><p class="qa-a"><b>Reports</b>, <b>Technical Architecture</b>, <b>Design Consideration</b>, <b>Technical Solution Components</b>, <b>Error Handling &amp; Retry</b>, <b>Data Model</b>, <b>NFR</b> (performance / IT security) and <b>Compliance</b> (BISO/CISO) are all empty <span class="q">&lt;&lt;&hellip;&gt;&gt;</span> in V0.3.</p></div>
+  </div>
+
+  <h2 class="section-h" id="scenarios">Scenarios seeded in the prototype</h2>
+  <p class="section-sub">Ten end-to-end situations are pre-loaded with sample employees so each rule can be walked through live. Sample cast: <em>Alicia Ferreira</em>, <em>Daniel Brooks</em> (contractor), <em>Meera Krishnan</em> (split 50/50 across two projects &amp; managers), <em>Ben Carter</em>, <em>Grace Wu</em>; managers <em>Priya Sharma</em> &amp; <em>David Chen</em>.</p>
+  <div style="overflow-x:auto">
+  <table style="width:100%;border-collapse:collapse;font-size:13px;background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden">
+    <thead><tr style="background:var(--line-2)">
+      <th style="text-align:left;padding:11px 14px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);width:34px">#</th>
+      <th style="text-align:left;padding:11px 14px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">Scenario</th>
+      <th style="text-align:left;padding:11px 14px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">Where to see it</th>
+    </tr></thead>
+    <tbody>
+      <tr style="border-top:1px solid var(--line-2)"><td style="padding:11px 14px;color:var(--muted)">1</td><td style="padding:11px 14px;color:var(--ink-2)">Previous weeks already filed &mdash; July weeks 1&ndash;4 are each <b>Submitted (default)</b> or <b>Submitted &amp; awaiting approval</b> for every employee; week 5 is the current open week.</td><td style="padding:11px 14px;color:var(--ink-2)">Employee &middot; My Timesheet (week selector)</td></tr>
+      <tr style="border-top:1px solid var(--line-2)"><td style="padding:11px 14px;color:var(--muted)">2</td><td style="padding:11px 14px;color:var(--ink-2)">Future month frozen &mdash; <b>August</b> is pre-populated with defaults and not editable, but the values are visible; the manager may <b>advance-approve the whole month now</b>.</td><td style="padding:11px 14px;color:var(--ink-2)">Employee (month dropdown &rarr; August) &middot; Manager (August &rarr; advance approval)</td></tr>
+      <tr style="border-top:1px solid var(--line-2)"><td style="padding:11px 14px;color:var(--muted)">3</td><td style="padding:11px 14px;color:var(--ink-2)">Monthly confirmation is <b>separate from weekly approval</b> &mdash; even with all weeks approved, the manager must <b>Confirm month &rarr; Accrual</b> to release the data.</td><td style="padding:11px 14px;color:var(--ink-2)">Manager &middot; Team Approvals &rarr; Accrual Integration</td></tr>
+      <tr style="border-top:1px solid var(--line-2)"><td style="padding:11px 14px;color:var(--muted)">4</td><td style="padding:11px 14px;color:var(--ink-2)"><b>Contractor Unbilled hours</b> &mdash; a contractor logs non-billable time; it is allowed but flagged for exception approval.</td><td style="padding:11px 14px;color:var(--ink-2)">Employee (Daniel / Grace) &middot; <span class="pill rej">Contractor Unbilled hours</span></td></tr>
+      <tr style="border-top:1px solid var(--line-2)"><td style="padding:11px 14px;color:var(--muted)">5</td><td style="padding:11px 14px;color:var(--ink-2)">Day-wise <b>billed / unbilled / leave</b> per employee &times; WBS &times; day flows to accrual and is visible in the extract.</td><td style="padding:11px 14px;color:var(--ink-2)">Admin &middot; Accrual Integration (day-wise extract)</td></tr>
+      <tr style="border-top:1px solid var(--line-2)"><td style="padding:11px 14px;color:var(--muted)">6</td><td style="padding:11px 14px;color:var(--ink-2)"><b>Leave Loss Coverage</b> &mdash; assign an unbilled colleague to cover an absence; the LOV is filtered (not already assigned, not absent that day); approved cover becomes billed and goes to the invoice annexure.</td><td style="padding:11px 14px;color:var(--ink-2)">Manager &middot; Leave Loss Coverage &rarr; Accrual annexure</td></tr>
+      <tr style="border-top:1px solid var(--line-2)"><td style="padding:11px 14px;color:var(--muted)">7</td><td style="padding:11px 14px;color:var(--ink-2)"><b>Advance closure</b> &mdash; the manager approves a period before the cut-off; tagged at the <b>month level</b>.</td><td style="padding:11px 14px;color:var(--ink-2)">Manager &middot; August month &middot; <span class="pill sub">Advance closure</span></td></tr>
+      <tr style="border-top:1px solid var(--line-2)"><td style="padding:11px 14px;color:var(--muted)">8</td><td style="padding:11px 14px;color:var(--ink-2)"><b>Late submission</b> &mdash; a week filed after the weekly / payroll cut-off is accepted but flagged.</td><td style="padding:11px 14px;color:var(--ink-2)">Employee (Ben, week 2) &middot; <span class="pill def">Late submission</span></td></tr>
+      <tr style="border-top:1px solid var(--line-2)"><td style="padding:11px 14px;color:var(--muted)">9</td><td style="padding:11px 14px;color:var(--ink-2)"><b>Correction</b> &mdash; a rejected week is edited and resubmitted, re-entering the workflow.</td><td style="padding:11px 14px;color:var(--ink-2)">Employee (reject &rarr; edit &rarr; resubmit) &middot; <span class="pill def">Correction</span></td></tr>
+      <tr style="border-top:1px solid var(--line-2)"><td style="padding:11px 14px;color:var(--muted)">10</td><td style="padding:11px 14px;color:var(--ink-2)"><b>Retro Project / WBS change after cut-off</b> &mdash; Meera moves hours from an old project/task to a new one: old line <span class="pill rej">Cancel</span> (&minus;), new line <span class="pill ok">Adjustment</span> (+); <b>manager approval required</b> before it posts to accrual.</td><td style="padding:11px 14px;color:var(--ink-2)">Employee (Meera, closed month) &rarr; Manager (Team Approvals) &rarr; Accrual</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h2 class="section-h" id="flags">Flags &amp; the action each drives</h2>
+  <p class="section-sub">Every status flag the timesheet can carry, what triggers it, and what the system does in response — as implemented in the prototype.</p>
+  <div style="overflow-x:auto">
+  <table style="width:100%;border-collapse:collapse;font-size:13px;background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden">
+    <thead><tr style="background:var(--line-2)">
+      <th style="text-align:left;padding:11px 14px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">Flag</th>
+      <th style="text-align:left;padding:11px 14px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">When it is raised</th>
+      <th style="text-align:left;padding:11px 14px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">Action it drives</th>
+    </tr></thead>
+    <tbody>
+      <tr style="border-top:1px solid var(--line-2)"><td style="padding:11px 14px"><span class="pill def">Defaulted</span></td><td style="padding:11px 14px;color:var(--ink-2)">Employee did not submit by the <b>payroll cut-off</b>.</td><td style="padding:11px 14px;color:var(--ink-2)">Auto-submit with default hours, lock the sheet, <b>hold salary</b>; only the manager can edit &amp; release (Salary Stopping).</td></tr>
+      <tr style="border-top:1px solid var(--line-2)"><td style="padding:11px 14px"><span class="pill def">Late submission</span></td><td style="padding:11px 14px;color:var(--ink-2)">Submitted <b>after</b> the week / delivery / payroll cut-off.</td><td style="padding:11px 14px;color:var(--ink-2)">Accepted but flagged for audit; feeds the accrual adjustment logic for the period it lands in.</td></tr>
+      <tr style="border-top:1px solid var(--line-2)"><td style="padding:11px 14px"><span class="pill def">Correction</span></td><td style="padding:11px 14px;color:var(--ink-2)">A <b>rejected</b> week is edited and resubmitted by the employee.</td><td style="padding:11px 14px;color:var(--ink-2)">Re-enters the approval workflow to the manager; tracked as a correction cycle.</td></tr>
+      <tr style="border-top:1px solid var(--line-2)"><td style="padding:11px 14px"><span class="pill rej">Contractor Unbilled hours</span></td><td style="padding:11px 14px;color:var(--ink-2)">A <b>contractor</b> logs non-billable time.</td><td style="padding:11px 14px;color:var(--ink-2)">Needs <b>exception approval</b> from the manager before it flows to accrual.</td></tr>
+      <tr style="border-top:1px solid var(--line-2)"><td style="padding:11px 14px"><span class="pill sub">Advance closure</span></td><td style="padding:11px 14px;color:var(--ink-2)">Manager approves <b>before</b> the delivery cut-off to close early.</td><td style="padding:11px 14px;color:var(--ink-2)">Period can be confirmed &amp; sent to accrual ahead of the standard timeline.</td></tr>
+      <tr style="border-top:1px solid var(--line-2)"><td style="padding:11px 14px"><span class="pill def">Overridden &amp; approved</span></td><td style="padding:11px 14px;color:var(--ink-2)">Manager edits the hours, then approves.</td><td style="padding:11px 14px;color:var(--ink-2)">Approved with the manager&rsquo;s values; original kept in the audit trail.</td></tr>
+      <tr style="border-top:1px solid var(--line-2)"><td style="padding:11px 14px"><span class="pill rej">Cancel</span></td><td style="padding:11px 14px;color:var(--ink-2)">Old project/WBS line is cancelled after the cut-off (retro change).</td><td style="padding:11px 14px;color:var(--ink-2)">After the <b>manager approves</b>, accrual <b>reverses (&minus;)</b> the old project&rsquo;s hours in the current open period; held until then.</td></tr>
+      <tr style="border-top:1px solid var(--line-2)"><td style="padding:11px 14px"><span class="pill ok">Adjustment</span></td><td style="padding:11px 14px;color:var(--ink-2)">New project/WBS line entered after the cut-off (retro change).</td><td style="padding:11px 14px;color:var(--ink-2)">After the <b>manager approves</b>, accrual <b>adds (+)</b> the new project&rsquo;s hours to the current open period; held until then.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h2 class="section-h" id="flagflow">Flag flow &mdash; where each flag is raised</h2>
+  <p class="section-sub">The whole timesheet lifecycle with every workflow flag placed at the point it is raised and the path it drives (colours match the flag legend above).</p>
+  <div style="overflow-x:auto;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px">
+  <pre class="mermaid">
+flowchart TD
+  A["Employee fills weekly timesheet"] --> B{"Submitted before the cut-off?"}
+  A -. "contractor logs non-billable" .-> F4["Contractor Unbilled hours"]:::red
+  F4 --> C["Manager review"]
+  B -->|"missed payroll cut-off"| F1["Defaulted"]:::red
+  B -->|"after weekly cut-off"| F2["Late submission"]:::amber
+  B -->|"on time"| C
+  F2 --> C
+  F1 --> SH["Salary hold: manager edits and releases"] --> C
+  C -->|"reject with reason"| RJ["Back to employee (reason + remarks shown)"]
+  RJ --> RS["Edit and resubmit"] --> F3["Correction"]:::amber --> C
+  C -->|"override hours then approve"| F5["Overridden and approved"]:::amber --> AP["Approved"]
+  C -->|"approve"| AP
+  C -->|"approve future month early"| F6["Advance closure"]:::blue --> AP
+  AP --> MC["Manager confirms month"] --> ACC["Accrual Integration"]
+  RETRO["Retro Project/WBS change after cut-off"] --> MA{"Manager approves?"}
+  MA -->|"yes"| F7["Reversal (-)"]:::red --> ACC
+  MA -->|"yes"| F8["Adjustment (+)"]:::green --> ACC
+  classDef red fill:#f6ddd8,stroke:#a73d2f,color:#7a2018;
+  classDef amber fill:#f8efdd,stroke:#a2670c,color:#7a5a00;
+  classDef blue fill:#e9f1f7,stroke:#1f5d83,color:#1f5d83;
+  classDef green fill:#e6f2ec,stroke:#1f6a4a,color:#1f6a4a;
+  </pre>
+  </div>
+
+  <h2 class="section-h" id="fusion">Oracle Fusion integration plan (OTL-centric)</h2>
+  <p class="section-sub"><strong>Oracle Time &amp; Labor (OTL) is the system of record.</strong> The app <b>prepopulates</b> from HCM &amp; Projects, the employee captures and the manager approves, then the app <b>pushes approved time into OTL</b> (<code>timeRecordEventRequests</code>, processMode <code>TIME_SUBMIT</code>). OTL&rsquo;s native processing feeds <b>Project Costing</b> and <b>Payroll</b> &mdash; the app does <b>not</b> write to them directly. The finalized payload is also pushed to our <b>other product</b> in parallel. Base: HCM <code>/hcmRestApi/&hellip;/</code>, FSCM <code>/fscmRestApi/&hellip;/</code> (11.13.18.05). Prefer <code>/{resource}/describe</code> over docs. <span class="brd">ItegrationAgent.md</span></p>
+
+  <p class="qa-grp">Prepopulation &mdash; inbound reads (build the grid)</p>
+  <div style="overflow-x:auto">
+  <table style="width:100%;border-collapse:collapse;font-size:12.5px;background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden">
+    <thead><tr style="background:var(--line-2)">
+      <th style="text-align:left;padding:10px 12px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">Area</th>
+      <th style="text-align:left;padding:10px 12px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">How the app uses it</th>
+      <th style="text-align:left;padding:10px 12px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">REST path</th>
+    </tr></thead>
+    <tbody>
+      <tr style="border-top:1px solid var(--line-2)"><td style="padding:10px 12px"><b>HCM &mdash; Workers &amp; Assignments</b></td><td style="padding:10px 12px;color:var(--ink-2)">Employee/assignment master; use <code>workers</code> (contingent/terminated) not <code>emps</code>. <b>PersonNumber &rarr; PersonId</b> hop; <code>&amp;effectiveDate=</code> for dated rows.</td><td style="padding:10px 12px;color:var(--ink-2)"><code>GET /workers?q=PersonNumber=..</code>, <code>/workers/{id}</code></td></tr>
+      <tr style="border-top:1px solid var(--line-2)"><td style="padding:10px 12px"><b>Projects &mdash; WBS &amp; Resource Assignments</b></td><td style="padding:10px 12px;color:var(--ink-2)"><b>Columns</b> of the grid: which project &times; WBS task &times; resource each employee can charge to.</td><td style="padding:10px 12px;color:var(--ink-2)"><code>GET /projects/{ProjectId}/child/Tasks</code>; <code>/projectResourceAssignments</code></td></tr>
+      <tr style="border-top:1px solid var(--line-2)"><td style="padding:10px 12px"><b>Work Schedules</b> <span class="q">verify</span></td><td style="padding:10px 12px;color:var(--ink-2)"><b>Rows/shape</b>: which days &amp; expected hours to prefill. Read path to confirm via <code>/describe</code>.</td><td style="padding:10px 12px;color:var(--ink-2)"><code>GET /timeRecordGroups?groupType=Schedule</code>; <code>POST /scheduleRequests</code> (write)</td></tr>
+      <tr style="border-top:1px solid var(--line-2)"><td style="padding:10px 12px"><b>Org / Absence Calendars</b></td><td style="padding:10px 12px;color:var(--ink-2)">Public holidays &amp; working patterns &mdash; needed only if the app computes expected hours itself.</td><td style="padding:10px 12px;color:var(--ink-2)"><code>GET /absenceCalendars</code>; <code>action/findByAdvancedSearch</code></td></tr>
+      <tr style="border-top:1px solid var(--line-2)"><td style="padding:10px 12px"><b>Absences</b></td><td style="padding:10px 12px;color:var(--ink-2)">Approved leave so employees don&rsquo;t double-enter; feeds Leave rows &amp; Leave-Loss. Leave is HR-sourced (not a selectable task).</td><td style="padding:10px 12px;color:var(--ink-2)"><code>GET /absences?q=personId=..;startDate&gt;=..</code></td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <p class="qa-grp">Outbound &mdash; write to OTL (system of record) &amp; reconcile</p>
+  <div class="qa">
+    <div class="qa-item confirmed"><p class="qa-a"><b>Push approved time &rarr; OTL:</b> <code>POST /timeRecordEventRequests</code> with processMode <code>TIME_SUBMIT</code> (creates the time card <b>and</b> submits it). Time attributes include <b>project</b> &amp; task. Read back via <code>GET /timeRecordGroups</code> / child <code>/timeRecords</code> / <code>/timeAttributes</code>. After a downstream consumer takes the data, <b>reconcile</b> with <code>POST /statusChangeRequests</code> (e.g. <code>consumerCode: "PYR"</code>). <b>Accrual system load:</b> on month confirmation the <b>consolidated timesheet</b> (employee × project × WBS × day) <b>plus day-wise Reversal (&minus;)/Adjustment(+) rows</b> are written into the accrual schema by filling its interface table <code>ACCRUAL.XX_O2C_TIMESHEET_ACCRUAL_IF</code> (via OIC / DB link). Default-hour corrections after the cut-off also post as adjustments.</p></div>
+  </div>
+
+  <p class="qa-grp">Downstream &mdash; read / audit only (no direct write)</p>
+  <div class="qa">
+    <div class="qa-item confirmed"><p class="qa-a"><b>Project Costing</b> <code>GET /projectCosts</code>, <code>/projectExpenditureBatches</code> &mdash; auto-populated once OTL is processed; query/audit only. <b>Payroll</b> <code>GET /payrollRelationships</code> for reference; payroll consumes via OTL extract, not a direct write. <b>Financials</b> <code>GET /receivablesInvoices</code>, <code>/journalBatches</code> &mdash; visibility that time reached billing/GL. <b>Contracts:</b> Enterprise Contracts is CLM, <b>not</b> a direct time consumer &mdash; contract-billing terms live in Projects/Project Billing; flag to architecture if a specific linkage is needed.</p></div>
+  </div>
+
+  <p class="qa-grp">Suggested sequence</p>
+  <div class="qa">
+    <div class="qa-item confirmed"><p class="qa-a"><b>1.</b> Pull <code>workers</code> + <code>projectResourceAssignments</code> + <code>Tasks</code> (chargeable columns). &nbsp;<b>2.</b> Pull <b>work schedules</b> (grid shape). &nbsp;<b>3.</b> Pull <code>absenceCalendars</code> only if the app computes hours itself. &nbsp;<b>4.</b> Cross-check <code>absences</code> to avoid conflicts on leave days. &nbsp;<b>5.</b> Employee submits &rarr; <code>timeRecordEventRequests</code> (TIME_SUBMIT) + push to other product. &nbsp;<b>6.</b> Decide the <b>approval source of truth</b> (app vs OTL native workflow). &nbsp;<b>7.</b> Reconcile with <code>statusChangeRequests</code>. &nbsp;<b>8.</b> Read <code>projectCosts</code>/<code>receivablesInvoices</code>/<code>journalBatches</code> for audit.</p></div>
+  </div>
+
+  <p class="qa-grp">Open items to confirm (from the integration reference)</p>
+  <div class="qa">
+    <div class="qa-item open"><div class="qa-top"><p class="qa-q">Per-employee work-schedule read path</p><span class="st open">Open</span></div><p class="qa-a">Prepopulation depends on it; <code>scheduleRequests</code> may be write-only. Check <code>/scheduleRequests/describe</code> and <code>/timeRecordGroups/describe</code> for the <code>groupType=Schedule</code> finder.</p></div>
+    <div class="qa-item open"><div class="qa-top"><p class="qa-q">Approval source of truth &mdash; app vs OTL native workflow</p><span class="st open">Open</span></div><p class="qa-a">Mirror the app&rsquo;s approval gate before calling OTL, or rely on OTL&rsquo;s workflow triggered by TIME_SUBMIT? Avoid double workflows &mdash; architecture decision.</p></div>
+    <div class="qa-item open"><div class="qa-top"><p class="qa-q"><code>personNumber</code> queryable on <code>absences</code>?</p><span class="st open">Open</span></div><p class="qa-a">If not, do the PersonNumber&rarr;PersonId hop first. Confirm via <code>/absences/describe</code>.</p></div>
+  </div>
+
+  <h2 class="section-h" id="intflow">Integration flow &mdash; inbound &amp; outbound</h2>
+  <p class="section-sub">The end-to-end data flow (from <em>ItegrationAgent.md</em>): <span class="brd">inbound</span> reads prepopulate the grid; the app captures &amp; approves; <span class="q">outbound</span> writes push approved time to <strong>OTL</strong> (the system of record), which feeds Project Costing &amp; Payroll natively; downstream is read/audit only; the finalized payload also goes to the other product in parallel.</p>
+  <div style="overflow-x:auto;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px">
+  <pre class="mermaid">
+flowchart LR
+  subgraph IN["INBOUND — prepopulate (read from Fusion)"]
+    direction TB
+    W["HCM Workers and Assignments<br/>/workers"]
+    RA["PPM WBS Tasks + Resource Assignments<br/>/projects child Tasks, /projectResourceAssignments"]
+    WS["Work Schedules<br/>/timeRecordGroups (Schedule)"]
+    CAL["Org / Absence Calendars<br/>/absenceCalendars"]
+    ABS["Absences — approved leave<br/>/absences"]
+  end
+  APP["O2C Timesheet app<br/>prepopulate → capture → approve"]:::app
+  W --> APP
+  RA --> APP
+  WS --> APP
+  CAL --> APP
+  ABS --> APP
+  APP ==>|"approved time — timeRecordEventRequests (TIME_SUBMIT)"| OTL["Oracle Time and Labor (OTL)<br/>SYSTEM OF RECORD"]:::otl
+  APP -.->|"reconcile — statusChangeRequests (PYR)"| OTL
+  OTL --> PC["Project Costing<br/>(native, auto)"]:::down
+  OTL --> PAY["Payroll<br/>(native, auto)"]:::down
+  APP ==>|"consolidated timesheet + adjustments (schema table load)"| OTHER["Accrual System<br/>fill ACCRUAL.XX_O2C_TIMESHEET_ACCRUAL_IF"]:::other
+  subgraph DOWN["DOWNSTREAM — read / audit only (no direct write)"]
+    direction TB
+    PCa["projectCosts"]
+    INV["receivablesInvoices"]
+    GLb["journalBatches / GL"]
+  end
+  PC -.-> PCa
+  PCa -.->|"read / audit"| APP
+  INV -.->|"read / audit"| APP
+  GLb -.->|"read / audit"| APP
+  CON["Enterprise Contracts (CLM)<br/>not a direct time consumer — flag"]:::flag
+  CON -.-> APP
+  classDef app fill:#e9f1f7,stroke:#1f5d83,color:#1f5d83;
+  classDef otl fill:#f6ddd8,stroke:#a73d2f,color:#7a2018;
+  classDef other fill:#e6f2ec,stroke:#1f6a4a,color:#1f6a4a;
+  classDef down fill:#f8efdd,stroke:#a2670c,color:#7a5a00;
+  classDef flag fill:#eeeeee,stroke:#8a8b92,color:#54565f;
+  </pre>
+  </div>
+  <p class="section-sub" style="margin-top:8px"><strong>Legend:</strong> solid bold = write (outbound); solid thin = prepopulation read (inbound); dashed = reconcile / read-audit / native downstream. Full endpoint list &amp; open items are in the <a href="#fusion" style="color:var(--emp)">Fusion integration plan</a>.</p>
+
+  <h2 class="section-h" id="changelog">Change log &mdash; day-wise</h2>
+  <p class="section-sub">The changes requested and delivered, grouped by working day (most recent first). Dates reflect the session in which each change was made.</p>
+
+  <p class="qa-grp">29 Jul 2026 &mdash; refinements</p>
+  <div class="qa">
+    <div class="qa-item confirmed"><p class="qa-a"><b>Retrospective Project / WBS change is now day-wise</b> (per affected day) instead of one consolidated lump &mdash; on the employee card, the manager approval panel, and the accrual net-off rows.</p></div>
+    <div class="qa-item confirmed"><p class="qa-a"><b>Common non-billable tasks</b> (Onboarding, Training, Travel, Client Holiday, Leave) added to <b>every project</b> and to a new <b>Organization (Non-Billable) project assigned to all</b> &mdash; billable staff log them in-project, non-billable staff on the org project; <b>Leave</b> is HR-sourced (not selectable).</p></div>
+    <div class="qa-item confirmed"><p class="qa-a"><b>Period Control Table removed from the Admin side</b> (reference data only); cut-off dates still drive the on-screen displays.</p></div>
+    <div class="qa-item confirmed"><p class="qa-a"><b>Integrations reworked to be OTL-centric</b> per the integration reference &mdash; OTL is the system of record (<code>timeRecordEventRequests</code> TIME_SUBMIT), feeding Project Costing &amp; Payroll natively; downstream is read/audit only.</p></div>
+    <div class="qa-item confirmed"><p class="qa-a">Added a separate <b>Integration flow diagram (inbound &amp; outbound)</b> to the journey.</p></div>
+    <div class="qa-item confirmed"><p class="qa-a">Added the missing <b>Accrual-system integration</b>: on month confirmation the app <b>fills the accrual schema interface table</b> (<code>ACCRUAL.XX_O2C_TIMESHEET_ACCRUAL_IF</code>) with the <b>consolidated timesheet + day-wise adjustments</b>.</p></div>
+    <div class="qa-item confirmed"><p class="qa-a">Re-read the updated BRD: <b>calendars confirmed to come from Oracle Fusion</b>; confirmed the <b>defaulted-week-then-corrected &rarr; adjustment-to-accrual</b> understanding (BRD open question) &mdash; both captured in Decisions.</p></div>
+  </div>
+
+  <p class="qa-grp">28 Jul 2026 &mdash; refinements</p>
+  <div class="qa">
+    <div class="qa-item confirmed"><p class="qa-a"><b>Retro Project/WBS change</b> now routes to the manager for approval (#10) before the Reversal/Adjustment rows post to accrual.</p></div>
+    <div class="qa-item confirmed"><p class="qa-a"><b>Discussion consolidated here:</b> every prototype screen&rsquo;s open-question list moved into this journey; each page now shows a pointer link.</p></div>
+    <div class="qa-item confirmed"><p class="qa-a"><b>Employee timesheet cleanup:</b> removed Payroll Cut-off &amp; Period Status; Allocation shown as a pop-up; standard hours &amp; shift shown <b>per day</b>; billable <b>type hidden</b> (manager-only); removed the redundant footer cut-off note.</p></div>
+    <div class="qa-item confirmed"><p class="qa-a"><b>Shift read-only</b> (from HCM); <b>Saturday &amp; Sunday editable</b> (default 0); removed the &ldquo;Daily total (max 24/day)&rdquo; row; <b>day-column alignment</b> fixed (centered).</p></div>
+    <div class="qa-item confirmed"><p class="qa-a"><b>Leave, Public Holiday &amp; Client Holiday as tasks</b>, with the client-holiday multi-line-per-day approach and a seeded worked example.</p></div>
+    <div class="qa-item confirmed"><p class="qa-a"><b>Approval workflow moved to the bottom</b> of the manager approval screen.</p></div>
+    <div class="qa-item confirmed"><p class="qa-a"><b>Rejection reason + remarks + rejected dates</b> now shown to the employee (day / week / month).</p></div>
+    <div class="qa-item confirmed"><p class="qa-a"><b>Manager Override &amp; approve</b> &mdash; correct the hours and approve; audit trail kept; tagged <b>Overridden &amp; approved</b>.</p></div>
+    <div class="qa-item confirmed"><p class="qa-a"><b>Salary Stopping</b> shows weeks submitted vs defaulted with applied vs default hours.</p></div>
+    <div class="qa-item confirmed"><p class="qa-a">Added the <b>flag-flow diagram</b>, this <b>Fusion integration plan</b>, and this <b>change log</b>.</p></div>
+    <div class="qa-item confirmed"><p class="qa-a"><b>Accrual confirmation is now all-employees-at-once</b> (project-month level) &mdash; removed the per-employee &ldquo;Sent to accrual&rdquo; status/button; confirm is gated until every employee is Approved.</p></div>
+  </div>
+
+  <p class="qa-grp">27 Jul 2026 &mdash; rebuild on the new BRDs</p>
+  <div class="qa">
+    <div class="qa-item confirmed"><p class="qa-a">Rebuilt the working prototype from <b>O2C Time V0.3 + Period Definition V3</b> with sample employees &amp; projects.</p></div>
+    <div class="qa-item confirmed"><p class="qa-a">Three roles (<b>Employee / Manager / Admin</b>) with a right-side collapsible menu; Employee &amp; Manager identity switchers.</p></div>
+    <div class="qa-item confirmed"><p class="qa-a">Weekly entry at WBS level; <b>50/50 multi-project split</b> with per-project managers; multi-line/multi-task per day; client-timesheet upload.</p></div>
+    <div class="qa-item confirmed"><p class="qa-a">Manager: monthly summary with <b>multi-select approve/reject</b>, weekly &amp; <b>date-wise</b> approval, reject-with-reason workflow.</p></div>
+    <div class="qa-item confirmed"><p class="qa-a">Admin: <b>Period Control Table</b>, Calendar (Fusion sync), Sync Status, Accrual Integration, REST integrations (as text).</p></div>
+    <div class="qa-item confirmed"><p class="qa-a">3-month history with <b>defaulted-lock</b>; month dropdown Open/Closed/Future; August advance-approval; external steppers; <b>10 seeded scenarios</b> &amp; the flag model.</p></div>
+  </div>
+
+  <footer>O2C Timesheet Module &middot; user journeys, decisions, open questions, flag legend, Fusion plan &amp; change log &middot; from O2C Time V0.3 + O2C Period Definition V3. Green = settled, amber = parked/de-scoped, red = open.</footer>
+</div>

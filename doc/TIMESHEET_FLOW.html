@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>O2C Time — Timesheet Flow</title>
+<style>
+  :root {
+    --ink:#12161c; --paper:#fcfcfd; --surface:#ffffff; --surface-2:#f4f6f8;
+    --border:#dde2e8; --slate:#5a6673; --slate-dim:#7d8894;
+    --flight:#2563a8;  --flight-bg:#e8f1fa;
+    --settled:#17795e; --settled-bg:#e6f4ee;
+    --missed:#a3651a;  --missed-bg:#fdf1e0;
+    --rework:#b3352c;  --rework-bg:#fdeceb;
+    --neutral:#5a6673; --neutral-bg:#eef1f4;
+    --mono: ui-monospace,"SF Mono","Cascadia Mono","JetBrains Mono",Consolas,"Liberation Mono",monospace;
+    --sans: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink:#e8ecf1; --paper:#14181e; --surface:#1b2028; --surface-2:#232933;
+      --border:#333c48; --slate:#a3aeba; --slate-dim:#85909d;
+      --flight:#7fb3e8;  --flight-bg:#17304a;
+      --settled:#6fcaa8; --settled-bg:#10382c;
+      --missed:#e0b070;  --missed-bg:#3d2c12;
+      --rework:#ec8b83;  --rework-bg:#3d1d1a;
+      --neutral:#a3aeba; --neutral-bg:#262d37;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:var(--sans); font-size:15px; line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap { max-width:1060px; margin:0 auto; padding:44px 24px 80px; }
+
+  h1 { font-size:29px; line-height:1.2; font-weight:700; letter-spacing:-0.02em; margin:0 0 10px; text-wrap:balance; }
+  h2 { font-size:20px; line-height:1.25; font-weight:700; letter-spacing:-0.01em; margin:0 0 8px; text-wrap:balance; }
+  h3 { font-size:15px; font-weight:700; margin:0 0 6px; }
+  p  { margin:0 0 12px; max-width:68ch; }
+
+  .eyebrow { font-family:var(--mono); font-size:10.5px; font-weight:700;
+             text-transform:uppercase; letter-spacing:.14em; color:var(--slate-dim); margin:0 0 8px; }
+  .lede { font-size:16.5px; color:var(--slate); max-width:66ch; }
+
+  header { border-bottom:2px solid var(--ink); padding-bottom:22px; margin-bottom:8px; }
+  nav.kin { display:flex; gap:8px; flex-wrap:wrap; margin-top:18px; font-family:var(--mono); font-size:11.5px; }
+  nav.kin a, nav.kin span.here {
+    padding:4px 10px; border:1px solid var(--border); border-radius:4px;
+    text-decoration:none; color:var(--slate);
+  }
+  nav.kin span.here { background:var(--ink); color:var(--paper); border-color:var(--ink); font-weight:700; }
+  nav.kin a:hover { border-color:var(--flight); color:var(--flight); }
+  nav.kin a:focus-visible { outline:2px solid var(--flight); outline-offset:2px; }
+
+  section { margin-top:40px; }
+  .num { font-family:var(--mono); font-size:11px; font-weight:700; color:var(--flight); letter-spacing:.08em; }
+
+  .tw { overflow-x:auto; margin:18px 0; border:1px solid var(--border); border-radius:6px; }
+  table { border-collapse:collapse; width:100%; font-size:13.5px; min-width:640px; }
+  th { background:var(--surface-2); text-align:left; font-family:var(--mono); font-size:10px;
+       font-weight:700; text-transform:uppercase; letter-spacing:.09em; color:var(--slate);
+       padding:10px 13px; border-bottom:1px solid var(--border); white-space:nowrap; }
+  td { padding:10px 13px; border-bottom:1px solid var(--border); vertical-align:top; }
+  tbody tr:last-child td { border-bottom:none; }
+  td.c { text-align:center; font-family:var(--mono); }
+
+  .chip { display:inline-block; font-family:var(--mono); font-size:12px; font-weight:600;
+          padding:2px 8px; border-radius:4px; white-space:nowrap; border:1px solid transparent; }
+  .s-neutral{background:var(--neutral-bg);color:var(--neutral);border-color:var(--neutral);}
+  .s-flight {background:var(--flight-bg); color:var(--flight); border-color:var(--flight);}
+  .s-settled{background:var(--settled-bg);color:var(--settled);border-color:var(--settled);}
+  .s-missed {background:var(--missed-bg); color:var(--missed); border-color:var(--missed);}
+  .s-rework {background:var(--rework-bg); color:var(--rework); border-color:var(--rework);}
+  .strike { text-decoration:line-through; text-decoration-color:var(--rework); }
+
+  code { font-family:var(--mono); font-size:12.5px; background:var(--surface-2);
+         padding:1px 5px; border-radius:3px; }
+
+  .callout { border:1px solid var(--border); border-left:3px solid var(--missed);
+             background:var(--missed-bg); border-radius:6px; padding:16px 18px; margin:18px 0; }
+  .callout.decision { border-left-color:var(--flight); background:var(--flight-bg); }
+  .callout p:last-child { margin-bottom:0; }
+
+  .key { font-family:var(--mono); font-size:11px; color:var(--slate-dim);
+         display:flex; gap:16px; flex-wrap:wrap; margin:12px 0 0; }
+  .key span { display:flex; align-items:center; gap:5px; }
+  .dot { width:9px; height:9px; border-radius:2px; display:inline-block; }
+
+  .moved { display:grid; gap:12px; margin:18px 0; }
+  .moved-row { display:grid; grid-template-columns:200px 1fr; gap:16px; border:1px solid var(--border);
+               border-radius:6px; padding:13px 15px; background:var(--surface); }
+
+  /* Diagram plate: deliberately light in BOTH themes. A schematic reads as an
+     inset drawing plate, and the semantic arrow/box colours are tuned for a
+     light ground — inverting them would cost legibility for no gain. */
+  .plate { background:#fbfcfd; border:1px solid #d5dbe2; border-radius:6px;
+           padding:16px 10px 6px; margin:18px 0 6px; overflow-x:auto; }
+  .plate svg.diagram { display:block; width:100%; min-width:820px; height:auto; }
+  .plate-cap { font-family:var(--mono); font-size:10.5px; text-transform:uppercase;
+               letter-spacing:.1em; color:var(--slate-dim); margin:0 0 18px; }
+
+  .foot { margin-top:52px; padding-top:18px; border-top:1px solid var(--border);
+          font-size:13px; color:var(--slate-dim); }
+
+  @media (max-width:680px) {
+    .wrap { padding:28px 16px 60px; }
+    h1 { font-size:24px; }
+    .moved-row { grid-template-columns:1fr; gap:8px; }
+  }
+  @media print {
+    body { background:#fff; color:#000; }
+    nav.kin, .foot { display:none; }
+    .wrap { max-width:none; padding:0; }
+    section { break-inside:avoid; }
+    .plate { break-inside:avoid; border-color:#bbb; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <p class="eyebrow">O2C Timesheet Module &middot; revision 2 &middot; for sign-off</p>
+    <h1>Timesheet Flow</h1>
+    <p class="lede">
+      The whole lifecycle of one employee-week, and the only two cut-offs that
+      affect it. Missing either &mdash; or both &mdash; produces
+      <span class="chip s-missed">Defaulted</span>.
+    </p>
+    <nav class="kin"><a href="STATUS_MODEL.html">Statuses</a>
+    <a href="FLAG_MODEL.html">Flags</a>
+    <span class="here">Flow chart</span></nav>
+  </header>
+
+  <section>
+    <p class="eyebrow"><span class="num">01</span> &nbsp;The two cut-offs</p>
+    <h2>Only two matter to a timesheet</h2>
+
+    <div class="tw">
+      <table>
+        <thead><tr><th>Cut-off</th><th>Whose</th><th>Missing it produces</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Weekly</strong></td><td>Employee</td>
+            <td><span class="chip s-missed">Defaulted</span> with
+                <code>DEFAULTED_BY = 'EMPLOYEE'</code>. The week auto-submits with
+                default hours and <strong>locks</strong> &mdash; only a manager can
+                then edit it. This is the one that holds salary.</td>
+          </tr>
+          <tr>
+            <td><strong>Delivery</strong></td><td>Manager</td>
+            <td><span class="chip s-missed">Defaulted</span> with
+                <code>DEFAULTED_BY = 'MANAGER'</code>. <strong>Not locked</strong>
+                &mdash; the manager can still approve it late. This one must never
+                hold the employee's salary.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>
+      The other five cut-offs in Period Control &mdash; Finance, Book, MEC, Client
+      and Payroll &mdash; drive downstream finance and payroll, not timesheet status.
+    </p>
+  </section>
+
+  <section>
+    <p class="eyebrow"><span class="num">02</span> &nbsp;Flow chart</p>
+    <h2>One week, start to close</h2>
+    <div class="key">
+      <span><i class="dot" style="background:var(--neutral)"></i> untouched</span>
+      <span><i class="dot" style="background:var(--flight)"></i> in flight</span>
+      <span><i class="dot" style="background:var(--settled)"></i> settled</span>
+      <span><i class="dot" style="background:var(--missed)"></i> SLA missed</span>
+      <span><i class="dot" style="background:var(--rework)"></i> needs rework</span>
+    </div>
+
+    <div class="plate">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 780" class="diagram" role="img"
+     aria-labelledby="flowT flowD">
+  <title id="flowT">Timesheet week lifecycle and the two cut-offs</title>
+  <desc id="flowD">A week is pre-populated, then either submitted before the weekly
+    cut-off or defaulted by the employee. Once submitted, the manager either
+    approves, overrides and approves, rejects, or misses the delivery cut-off which
+    defaults it. A rejected week returns to Submitted when resubmitted, carrying a
+    Late submission flag if that happens after the weekly cut-off. Approved and
+    Overridden weeks become Closed when the month is confirmed.</desc>
+
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#5a6673"/>
+    </marker>
+  </defs>
+
+  <style>
+    .bx   { rx:6; stroke-width:1.5; }
+    .lbl  { font-family:ui-monospace,"SF Mono",Consolas,monospace; font-size:12.5px;
+            font-weight:600; text-anchor:middle; }
+    .sub  { font-family:-apple-system,"Segoe UI",Roboto,sans-serif; font-size:10.5px;
+            text-anchor:middle; fill:#5a6673; }
+    .dia  { fill:#ffffff; stroke:#5a6673; stroke-width:1.5; }
+    .diat { font-family:-apple-system,"Segoe UI",Roboto,sans-serif; font-size:11.5px;
+            font-weight:600; text-anchor:middle; fill:#12161c; }
+    .arw  { stroke:#5a6673; stroke-width:1.5; fill:none; marker-end:url(#ah); }
+    .edge { font-family:ui-monospace,"SF Mono",Consolas,monospace; font-size:10px;
+            font-weight:700; fill:#5a6673; }
+    .loopt{ font-family:-apple-system,"Segoe UI",Roboto,sans-serif; font-size:10px;
+            fill:#a3651a; }
+  </style>
+
+  <!-- ═══ population ═══ -->
+  <rect x="310" y="20" width="180" height="36" rx="18" fill="#eef1f4" stroke="#5a6673" stroke-width="1.5"/>
+  <text class="lbl" x="400" y="43" fill="#5a6673">Population job</text>
+  <path class="arw" d="M400,56 V84"/>
+
+  <!-- ═══ not yet submitted ═══ -->
+  <rect class="bx" x="280" y="86" width="240" height="54" fill="#eef1f4" stroke="#5a6673"/>
+  <text class="lbl" x="400" y="118" fill="#5a6673">Not yet submitted</text>
+  <path class="arw" d="M400,140 V170"/>
+
+  <!-- ═══ decision 1: weekly cut-off ═══ -->
+  <polygon class="dia" points="400,172 575,214 400,256 225,214"/>
+  <text class="diat" x="400" y="209">Submits before the</text>
+  <text class="diat" x="400" y="223">Weekly cut-off?</text>
+  <text class="edge" x="585" y="207">NO</text>
+  <text class="edge" x="410" y="273">YES</text>
+  <path class="arw" d="M575,214 H614"/>
+  <path class="arw" d="M400,256 V286"/>
+
+  <!-- ═══ defaulted — employee ═══ -->
+  <rect class="bx" x="620" y="179" width="240" height="70" fill="#fdf1e0" stroke="#a3651a"/>
+  <text class="lbl" x="740" y="203" fill="#a3651a">Defaulted</text>
+  <text class="sub" x="740" y="219" fill="#a3651a">DEFAULTED_BY = EMPLOYEE</text>
+  <text class="sub" x="740" y="234" fill="#a3651a">locked · default hours · holds salary</text>
+
+  <!-- ═══ submitted ═══ -->
+  <rect class="bx" x="280" y="288" width="240" height="54" fill="#e8f1fa" stroke="#2563a8"/>
+  <text class="lbl" x="400" y="320" fill="#2563a8">Submitted</text>
+  <path class="arw" d="M400,342 V372"/>
+
+  <!-- ═══ decision 2: delivery cut-off ═══ -->
+  <polygon class="dia" points="400,374 570,416 400,458 230,416"/>
+  <text class="diat" x="400" y="411">Manager decides before</text>
+  <text class="diat" x="400" y="425">the Delivery cut-off?</text>
+  <text class="edge" x="580" y="409">NO</text>
+  <text class="edge" x="196" y="409">REJECTS</text>
+  <text class="edge" x="410" y="476">APPROVES</text>
+  <path class="arw" d="M570,416 H614"/>
+  <path class="arw" d="M230,416 H194"/>
+
+  <!-- ═══ defaulted — manager ═══ -->
+  <rect class="bx" x="620" y="381" width="240" height="70" fill="#fdf1e0" stroke="#a3651a"/>
+  <text class="lbl" x="740" y="405" fill="#a3651a">Defaulted</text>
+  <text class="sub" x="740" y="421" fill="#a3651a">DEFAULTED_BY = MANAGER</text>
+  <text class="sub" x="740" y="436" fill="#a3651a">not locked · never holds salary</text>
+
+  <!-- ═══ rejected ═══ -->
+  <rect class="bx" x="30" y="389" width="164" height="54" fill="#fdeceb" stroke="#b3352c"/>
+  <text class="lbl" x="112" y="421" fill="#b3352c">Rejected</text>
+
+  <!-- ═══ resubmit loop, routed on the far left ═══ -->
+  <path class="arw" d="M30,416 H20 V315 H276"/>
+  <text class="loopt" x="30" y="352">resubmits → Submitted again</text>
+  <text class="loopt" x="30" y="366">+ Late submission flag if after the cut-off</text>
+
+  <!-- ═══ approved outcomes ═══ -->
+  <path class="arw" d="M400,458 V482 H250 V504"/>
+  <path class="arw" d="M400,458 V482 H560 V504"/>
+
+  <rect class="bx" x="140" y="506" width="220" height="54" fill="#e6f4ee" stroke="#17795e"/>
+  <text class="lbl" x="250" y="530" fill="#17795e">Overridden and</text>
+  <text class="lbl" x="250" y="546" fill="#17795e">approved</text>
+
+  <rect class="bx" x="480" y="506" width="160" height="54" fill="#e6f4ee" stroke="#17795e"/>
+  <text class="lbl" x="560" y="538" fill="#17795e">Approved</text>
+
+  <!-- ═══ both defaults can still be approved, via a bus on the right ═══ -->
+  <rect x="670" y="506" width="200" height="54" rx="8" fill="#ffffff" stroke="#5a6673"
+        stroke-width="1.5" stroke-dasharray="4 3"/>
+  <text class="sub" x="770" y="529" fill="#5a6673">manager edits the locked week,</text>
+  <text class="sub" x="770" y="544" fill="#5a6673">or approves late</text>
+
+  <path class="arw" d="M860,214 H910 V533 H874"/>
+  <path d="M860,416 H910" stroke="#5a6673" stroke-width="1.5" fill="none"/>
+  <path class="arw" d="M670,533 H645"/>
+
+  <!-- ═══ closed ═══ -->
+  <path class="arw" d="M250,560 V640 H400 V674"/>
+  <path d="M560,560 V640 H400" stroke="#5a6673" stroke-width="1.5" fill="none"/>
+
+  <rect class="bx" x="300" y="676" width="200" height="54" fill="#e6f4ee" stroke="#17795e"/>
+  <text class="lbl" x="400" y="700" fill="#17795e">Closed</text>
+  <text class="sub" x="400" y="716" fill="#17795e">month confirmed to accrual</text>
+</svg>
+    </div>
+    <p class="plate-cap">Plate 1 &mdash; week lifecycle and cut-off decisions</p>
+  </section>
+
+  <section>
+    <p class="eyebrow"><span class="num">03</span> &nbsp;Worked example</p>
+    <h2>Reject, then resubmit &mdash; before and after the cut-off</h2>
+    <p>
+      Week 3 of July 2026 runs Mon 13 to Sun 19. The weekly cut-off is Monday 17:00,
+      so for this week that is <strong>Mon 20-Jul 17:00</strong>. Both cases end in
+      the same status; only the flag differs.
+    </p>
+
+    <div class="tw">
+      <table>
+        <thead>
+          <tr><th>Step</th><th>When</th><th>Status</th><th>Flags</th><th>Audit trail</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Employee submits</td><td>Fri 17-Jul</td>
+            <td><span class="chip s-flight">Submitted</span></td><td>&mdash;</td>
+            <td><code>Submit</code></td>
+          </tr>
+          <tr>
+            <td>Manager rejects</td><td>Sat 18-Jul</td>
+            <td><span class="chip s-rework">Rejected</span></td><td>&mdash;</td>
+            <td><code>Reject</code> + reason + remarks</td>
+          </tr>
+          <tr>
+            <td><strong>Case A</strong> &mdash; resubmits</td>
+            <td>Mon 20-Jul 09:00<br><span style="color:var(--settled)">before the cut-off</span></td>
+            <td><span class="chip s-flight">Submitted</span></td><td>&mdash;</td>
+            <td><code>Resubmit</code></td>
+          </tr>
+          <tr>
+            <td><strong>Case B</strong> &mdash; resubmits</td>
+            <td>Tue 21-Jul 09:00<br><span style="color:var(--missed)">after the cut-off</span></td>
+            <td><span class="chip s-flight">Submitted</span></td>
+            <td><span class="chip s-missed">Late submission</span></td>
+            <td><code>Resubmit</code></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>
+      In both cases the week returns to the manager. And in both cases the
+      <code>Resubmit</code> row is what records that this was a correction &mdash;
+      which is exactly why the
+      <span class="chip s-flight strike">Correction</span> flag was safe to drop.
+    </p>
+  </section>
+
+  <section>
+    <p class="eyebrow"><span class="num">04</span> &nbsp;Open</p>
+    <h2>One decision the chart cannot settle</h2>
+    <div class="callout decision">
+      <h3>Can a <span class="chip s-missed">Defaulted</span> week be confirmed to accrual?</h3>
+      <p>
+        RULE-020 gates month confirmation on every employee being
+        <span class="chip s-settled">Approved</span>. A
+        <span class="chip s-missed">Defaulted</span> week is not, so as drawn it
+        <strong>blocks</strong> the month. But advance close says defaulted hours are
+        &ldquo;treated as approved&rdquo;, and they are meant to reach accrual as
+        <code>ENTRY_TYPE = 'Default'</code>.
+      </p>
+      <p>
+        <strong>Recommendation: keep it blocking</strong>, with advance close as the
+        explicit exception &mdash; because the alternative lets default hours reach
+        revenue with no human decision at all.
+      </p>
+    </div>
+  </section>
+
+
+<p class="foot">
+  O2C Timesheet Module &middot; status &amp; flag model revision 2 &middot; 30 July 2026 &middot;
+  canonical copy at <code>Time&nbsp;Module/STATUS_AND_FLAG_MODEL.md</code>
+</p>
+</div>
+</body>
+</html>

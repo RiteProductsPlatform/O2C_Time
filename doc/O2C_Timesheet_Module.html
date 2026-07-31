@@ -1,0 +1,1722 @@
+<title>O2C Timesheet Module — Working Prototype (BRD V0.3)</title>
+<style>
+:root{
+  --rw-coal:#2a2c33; --rw-ink-2:#3a3c44; --rw-slate:#5b5d65; --rw-oyster:#f6f6f4; --rw-paper:#ffffff;
+  --rw-border:#dcdbd7; --rw-border-2:#eceae6; --rw-hover:#f0efeb; --rw-danger:#a73d2f; --rw-success:#1f6a4a;
+  --rw-warning:#a26a0a; --rw-info:#1f5d83; --shell-header-height:56px;
+}
+*{ box-sizing:border-box; }
+html,body{ margin:0; padding:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,sans-serif; }
+body{ color:var(--rw-ink-2); }
+.rw-app{ display:flex; flex-direction:column; height:100vh; overflow:hidden; background:var(--rw-oyster); }
+.rw-topbar{ height:var(--shell-header-height); min-height:var(--shell-header-height); background:#3a3530; border-bottom:3px solid #a23541; display:flex; align-items:center; justify-content:space-between; padding:0 20px; gap:12px; flex-shrink:0; }
+.rw-brand{ font-size:16px; font-weight:700; color:#fff; letter-spacing:.01em; }
+.rw-topbar-right{ display:flex; align-items:center; gap:12px; }
+.rw-role-switch{ display:flex; background:rgba(255,255,255,0.08); border-radius:6px; padding:2px; gap:2px; }
+.rw-role-btn{ border:none; background:transparent; color:rgba(255,255,255,0.65); font-size:11.5px; font-weight:700; padding:6px 12px; border-radius:5px; cursor:pointer; font-family:inherit; }
+.rw-role-btn.active{ background:#fff; color:#1a1c22; }
+.rw-topicon{ color:rgba(255,255,255,0.75); font-size:16px; cursor:pointer; }
+.rw-user-badge{ display:flex; align-items:center; gap:8px; }
+.rw-user-avatar{ width:28px; height:28px; border-radius:50%; background:#3b82f6; color:#fff; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+.rw-user-name{ font-size:13px; font-weight:600; color:rgba(255,255,255,0.92); }
+.rw-user-role{ font-size:9.5px; font-weight:700; letter-spacing:.06em; color:rgba(255,255,255,0.6); background:rgba(255,255,255,0.12); padding:2px 7px; border-radius:3px; }
+.rw-hamburger{ background:transparent; border:none; color:#fff; font-size:20px; cursor:pointer; padding:4px 6px; line-height:1; }
+.rw-main{ flex:1; overflow-y:auto; overflow-x:hidden; }
+/* right-side collapsible drawer */
+.rw-drawer-overlay{ position:fixed; inset:0; background:rgba(20,18,16,0.30); z-index:150; opacity:0; pointer-events:none; transition:opacity .2s; }
+.rw-drawer-overlay.open{ opacity:1; pointer-events:auto; }
+.rw-drawer{ position:fixed; top:0; right:0; height:100vh; width:280px; background:#3a3530; color:#fff; z-index:200; display:flex; flex-direction:column; transform:translateX(100%); transition:transform .24s ease; box-shadow:-8px 0 28px rgba(0,0,0,0.22); }
+.rw-drawer.open{ transform:none; }
+.rw-drawer-hd{ height:var(--shell-header-height); min-height:var(--shell-header-height); padding:0 18px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid rgba(255,255,255,0.1); }
+.rw-drawer-title{ font-size:14px; font-weight:700; margin:0; }
+.rw-drawer-sub{ font-size:9.5px; color:rgba(255,255,255,0.5); margin:2px 0 0; letter-spacing:.06em; text-transform:uppercase; }
+.rw-drawer-close{ background:none; border:none; color:rgba(255,255,255,0.7); font-size:22px; cursor:pointer; line-height:1; }
+.rw-drawer-nav{ flex:1; overflow-y:auto; padding:10px 10px 24px; }
+.rw-nav-group-label{ font-size:10.5px; font-weight:700; color:rgba(255,255,255,0.4); text-transform:uppercase; letter-spacing:.08em; padding:14px 12px 6px; }
+.rw-nav-item{ display:flex; align-items:center; gap:12px; padding:11px 14px; border-radius:6px; font-size:13.5px; font-weight:600; color:rgba(255,255,255,0.9); cursor:pointer; border:none; background:transparent; width:100%; text-align:left; font-family:inherit; position:relative; }
+.rw-nav-item:hover{ background:rgba(255,255,255,0.1); color:#fff; }
+.rw-nav-item.active{ background:rgba(255,255,255,0.16); color:#fff; }
+.rw-nav-item.active::before{ content:''; position:absolute; right:0; top:7px; bottom:7px; width:3px; background:#fff; border-radius:2px 0 0 2px; }
+.rw-nav-item .ico{ width:18px; text-align:center; font-size:14px; flex-shrink:0; }
+.rw-screen{ display:none; }
+.rw-screen.active{ display:block; }
+.page-band{ background:linear-gradient(135deg,#374151 0%,#4b5563 50%,#6b7280 100%); padding:24px 32px 20px; color:#fff; }
+.page-band-eyebrow{ font-size:11px; font-weight:700; letter-spacing:.10em; text-transform:uppercase; color:rgba(255,255,255,0.65); margin:0 0 6px; }
+.page-band-header{ display:flex; align-items:flex-end; gap:14px; flex-wrap:wrap; }
+.page-band-title{ font-family:Georgia,"Times New Roman",serif; font-size:24px; font-weight:400; color:#fff; margin:0; flex:1; min-width:0; }
+.page-band-sub{ font-size:13px; color:rgba(255,255,255,0.72); margin-top:6px; max-width:760px; }
+.rw-body{ padding:20px 28px 56px; }
+.rw-toolbar{ display:flex; align-items:center; gap:8px; padding:0 0 16px; flex-wrap:wrap; }
+.btn{ display:inline-flex; align-items:center; gap:6px; padding:7px 14px; border-radius:4px; font-size:13px; font-weight:600; cursor:pointer; border:1px solid transparent; white-space:nowrap; line-height:1.4; min-height:32px; font-family:inherit; }
+.btn-primary{ background:var(--rw-coal); color:#fff; } .btn-primary:hover{ background:#1a1c22; }
+.btn-outline{ background:#fff; color:var(--rw-ink-2); border-color:var(--rw-border); } .btn-outline:hover{ background:var(--rw-hover); }
+.btn-ghost{ background:transparent; color:var(--rw-ink-2); } .btn-ghost:hover{ background:var(--rw-hover); }
+.btn-danger{ background:var(--rw-danger); color:#fff; } .btn-danger:hover{ background:#8b2f23; }
+.btn-sm{ padding:4px 10px; font-size:12px; min-height:26px; }
+.btn:disabled{ opacity:.45; cursor:not-allowed; }
+.chip{ display:inline-flex; align-items:center; padding:2px 9px; border-radius:3px; font-size:11px; font-weight:600; white-space:nowrap; letter-spacing:.02em; }
+.chip-draft{ background:#eceae6; color:#5b5d65; }
+.chip-open{ background:#dbeeff; color:#1f4a7a; }
+.chip-submitted{ background:#dbe7f4; color:#1f4a7a; }
+.chip-approved{ background:#e2f1ea; color:#1f6a4a; }
+.chip-rejected{ background:#f4dad6; color:#8a2f23; }
+.chip-defaulted{ background:#fbe4c7; color:#8a5a12; }
+.chip-late{ background:#f3e0f2; color:#7a2f6a; }
+.chip-closed{ background:#eceae6; color:#5b5d65; }
+.chip-warn{ background:#fef9c3; color:#854d0e; }
+.doubt-flag{ display:inline-flex; align-items:center; gap:5px; font-size:10.5px; font-weight:700; color:#8a2f23; background:#f4dad6; border-radius:3px; padding:2px 8px; letter-spacing:.02em; margin-left:6px; vertical-align:middle; cursor:help; }
+.card{ background:#fff; border:1px solid var(--rw-border); border-radius:6px; margin-bottom:16px; box-shadow:0 1px 3px rgba(0,0,0,0.05); overflow:hidden; }
+.card-toolbar{ display:flex; align-items:center; gap:10px; padding:12px 16px; border-bottom:1px solid var(--rw-border); flex-wrap:wrap; }
+.card-title{ font-size:13px; font-weight:700; color:var(--rw-coal); text-transform:uppercase; letter-spacing:.05em; }
+.card-toolbar-right{ margin-left:auto; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.card-body{ padding:16px; }
+.section-title{ font-size:12px; font-weight:700; color:var(--rw-slate); margin:0 0 12px; text-transform:uppercase; letter-spacing:.06em; }
+.tbl-wrap{ overflow-x:auto; }
+.tbl-wrap table{ width:100%; border-collapse:collapse; font-size:12.5px; }
+.tbl-wrap thead th{ background:#f5f4f0; padding:9px 12px; text-align:left; font-size:10.5px; font-weight:700; color:var(--rw-slate); text-transform:uppercase; letter-spacing:.04em; border-bottom:1px solid var(--rw-border); white-space:nowrap; }
+.tbl-wrap thead th.num{ text-align:right; }
+.tbl-wrap tbody td{ padding:8px 12px; border-bottom:1px solid var(--rw-border-2); vertical-align:middle; }
+.tbl-wrap tbody tr:hover{ background:#faf9f6; }
+.tbl-wrap tfoot td{ padding:9px 12px; font-weight:700; background:#faf9f6; border-top:2px solid var(--rw-border); }
+.num{ text-align:right; font-variant-numeric:tabular-nums; font-family:ui-monospace,Consolas,monospace; }
+/* Timesheet entry grid: day columns are center-aligned so the day header, shift, hours & standard line up in each column (steppers make right-align look offset). */
+.ts-grid thead th.num, .ts-grid tbody td.num, .ts-grid tfoot td.num{ text-align:center; }
+.ts-grid .hr-stepper{ justify-content:center; }
+.mono{ font-family:ui-monospace,Consolas,monospace; font-size:12px; }
+.editbox{ width:60px; height:28px; padding:0 6px; border:1px solid var(--rw-border); border-radius:4px; font-size:12.5px; font-variant-numeric:tabular-nums; text-align:right; background:#fff; font-family:ui-monospace,Consolas,monospace; }
+/* external up/down stepper (arrows outside the box) */
+.hr-stepper{ display:inline-flex; align-items:center; gap:4px; }
+.hr-stepper .editbox{ width:52px; }
+.hr-arr{ display:inline-flex; flex-direction:column; gap:2px; }
+.hr-arr button{ width:20px; height:13px; padding:0; line-height:1; border:1px solid var(--rw-border); background:#fff; border-radius:3px; font-size:9px; color:var(--rw-slate); cursor:pointer; display:flex; align-items:center; justify-content:center; }
+.hr-arr button:hover{ background:var(--rw-hover); color:var(--rw-coal); border-color:#c5c3bd; }
+.hr-arr button:active{ background:var(--rw-coal); color:#fff; }
+.editbox[readonly]{ background:var(--rw-oyster); color:var(--rw-slate); border-color:var(--rw-border-2); }
+.form-select,.form-input{ height:32px; border:1px solid var(--rw-border); border-radius:4px; padding:0 10px; font-size:13px; background:#fff; font-family:inherit; }
+.hdr-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:14px; }
+@media(max-width:900px){ .hdr-grid{ grid-template-columns:1fr 1fr; } .rw-sidebar{ display:none; } }
+.hdr-item .form-label{ display:block; font-size:11px; font-weight:600; color:var(--rw-slate); text-transform:uppercase; letter-spacing:.05em; margin-bottom:4px; }
+.hdr-item .form-value{ font-size:13px; color:var(--rw-ink-2); }
+.stat-row{ display:flex; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
+.stat-card{ flex:1; min-width:130px; background:#fff; border:1px solid var(--rw-border); border-radius:6px; padding:13px 15px; }
+.stat-card .lbl{ font-size:10px; text-transform:uppercase; letter-spacing:.05em; color:var(--rw-slate); font-weight:700; }
+.stat-card .val{ font-size:20px; font-weight:700; color:var(--rw-coal); margin-top:5px; }
+.info-banner{ background:#eaf1f5; border-left:3px solid #1f5d83; border-radius:3px; padding:10px 14px; margin-bottom:14px; font-size:12.5px; color:#1f4a6a; }
+.warn-banner{ background:#fbf3d8; border-left:3px solid #a96b00; border-radius:3px; padding:10px 14px; margin-bottom:14px; font-size:12.5px; color:#7a5a00; }
+.q-banner{ background:#fdecef; border-left:3px solid #a73d2f; border-radius:3px; padding:10px 14px; margin-bottom:14px; font-size:12.5px; color:#7a2018; }
+.q-list{ margin:0; padding-left:18px; font-size:12.5px; line-height:1.7; }
+.q-list li{ margin-bottom:5px; }
+.brd-tag{ display:inline-block; font-size:10px; font-weight:700; color:#1f6a4a; background:#e2f1ea; border-radius:3px; padding:1px 6px; letter-spacing:.02em; }
+.q-tag{ display:inline-block; font-size:10px; font-weight:700; color:#8a2f23; background:#f4dad6; border-radius:3px; padding:1px 6px; letter-spacing:.02em; }
+.week-hd td{ background:#f5f4f0 !important; padding:8px 12px !important; }
+.week-hd-inner{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.week-hd-inner .actions{ margin-left:auto; display:flex; gap:8px; }
+.sys-row td{ background:#faf9f6; color:var(--rw-slate); font-style:italic; }
+.modal-backdrop{ display:none; position:fixed; inset:0; background:rgba(20,20,24,.45); z-index:100; align-items:flex-start; justify-content:center; padding:6vh 20px; overflow-y:auto; }
+.modal-backdrop.show{ display:flex; }
+.modal{ background:#fff; border-radius:8px; width:100%; max-width:640px; box-shadow:0 20px 60px rgba(0,0,0,.3); }
+.modal-header{ display:flex; align-items:center; justify-content:space-between; padding:15px 20px; border-bottom:1px solid var(--rw-border); }
+.modal-header h4{ margin:0; font-size:15px; font-weight:700; color:var(--rw-coal); }
+.modal-close{ background:none; border:none; font-size:18px; color:var(--rw-slate); cursor:pointer; }
+.modal-body{ padding:18px 20px; max-height:62vh; overflow-y:auto; }
+.modal-footer{ display:flex; justify-content:flex-end; gap:8px; padding:14px 20px; border-top:1px solid var(--rw-border); }
+.rw-toast{ position:fixed; top:20px; right:20px; background:var(--rw-coal); color:#fff; padding:11px 18px; border-radius:5px; font-size:13px; z-index:9999; opacity:0; transition:opacity .25s; pointer-events:none; box-shadow:0 8px 24px rgba(0,0,0,.2); min-width:260px; border-left:3px solid #1f7a4d; }
+.rw-toast.show{ opacity:1; }
+.tab-row{ display:flex; gap:4px; border-bottom:1px solid var(--rw-border); margin-bottom:16px; flex-wrap:wrap; }
+.tab{ border:none; background:transparent; padding:9px 15px; font-size:12.5px; font-weight:700; color:var(--rw-slate); cursor:pointer; border-bottom:2px solid transparent; font-family:inherit; }
+.tab.active{ color:var(--rw-coal); border-bottom-color:var(--rw-coal); }
+.tab-pane{ display:none; } .tab-pane.active{ display:block; }
+.legend-tag{ display:inline-flex; align-items:center; gap:5px; font-size:11px; color:var(--rw-slate); margin-right:14px; }
+.journey-lane{ background:#fff; border:1px solid var(--rw-border); border-radius:8px; padding:0; margin-bottom:18px; overflow:hidden; }
+.journey-lane-hd{ padding:12px 18px; font-weight:700; color:#fff; display:flex; align-items:center; gap:10px; }
+.journey-steps{ display:flex; overflow-x:auto; padding:18px; gap:0; }
+.journey-step{ min-width:180px; flex:1; padding:0 14px; border-right:1px dashed var(--rw-border); position:relative; }
+.journey-step:last-child{ border-right:none; }
+.journey-step .step-no{ display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; border-radius:50%; background:var(--rw-coal); color:#fff; font-size:11px; font-weight:700; margin-bottom:8px; }
+.journey-step h5{ margin:0 0 6px; font-size:13px; color:var(--rw-coal); }
+.journey-step p{ margin:0; font-size:11.5px; color:var(--rw-slate); line-height:1.5; }
+.journey-step .chip{ margin-top:8px; }
+/* workflow strip */
+.wf{ display:flex; align-items:stretch; gap:0; flex-wrap:wrap; margin:2px 0 4px; }
+.wf-step{ display:flex; align-items:center; gap:8px; padding:8px 14px 8px 12px; background:#fff; border:1px solid var(--rw-border); position:relative; font-size:12px; }
+.wf-step:not(:last-child){ border-right:none; }
+.wf-step .dot{ width:20px; height:20px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; color:#fff; flex-shrink:0; }
+.wf-done .dot{ background:var(--rw-success); } .wf-current .dot{ background:var(--rw-info); } .wf-pending .dot{ background:#c9c7c1; } .wf-reject .dot{ background:var(--rw-danger); }
+.wf-step .wf-lbl{ font-weight:700; color:var(--rw-coal); } .wf-step .wf-sub{ color:var(--rw-slate); font-size:11px; }
+.wf-current{ box-shadow:inset 0 0 0 2px var(--rw-info); }
+.wf-arrow{ display:flex; align-items:center; color:var(--rw-slate); padding:0 2px; }
+.wf-with{ font-size:12px; padding:8px 12px; background:#eaf1f5; border-left:3px solid var(--rw-info); border-radius:3px; margin-bottom:12px; color:#1f4a6a; }
+.wf-with.rej{ background:#fdecef; border-left-color:var(--rw-danger); color:#7a2018; }
+.chk{ width:16px; height:16px; cursor:pointer; }
+.emp-switch{ display:flex; align-items:center; gap:8px; background:#fff7e6; border:1px solid #e6cf9a; border-radius:6px; padding:8px 12px; margin-bottom:14px; font-size:12.5px; }
+</style>
+
+<div class="rw-app">
+  <header class="rw-topbar">
+    <div class="rw-brand">Opportunity To Cash</div>
+    <div class="rw-topbar-right">
+      <div class="rw-role-switch">
+        <button class="rw-role-btn active" onclick="setRole('Employee',this)">Employee</button>
+        <button class="rw-role-btn" onclick="setRole('Manager',this)">Manager</button>
+        <button class="rw-role-btn" onclick="setRole('Admin',this)">Admin</button>
+      </div>
+      <span class="rw-topicon" title="Notifications">&#128276;</span>
+      <div class="rw-user-badge"><div class="rw-user-avatar" id="userAvatar">MK</div><span class="rw-user-name" id="userName">Meera Krishnan</span><span class="rw-user-role" id="userRoleTag">EMPLOYEE</span></div>
+      <span class="rw-topicon" title="Sign out">&#8677;</span>
+      <button class="rw-hamburger" onclick="toggleDrawer()" title="Menu">&#9776;</button>
+    </div>
+  </header>
+  <main class="rw-main" id="mainArea"></main>
+</div>
+
+<div class="rw-drawer-overlay" id="drawerOverlay" onclick="toggleDrawer(false)"></div>
+<aside class="rw-drawer open" id="drawer">
+  <div class="rw-drawer-hd">
+    <div><p class="rw-drawer-title" id="drawerTitle">Timesheet Module</p><p class="rw-drawer-sub">O2C PLATFORM · BRD V0.3</p></div>
+    <button class="rw-drawer-close" onclick="toggleDrawer(false)" title="Close">&times;</button>
+  </div>
+  <nav class="rw-drawer-nav" id="sidebarNav"></nav>
+</aside>
+
+<div class="rw-toast" id="toast"></div>
+<div class="modal-backdrop" id="modal"><div class="modal" id="modalInner"></div></div>
+
+<script>
+/* ============================================================
+   O2C Timesheet Module — prototype grounded in:
+   - O2C period Definition_V3.docx  (Period Control Table)
+   - O2C Time V0.3.docx             (Timesheet Module BRD)
+   Everything tagged [BRD] is specified in those docs; everything
+   tagged [Q] is an open question surfaced for discussion.
+   ============================================================ */
+
+// ---------- Period Control Table (Finance-owned) [BRD: Period Definition] ----------
+var PERIODS = [
+  {name:'June 2026', status:'Closed', start:'01-Jun-2026', end:'30-Jun-2026', acct:'30-Jun-2026', delivery:'03-Jul-2026', finance:'05-Jul-2026', book:'07-Jul-2026', mec:'30-Jun-2026', advanceClose:false},
+  {name:'July 2026', status:'Open',   start:'01-Jul-2026', end:'31-Jul-2026', acct:'31-Jul-2026', delivery:'04-Aug-2026', finance:'05-Aug-2026', book:'07-Aug-2026', mec:'31-Jul-2026', advanceClose:false},
+  {name:'August 2026', status:'Closed', start:'01-Aug-2026', end:'31-Aug-2026', acct:'31-Aug-2026', delivery:'04-Sep-2026', finance:'05-Sep-2026', book:'07-Sep-2026', mec:'31-Aug-2026', advanceClose:false}
+];
+var CLIENT_CUTOFFS = [
+  {client:'Northwind Health', clientId:'CUST-001', period:'July 2026', status:'Open', start:'01-Jul-2026', end:'31-Jul-2026', cutoff:'10-Aug-2026', terms:'Net 30'},
+  {client:'King County', clientId:'CUST-002', period:'July 2026', status:'Open', start:'01-Jul-2026', end:'31-Jul-2026', cutoff:'15-Aug-2026', terms:'Net 45'}
+];
+var TS_CUTOFF = {day:'Monday', time:'5:00 PM', contractorResubmit:60};
+// Revision / adjustment window (Finance-configurable) [BRD 4.2.1: adjustments up to 3 months; backdated changes controlled by config]
+var REVISION = {adjustmentMonths:3, backdatedMonths:3, contractorResubmitDays:60, employeeResubmitDays:60, lateHandling:'Post as JV / adjustment (net-off reversal + re-post)'};
+var PAYROLL = [
+  {country:'India', type:'Cut off', start:'-', end:'-', payout:'30-Jul-2026', cutoff:'26-Jul-2026', desc:'Monthly BPS India cycle', holdRelease:60},
+  {country:'United States', type:'Date Range', start:'13-Jul-2026', end:'26-Jul-2026', payout:'31-Jul-2026', cutoff:'-', desc:'Fortnightly US cycle', holdRelease:60}
+];
+
+// ---------- Projects (FSCM /projects) + WBS tasks [BRD] ----------
+var PROJECTS = [
+  {id:'PRJ-1001', name:'Claims Modernization', client:'Northwind Health', model:'T&M', leaveLoss:false, managerId:'EMP-900', managerName:'Priya Sharma',
+   tasks:[{code:'1.1', name:'Discovery & Assessment'},{code:'1.2', name:'Build & Configuration'},{code:'1.3', name:'Testing & Cutover'}]},
+  {id:'PRJ-1002', name:'Data Platform Managed Service', client:'Northwind Health', model:'Fixed Capacity (FCP)', leaveLoss:true, managerId:'EMP-900', managerName:'Priya Sharma',
+   tasks:[{code:'2.1', name:'Platform Operations'},{code:'2.2', name:'Enhancements'}]},
+  {id:'PRJ-1003', name:'Records Digitization', client:'King County', model:'Milestone', leaveLoss:false, managerId:'EMP-901', managerName:'David Chen',
+   tasks:[{code:'3.1', name:'Scan & Index'},{code:'3.2', name:'QA & Delivery'}]},
+  // Organization-level NON-BILLABLE project — assigned to ALL employees. Non-billable staff log here; its
+  // tasks are the common non-billable tasks. (Billable staff log the same tasks inside their own project.)
+  {id:'PRJ-ORG', name:'Organization (Non-Billable)', client:'Internal', model:'Non-Billable', leaveLoss:false, managerId:'EMP-900', managerName:'Priya Sharma', org:true,
+   tasks:[]}
+];
+// Common NON-BILLABLE tasks — present at the ORGANIZATION project AND inside every regular project.
+// Selecting one marks the line non-billable with the unbilled reason = the task. 'Leave' comes from HR (Absence)
+// only and is NOT selectable by the employee.
+var SPECIAL_TASKS = [
+  {code:'ONB',    name:'Onboarding',     reason:'Onboarding',     selectable:true},
+  {code:'TRN',    name:'Training',       reason:'Training',       selectable:true},
+  {code:'TRV',    name:'Travel',         reason:'Travel',         selectable:true},
+  {code:'CLI_HOL',name:'Client Holiday', reason:'Client Holiday', selectable:true},
+  {code:'LEAVE',  name:'Leave',          reason:'Leave',          selectable:false}
+];
+function specialTask(code){ for(var i=0;i<SPECIAL_TASKS.length;i++) if(SPECIAL_TASKS[i].code===code) return SPECIAL_TASKS[i]; return null; }
+function selectableCommonTasks(){ return SPECIAL_TASKS.filter(function(t){ return t.selectable; }); }
+
+// ---------- Employees / Contractors (HCM /workers) + allocation (Resource Mgmt) [BRD] ----------
+// billing: 'Billable' or 'Unbilled'; kind: 'Employee' or 'Contractor'
+var EMPLOYEES = [
+  {id:'EMP-501', name:'Alicia Ferreira', kind:'Employee', role:'Senior Consultant', country:'United States', city:'Boston', stdHrs:8, billing:'Billable',
+   alloc:[{proj:'PRJ-1001', pct:100, shift:'Regular', wbs:[{code:'1.2', pct:70},{code:'1.3', pct:30}]}]},
+  {id:'EMP-502', name:'Daniel Osei', kind:'Contractor', role:'Consultant', country:'United States', city:'Austin', stdHrs:8, billing:'Billable',
+   alloc:[{proj:'PRJ-1001', pct:100, shift:'Night', wbs:[{code:'1.2', pct:100}]}]},
+  {id:'EMP-503', name:'Meera Krishnan', kind:'Employee', role:'Business Analyst', country:'India', city:'Bangalore', stdHrs:8, billing:'Billable',
+   alloc:[{proj:'PRJ-1001', pct:50, shift:'Regular', wbs:[{code:'1.1', pct:100}]},{proj:'PRJ-1003', pct:50, shift:'Night', wbs:[{code:'3.1', pct:100}]}]},
+  {id:'EMP-504', name:'Ben Okafor', kind:'Employee', role:'Consultant', country:'United States', city:'Seattle', stdHrs:8, billing:'Billable',
+   alloc:[{proj:'PRJ-1002', pct:100, shift:'Regular', wbs:[{code:'2.1', pct:60},{code:'2.2', pct:40}]}]},
+  {id:'EMP-505', name:'Grace Adeyemi', kind:'Employee', role:'QA Engineer', country:'India', city:'Chennai', stdHrs:8, billing:'Unbilled',
+   alloc:[{proj:'PRJ-1002', pct:100, shift:'Regular', wbs:[{code:'2.2', pct:100}]}]},
+  {id:'EMP-900', name:'Priya Sharma', kind:'Employee', role:'Delivery Manager', country:'India', city:'Bangalore', stdHrs:8, billing:'Billable', isManager:true, reportsTo:'EMP-901',
+   alloc:[{proj:'PRJ-1001', pct:100, shift:'Regular', wbs:[{code:'1.1', pct:100}]}]},
+  {id:'EMP-901', name:'David Chen', kind:'Employee', role:'Delivery Manager', country:'United States', city:'Seattle', stdHrs:8, billing:'Billable', isManager:true, reportsTo:'EMP-900',
+   alloc:[{proj:'PRJ-1003', pct:100, shift:'Regular', wbs:[{code:'3.2', pct:100}]}]}
+];
+// A manager's own timesheet is approved by their reporting manager (reportsTo) — never themselves. [Correction #1]
+function approverFor(empId, projId){
+  var e=emp(empId);
+  if (e.isManager){ var rt=e.reportsTo && emp(e.reportsTo); return (rt && rt.id!==e.id) ? rt.name : '(unassigned — must differ from self)'; }
+  var p=proj(projId); return p?p.managerName:'—';
+}
+var SHIFTS = ['Regular','Night','Early','Split']; // shift LOV [BRD: shift type]
+
+// Absence feed (HR / Absence module) — leave day => billable 0 [BRD]
+// types: Leave (shown, not selectable), LOP / Maternity (excluded from num & denom & LLC)
+var ABSENCE = [
+  {emp:'EMP-503', date:'15 Jul', type:'Leave'},
+  {emp:'EMP-504', date:'16 Jul', type:'Leave'},
+  {emp:'EMP-505', date:'14 Jul', type:'LOP'}
+];
+
+var UNBILLED_REASONS = ['Customer Holiday','Training','Travel','Bench']; // selectable [BRD]
+var REJECT_REASONS = ['Manager driven','Client driven','Absence'];       // [BRD]
+
+// ---------- Months: selectable period with Open/Closed by payroll cut-off (today = 24-Jul-2026) ----------
+// A month is Open until its payroll cut-off passes, then Closed.
+var MONTHS_ALL = [
+  {key:'April 2026', payrollCutoff:'05-May-2026', open:false},
+  {key:'May 2026',   payrollCutoff:'05-Jun-2026', open:false},
+  {key:'June 2026',  payrollCutoff:'05-Jul-2026', open:false},
+  {key:'July 2026',  payrollCutoff:'26-Jul-2026', open:true},  // today is before this cut-off → Open
+  {key:'August 2026',payrollCutoff:'26-Aug-2026', open:false, future:true}  // future: pre-populated, read-only
+];
+function monthObj(k){ for(var i=0;i<MONTHS_ALL.length;i++) if(MONTHS_ALL[i].key===k) return MONTHS_ALL[i]; return MONTHS_ALL[MONTHS_ALL.length-1]; }
+var HIST_MONTHS = ['April 2026','May 2026','June 2026'];   // June 2026 = "last month"
+var LAST_MONTH = 'June 2026';
+var PAYROLL_CUTOFF_LASTMONTH = '05-Jul-2026';              // payroll cut-off for last month (June)
+// per-employee monthly status; seeded Approved, with a few Defaulted for last month
+var MONTH_STATUS = {};
+function seedHistory(){
+  EMPLOYEES.forEach(function(e){ if(e.isManager) return;
+    MONTH_STATUS[e.id] = {};
+    HIST_MONTHS.forEach(function(m){ MONTH_STATUS[e.id][m] = {status:'Approved', mgrEdited:false}; });
+  });
+  // last month (June): a few employees did NOT submit by the payroll cut-off → auto-submitted with
+  // DEFAULT values, status Defaulted, locked (employee cannot edit; only the manager can).
+  ['EMP-502','EMP-505'].forEach(function(id){ if(MONTH_STATUS[id]) MONTH_STATUS[id][LAST_MONTH]={status:'Defaulted', mgrEdited:false, defaulted:true}; });
+}
+function monthStd(e){ return e.stdHrs*23; } // ~ full month of default (billable) hours
+
+// ---------- Week model (Mon–Sun), July 2026; current week highlighted ----------
+var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+var DOW = ['Sun','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+var DOW_SHORT = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+function buildWeeks(){
+  var weeks = [], start = new Date(2026,5,29); // Mon 29 Jun 2026
+  for (var w=0; w<5; w++){
+    var days = [];
+    for (var d=0; d<7; d++){
+      var dt = new Date(start.getFullYear(), start.getMonth(), start.getDate()+w*7+d);
+      days.push({dow:dt.getDay(), date:(dt.getDate()<10?'0':'')+dt.getDate()+' '+MONTHS[dt.getMonth()],
+        inMonth:dt.getMonth()===6, weekend:(dt.getDay()===0||dt.getDay()===6)});
+    }
+    weeks.push({idx:w, range:days[0].date+' – '+days[6].date, days:days});
+  }
+  return weeks;
+}
+var WEEKS = buildWeeks();
+var CURRENT_WEEK = 4; // Week 5 (27 Jul–02 Aug) is "current"/open; weeks 1–4 are past their cut-off
+// August weeks (Mon–Sun overlapping Aug 2026) — shown frozen (read-only, default values)
+function buildWeeksFor(year, month){
+  var first=new Date(year,month,1), dow=first.getDay(), back=(dow===0?6:dow-1);
+  var start=new Date(year,month,1-back), weeks=[];
+  for (var w=0; w<6; w++){
+    var days=[];
+    for (var d=0; d<7; d++){ var dt=new Date(start.getFullYear(),start.getMonth(),start.getDate()+w*7+d);
+      days.push({dow:dt.getDay(), date:(dt.getDate()<10?'0':'')+dt.getDate()+' '+MONTHS[dt.getMonth()], inMonth:dt.getMonth()===month, weekend:(dt.getDay()===0||dt.getDay()===6)}); }
+    if (days.some(function(x){return x.inMonth;})) weeks.push({idx:weeks.length, range:days[0].date+' – '+days[6].date, days:days});
+  }
+  return weeks;
+}
+var AUG_WEEKS = buildWeeksFor(2026,7);
+
+// ---------- runtime state ----------
+var currentRole = 'Employee';
+var SELF = {Employee:'EMP-503', Manager:'EMP-900'};   // logged-in identity per role (EMP-503 is split 50/50 across two projects/managers)
+var view = {screen:'mytime', month:'July 2026', week:CURRENT_WEEK, mgrProject:null, mgrEmp:null};
+var TS = {};     // timesheet store: key emp|week -> {status, lines:[{proj,task,shift,type,reason,hrs:[7]}]} (lines span multiple projects)
+var MGR = {};    // manager confirmation store: key proj|emp -> {status, flag, rejectReason, rejectRemark}
+var LLC = {};    // leave-loss coverage store
+var clientTSFiles = {}; // key proj|period -> [files]
+
+function selfEmp(){ return currentRole === 'Manager' ? SELF.Manager : SELF.Employee; }
+function emp(id){ for (var i=0;i<EMPLOYEES.length;i++) if (EMPLOYEES[i].id===id) return EMPLOYEES[i]; return null; }
+function proj(id){ for (var i=0;i<PROJECTS.length;i++) if (PROJECTS[i].id===id) return PROJECTS[i]; return null; }
+function taskName(p, code){ var st=specialTask(code); if(st) return st.name; var pr=proj(p); for (var i=0;i<pr.tasks.length;i++) if(pr.tasks[i].code===code) return pr.tasks[i].code+' · '+pr.tasks[i].name; return code; }
+function esc(s){ return (''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function num(v){ return parseFloat(v)||0; }
+
+// seed a week timesheet from ALL allocations (8h std split by project% then WBS%) [BRD population logic]
+// Lines span multiple projects — the employee's 100% is distributed across projects at line level.
+function ensureTS(empId, wk){
+  var key = empId+'|'+wk;
+  if (TS[key]) return TS[key];
+  var e = emp(empId), lines = [];
+  e.alloc.forEach(function(a){
+    var projStd = e.stdHrs * (a.pct/100); // hrs/day for this project
+    a.wbs.forEach(function(w){
+      var hrs = [0,0,0,0,0,0,0];
+      WEEKS[wk].days.forEach(function(day, di){
+        if (!day.weekend && day.inMonth) hrs[di] = Math.round(projStd*(w.pct/100)*4)/4; // 15-min rounding
+      });
+      lines.push({proj:a.proj, task:w.code, shift:a.shift, type:'Billable', reason:'', hrs:hrs});
+    });
+  });
+  // shift is captured per DAY (one shift per employee per day — they cannot be in two shifts on the same day)
+  var dayShift = WEEKS[wk].days.map(function(day){ return (!day.weekend && day.inMonth) ? (e.alloc[0]?e.alloc[0].shift:'Regular') : ''; });
+  TS[key] = {status:'Not yet submitted', lines:lines, lateFlag:false, wasRejected:false, dayShift:dayShift};
+  return TS[key];
+}
+function absenceForWeek(empId, wk){
+  var out = {};
+  ABSENCE.forEach(function(ab){ if (ab.emp===empId){ WEEKS[wk].days.forEach(function(d,di){ if (d.date===ab.date) out[di]=ab.type; }); } });
+  return out;
+}
+// Weekly timesheet cut-off date = the TS_CUTOFF weekday following the week's end [BRD: weekly cut-off, base location]
+function cutoffForWeek(wk){
+  var d = new Date(2026,5,29 + (wk+1)*7); // Monday after this Mon–Sun week
+  return (d.getDate()<10?'0':'')+d.getDate()+' '+MONTHS[d.getMonth()]+'-'+d.getFullYear()+', '+TS_CUTOFF.time;
+}
+
+// ============================================================
+//  APPROVAL WORKFLOW MODEL  — per employee|project|week
+//  status: Not submitted | Pending | Approved | Rejected
+//  history: [{by, act, to}]; dayApproved: set of 'w{wk}d{di}' (date-wise approval, #4)
+// ============================================================
+// ---------- Flags (with the action each drives) — also listed in the User Journey ----------
+var DELIVERY_CUTOFF_JUL = '04-Aug-2026';   // manager delivery cut-off for July; today is 28-Jul (before it)
+var FLAG_DEFS = [
+  {flag:'Defaulted', cls:'chip-defaulted', action:'Not submitted by the payroll cut-off → auto-submitted with default hours, locked; salary held until the manager edits & releases.'},
+  {flag:'Late submission', cls:'chip-late', action:'Submitted after the week/delivery/payroll cut-off. Accepted, but flagged for audit and for the accrual adjustment logic.'},
+  {flag:'Correction', cls:'chip-warn', action:'A rejected timesheet was edited and resubmitted by the employee.'},
+  {flag:'Contractor Unbilled hours', cls:'chip-rejected', action:'A contractor logged non-billable time — needs exception approval before it flows to accrual.'},
+  {flag:'Advance closure', cls:'chip-open', action:'Manager approved before the delivery cut-off to close the period early.'},
+  {flag:'Overridden & approved', cls:'chip-warn', action:'Manager edited the hours and then approved.'},
+  {flag:'Reversal', cls:'chip-rejected', action:'Old project/WBS line cancelled after the cut-off (retro change) → hours reversed (−) in the open accrual period.'},
+  {flag:'Adjustment', cls:'chip-approved', action:'New project/WBS line after the cut-off (retro change) → hours added (+) to the open accrual period.'}
+];
+function flagCls(f){ for(var i=0;i<FLAG_DEFS.length;i++) if(FLAG_DEFS[i].flag===f) return FLAG_DEFS[i].cls; return 'chip-warn'; }
+function flagChip(f){ return '<span class="chip '+flagCls(f)+'" style="margin-left:4px">'+f+'</span>'; }
+function flagChips(arr){ return (arr||[]).map(flagChip).join(''); }
+function addFlag(s, f){ s.flags=s.flags||[]; if(s.flags.indexOf(f)<0) s.flags.push(f); }
+
+var APPR = {};
+function apprKey(empId, projId){ return empId+'|'+projId; }
+function ensureAppr(empId, projId){ var k=apprKey(empId,projId); if(!APPR[k]) APPR[k]={weeks:{}, dayApproved:{}, dayRejected:{}}; if(!APPR[k].dayRejected) APPR[k].dayRejected={}; return APPR[k]; }
+function wk(empId, projId, w){ var a=ensureAppr(empId,projId); if(!a.weeks[w]) a.weeks[w]={status:'Not submitted', reason:'', history:[], flags:[]}; if(!a.weeks[w].flags) a.weeks[w].flags=[]; return a.weeks[w]; }
+function projsInWeek(empId, w){ var t=ensureTS(empId,w); var s={}; t.lines.forEach(function(l){ s[l.proj]=1; }); return Object.keys(s); }
+// aggregate approval state for the employee's whole week across its projects (drives employee editability)
+function weekApprState(empId, w){
+  var ps=projsInWeek(empId,w); if(!ps.length) return 'Not submitted';
+  var sts=ps.map(function(pid){ return wk(empId,pid,w).status; });
+  if (sts.indexOf('Rejected')>=0) return 'Rejected';
+  if (sts.indexOf('Defaulted')>=0) return 'Defaulted';          // auto-submitted default → locked
+  if (sts.every(function(s){return s==='Approved';})) return 'Approved';
+  if (sts.every(function(s){return s==='Not submitted';})) return 'Not submitted';
+  return 'Pending';
+}
+// #5 dates the manager sent back within a week (for a date-level rejection) — shown to the employee
+function rejectedDatesList(empId, pid, w){ var a=ensureAppr(empId,pid), out=[]; WEEKS[w].days.forEach(function(d,di){ if(a.dayRejected['w'+w+'d'+di]) out.push(d.date); }); return out; }
+function submitWeekWorkflow(empId, w){
+  projsInWeek(empId,w).forEach(function(pid){
+    var s=wk(empId,pid,w); if (s.status==='Approved') return;   // never re-open an already-approved project
+    var appr=approverFor(empId,pid);
+    var resubmit = (s.status==='Rejected');
+    if (resubmit){ var a=ensureAppr(empId,pid); WEEKS[w].days.forEach(function(d,di){ delete a.dayRejected['w'+w+'d'+di]; }); } // clear prior day-rejections on resubmit
+    s.status='Pending'; s.reason='';
+    if (resubmit) addFlag(s,'Correction');                       // #9 rejected → corrected & resubmitted
+    if (w < CURRENT_WEEK) addFlag(s,'Late submission');          // #8 submitting a past week after its cut-off
+    // #4 contractor logging non-billable time on this project this week
+    var e0=emp(empId), tw=ensureTS(empId,w);
+    if (e0.kind==='Contractor' && tw.lines.some(function(l){return l.proj===pid && l.type==='Non-billable' && l.hrs.some(function(x){return num(x)>0;});})) addFlag(s,'Contractor Unbilled hours');
+    s.history.push({by:emp(empId).name, act:(resubmit?'Resubmitted (Correction)':'Submitted'), to:'Pending with '+appr});
+  });
+}
+function approveWeekWF(empId, projId, w){
+  var s=wk(empId,projId,w); s.status='Approved';
+  // mark all working in-month days of this week approved
+  var a=ensureAppr(empId,projId);
+  WEEKS[w].days.forEach(function(d,di){ if(!d.weekend&&d.inMonth) a.dayApproved['w'+w+'d'+di]=true; });
+  s.history.push({by:approverFor(empId,projId), act:'Approved', to:'Closed'});   // advance-closure is a MONTH-level concept, not per week (#4)
+}
+var TODAY_BEFORE_DELIVERY_CUTOFF = true;  // today 28-Jul is before the 04-Aug delivery cut-off
+function rejectWeekWF(empId, projId, w, reason, remarks){
+  var s=wk(empId,projId,w); s.status='Rejected'; s.reason=reason; s.remarks=remarks||'';
+  s.history.push({by:approverFor(empId,projId), act:'Rejected ('+reason+')'+(remarks?' — '+remarks:''), to:'Back with '+emp(empId).name});
+}
+// #3 monthly confirmation — even after weekly approvals, the manager confirms the month → sends to accrual.
+// Accrual is sent for ALL employees on the project AT ONCE (not per employee), so confirmation is project-level.
+function monthConfirmed(empId, projId){ return !!ensureAppr(empId,projId).monthConfirmed; }
+function monthAdvanceClosure(empId, projId){ return !!ensureAppr(empId,projId).advanceClosure; }
+function projMonthReady(pid){ var es=empsOnProject(pid); return es.length>0 && es.every(function(e){ return monthStatus(e,pid)==='Approved'; }); }
+function projMonthConfirmed(pid){ var es=empsOnProject(pid); return es.length>0 && es.every(function(e){ return monthConfirmed(e.id,pid); }); }
+function confirmProjectMonth(pid){
+  if(!projMonthReady(pid)){ toast('Approve every employee’s month first — accrual is sent for all employees at once.'); return; }
+  empsOnProject(pid).forEach(function(e){ ensureAppr(e.id,pid).monthConfirmed=true; });
+  toast('Month confirmed for all employees on '+proj(pid).name+' — sent to Accrual Integration.');
+  renderTeam();
+}
+function approveDatesWF(empId, projId, dayKeys){
+  var a=ensureAppr(empId,projId); dayKeys.forEach(function(k){ a.dayApproved[k]=true; });
+  // any week whose working in-month days are all approved flips to Approved
+  Object.keys(a.weeks).concat(dayKeys.map(function(k){return k.split('d')[0].slice(1);})).forEach(function(){});
+  [0,1,2,3,4].forEach(function(w){
+    if (w>CURRENT_WEEK) return;
+    var working = WEEKS[w].days.map(function(d,di){return {d:d,di:di};}).filter(function(x){return !x.d.weekend&&x.d.inMonth;});
+    if (!working.length) return;
+    var proj = projsInWeek(empId,w).indexOf(projId)>=0;
+    if (!proj) return;
+    var allApproved = working.every(function(x){ return a.dayApproved['w'+w+'d'+x.di]; });
+    var s=wk(empId,projId,w);
+    if (allApproved && s.status!=='Approved'){ s.status='Approved'; s.history.push({by:approverFor(empId,projId),act:'Approved (all dates)',to:'Closed'}); }
+  });
+}
+// ---- seed current-month scenarios: past weeks submitted for some, contractor unbilled, retro change ----
+var ADJUSTMENTS = []; // retro project/WBS change → accrual adjustment rows (#10)
+var AUG_APPROVE = {}; // manager advance-approval of August (future month) — key emp|proj -> {approved}
+function seedScenarios(){
+  // #2 EVERY employee: July weeks 1–4 (idx 0–3) are already actioned — either Submitted (Pending) or
+  // Defaulted (auto-submitted with default hours because they missed the cut-off). Week 5 (idx 4) is left open.
+  var defaulters = ['EMP-502','EMP-505'];   // these two missed the cut-off → Defaulted
+  EMPLOYEES.forEach(function(e){ if(e.isManager) return;
+    e.alloc.forEach(function(a){ [0,1,2,3].forEach(function(w){ ensureTS(e.id,w); var s=wk(e.id,a.proj,w); if(s.status!=='Not submitted') return;
+      if (defaulters.indexOf(e.id)>=0){ s.status='Defaulted'; addFlag(s,'Defaulted'); s.history.push({by:'System (payroll cut-off)', act:'Auto-submitted with default hours', to:'Locked — manager can edit'}); }
+      else { s.status='Pending'; s.history.push({by:e.name, act:'Submitted', to:'Pending with '+approverFor(e.id,a.proj)}); }
+    }); }); });
+  // #8 Ben's week 2 (idx 1) carries a Late submission flag
+  addFlag(wk('EMP-504','PRJ-1002',1),'Late submission');
+
+  // #4 contractor (Daniel) logs non-billable time in the current (open) week → 'Contractor Unbilled hours' (Training on org project)
+  var t=ensureTS('EMP-502',CURRENT_WEEK);
+  if(!t.lines.some(function(l){return l.type==='Non-billable';}))
+    t.lines.push({proj:'PRJ-ORG', task:'TRN', shift:'Night', type:'Non-billable', reason:'Training', hrs:[0,4,4,0,0,0,0]});
+
+  // Worked example — Meera's current (open) week shows common non-billable tasks IN a billable project AND on the
+  // organization (non-billable) project. Mon = Client Holiday (half day, second line same day); Tue = Training
+  // (in-project); Wed = Onboarding on the ORG project (PRJ-ORG). Leave is NOT a task — it comes from HR (Absence).
+  var mt=ensureTS('EMP-503',CURRENT_WEEK); mt.lines=[
+    {proj:'PRJ-1001', task:'1.1',     shift:'Regular', type:'Billable',     reason:'',               hrs:[4,0,0,8,8,0,0]},
+    {proj:'PRJ-1001', task:'CLI_HOL', shift:'Regular', type:'Non-billable', reason:'Client Holiday', hrs:[4,0,0,0,0,0,0]},
+    {proj:'PRJ-1001', task:'TRN',     shift:'Regular', type:'Non-billable', reason:'Training',       hrs:[0,8,0,0,0,0,0]},
+    {proj:'PRJ-ORG',  task:'ONB',     shift:'Regular', type:'Non-billable', reason:'Onboarding',     hrs:[0,0,8,0,0,0,0]}
+  ];
+  // #5 demonstrate a rejection with reason + remarks so the employee can see it and act (Meera, Week 2 · PRJ-1001)
+  rejectWeekWF('EMP-503','PRJ-1001',1,'Incorrect / insufficient hours','Tuesday shows only part of the day — please log your full hours or mark it as Leave / Holiday, then resubmit.');
+
+  // #10 retro project/WBS change after cut-off: Meera's last-month time moves PRJ-1001 → PRJ-1003
+  // #10 retro change is captured DAY-WISE (not one consolidated lump) — each affected day is cancelled on the old
+  // project/task and re-added on the new one.
+  ADJUSTMENTS.push({emp:'EMP-503', name:'Meera Krishnan', period:LAST_MONTH, oldProj:'PRJ-1001', oldTask:'1.1', newProj:'PRJ-1003', newTask:'3.1',
+    days:[{date:'02-Jun-2026', hrs:8},{date:'03-Jun-2026', hrs:8},{date:'04-Jun-2026', hrs:8}], applied:false, approved:false});
+
+  // Alicia's July weeks are approved (per-employee), but PRJ-1001 also has Daniel (defaulted) & Meera (rejected),
+  // so the PROJECT month cannot be confirmed — that's correct: accrual is sent for all employees at once.
+  [0,1,2,3].forEach(function(w){ approveWeekWF('EMP-501','PRJ-1001',w); });
+  // A genuinely fully-approved project so Accrual shows data by default: PRJ-1003 has only Meera → approve all her
+  // weeks and confirm the whole project month at once (no per-employee confirm).
+  [0,1,2,3].forEach(function(w){ approveWeekWF('EMP-503','PRJ-1003',w); });
+  empsOnProject('PRJ-1003').forEach(function(e){ ensureAppr(e.id,'PRJ-1003').monthConfirmed=true; });
+}
+// date-wise rejection (#3): flag specific dates and send the covering week(s) back to the employee
+function rejectDatesWF(empId, projId, dayKeys, reason, remarks){
+  var a=ensureAppr(empId,projId), weeksHit={};
+  dayKeys.forEach(function(k){ a.dayRejected[k]=reason; delete a.dayApproved[k]; weeksHit[+k.slice(1).split('d')[0]]=1; });
+  Object.keys(weeksHit).forEach(function(w){ w=+w;
+    var s=wk(empId,projId,w); s.status='Rejected'; s.reason=reason; s.remarks=remarks||'';
+    s.history.push({by:approverFor(empId,projId), act:'Rejected dates ('+reason+')'+(remarks?' — '+remarks:''), to:'Back with '+emp(empId).name});
+  });
+}
+function wfStrip(hist, curStatus, withWhom){
+  if (!hist.length) return '';
+  var h='<div class="wf">';
+  hist.forEach(function(ev, i){
+    var cls = ev.act.indexOf('Rejected')>=0 ? 'wf-reject' : (i===hist.length-1 ? 'wf-current' : 'wf-done');
+    h += (i>0?'<span class="wf-arrow">&rarr;</span>':'')+
+      '<div class="wf-step '+cls+'"><span class="dot">'+(ev.act.indexOf('Rejected')>=0?'✕':(i===hist.length-1?'●':'✓'))+'</span>'+
+      '<span><span class="wf-lbl">'+esc(ev.act)+'</span><br><span class="wf-sub">by '+esc(ev.by)+' → '+esc(ev.to)+'</span></span></div>';
+  });
+  h += '</div>';
+  return h;
+}
+
+// ============================================================
+//  NAVIGATION
+// ============================================================
+var JOURNEY_URL = 'https://claude.ai/code/artifact/d6d70cfe-fadc-411c-b11f-25537bcf1c43';
+var DISCUSSION = {grp:'Discussion'};
+var JOURNEY_ITEM = {ico:'🧭', label:'User Journey ↗', url:JOURNEY_URL};
+var NAV = {
+  Employee:[
+    {grp:'My Work'},
+    {id:'mytime', ico:'🕒', label:'My Timesheet'},
+    {id:'clientts', ico:'📎', label:'Client Timesheets'},
+    DISCUSSION, JOURNEY_ITEM
+  ],
+  Manager:[
+    {grp:'Team'},
+    {id:'team', ico:'✅', label:'Team Approvals'},
+    {id:'llc', ico:'👥', label:'Leave Loss Coverage'},
+    {id:'salstop', ico:'⏸', label:'Salary Stopping'},
+    DISCUSSION, JOURNEY_ITEM
+  ],
+  Admin:[
+    {grp:'Setup'},
+    {id:'calendar', ico:'📆', label:'Calendar (Fusion Sync)'},
+    {grp:'Operations'},
+    {id:'syncstatus', ico:'📡', label:'Sync Status'},
+    {id:'accrual', ico:'💹', label:'Accrual Integration'},
+    {id:'integrations', ico:'🔌', label:'Integrations (REST)'},
+    DISCUSSION, JOURNEY_ITEM
+  ]
+};
+var TITLES = {mytime:'My Timesheet', clientts:'Client Timesheets', salstop:'Salary Stopping Tool',
+  team:'Team Approvals', llc:'Leave Loss Coverage', period:'Period Control Table',
+  calendar:'Calendar (Fusion Sync)', syncstatus:'Sync Status', accrual:'Accrual Integration', integrations:'Integrations'};
+
+function renderSidebar(){
+  var html = '';
+  NAV[currentRole].forEach(function(item){
+    if (item.grp){ html += '<div class="rw-nav-group-label">'+item.grp+'</div>'; }
+    else if (item.url){ html += '<button class="rw-nav-item" onclick="window.open(\''+item.url+'\',\'_blank\')"><span class="ico">'+item.ico+'</span>'+item.label+'</button>'; }
+    else { html += '<button class="rw-nav-item'+(view.screen===item.id?' active':'')+'" onclick="go(\''+item.id+'\')"><span class="ico">'+item.ico+'</span>'+item.label+'</button>'; }
+  });
+  document.getElementById('sidebarNav').innerHTML = html;
+}
+var DRAWER_MODULE = {Employee:'My Timesheet', Manager:'Manager Workspace', Admin:'Admin Workspace'};
+function go(screen){
+  view.screen = screen;
+  renderSidebar();
+  var dt=document.getElementById('drawerTitle'); if(dt) dt.textContent = DRAWER_MODULE[currentRole]||'Timesheet Module';
+  var fn = {mytime:renderMyTimesheet, clientts:renderClientTS, salstop:renderSalaryStopping,
+    team:renderTeam, llc:renderLLC, period:renderPeriod, calendar:renderCalendar,
+    syncstatus:renderSyncStatus, accrual:renderAccrual, integrations:renderIntegrations}[screen];
+  document.getElementById('mainArea').innerHTML = '';
+  if (fn) fn();
+  if (window.innerWidth < 1100) toggleDrawer(false); // auto-collapse after picking on narrow screens
+}
+function toggleDrawer(force){
+  var d=document.getElementById('drawer'), o=document.getElementById('drawerOverlay');
+  var open = (typeof force==='boolean') ? force : !d.classList.contains('open');
+  d.classList.toggle('open', open); o.classList.toggle('open', open);
+}
+function setRole(role, btn){
+  currentRole = role;
+  document.querySelectorAll('.rw-role-btn').forEach(function(b){ b.classList.remove('active'); });
+  if (btn) btn.classList.add('active');
+  var e = emp(selfEmp());
+  var nm = (role==='Admin') ? 'Marcus Bell' : e.name;
+  document.getElementById('userName').textContent = nm;
+  document.getElementById('userAvatar').textContent = (role==='Admin'?'MB':nm.split(' ').map(function(w){return w[0];}).join('').slice(0,2));
+  document.getElementById('userRoleTag').textContent = role.toUpperCase();
+  view.mgrProject = null; view.mgrEmp = null;
+  var landing = {Employee:'mytime', Manager:'team', Admin:'calendar'}[role];
+  go(landing);
+}
+
+// ============================================================
+//  shared UI helpers
+// ============================================================
+function band(eyebrow, title, sub, backFn){
+  return '<div class="page-band"><p class="page-band-eyebrow">'+eyebrow+'</p><div class="page-band-header">'+
+    (backFn?'<button class="btn btn-ghost" style="color:#fff;border:1px solid rgba(255,255,255,.4)" onclick="'+backFn+'">&larr; Back</button>':'')+
+    '<h1 class="page-band-title">'+title+'</h1></div>'+(sub?'<p class="page-band-sub">'+sub+'</p>':'')+'</div>';
+}
+function statusChip(s){
+  var m = {'Not yet submitted':'chip-draft','Not submitted':'chip-draft','Submitted':'chip-submitted','Approved':'chip-approved',
+    'Rejected':'chip-rejected','Defaulted':'chip-defaulted','Late submission':'chip-late',
+    'Pending':'chip-submitted','Manager Defaulted':'chip-defaulted','Open':'chip-open','Closed':'chip-closed'};
+  return '<span class="chip '+(m[s]||'chip-draft')+'">'+s+'</span>';
+}
+function hdrItem(l,v){ return '<div class="hdr-item"><span class="form-label">'+l+'</span><span class="form-value">'+v+'</span></div>'; }
+function statCard(l,v){ return '<div class="stat-card"><div class="lbl">'+l+'</div><div class="val">'+v+'</div></div>'; }
+function qList(items){ return '<div class="card"><div class="card-body"><p class="section-title">Open questions for discussion <span class="q-tag">not resolved in BRD</span></p><ul class="q-list">'+items.map(function(q){return '<li>'+q+'</li>';}).join('')+'</ul></div></div>'; }
+// Discussion for every screen is consolidated in the User Journey document — each page shows a pointer instead of an inline question list.
+function discussHere(label){ return '<div class="card" style="border-left:3px solid var(--rw-info);background:#f2f7fb"><div class="card-body" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><span style="font-size:16px">&#128172;</span><span style="font-size:12.5px;color:var(--rw-slate)"><strong style="color:var(--rw-coal)">Open questions &amp; discussion for this screen</strong> are consolidated in the <strong>User Journey &amp; Discussion</strong> document'+(label?' &mdash; see <em>'+label+'</em>':'')+'.</span><a class="btn btn-outline btn-sm" href="'+JOURNEY_URL+'#open" target="_blank" rel="noopener" style="margin-left:auto">Open discussion &#8599;</a></div></div>'; }
+function decList(items){ return '<div class="card"><div class="card-body"><p class="section-title">Decisions <span class="brd-tag">resolved</span></p><ul class="q-list">'+items.map(function(q){return '<li>'+q+'</li>';}).join('')+'</ul></div></div>'; }
+function openModal(html){ document.getElementById('modalInner').innerHTML = html; document.getElementById('modal').classList.add('show'); }
+function closeModal(){ document.getElementById('modal').classList.remove('show'); }
+var toastTimer;
+function toast(msg){ var t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toastTimer); toastTimer=setTimeout(function(){t.classList.remove('show');},2900); }
+
+document.getElementById('modal').addEventListener('click', function(e){ if (e.target===this) closeModal(); });
+
+// ============================================================
+//  EMPLOYEE — Weekly Time Entry  [BRD 4.2]
+// ============================================================
+function myProjects(){ var ps = emp(selfEmp()).alloc.map(function(a){ return a.proj; }); if(ps.indexOf('PRJ-ORG')<0) ps.push('PRJ-ORG'); return ps; } // org non-billable project assigned to all
+function weekEditable(wIdx){
+  if (wIdx > CURRENT_WEEK) return false;               // cannot enter future weeks [BRD]
+  var st = weekApprState(selfEmp(), wIdx);
+  return st==='Not submitted' || st==='Rejected';      // draft, or sent back by a manager → editable & resubmittable
+}
+function renderMyTimesheet(){
+  var e = emp(selfEmp());
+  var ts = ensureTS(e.id, view.week);
+  var abs = absenceForWeek(e.id, view.week);
+  var editable = weekEditable(view.week);
+  var wState = weekApprState(e.id, view.week);
+  var projs = myProjects();
+
+  var h = band('Timesheet · '+e.kind, 'My Timesheet — '+esc(e.name),
+    'Weekly time entry at task (WBS) level. The employee is allocated across <strong>multiple projects</strong>; each line carries its own Project, Task &amp; Shift. Editable in 15-minute blocks. <span class="brd-tag">BRD 4.2</span>');
+  h += '<div class="rw-body">';
+
+  // #2 employee identity switcher — log in as any employee for visualisation
+  h += '<div class="emp-switch"><span>&#128100; <strong>Logged in as</strong></span>'+
+    '<select class="form-select" onchange="switchEmployee(this.value)">'+
+      EMPLOYEES.map(function(x){ return '<option value="'+x.id+'" '+(x.id===e.id?'selected':'')+'>'+esc(x.name)+' · '+x.id+' · '+esc(x.role)+(x.isManager?' (also a manager)':'')+'</option>'; }).join('')+
+    '</select><span style="color:var(--rw-slate)">— switch to visualise any employee\'s timesheet &amp; workflow.</span></div>';
+
+  // month dropdown + Open/Closed (a month is Open until its payroll cut-off passes)
+  var mo = monthObj(view.month), isOpen = mo.open, isFuture = !!mo.future;
+  var augApproved = isFuture && e.alloc.some(function(a){ return (AUG_APPROVE[e.id+'|'+a.proj]||{}).approved; });
+  var statusBadge = isOpen ? '<span class="chip chip-open">Open — before payroll cut-off</span>'
+    : isFuture ? (augApproved?'<span class="chip chip-approved">Advance-approved</span> <span class="chip chip-open">Advance closure</span>':'<span class="chip chip-submitted">Future — frozen (pre-populated), advance-approvable</span>')
+    : '<span class="chip chip-closed">Closed — payroll cut-off passed</span>';
+  h += '<div class="card"><div class="card-body" style="display:flex;gap:14px;align-items:end;flex-wrap:wrap">'+
+    '<div class="hdr-item"><span class="form-label">Month</span><select class="form-select" style="width:200px" onchange="view.month=this.value;renderMyTimesheet()">'+
+      MONTHS_ALL.map(function(m){ return '<option '+(m.key===view.month?'selected':'')+'>'+m.key+'</option>'; }).join('')+'</select></div>'+
+    '</div></div>';
+
+  // Future month (August) → frozen weekly timesheet: shown with pre-populated default values, read-only
+  if (isFuture){
+    if (typeof view.augWeek!=='number'){ view.augWeek=0; for(var ai=0;ai<AUG_WEEKS.length;ai++){ if(AUG_WEEKS[ai].days.some(function(d){return d.inMonth&&!d.weekend;})){ view.augWeek=ai; break; } } }
+    var aw = AUG_WEEKS[view.augWeek];
+    h += '<div class="warn-banner">&#10052; <strong>Frozen</strong> — the '+view.month+' timesheet is <strong>pre-populated from allocation &amp; standard hours</strong> and shown read-only. Employees cannot edit a future month. A manager may <strong>advance-approve</strong> the month now (Advance closure). <span class="brd-tag">BRD 4.1 / 4.2 · #7</span></div>';
+    // prominent week selector (like July)
+    h += '<div class="card"><div class="card-body" style="display:flex;gap:14px;align-items:end;flex-wrap:wrap">'+
+      '<div class="hdr-item"><span class="form-label">Select Week</span><select class="form-select" style="width:280px" onchange="view.augWeek=+this.value;renderMyTimesheet()">'+
+        AUG_WEEKS.map(function(w,i){ return '<option value="'+i+'" '+(i===view.augWeek?'selected':'')+'>Week '+(i+1)+' · '+w.range+'</option>'; }).join('')+'</select></div>'+
+      '</div></div>';
+    h += '<div class="card"><div class="card-toolbar"><span class="card-title">'+view.month+' &middot; Week '+(view.augWeek+1)+' &middot; '+aw.range+' — frozen</span></div>';
+    h += '<div class="tbl-wrap"><table class="ts-grid"><thead><tr><th>Project</th><th>Task (WBS)</th>'+
+      aw.days.map(function(d){ return '<th class="num" style="'+(d.weekend?'color:#b0aea8':'')+'">'+DOW_SHORT[d.dow]+'<br><span style="font-weight:400">'+d.date+'</span></th>'; }).join('')+
+      '<th class="num">Total</th></tr></thead><tbody>';
+    var augShift=(e.alloc[0]?e.alloc[0].shift:'Regular');
+    h += '<tr class="sys-row"><td colspan="2"><strong>Shift</strong> <span style="font-weight:400;color:var(--rw-slate)">(per day)</span></td>'+
+      aw.days.map(function(d){ return '<td class="num"><span style="font-size:11px;color:'+((!d.weekend&&d.inMonth)?'var(--rw-slate)':'#b0aea8')+'">'+((!d.weekend&&d.inMonth)?augShift:'—')+'</span></td>'; }).join('')+'<td></td></tr>';
+    var dailyTot=[0,0,0,0,0,0,0];
+    e.alloc.forEach(function(a){ var pr=proj(a.proj); a.wbs.forEach(function(w){
+      var perDay=Math.round(e.stdHrs*(a.pct/100)*(w.pct/100)*4)/4, rowTot=0;
+      var cells=aw.days.map(function(d,di){ var v=(!d.weekend&&d.inMonth)?perDay:0; rowTot+=v; dailyTot[di]+=v; return '<td class="num"><span style="color:'+(v?'var(--rw-slate)':'#b0aea8')+'">'+v.toFixed(2)+'</span></td>'; }).join('');
+      h += '<tr><td>'+esc(pr.name)+'</td><td>'+taskName(a.proj,w.code)+'</td>'+cells+'<td class="num"><strong>'+rowTot.toFixed(2)+'</strong></td></tr>';
+    }); });
+    h += '</tbody><tfoot><tr><td colspan="2">Daily total</td>'+dailyTot.map(function(t){return '<td class="num">'+t.toFixed(2)+'</td>';}).join('')+'<td class="num">'+dailyTot.reduce(function(a,b){return a+b;},0).toFixed(2)+'</td></tr></tfoot></table></div>'+
+      '<div style="padding:10px 16px;border-top:1px solid var(--rw-border);font-size:12px;color:var(--rw-slate)">&#128274; Frozen — no Save / Submit. '+(augApproved?'Advance-approved by the manager.':'Awaiting manager advance-approval.')+'</div></div>';
+    h += '</div>';
+    document.getElementById('mainArea').innerHTML = h;
+    return;
+  }
+
+  // Closed month → read-only summary; no time entry
+  if (!isOpen){
+    var st = (MONTH_STATUS[e.id] && MONTH_STATUS[e.id][view.month]) || {status:'Approved'};
+    var heldNow = st.status==='Defaulted' && !st.mgrEdited;
+    var shown = st.mgrEdited ? 'Approved' : st.status;
+    h += '<div class="card"><div class="card-toolbar"><span class="card-title">'+view.month+' — Closed</span><div class="card-toolbar-right">'+statusChip(shown)+(heldNow?' <span class="chip chip-rejected">Salary held</span>':'')+'</div></div>'+
+      '<div class="card-body"><div class="hdr-grid">'+
+        hdrItem('Total Billable (hrs)', monthStd(e).toFixed(2)+(st.status==='Defaulted'?' <span class="cap-src" style="color:var(--rw-warning)">default values</span>':''))+
+        hdrItem('Submission', st.status==='Defaulted'?'Auto-submitted (default) — missed cut-off':'Submitted &amp; approved')+
+        hdrItem('Editable', heldNow?'🔒 Locked — manager only (Salary Stopping)':'No — period closed')+
+      '</div>'+
+      (heldNow?'<div class="warn-banner" style="margin:14px 0 0">This month was <strong>not submitted</strong> by the payroll cut-off, so it was auto-submitted with default values and locked. Only the manager can edit it (via Salary Stopping) to release the held salary.</div>'
+        : '<div class="info-banner" style="margin:14px 0 0">Period is closed — the timesheet is read-only. Corrections after close go through the adjustment / JV path.</div>')+
+      '</div></div>';
+    // #10 retrospective project/WBS change after cut-off for this closed month
+    var adj = ADJUSTMENTS.filter(function(x){ return x.emp===e.id && x.period===view.month; })[0];
+    if (adj){
+      var adjRows = (adj.days||[]).map(function(d){
+        return '<tr><td>'+d.date+'</td>'+
+          '<td>'+esc(proj(adj.oldProj).name)+' · '+adj.oldTask+' '+(adj.applied?flagChip('Reversal'):'<span style="font-size:11px;color:var(--rw-slate)">to cancel</span>')+'</td>'+
+          '<td class="num" style="color:var(--rw-danger)">'+(adj.applied?'-'+d.hrs.toFixed(2):d.hrs.toFixed(2))+'</td>'+
+          '<td>'+esc(proj(adj.newProj).name)+' · '+adj.newTask+' '+(adj.applied?flagChip('Adjustment'):'<span style="font-size:11px;color:var(--rw-slate)">to add</span>')+'</td>'+
+          '<td class="num" style="color:var(--rw-success)">'+(adj.applied?'+'+d.hrs.toFixed(2):d.hrs.toFixed(2))+'</td></tr>';
+      }).join('');
+      h += '<div class="card"><div class="card-toolbar"><span class="card-title">Retrospective Project / WBS change &mdash; after cut-off <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--rw-slate)">(day-wise)</span></span><div class="card-toolbar-right">'+(adj.applied?'<span class="chip chip-approved">Applied → Accrual</span>':'<span class="chip chip-warn">Action needed</span>')+'</div></div><div class="card-body">'+
+        '<p style="font-size:12.5px;color:var(--rw-ink-2);margin:0 0 12px">The project/task changed <strong>after the cut-off</strong>. Each affected day is <strong>cancelled on the old</strong> project/task '+flagChip('Reversal')+' and <strong>re-added on the new</strong> one '+flagChip('Adjustment')+'; accrual reverses (−) and adds (+) per day in the open period.</p>'+
+        '<div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Reversal — old (Project · Task)</th><th class="num">Hours</th><th>Adjustment — new (Project · Task)</th><th class="num">Hours</th></tr></thead><tbody>'+
+          adjRows+
+          '<tr style="font-weight:700;background:#faf9f6"><td>Total</td><td>'+esc(proj(adj.oldProj).name)+' · '+adj.oldTask+'</td><td class="num" style="color:var(--rw-danger)">'+(adj.applied?'-':'')+adjHrs(adj).toFixed(2)+'</td><td>'+esc(proj(adj.newProj).name)+' · '+adj.newTask+'</td><td class="num" style="color:var(--rw-success)">'+(adj.applied?'+':'')+adjHrs(adj).toFixed(2)+'</td></tr>'+
+        '</tbody></table></div>'+
+        (adj.applied
+          ? '<div class="info-banner" style="margin:12px 0 0">Applied day-wise — sent to Accrual Integration as '+(adj.days||[]).length+' day(s): −'+adjHrs(adj)+'h ('+adj.oldProj+') and +'+adjHrs(adj)+'h ('+adj.newProj+') in the open period. '+(adj.approved?'Manager-approved.':'Awaiting manager approval.')+'</div>'
+          : '<div style="margin:12px 0 0;display:flex;gap:8px"><button class="btn btn-primary btn-sm" onclick="applyAdjustment('+ADJUSTMENTS.indexOf(adj)+')">Enter new &amp; cancel old (day-wise)</button></div>')+
+        '</div></div>';
+    }
+    h += '</div>';
+    document.getElementById('mainArea').innerHTML = h;
+    return;
+  }
+
+  // week selector + weekly cut-off + status; allocation is a link → popup (#2)
+  h += '<div class="card"><div class="card-body">'+
+    '<div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap">'+
+    '<div class="hdr-item"><span class="form-label">Select Week</span><select class="form-select" style="width:260px" onchange="view.week=+this.value;renderMyTimesheet()">'+
+      WEEKS.map(function(w){ return '<option value="'+w.idx+'" '+(w.idx===view.week?'selected':'')+'>Week '+(w.idx+1)+' · '+w.range+(w.idx===CURRENT_WEEK?' (current)':'')+(w.idx>CURRENT_WEEK?' (future)':'')+'</option>'; }).join('')+'</select></div>'+
+    '<div class="hdr-item"><span class="form-label">Weekly Cut-off</span><span class="form-value" style="font-weight:700;color:var(--rw-danger)">'+cutoffForWeek(view.week)+'</span></div>'+
+    '<div style="margin-left:auto;display:flex;align-items:center;gap:16px">'+
+      '<a href="#" onclick="showAllocation();return false;" style="font-size:12.5px;font-weight:600;color:var(--rw-info);text-decoration:none">&#128203; My allocation &#8599;</a>'+
+      '<span>'+statusChip(wState)+(ts.lateFlag?' <span class="chip chip-late">Late submission</span>':'')+'</span>'+
+    '</div></div>'+
+  '</div></div>';
+
+  if (view.week > CURRENT_WEEK)
+    h += '<div class="warn-banner">Future week — employees cannot enter hours for future weeks. <span class="brd-tag">BRD 4.2 rule</span></div>';
+  // #5 if this week was rejected (day / week / month), surface the manager's reason & remarks so the employee can act
+  if (wState==='Rejected'){
+    var rejItems = projsInWeek(e.id,view.week).map(function(pid){ var s=wk(e.id,pid,view.week); if(s.status!=='Rejected') return ''; var rd=rejectedDatesList(e.id,pid,view.week);
+      return '<li><strong>'+esc(proj(pid).name)+'</strong> — reason: <strong>'+esc(s.reason||'—')+'</strong>'+(s.remarks?', remarks: <em>'+esc(s.remarks)+'</em>':'')+(rd.length?', dates sent back: <strong>'+rd.join(', ')+'</strong>':'')+' <span style="color:var(--rw-slate)">(by '+esc(approverFor(e.id,pid))+')</span></li>'; }).filter(Boolean).join('');
+    h += '<div class="warn-banner" style="background:#fdecef;border-left-color:var(--rw-danger);color:#7a2018"><strong>&#9888; This week was rejected — action needed.</strong> Correct the entries below and re-submit before the delivery cut-off.<ul style="margin:8px 0 0;padding-left:18px">'+rejItems+'</ul></div>';
+  }
+  // #4 contractor non-billable time
+  if (e.kind==='Contractor' && ts.lines.some(function(l){return l.type==='Non-billable' && l.hrs.some(function(x){return num(x)>0;});}))
+    h += '<div class="warn-banner">&#9888; <strong>Contractor Unbilled hours</strong> — you have logged non-billable time as a contractor. This is allowed but is flagged and needs <strong>exception approval</strong> from the manager before it flows to accrual. '+flagChip('Contractor Unbilled hours')+'</div>';
+
+  // #1/#2/#3 how leave, holidays & client holidays are captured — as tasks
+  h += '<div class="info-banner"><strong>Common non-billable tasks — Onboarding, Training, Travel, Client Holiday</strong> — are available in <strong>every project</strong> and in the <strong>Organization (Non-Billable)</strong> project (assigned to everyone). Billable staff log them inside their own project; non-billable staff log them on the Organization project. The <strong>unbilled reason is the task itself</strong> (project- or day-level). '+
+    '<br><strong>Leave is not selectable</strong> — it flows from HR (Absence). <strong>Client-holiday example:</strong> if the client is closed and you can only bill part of the day, log the un-billable hours against <em>Client Holiday</em> as a <strong>second line on the same day</strong>. <span class="brd-tag">org non-billable project · common tasks</span></div>';
+  // grid — Project + Task per line; hours per day. SHIFT is captured per day (row below); billable TYPE is hidden from the employee (#6, #7)
+  h += '<div class="card"><div class="card-toolbar"><span class="card-title">Week '+(view.week+1)+' · '+WEEKS[view.week].range+'</span>'+
+    '<div class="card-toolbar-right">'+(editable?'<button class="btn btn-outline btn-sm" onclick="addTSLine()">+ Add line</button>':'')+'</div></div>';
+  h += '<div class="tbl-wrap"><table class="ts-grid"><thead><tr><th>Project</th><th>Task (WBS)</th>'+
+    WEEKS[view.week].days.map(function(d){ return '<th class="num" style="'+(d.weekend?'color:#b0aea8':'')+'">'+DOW_SHORT[d.dow]+'<br><span style="font-weight:400">'+d.date+'</span></th>'; }).join('')+
+    '<th class="num">Total</th><th></th></tr></thead><tbody>';
+
+  // #6 day-wise Shift row — one shift per employee per day; read-only, sourced from Oracle HCM / external system (#1)
+  if(!ts.dayShift) ts.dayShift = WEEKS[view.week].days.map(function(d){ return (!d.weekend&&d.inMonth)?(e.alloc[0]?e.alloc[0].shift:'Regular'):''; });
+  h += '<tr class="sys-row"><td colspan="2"><strong>Shift</strong> <span style="font-weight:400;color:var(--rw-slate)">(per day · from HCM, read-only)</span></td>'+
+    WEEKS[view.week].days.map(function(d,di){
+      if (d.weekend || !d.inMonth || abs[di]) return '<td class="num"><span style="color:#b0aea8">—</span></td>';
+      return '<td class="num"><span style="font-size:11.5px;color:var(--rw-slate)">'+esc(ts.dayShift[di]||'—')+'</span></td>';
+    }).join('')+'<td></td><td></td></tr>';
+
+  var dailyTot = [0,0,0,0,0,0,0];
+  ts.lines.forEach(function(ln, li){
+    var rowTot = 0;
+    var cells = ln.hrs.map(function(v, di){
+      rowTot += num(v); dailyTot[di]+=num(v);
+      var dis = (!editable || abs[di]); // #2 Saturday & Sunday are now editable too (default 0)
+      return '<td class="num">'+(dis
+        ? '<span style="color:#b0aea8">'+(abs[di]?'—':num(v).toFixed(2))+'</span>'
+        : '<span class="hr-stepper"><input class="editbox" value="'+num(v)+'" onchange="setTSHrs('+li+','+di+',this.value)"><span class="hr-arr"><button type="button" title="+15 min" onclick="stepHr('+li+','+di+',0.25)">&#9650;</button><button type="button" title="-15 min" onclick="stepHr('+li+','+di+',-0.25)">&#9660;</button></span></span>')+'</td>';
+    }).join('');
+    // Project LOV (employee's allocated projects)
+    var projCell = editable
+      ? '<select class="form-select" style="height:28px;font-size:12px" onchange="setLineProj('+li+',this.value)">'+projs.map(function(pid){var pr=proj(pid);return '<option value="'+pid+'" '+(pid===ln.proj?'selected':'')+'>'+esc(pr.name)+'</option>';}).join('')+'</select>'
+      : esc(proj(ln.proj).name);
+    // Task LOV: project WBS (skipped for the org project) + common non-billable tasks (Leave excluded — HR only)
+    var wbsGrp = proj(ln.proj).tasks.length
+      ? '<optgroup label="Project WBS">'+proj(ln.proj).tasks.map(function(t){return '<option value="'+t.code+'" '+(t.code===ln.task?'selected':'')+'>'+t.code+' · '+esc(t.name)+'</option>';}).join('')+'</optgroup>' : '';
+    var taskCell = editable
+      ? '<select class="form-select" style="height:28px;font-size:12px" onchange="setLineTask('+li+',this.value)">'+
+          wbsGrp+
+          '<optgroup label="Common (non-billable)">'+selectableCommonTasks().map(function(t){return '<option value="'+t.code+'" '+(t.code===ln.task?'selected':'')+'>'+esc(t.name)+'</option>';}).join('')+'</optgroup>'+
+        '</select>'
+      : taskName(ln.proj, ln.task);
+    h += '<tr><td>'+projCell+'</td><td>'+taskCell+'</td>'+
+      cells+'<td class="num"><strong>'+rowTot.toFixed(2)+'</strong></td>'+
+      '<td>'+(editable?'<button class="btn btn-ghost btn-sm" onclick="removeTSLine('+li+')">✕</button>':'')+'</td></tr>';
+  });
+  // system rows: Leave (from absence) and Billing Loss
+  var absDays = absenceForWeek(e.id, view.week);
+  if (Object.keys(absDays).length){
+    h += '<tr class="sys-row"><td colspan="2">Leave / Absence <span class="brd-tag">from Absence</span></td>'+
+      WEEKS[view.week].days.map(function(d,di){ return '<td class="num">'+(absDays[di]?'<span title="'+absDays[di]+'">'+(absDays[di]==='LOP'?'LOP':'8.00')+'</span>':'—')+'</td>'; }).join('')+
+      '<td class="num">—</td><td></td></tr>';
+  }
+  var weekdayCount = WEEKS[view.week].days.filter(function(d){return !d.weekend && d.inMonth;}).length;
+  var stdWeek = e.stdHrs*weekdayCount;
+  var billableEntered = 0; ts.lines.forEach(function(l){ if(l.type==='Billable') l.hrs.forEach(function(v){billableEntered+=num(v);}); });
+  var absHrs = Object.keys(absDays).filter(function(k){return absDays[k]==='Leave';}).length*8;
+  var billingLoss = Math.max(0, stdWeek - billableEntered - absHrs);
+  if (billingLoss>0){
+    h += '<tr class="sys-row"><td colspan="2">Billing Loss <span class="brd-tag">read-only</span></td><td class="num" colspan="7" style="text-align:center;color:var(--rw-slate)">auto-distributed across working days</td>'+
+      '<td class="num">'+billingLoss.toFixed(2)+'</td><td></td></tr>';
+  }
+  h += '</tbody><tfoot>'+
+    '<tr><td colspan="2">Standard / day</td>'+
+      WEEKS[view.week].days.map(function(d){ return '<td class="num">'+((!d.weekend&&d.inMonth)?e.stdHrs.toFixed(2):'<span style="color:#b0aea8">—</span>')+'</td>'; }).join('')+
+      '<td class="num">'+stdWeek.toFixed(2)+'</td><td></td></tr>'+
+    '</tfoot></table></div>';
+
+  h += '<div style="display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--rw-border);align-items:center">';
+  if (editable){
+    h += '<span style="margin-right:auto"></span>'+
+      '<button class="btn btn-outline btn-sm" onclick="saveTS()">Save Draft</button>'+
+      '<button class="btn btn-primary btn-sm" onclick="submitTS()">Submit for Approval</button>';
+  } else if (wState==='Pending'){ h += '<span style="margin-right:auto;font-size:12px;color:var(--rw-slate)">Submitted — locked pending manager approval.</span>';
+  } else if (wState==='Approved'){ h += '<span style="margin-right:auto;font-size:12px;color:var(--rw-slate)">Approved &amp; locked.</span>';
+  } else if (view.week>CURRENT_WEEK){ h += '<span style="margin-right:auto;font-size:12px;color:var(--rw-slate)">Future week — entry disabled.</span>'; }
+  h += '</div></div>';
+
+  // #5 approval workflow per project for this week
+  var wfProjs = projsInWeek(e.id, view.week).filter(function(pid){ return wk(e.id,pid,view.week).history.length; });
+  if (wfProjs.length){
+    h += '<div class="card"><div class="card-toolbar"><span class="card-title">Approval workflow — Week '+(view.week+1)+'</span></div><div class="card-body">';
+    wfProjs.forEach(function(pid){
+      var s = wk(e.id,pid,view.week);
+      var rd = rejectedDatesList(e.id,pid,view.week);
+      var withMsg = s.status==='Pending' ? '<div class="wf-with">This week for <strong>'+esc(proj(pid).name)+'</strong> is <strong>pending with '+esc(approverFor(e.id,pid))+'</strong>.</div>'
+        : s.status==='Rejected' ? '<div class="wf-with rej">Rejected by '+esc(approverFor(e.id,pid))+' — reason: <strong>'+esc(s.reason)+'</strong>'+(s.remarks?'. Remarks: <em>'+esc(s.remarks)+'</em>':'')+(rd.length?'. Dates sent back: <strong>'+rd.join(', ')+'</strong>':'')+'. It is back with you; edit &amp; resubmit before the delivery cut-off.</div>'
+        : s.status==='Approved' ? '<div class="wf-with" style="background:#e2f1ea;border-left-color:var(--rw-success);color:#1f6a4a">Approved by '+esc(approverFor(e.id,pid))+' — closed.</div>' : '';
+      h += '<p class="section-title" style="margin:6px 0">'+esc(proj(pid).name)+' ('+pid+') '+statusChip(s.status)+flagChips(s.flags)+'</p>'+withMsg+wfStrip(s.history);
+      if (s.status==='Rejected') h += '<div style="margin:8px 0 16px"><button class="btn btn-primary btn-sm" onclick="submitTS()">Edit &amp; Resubmit this week</button></div>';
+    });
+    h += '</div></div>';
+  }
+
+  h += '</div>';
+  document.getElementById('mainArea').innerHTML = h;
+}
+function tsKey(){ return selfEmp()+'|'+view.week; }
+function setTSHrs(li,di,v){ TS[tsKey()].lines[li].hrs[di]=Math.min(24,Math.max(0,Math.round(num(v)*4)/4)); renderMyTimesheet(); }
+function stepHr(li,di,delta){ var cur=num(TS[tsKey()].lines[li].hrs[di]); setTSHrs(li,di, cur+delta); }
+function setTSType(li,v){ TS[tsKey()].lines[li].type=v; if(v==='Billable')TS[tsKey()].lines[li].reason=''; renderMyTimesheet(); }
+function setTSReason(li,v){ TS[tsKey()].lines[li].reason=v; }
+function setLineProj(li,v){ var ln=TS[tsKey()].lines[li]; ln.proj=v; var w0=proj(v).tasks[0];
+  if(w0){ ln.task=w0.code; ln.type='Billable'; ln.reason=''; }            // regular project -> first WBS task, billable
+  else { var ct=selectableCommonTasks()[0]; ln.task=ct.code; ln.type='Non-billable'; ln.reason=ct.reason; } // org project -> common non-billable task
+  renderMyTimesheet(); }
+function setLineTask(li,v){ var ln=TS[tsKey()].lines[li]; ln.task=v; var st=specialTask(v);
+  // #1 a special task IS the unbilled reason — set it at the line (project) level; put hours only on the affected day for a day-level reason
+  if(st){ ln.type='Non-billable'; ln.reason=st.reason; } else { ln.type='Billable'; ln.reason=''; }
+  renderMyTimesheet(); }
+function setLineShift(li,v){ TS[tsKey()].lines[li].shift=v; }
+// #6 one shift per employee per day — set it on the day, so two shifts on the same day are impossible by construction
+function setDayShift(di,v){ var t=TS[tsKey()]; if(!t.dayShift)t.dayShift=[]; t.dayShift[di]=v; }
+// #2 allocation shown as a link → popup
+function showAllocation(){
+  var e=emp(selfEmp());
+  var rows=e.alloc.map(function(a){ var pr=proj(a.proj); return '<tr><td>'+esc(pr.name)+' <span class="mono" style="color:var(--rw-slate)">'+a.proj+'</span></td><td>'+esc(pr.client)+'</td><td class="num">'+a.pct+'%</td><td>'+esc(approverFor(e.id,a.proj))+(e.isManager?' <span class="brd-tag">reports-to (not self)</span>':'')+'</td></tr>'; }).join('');
+  openModal('<div class="modal-header"><h4>My allocation — '+esc(e.name)+'</h4><button class="modal-close" onclick="closeModal()">&times;</button></div>'+
+    '<div class="modal-body"><p style="font-size:12.5px;color:var(--rw-slate);margin:0 0 12px">You are allocated <strong>100% across the projects below</strong>; each project-line routes to its own approving manager. <span class="brd-tag">BRD 4.1</span></p>'+
+    '<div class="tbl-wrap"><table><thead><tr><th>Project</th><th>Client</th><th class="num">Alloc %</th><th>Approving Manager</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>'+
+    '<div class="modal-footer"><button class="btn btn-outline" onclick="closeModal()">Close</button></div>');
+}
+function addTSLine(){ var pid=myProjects()[0]; TS[tsKey()].lines.push({proj:pid,task:proj(pid).tasks[0].code,shift:emp(selfEmp()).alloc[0].shift,type:'Billable',reason:'',hrs:[0,0,0,0,0,0,0]}); renderMyTimesheet(); }
+function removeTSLine(li){ TS[tsKey()].lines.splice(li,1); renderMyTimesheet(); }
+function saveTS(){ toast('Draft saved — you can keep editing until the weekly cut-off.'); }
+function submitTS(){
+  var t=TS[tsKey()];
+  var daily=[0,0,0,0,0,0,0], missingReason=false;
+  t.lines.forEach(function(l){ l.hrs.forEach(function(v,di){daily[di]+=num(v);}); if(l.type==='Non-billable'&&!l.reason)missingReason=true; });
+  if (daily.some(function(d){return d>24;})){ toast('Cannot submit: a day exceeds 24 hours.'); return; }
+  if (missingReason){ toast('Cannot submit: unbilled reason is mandatory for non-billable hours.'); return; }
+  t.status = (view.week < CURRENT_WEEK && t.wasRejected) ? 'Late submission' : 'Submitted';
+  if (view.week < CURRENT_WEEK && t.wasRejected) t.lateFlag = true;
+  submitWeekWorkflow(selfEmp(), view.week);
+  toast('Timesheet submitted — each project-line routed to its project manager.');
+  renderMyTimesheet();
+}
+function switchEmployee(id){ SELF.Employee=id; setRole('Employee', document.querySelectorAll('.rw-role-btn')[0]); }
+function switchManager(id){
+  SELF.Manager=id; view.mgrProject=null; view.mgrEmp=null;
+  var e=emp(id);
+  document.getElementById('userName').textContent=e.name;
+  document.getElementById('userAvatar').textContent=e.name.split(' ').map(function(w){return w[0];}).join('').slice(0,2);
+  go('team');
+}
+
+// ============================================================
+//  MANAGER — landing → View Timesheet → Day-wise  [BRD 4.2 Manager confirmation]
+// ============================================================
+function mgrProjects(){ return PROJECTS.filter(function(p){ return p.managerId===SELF.Manager; }); }
+function empsOnProject(pid){ return EMPLOYEES.filter(function(e){ return e.alloc.some(function(a){return a.proj===pid;}) && !e.isManager; }); }
+function empMonthTotals(e, pid){
+  var bill=0, nonbill=0, leave=0;
+  WEEKS.forEach(function(w){ var t=ensureTS(e.id,w.idx);   // full month (all weeks overlapping July)
+    t.lines.forEach(function(l){ if(l.proj!==pid) return; l.hrs.forEach(function(v,di){ if(!w.days[di].inMonth)return; if(l.type==='Billable')bill+=num(v); else nonbill+=num(v); }); });
+  });
+  ABSENCE.forEach(function(a){ if(a.emp===e.id && a.type==='Leave') leave+=8; });
+  return {bill:bill, nonbill:nonbill, leave:leave, total:bill+nonbill+leave};
+}
+function capFor(e, pid){ var p=proj(pid); return p.model.indexOf('Capacity')>=0 ? {type:'Monthly Hours', hrs:160} : {type:'', hrs:''}; }
+// all weeks overlapping the month that have lines for this project (manager reviews the whole month)
+function empWeeksForProj(e, pid){ var out=[]; for(var w=0;w<WEEKS.length;w++){ if(projsInWeek(e.id,w).indexOf(pid)>=0) out.push(w); } return out; }
+function weekHours(e, pid, w){ var t=ensureTS(e.id,w),b=0,n=0; t.lines.forEach(function(l){ if(l.proj!==pid)return; l.hrs.forEach(function(v,di){ if(!WEEKS[w].days[di].inMonth)return; if(l.type==='Billable')b+=num(v); else n+=num(v); }); }); return {bill:b,nonbill:n}; }
+function monthStatus(e, pid){ // derive from weekly workflow
+  var wks=empWeeksForProj(e,pid), sub=wks.map(function(w){return wk(e.id,pid,w).status;});
+  if (sub.some(function(s){return s==='Rejected';})) return 'Rejected';
+  var submitted=sub.filter(function(s){return s!=='Not submitted';});
+  if (submitted.length && submitted.every(function(s){return s==='Approved';})) return 'Approved';
+  if (submitted.length) return 'Pending';
+  return 'Not submitted';
+}
+
+function renderTeam(){
+  if (!view.mgrProject){ renderTeamLanding(); return; }
+  if (!view.mgrEmp){ renderViewTimesheet(); return; }
+  renderDayWise();
+}
+function allCutoffsPanel(){
+  var rows=[
+    ['Delivery cut-off (manager approve)', PERIODS[1].delivery, 'manager must approve by'],
+    ['Payroll cut-off · India', PAYROLL[0].cutoff, 'salary stopping'],
+    ['Payroll cut-off · US', PAYROLL[1].start+' – '+PAYROLL[1].end, 'fortnightly']
+  ];
+  return '<div class="card"><div class="card-toolbar"><span class="card-title">Cut-off dates (July 2026) <span class="brd-tag">#8 · cut-off configuration (Admin)</span></span></div>'+
+    '<div class="tbl-wrap"><table><thead><tr><th>Cut-off</th><th>Date / Time</th><th>Effect</th></tr></thead><tbody>'+
+    rows.map(function(r){return '<tr><td>'+r[0]+'</td><td><strong>'+r[1]+'</strong></td><td style="color:var(--rw-slate)">'+r[2]+'</td></tr>';}).join('')+
+    '</tbody></table></div></div>';
+}
+// #4 advance-approve the August (future) month now, before the delivery cut-off → Advance closure
+function advApproveAug(eid,pid){ AUG_APPROVE[eid+'|'+pid]={approved:true}; toast('August advance-approved for '+emp(eid).name+' — tagged Advance closure.'); renderTeam(); }
+function toggleAllAug(cb){ document.querySelectorAll('.augChk').forEach(function(c){ c.checked=cb.checked; }); }
+function approveSelectedAug(){
+  var n=0; document.querySelectorAll('.augChk').forEach(function(c){ if(c.checked){ var k=c.dataset.key.split('|'); AUG_APPROVE[c.dataset.key]={approved:true}; n++; } });
+  toast(n?(n+' employee-month(s) advance-approved for August — tagged Advance closure.'):'Tick at least one employee.'); renderTeam();
+}
+function advanceAugustPanel(){
+  var rows='', anyPending=false;
+  mgrProjects().forEach(function(p){ empsOnProject(p.id).forEach(function(e){
+    var ap=(AUG_APPROVE[e.id+'|'+p.id]||{}).approved; if(!ap) anyPending=true;
+    rows += '<tr><td>'+(ap?'<span style="color:#b0aea8" title="already approved">&mdash;</span>':'<input type="checkbox" class="chk augChk" data-key="'+e.id+'|'+p.id+'">')+'</td>'+
+      '<td>'+esc(e.name)+' <span class="mono" style="color:var(--rw-slate)">'+e.id+'</span></td><td>'+esc(p.name)+'</td><td>August 2026</td>'+
+      '<td>'+(ap?'<span class="chip chip-approved">Advance-approved</span> '+flagChip('Advance closure'):'<span class="chip chip-submitted">Frozen — default values</span>')+'</td>'+
+      '<td>'+(ap?'<span style="font-size:11.5px;color:var(--rw-slate)">Done</span>':'<button class="btn btn-outline btn-sm" onclick="advApproveAug(\''+e.id+'\',\''+p.id+'\')">Approve</button>')+'</td></tr>';
+  }); });
+  return '<div class="card"><div class="card-toolbar"><span class="card-title">Advance approval — August 2026 (future month, before delivery cut-off)</span>'+
+    '<div class="card-toolbar-right"><span class="brd-tag">#4 · Advance closure</span> <button class="btn btn-primary btn-sm" onclick="approveSelectedAug()"'+(anyPending?'':' disabled')+'>Approve selected (Advance closure)</button></div></div>'+
+    '<div class="tbl-wrap"><table><thead><tr><th><input type="checkbox" class="chk" onclick="toggleAllAug(this)"></th><th>Employee</th><th>Project</th><th>Month</th><th>Status</th><th>Action</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
+    '<div style="padding:10px 16px;border-top:1px solid var(--rw-border);font-size:12px;color:var(--rw-slate)">Tick the header box to <strong>select all</strong>, then <strong>Approve selected</strong> — or approve a single row. Approving closes August early &mdash; tagged '+flagChip('Advance closure')+'.</div></div>';
+}
+function renderTeamLanding(){
+  var mgrs = EMPLOYEES.filter(function(x){ return x.isManager; });
+  var h = band('Timesheet · Manager', 'Team Approvals',
+    'Projects you manage. Employees submit <strong>weekly</strong>; you can approve week-by-week or roll up the month, before the <strong>Delivery cut-off</strong>. <span class="brd-tag">BRD 4.2</span>');
+  h += '<div class="rw-body">';
+  // manager identity switcher — move between managers to review their own teams
+  h += '<div class="emp-switch"><span>&#128100; <strong>Logged in as manager</strong></span>'+
+    '<select class="form-select" onchange="switchManager(this.value)">'+
+      mgrs.map(function(m){ var pj=PROJECTS.filter(function(p){return p.managerId===m.id;}).map(function(p){return p.id;}).join(', '); return '<option value="'+m.id+'" '+(m.id===SELF.Manager?'selected':'')+'>'+esc(m.name)+' · '+m.id+' · manages '+(pj||'—')+'</option>'; }).join('')+
+    '</select><span style="color:var(--rw-slate)">— switch managers to review each one\'s team (e.g. a split employee\'s other project).</span></div>';
+  if (!view.mgrMonth) view.mgrMonth='July 2026';
+  h += '<div class="card"><div class="card-body" style="display:flex;gap:10px;align-items:end;flex-wrap:wrap">'+
+    '<div class="hdr-item"><span class="form-label">Month / Year</span><select class="form-select" onchange="view.mgrMonth=this.value;renderTeam()">'+
+      MONTHS_ALL.slice().reverse().map(function(m){ return '<option '+(m.key===view.mgrMonth?'selected':'')+'>'+m.key+'</option>'; }).join('')+'</select></div>'+
+    '<div class="hdr-item"><span class="form-label">Project</span><select class="form-select"><option>All projects</option>'+mgrProjects().map(function(p){return '<option>'+esc(p.name)+'</option>';}).join('')+'</select></div></div></div>';
+
+  // #3/#4 August selected → show the advance-approval interface here (not as a separate always-on table)
+  if (view.mgrMonth==='August 2026'){
+    h += '<div class="info-banner">August is a <strong>future month</strong>, pre-populated with default values and frozen. Before the delivery cut-off you may <strong>advance-approve</strong> it now — this closes it early and is tagged '+flagChip('Advance closure')+' at the <strong>month level</strong>. <span class="brd-tag">#4</span></div>';
+    h += advanceAugustPanel();
+    h += '</div>'; document.getElementById('mainArea').innerHTML = h; return;
+  }
+
+  h += '<div class="card"><div class="tbl-wrap"><table><thead><tr><th>Month/Year</th><th>Project</th><th>Number</th><th>TS Start</th><th>TS End</th><th>Status</th><th>Approved On</th><th>Details</th></tr></thead><tbody>';
+  mgrProjects().forEach(function(p){
+    var emps = empsOnProject(p.id);
+    var sts = emps.map(function(e){return monthStatus(e,p.id);});
+    var st = emps.length && sts.every(function(s){return s==='Approved';}) ? 'Approved' : sts.indexOf('Rejected')>=0 ? 'Rejected' : 'Pending';
+    h += '<tr><td>'+view.mgrMonth+'</td><td>'+esc(p.name)+'</td><td>'+p.id+'</td><td>01-Jul-2026</td><td>31-Jul-2026</td><td>'+statusChip(st)+'</td>'+
+      '<td>'+(st==='Approved'?'24-Jul-2026':'—')+'</td><td><button class="btn btn-outline btn-sm" onclick="view.mgrProject=\''+p.id+'\';renderTeam()">View Timesheet</button></td></tr>';
+  });
+  h += '</tbody></table></div></div>';
+  h += mgrAdjustmentsPanel(); // #10 retro adjustment approvals
+  h += allCutoffsPanel(); // #8
+  h += '</div>';
+  document.getElementById('mainArea').innerHTML = h;
+}
+// ---- View Timesheet: MONTHLY SUMMARY per employee + multi-select approve/reject ----
+function renderViewTimesheet(){
+  var p = proj(view.mgrProject), emps = empsOnProject(p.id);
+  var h = band('Timesheet · Manager', 'View Timesheet — '+esc(p.name),
+    'Monthly summary per employee. Tick one or more employees and <strong>Approve</strong> or <strong>Reject</strong> together, or open an employee for weekly / daily detail. <span class="brd-tag">BRD 4.2</span>',
+    'view.mgrProject=null;renderTeam()');
+  h += '<div class="rw-body">';
+  h += '<div class="card"><div class="card-toolbar"><span class="card-title">Employees — July 2026 (monthly summary)</span>'+
+    '<div class="card-toolbar-right"><button class="btn btn-outline btn-sm" onclick="rejectMonthSelected(\''+p.id+'\')">Reject selected</button>'+
+    '<button class="btn btn-primary btn-sm" onclick="approveMonthSelected(\''+p.id+'\')">Approve selected</button></div></div>';
+  h += '<div class="tbl-wrap"><table><thead><tr><th><input type="checkbox" class="chk" onclick="toggleAllEmp(this)"></th><th>Emp ID</th><th>Name</th><th>Billing</th>'+
+    '<th class="num">Billable</th><th class="num">Non-billable</th><th class="num">Leave</th><th class="num">Total</th><th>Cap</th><th>Month Status</th><th></th></tr></thead><tbody>';
+  emps.forEach(function(e){
+    var t=empMonthTotals(e,p.id), cap=capFor(e,p.id), mSt=monthStatus(e,p.id);
+    var pending = empWeeksForProj(e,p.id).some(function(w){ return wk(e.id,p.id,w).status==='Pending'; });
+    h += '<tr><td>'+(pending?'<input type="checkbox" class="chk empChk" data-emp="'+e.id+'">':'<span style="color:#b0aea8" title="nothing pending to action">&mdash;</span>')+'</td>'+
+      '<td>'+e.id+'</td><td>'+esc(e.name)+(e.kind==='Contractor'?' <span class="chip chip-warn">Contractor</span>':'')+'</td><td>'+e.billing+'</td>'+
+      '<td class="num">'+t.bill.toFixed(2)+'</td><td class="num">'+t.nonbill.toFixed(2)+'</td><td class="num">'+t.leave.toFixed(2)+'</td><td class="num"><strong>'+t.total.toFixed(2)+'</strong></td>'+
+      '<td>'+(cap.type?cap.type+' '+cap.hrs+'h':'—')+'</td><td>'+statusChip(mSt)+'</td>'+
+      '<td><button class="btn btn-ghost btn-sm" onclick="view.mgrEmp=\''+e.id+'\';view.dayMode=\'weekly\';view.focusWeek=null;renderTeam()">Open detail</button></td></tr>';
+  });
+  h += '</tbody></table></div></div>';
+  // #3 monthly → accrual is a SINGLE, all-employees-at-once action (no per-employee "sent to accrual")
+  var ready=projMonthReady(p.id), done=projMonthConfirmed(p.id);
+  h += '<div class="card"><div class="card-body" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">'+
+    '<div style="max-width:64ch"><strong style="font-size:13px">Monthly &rarr; Accrual — all employees at once</strong>'+
+      '<div style="font-size:12px;color:var(--rw-slate);margin-top:2px">Accrual is confirmed for the <strong>whole project month</strong>; individual employees are <strong>not</strong> sent separately. Every employee must be <strong>Approved</strong> first.</div></div>'+
+    '<span style="margin-left:auto">'+(done
+      ? '<span class="chip chip-approved">&#10003; Month confirmed &rarr; sent to Accrual</span>'
+      : ready
+        ? '<button class="btn btn-primary" onclick="confirmProjectMonth(\''+p.id+'\')">Confirm month &rarr; Accrual</button>'
+        : '<span class="chip chip-rejected">Approve every employee first</span>')+'</span>'+
+    '</div></div>';
+  h += '<div class="info-banner">Weekly approval is separate from the <strong>monthly confirmation</strong>. Cap hours are info-only. <span class="brd-tag">#3 · BRD 4.2</span></div>';
+  h += '</div>';
+  document.getElementById('mainArea').innerHTML = h;
+}
+function toggleAllEmp(cb){ document.querySelectorAll('.empChk').forEach(function(c){ c.checked=cb.checked; }); }
+function selectedEmps(){ var s=[]; document.querySelectorAll('.empChk').forEach(function(c){ if(c.checked) s.push(c.dataset.emp); }); return s; }
+function approveMonthSelected(pid){
+  var sel=selectedEmps(); if(!sel.length){ toast('Select at least one employee with pending time.'); return; }
+  var n=0; sel.forEach(function(eid){ empWeeksForProj(emp(eid),pid).forEach(function(w){ if(wk(eid,pid,w).status==='Pending'){ approveWeekWF(eid,pid,w); n++; } }); });
+  toast(n+' pending week(s) approved across '+sel.length+' employee(s).'); renderTeam();
+}
+var _rejSel=[];
+function rejectMonthSelected(pid){
+  _rejSel=selectedEmps(); if(!_rejSel.length){ toast('Select at least one employee.'); return; }
+  openModal('<div class="modal-header"><h4>Reject '+_rejSel.length+' employee(s) — monthly</h4><button class="modal-close" onclick="closeModal()">&times;</button></div>'+
+    '<div class="modal-body"><p class="section-title">Rejection reason (mandatory) <span class="brd-tag">BRD LOV</span></p>'+
+    '<select class="form-select" id="rjReason" style="width:100%;margin-bottom:12px">'+REJECT_REASONS.map(function(r){return '<option>'+r+'</option>';}).join('')+'</select>'+
+    '<p class="section-title">Remarks</p><textarea id="rjRemarks" class="form-input" style="width:100%;height:64px;padding:8px" placeholder="Applies to all pending weeks of the selected employees"></textarea></div>'+
+    '<div class="modal-footer"><button class="btn btn-outline" onclick="closeModal()">Cancel</button>'+
+    '<button class="btn btn-danger" onclick="doRejectMonthSelected(\''+pid+'\')">Reject selected</button></div>');
+}
+function rjRemarksVal(){ var el=document.getElementById('rjRemarks'); return el?el.value:''; }
+function doRejectMonthSelected(pid){
+  var reason=document.getElementById('rjReason').value, rm=rjRemarksVal(), n=0;
+  _rejSel.forEach(function(eid){ empWeeksForProj(emp(eid),pid).forEach(function(w){ if(wk(eid,pid,w).status==='Pending'){ rejectWeekWF(eid,pid,w,reason,rm); n++; } }); });
+  closeModal(); toast(n+' week(s) rejected — back with the respective employees.'); renderTeam();
+}
+
+// ---- Day-wise: WEEKLY | DAILY toggle for approval / rejection ----
+function renderDayWise(){
+  var p=proj(view.mgrProject), e=emp(view.mgrEmp), a=ensureAppr(e.id,p.id), mSt=monthStatus(e,p.id);
+  if (!view.dayMode) view.dayMode='weekly';
+  var h = band('Timesheet · Manager', 'Approval detail — '+esc(e.name),
+    'Approve or reject at <strong>weekly</strong> or <strong>daily</strong> granularity. When every working day of a week is approved, the week closes. <span class="brd-tag">BRD 4.2</span>',
+    'view.mgrEmp=null;renderTeam()');
+  h += '<div class="rw-body">';
+  h += '<div class="stat-row">'+statCard('Month status', mSt)+statCard('Billing', e.billing)+statCard('Base Location', esc(e.city+', '+e.country))+'</div>';
+
+  // #6 workflow per week — who the task is currently with. Built here, but rendered at the END of the screen (#4).
+  var subWks = empWeeksForProj(e,p.id).filter(function(w){ return wk(e.id,p.id,w).history.length; });
+  var wfCard='';
+  if (subWks.length){
+    wfCard += '<div class="card"><div class="card-toolbar"><span class="card-title">Approval workflow &amp; whereabouts</span></div><div class="card-body">';
+    subWks.forEach(function(w){ var s=wk(e.id,p.id,w);
+      var with_ = s.status==='Pending' ? '<div class="wf-with">Week '+(w+1)+' is <strong>with you ('+esc(approverFor(e.id,p.id))+')</strong> for approval.</div>'
+        : s.status==='Rejected' ? '<div class="wf-with rej">Week '+(w+1)+' rejected — now <strong>back with '+esc(e.name)+'</strong> (reason: <strong>'+esc(s.reason)+'</strong>'+(s.remarks?'; remarks: '+esc(s.remarks):'')+').</div>'
+        : '<div class="wf-with" style="background:#e2f1ea;border-left-color:var(--rw-success);color:#1f6a4a">Week '+(w+1)+' approved — closed.</div>';
+      wfCard += with_ + (s.flags&&s.flags.length?'<div style="margin:0 0 6px">Flags: '+flagChips(s.flags)+'</div>':'') + wfStrip(s.history);
+    });
+    wfCard += '</div></div>';
+  }
+
+  // toggle
+  h += '<div class="tab-row"><button class="tab'+(view.dayMode==='weekly'?' active':'')+'" onclick="view.dayMode=\'weekly\';renderTeam()">Weekly</button>'+
+    '<button class="tab'+(view.dayMode==='daily'?' active':'')+'" onclick="view.dayMode=\'daily\';view.focusWeek=null;renderTeam()">Daily</button></div>';
+
+  if (view.dayMode==='weekly'){
+    h += '<div class="card"><div class="card-toolbar"><span class="card-title">Weekly approval</span><div class="card-toolbar-right">'+
+      '<button class="btn btn-outline btn-sm" onclick="rejectSelectedWeeks(\''+e.id+'\',\''+p.id+'\')">Reject selected</button>'+
+      '<button class="btn btn-primary btn-sm" onclick="approveSelectedWeeks(\''+e.id+'\',\''+p.id+'\')">Approve selected</button></div></div>'+
+      '<div class="tbl-wrap"><table><thead><tr><th><input type="checkbox" class="chk" onclick="toggleAllWeeks(this)"></th><th>Week</th><th>Range</th><th class="num">Billable</th><th class="num">Non-billable</th><th>Status</th><th>Action</th></tr></thead><tbody>';
+    empWeeksForProj(e,p.id).forEach(function(w){
+      var s=wk(e.id,p.id,w), hh=weekHours(e,p.id,w);
+      var chkCell = s.status==='Pending' ? '<input type="checkbox" class="chk weekChk" data-w="'+w+'">' : '<span style="color:#b0aea8" title="nothing to action">&mdash;</span>';
+      var act = (s.status==='Pending'
+        ? '<button class="btn btn-outline btn-sm" onclick="openRejectWeek(\''+e.id+'\',\''+p.id+'\','+w+')">Reject</button><button class="btn btn-outline btn-sm" onclick="openOverride(\''+e.id+'\',\''+p.id+'\','+w+')">Override</button><button class="btn btn-primary btn-sm" onclick="approveWeekMgr(\''+e.id+'\',\''+p.id+'\','+w+')">Approve</button>'
+        : '')+'<button class="btn btn-ghost btn-sm" onclick="openWeekDetails('+w+')">Open details &rarr;</button>';
+      h += '<tr><td>'+chkCell+'</td><td>Week '+(w+1)+'</td><td>'+WEEKS[w].range+'</td><td class="num">'+hh.bill.toFixed(2)+'</td><td class="num">'+hh.nonbill.toFixed(2)+'</td><td>'+statusChip(s.status)+'</td><td><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">'+act+'</div></td></tr>';
+    });
+    h += '</tbody></table></div>'+
+      '<div style="padding:10px 16px;border-top:1px solid var(--rw-border);display:flex;align-items:center"><span style="margin-right:auto;font-size:12px;color:var(--rw-slate)">Tick weeks and Approve/Reject selected, act per-week, or approve all at once.</span><button class="btn btn-ghost btn-sm" onclick="approveMonthMgr(\''+e.id+'\',\''+p.id+'\')">Approve all pending weeks</button></div></div>';
+  } else {
+    var focus = (typeof view.focusWeek==='number') ? view.focusWeek : null;
+    h += '<div class="card"><div class="card-toolbar"><span class="card-title">Daily approval <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--rw-slate)">— billable / non-billable per task line'+(focus!==null?' · Week '+(focus+1)+' only':'')+'</span></span><div class="card-toolbar-right">'+
+      (focus!==null?'<button class="btn btn-ghost btn-sm" onclick="view.focusWeek=null;renderTeam()">Show all weeks</button>':'')+
+      '<button class="btn btn-outline btn-sm" onclick="toast(\'Exported to Excel (mock).\')">&#8681; Download</button>'+
+      '<button class="btn btn-outline btn-sm" onclick="toast(\'Upload edited Excel (mock).\')">&#8679; Upload</button>'+
+      '<button class="btn btn-outline btn-sm" onclick="rejectSelectedDates(\''+e.id+'\',\''+p.id+'\')">Reject selected dates</button>'+
+      '<button class="btn btn-primary btn-sm" onclick="approveSelectedDates(\''+e.id+'\',\''+p.id+'\')">Approve selected dates</button></div></div>';
+    h += '<div class="tbl-wrap"><table><thead><tr><th><input type="checkbox" class="chk" onclick="toggleAllDates(this)"></th><th>Date</th><th>Day</th><th>Task (line)</th><th>Type</th><th class="num">Billable</th><th class="num">Non-billable</th><th class="num">Leave</th><th>Unbilled Reason</th><th>Status</th></tr></thead><tbody>';
+    WEEKS.forEach(function(w){ if(focus!==null && w.idx!==focus) return; var t=ensureTS(e.id,w.idx); var absW=absenceForWeek(e.id,w.idx); var s=wk(e.id,p.id,w.idx).status;
+      var projLines = t.lines.filter(function(l){ return l.proj===p.id; });
+      if (!projLines.length) return;
+      w.days.forEach(function(d,di){ if(!d.inMonth||d.weekend) return;
+        var dk='w'+w.idx+'d'+di, appd=a.dayApproved[dk], rejd=a.dayRejected[dk];
+        var leave = absW[di]==='Leave'?8:0;
+        // rows for this day: one per task line (line-wise billable/non-billable), plus a leave row if on leave
+        var dayLines = projLines.slice();
+        // build the status cell + date/day cells shown only on first row of the day
+        var stCell = appd ? '<span class="chip chip-approved">Approved</span>'
+          : rejd ? '<span class="chip chip-rejected" title="'+esc(rejd)+'">Rejected</span>'
+          : s==='Pending' ? '<span class="chip chip-submitted">Pending</span>'
+          : s==='Rejected' ? '<span class="chip chip-rejected">Rejected</span>'
+          : s==='Approved' ? '<span class="chip chip-approved">Approved</span>'
+          : '<span class="chip chip-draft">Not submitted</span>';
+        var chkCell = (!appd && !rejd && (s==='Pending'||s==='Rejected')) ? '<input type="checkbox" class="chk dateChk" data-key="'+dk+'">' : (appd?'<span title="approved">&#10003;</span>':'<span style="color:#b0aea8">&mdash;</span>');
+        var lineRows = [];
+        if (leave){ lineRows.push({task:'—', type:'Leave', bill:0, nonbill:0, reason:absW[di]}); }
+        dayLines.forEach(function(l){ lineRows.push({task:l.task, type:l.type, bill:l.type==='Billable'?num(l.hrs[di]):0, nonbill:l.type==='Billable'?0:num(l.hrs[di]), reason:l.type==='Non-billable'?(l.reason||'—'):'—'}); });
+        if (!lineRows.length) lineRows.push({task:'—',type:'—',bill:0,nonbill:0,reason:'—'});
+        lineRows.forEach(function(lr, ri){
+          h += '<tr>'+
+            (ri===0 ? '<td rowspan="'+lineRows.length+'">'+chkCell+'</td><td rowspan="'+lineRows.length+'">'+d.date+'</td><td rowspan="'+lineRows.length+'">'+DOW[d.dow]+'</td>' : '')+
+            '<td>'+(lr.task==='—'?'—':taskName(p.id,lr.task))+'</td><td>'+lr.type+'</td>'+
+            '<td class="num">'+lr.bill.toFixed(2)+'</td><td class="num">'+lr.nonbill.toFixed(2)+'</td>'+
+            (ri===0 ? '<td class="num" rowspan="'+lineRows.length+'">'+leave.toFixed(2)+'</td>' : '')+
+            '<td>'+lr.reason+'</td>'+
+            (ri===0 ? '<td rowspan="'+lineRows.length+'">'+stCell+'</td>' : '')+'</tr>';
+        });
+      });
+    });
+    h += '</tbody></table></div>'+
+      '<div style="display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--rw-border);align-items:center">'+
+      '<span style="margin-right:auto;font-size:12px;color:var(--rw-slate)">'+(e.kind==='Contractor'?'&#9888; Contractor with unbilled hours — exception approval applies. ':'')+'Tick dates (checkbox appears for submitted/pending days) and "Approve selected dates", or reject a week.</span>'+
+      '<button class="btn btn-outline btn-sm" onclick="rejectWeekPicker(\''+e.id+'\',\''+p.id+'\')">Reject a week</button></div></div>';
+  }
+  h += wfCard;   // #4 approval workflow shown at the END of the approval screen
+  h += '</div>';
+  document.getElementById('mainArea').innerHTML = h;
+}
+function toggleAllWeeks(cb){ document.querySelectorAll('.weekChk').forEach(function(c){ c.checked=cb.checked; }); }
+function selectedWeeks(){ var s=[]; document.querySelectorAll('.weekChk').forEach(function(c){ if(c.checked) s.push(+c.dataset.w); }); return s; }
+function approveSelectedWeeks(eid,pid){ var ws=selectedWeeks(); if(!ws.length){ toast('Tick at least one pending week.'); return; } ws.forEach(function(w){ approveWeekWF(eid,pid,w); }); toast(ws.length+' week(s) approved.'); renderTeam(); }
+function rejectSelectedWeeks(eid,pid){
+  var ws=selectedWeeks(); if(!ws.length){ toast('Tick at least one pending week.'); return; }
+  _rejWeeks={eid:eid,pid:pid,ws:ws};
+  openModal('<div class="modal-header"><h4>Reject '+ws.length+' week(s) — '+esc(emp(eid).name)+'</h4><button class="modal-close" onclick="closeModal()">&times;</button></div>'+
+    '<div class="modal-body"><p class="section-title">Rejection reason (mandatory) <span class="brd-tag">BRD LOV</span></p>'+
+    '<select class="form-select" id="rjReason" style="width:100%;margin-bottom:12px">'+REJECT_REASONS.map(function(r){return '<option>'+r+'</option>';}).join('')+'</select>'+
+    '<p class="section-title">Remarks</p><textarea id="rjRemarks" class="form-input" style="width:100%;height:64px;padding:8px" placeholder="Applies to all selected weeks"></textarea></div>'+
+    '<div class="modal-footer"><button class="btn btn-outline" onclick="closeModal()">Cancel</button>'+
+    '<button class="btn btn-danger" onclick="doRejectSelectedWeeks()">Reject selected</button></div>');
+}
+var _rejWeeks=null;
+function doRejectSelectedWeeks(){ var r=document.getElementById('rjReason').value, rm=rjRemarksVal(); _rejWeeks.ws.forEach(function(w){ rejectWeekWF(_rejWeeks.eid,_rejWeeks.pid,w,r,rm); }); closeModal(); toast('Selected week(s) rejected — back with '+emp(_rejWeeks.eid).name+'.'); renderTeam(); }
+function approveWeekMgr(eid,pid,w){ approveWeekWF(eid,pid,w); toast('Week '+(w+1)+' approved for '+emp(eid).name+'.'); renderTeam(); }
+// #1 manager OVERRIDE & approve — correct the hours, keep the original in the audit trail, tag 'Overridden & approved'
+var _ovCtx=null;
+function openOverride(eid,pid,w){
+  _ovCtx={eid:eid,pid:pid,w:w};
+  var t=ensureTS(eid,w), days=WEEKS[w].days;
+  var lines=[]; t.lines.forEach(function(l,li){ if(l.proj===pid) lines.push({l:l,li:li}); });
+  var head='<tr><th>Task</th>'+days.map(function(d){ return '<th class="num" style="'+(d.weekend?'color:#b0aea8':'')+'">'+DOW_SHORT[d.dow]+'</th>'; }).join('')+'</tr>';
+  var body=lines.map(function(x){ return '<tr><td>'+taskName(pid,x.l.task)+'</td>'+days.map(function(d,di){ return '<td class="num"><input class="editbox" style="width:46px" id="ov_'+x.li+'_'+di+'" value="'+num(x.l.hrs[di])+'"></td>'; }).join('')+'</tr>'; }).join('');
+  openModal('<div class="modal-header"><h4>Override &amp; approve — Week '+(w+1)+' · '+esc(emp(eid).name)+'</h4><button class="modal-close" onclick="closeModal()">&times;</button></div>'+
+    '<div class="modal-body"><p style="font-size:12.5px;color:var(--rw-slate);margin:0 0 10px">Correct the hours where needed, then approve. The <strong>original values are kept in the audit trail</strong> and the week is tagged '+flagChip('Overridden & approved')+'. <span class="brd-tag">#1 · manager correction</span></p>'+
+    '<div class="tbl-wrap"><table class="ts-grid"><thead>'+head+'</thead><tbody>'+body+'</tbody></table></div>'+
+    '<p class="section-title" style="margin-top:12px">Reason for the correction</p><textarea id="ovNote" class="form-input" style="width:100%;height:56px;padding:8px" placeholder="e.g. corrected Tuesday from 4h to 8h per client sign-off"></textarea></div>'+
+    '<div class="modal-footer"><button class="btn btn-outline" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="doOverrideApprove()">Save correction &amp; approve</button></div>');
+}
+function doOverrideApprove(){
+  var c=_ovCtx, t=ensureTS(c.eid,c.w), changes=[];
+  t.lines.forEach(function(l,li){ if(l.proj!==c.pid) return; l.hrs.forEach(function(v,di){ var el=document.getElementById('ov_'+li+'_'+di); if(!el) return; var nv=Math.min(24,Math.max(0,Math.round(num(el.value)*4)/4)); if(nv!==num(v)) changes.push(DOW_SHORT[WEEKS[c.w].days[di].dow]+' '+num(v)+'→'+nv); l.hrs[di]=nv; }); });
+  var note=(document.getElementById('ovNote')||{}).value||'';
+  var s=wk(c.eid,c.pid,c.w); addFlag(s,'Overridden & approved'); s.status='Approved';
+  var a=ensureAppr(c.eid,c.pid); WEEKS[c.w].days.forEach(function(d,di){ if(!d.weekend&&d.inMonth) a.dayApproved['w'+c.w+'d'+di]=true; });
+  s.history.push({by:approverFor(c.eid,c.pid), act:'Overridden &amp; approved'+(changes.length?' ('+changes.join(', ')+')':'')+(note?' — '+note:''), to:'Closed'});
+  closeModal(); toast('Week '+(c.w+1)+' corrected &amp; approved for '+emp(c.eid).name+' — tagged Overridden & approved.'); renderTeam();
+}
+function approveMonthMgr(eid,pid){ var n=0; empWeeksForProj(emp(eid),pid).forEach(function(w){ if(wk(eid,pid,w).status==='Pending'){ approveWeekWF(eid,pid,w); n++; } }); toast(n?(n+' pending week(s) approved for '+emp(eid).name+'.'):'No pending weeks.'); renderTeam(); }
+function openRejectWeek(eid,pid,w){
+  openModal('<div class="modal-header"><h4>Reject — Week '+(w+1)+' · '+esc(emp(eid).name)+'</h4><button class="modal-close" onclick="closeModal()">&times;</button></div>'+
+    '<div class="modal-body"><p class="section-title">Rejection reason (mandatory) <span class="brd-tag">BRD LOV</span></p>'+
+    '<select class="form-select" id="rjReason" style="width:100%;margin-bottom:12px">'+REJECT_REASONS.map(function(r){return '<option>'+r+'</option>';}).join('')+'</select>'+
+    '<p class="section-title">Remarks</p><textarea id="rjRemarks" class="form-input" style="width:100%;height:70px;padding:8px" placeholder="Optional remarks to the employee"></textarea></div>'+
+    '<div class="modal-footer"><button class="btn btn-outline" onclick="closeModal()">Cancel</button>'+
+    '<button class="btn btn-danger" onclick="doRejectWeek(\''+eid+'\',\''+pid+'\','+w+')">Reject</button></div>');
+}
+function doRejectWeek(eid,pid,w){ rejectWeekWF(eid,pid,w, document.getElementById('rjReason').value, rjRemarksVal()); closeModal(); toast('Week '+(w+1)+' rejected — now back with '+emp(eid).name+'.'); renderTeam(); }
+function openWeekDetails(w){ view.dayMode='daily'; view.focusWeek=w; renderTeam(); }
+function toggleAllDates(cb){ document.querySelectorAll('.dateChk').forEach(function(c){ c.checked=cb.checked; }); }
+function approveSelectedDates(eid,pid){
+  var keys=[]; document.querySelectorAll('.dateChk').forEach(function(c){ if(c.checked) keys.push(c.dataset.key); });
+  if(!keys.length){ toast('Tick at least one date to approve.'); return; }
+  approveDatesWF(eid,pid,keys); toast(keys.length+' date(s) approved. Weeks fully approved will close.'); renderTeam();
+}
+var _rejDates=null;
+function rejectSelectedDates(eid,pid){
+  var keys=[]; document.querySelectorAll('.dateChk').forEach(function(c){ if(c.checked) keys.push(c.dataset.key); });
+  if(!keys.length){ toast('Tick at least one date to reject.'); return; }
+  _rejDates={eid:eid,pid:pid,keys:keys};
+  openModal('<div class="modal-header"><h4>Reject '+keys.length+' date(s) — '+esc(emp(eid).name)+'</h4><button class="modal-close" onclick="closeModal()">&times;</button></div>'+
+    '<div class="modal-body"><p class="section-title">Rejection reason (mandatory) <span class="brd-tag">BRD LOV</span></p>'+
+    '<select class="form-select" id="rjReason" style="width:100%;margin-bottom:12px">'+REJECT_REASONS.map(function(r){return '<option>'+r+'</option>';}).join('')+'</select>'+
+    '<p class="section-title">Remarks</p><textarea id="rjRemarks" class="form-input" style="width:100%;height:64px;padding:8px" placeholder="The week(s) containing these dates go back to the employee to correct."></textarea></div>'+
+    '<div class="modal-footer"><button class="btn btn-outline" onclick="closeModal()">Cancel</button>'+
+    '<button class="btn btn-danger" onclick="doRejectDates()">Reject dates</button></div>');
+}
+function doRejectDates(){ var r=document.getElementById('rjReason').value, rm=rjRemarksVal(); rejectDatesWF(_rejDates.eid,_rejDates.pid,_rejDates.keys,r,rm); closeModal(); toast(_rejDates.keys.length+' date(s) rejected — the affected week(s) are back with '+emp(_rejDates.eid).name+'.'); renderTeam(); }
+function rejectWeekPicker(eid,pid){
+  var wks=empWeeksForProj(emp(eid),pid).filter(function(w){ return wk(eid,pid,w).status==='Pending'; });
+  if(!wks.length){ toast('No pending week to reject.'); return; }
+  openModal('<div class="modal-header"><h4>Reject a week — '+esc(emp(eid).name)+'</h4><button class="modal-close" onclick="closeModal()">&times;</button></div>'+
+    '<div class="modal-body"><p class="section-title">Week</p><select class="form-select" id="rjWeek" style="width:100%;margin-bottom:12px">'+wks.map(function(w){return '<option value="'+w+'">Week '+(w+1)+' · '+WEEKS[w].range+'</option>';}).join('')+'</select>'+
+    '<p class="section-title">Reason (mandatory)</p><select class="form-select" id="rjReason" style="width:100%;margin-bottom:12px">'+REJECT_REASONS.map(function(r){return '<option>'+r+'</option>';}).join('')+'</select>'+
+    '<p class="section-title">Remarks</p><textarea id="rjRemarks" class="form-input" style="width:100%;height:64px;padding:8px" placeholder="Optional"></textarea></div>'+
+    '<div class="modal-footer"><button class="btn btn-outline" onclick="closeModal()">Cancel</button>'+
+    '<button class="btn btn-danger" onclick="doRejectWeek(\''+eid+'\',\''+pid+'\',+document.getElementById(\'rjWeek\').value)">Reject week</button></div>');
+}
+
+// ============================================================
+//  LEAVE LOSS COVERAGE  [BRD 4.2.1]
+// ============================================================
+// pool of unbilled employees on the FCP project (with the dates each is themselves absent → not available)
+var LLC_UNBILLED = [
+  {id:'U1', name:'Tomas Reyes',  unavail:['16 Jul']},
+  {id:'U2', name:'Sofia Marin',  unavail:[]},
+  {id:'U3', name:'Arjun Rao',    unavail:['17 Jul']},
+  {id:'U4', name:'Lena Fischer', unavail:[]}
+];
+// absentees on the FCP project (Leave only — LOP/maternity excluded), each coverable 1:1
+var LLC_ROWS = [
+  {emp:'EMP-504', name:'Ben Okafor',  date:'16 Jul', hours:8, assigned:'', approved:false},
+  {emp:'A2',      name:'Grace Wu',    date:'17 Jul', hours:8, assigned:'', approved:false},
+  {emp:'A3',      name:'Marco Silva', date:'16 Jul', hours:4, assigned:'', approved:false}
+];
+function llcAssignedElsewhere(exceptIdx){ var s={}; LLC_ROWS.forEach(function(r,i){ if(i!==exceptIdx && r.assigned) s[r.assigned]=1; }); return s; }
+function llcCandidates(rowIdx){
+  var row=LLC_ROWS[rowIdx], taken=llcAssignedElsewhere(rowIdx);
+  return LLC_UNBILLED.filter(function(u){
+    if (taken[u.id]) return false;                 // (b) already covering another absentee
+    if (u.unavail.indexOf(row.date)>=0) return false; // (c) the candidate is themselves absent that day
+    return true;
+  });
+}
+function renderLLC(){
+  var fcp = PROJECTS.filter(function(p){ return p.leaveLoss; });
+  var h = band('Timesheet · Manager', 'Leave Loss Coverage',
+    'Only for <strong>Capacity / FCP</strong> projects where Leave Loss = Yes. Covered absence hours are treated as <strong>billed</strong> and go to the invoice <strong>annexure</strong> that flows with the timesheet to accrual. <span class="brd-tag">BRD 4.2.1</span>');
+  h += '<div class="rw-body">';
+  if (!fcp.length){ h += '<div class="info-banner">No FCP project with Leave Loss = Yes for this manager.</div></div>'; document.getElementById('mainArea').innerHTML=h; return; }
+  var p = fcp[0];
+  h += '<div class="info-banner">Project: <strong>'+esc(p.name)+'</strong> ('+p.id+') · '+p.model+' · Leave Loss = Yes. The replacement drop-down lists <strong>only unbilled employees on this project</strong> who are (a) <strong>not already assigned</strong> to cover someone else and (b) <strong>not themselves on leave/absence</strong> that day. LOP/maternity are excluded from the absentee list. <span class="brd-tag">BRD rules #6a–c</span></div>';
+  h += '<div class="card"><div class="card-toolbar"><span class="card-title">Absences to cover — multiple examples</span><div class="card-toolbar-right"><button class="btn btn-primary btn-sm" onclick="approveAllLLC()">Approve all filled lines</button></div></div>';
+  h += '<div class="tbl-wrap"><table><thead><tr><th>Absent Employee</th><th>Date</th><th class="num">Hours</th><th>Assign replacement (unbilled, available)</th><th>Status</th></tr></thead><tbody>';
+  LLC_ROWS.forEach(function(r, i){
+    var cands = llcCandidates(i);
+    var opts = '<option value="">— select replacement —</option>'+
+      cands.map(function(u){ return '<option value="'+u.id+'" '+(r.assigned===u.id?'selected':'')+'>'+esc(u.name)+' ('+u.id+') · available</option>'; }).join('');
+    // keep the currently-assigned option even if it would otherwise be filtered (shouldn't happen, but safe)
+    if (r.assigned && !cands.some(function(u){return u.id===r.assigned;})){ var au=LLC_UNBILLED.filter(function(u){return u.id===r.assigned;})[0]; if(au) opts+='<option value="'+au.id+'" selected>'+esc(au.name)+' ('+au.id+')</option>'; }
+    var noCand = cands.length===0 && !r.assigned;
+    h += '<tr><td>'+esc(r.name)+' <span class="mono" style="color:var(--rw-slate)">'+r.emp+'</span></td><td>'+r.date+'</td><td class="num">'+r.hours.toFixed(2)+'</td>'+
+      '<td>'+(noCand?'<span class="chip chip-rejected">No eligible unbilled employee available</span>':'<select class="form-select" style="height:30px;min-width:240px" onchange="assignLLC('+i+',this.value)">'+opts+'</select>')+'</td>'+
+      '<td>'+(r.approved?'<span class="chip chip-approved">Approved · billed (annexure)</span>':(r.assigned?'<span class="chip chip-submitted">Assigned — pending approve</span>':'<span class="chip chip-draft">Pending</span>'))+'</td></tr>';
+  });
+  h += '</tbody></table></div><div style="padding:10px 16px;border-top:1px solid var(--rw-border);font-size:12px;color:var(--rw-slate)">Assigning a replacement removes them from every other line&rsquo;s drop-down (a person can cover only one absentee per day).</div></div>';
+  h += '<div class="info-banner">Approved coverage lines are treated as <strong>billed hours</strong> for the FCP project and flow to the <strong>invoice annexure</strong> in Accrual Integration (Admin). <span class="brd-tag">#6d</span></div>';
+  h += '</div>';
+  document.getElementById('mainArea').innerHTML = h;
+}
+function assignLLC(i, val){ LLC_ROWS[i].assigned=val; if(!val) LLC_ROWS[i].approved=false; renderLLC(); }
+function approveAllLLC(){
+  var n=0; LLC_ROWS.forEach(function(r){ if(r.assigned && !r.approved){ r.approved=true; n++; } });
+  toast(n?(n+' coverage line(s) approved — treated as billed; added to the invoice annexure for accrual.'):'Assign a replacement first.');
+  renderLLC();
+}
+function llcAnnexure(){ return LLC_ROWS.filter(function(r){ return r.approved; }); }
+
+// ============================================================
+//  CLIENT TIMESHEETS  [BRD 4.3]
+// ============================================================
+function renderClientTS(){
+  var h = band('Timesheet', 'Client Timesheets',
+    'Upload &amp; maintain <strong>customer-approved</strong> timesheets per Project + Billing Period. Maintained separately from billing close — signed sheets may arrive 1–2 weeks later. Multiple documents allowed. <strong>No approval step.</strong> <span class="brd-tag">BRD 4.3</span>');
+  h += '<div class="rw-body">';
+  h += '<div class="info-banner">This is a <strong>separate page with no link to the billing-close date</strong> — customer-signed sheets may arrive 1–2 weeks after close and are collected here independently. Not part of the billing-close submission; not required in the mobile app. Previous month\'s approved/defaulted timesheet shown for reference. <span class="brd-tag">BRD 4.3 · confirmed</span></div>';
+  h += '<div class="card"><div class="card-body" style="display:flex;gap:10px;align-items:end;flex-wrap:wrap">'+
+    '<div class="hdr-item"><span class="form-label">Project</span><select class="form-select" id="ctsProj">'+PROJECTS.map(function(p){return '<option value="'+p.id+'">'+esc(p.name)+'</option>';}).join('')+'</select></div>'+
+    '<div class="hdr-item"><span class="form-label">Billing Period</span><select class="form-select" id="ctsPeriod"><option>July 2026</option><option>June 2026</option></select></div>'+
+    '<div class="hdr-item"><span class="form-label">Display</span><select class="form-select"><option>Week-wise</option><option>Whole month</option></select></div>'+
+    '<input type="file" id="ctsFile" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg" style="display:none" onchange="addClientTS(this)">'+
+    '<button class="btn btn-primary" onclick="document.getElementById(\'ctsFile\').click()">+ Attach Customer Timesheet</button></div></div>';
+  h += '<div class="card"><div class="card-toolbar"><span class="card-title">Attached Documents</span></div><div class="tbl-wrap"><table><thead><tr><th>Document</th><th>Size</th><th>Uploaded</th><th></th></tr></thead><tbody id="ctsRows"><tr><td colspan="4" style="color:var(--rw-slate)">No customer timesheets attached yet.</td></tr></tbody></table></div></div>';
+  h += '<div class="card"><div class="card-toolbar"><span class="card-title">Previous month (reference) — approved / defaulted</span></div><div class="card-body" style="font-size:12.5px;color:var(--rw-slate)">June 2026 timesheet: all employees <span class="chip chip-approved">Approved</span> · 1 <span class="chip chip-defaulted">Defaulted</span> (shown read-only for reference per BRD 4.3).</div></div>';
+  h += '</div>';
+  document.getElementById('mainArea').innerHTML = h;
+}
+function addClientTS(input){
+  var f=input.files[0]; if(!f) return;
+  var key=document.getElementById('ctsProj').value+'|'+document.getElementById('ctsPeriod').value;
+  clientTSFiles[key]=clientTSFiles[key]||[]; clientTSFiles[key].push({name:f.name,size:f.size});
+  var rows=document.getElementById('ctsRows');
+  rows.innerHTML = clientTSFiles[key].map(function(x){ return '<tr><td>📄 '+esc(x.name)+'</td><td class="num">'+(x.size<1048576?(x.size/1024).toFixed(0)+' KB':(x.size/1048576).toFixed(1)+' MB')+'</td><td>Today</td><td><button class="btn btn-ghost btn-sm" onclick="toast(\'Removed (mock).\')">Remove</button></td></tr>'; }).join('');
+  input.value=''; toast('Customer timesheet attached (metadata only — no upload backend in this prototype).');
+}
+
+// ============================================================
+//  SALARY STOPPING TOOL  [BRD 4.4]
+// ============================================================
+function defaultedList(){
+  var out=[];
+  EMPLOYEES.forEach(function(e){ if(e.isManager) return; var st=MONTH_STATUS[e.id]&&MONTH_STATUS[e.id][LAST_MONTH];
+    if (st && st.status==='Defaulted') out.push({e:e, st:st}); });
+  return out;
+}
+// #3 per-week breakdown for the defaulted month (June): the employee submitted some weeks and missed others.
+var DEFAULT_WEEKS = {
+  'EMP-502': [ {label:'Wk 1 · 01–07 Jun', status:'Submitted', hrs:40}, {label:'Wk 2 · 08–14 Jun', status:'Submitted', hrs:40},
+               {label:'Wk 3 · 15–21 Jun', status:'Defaulted', hrs:40}, {label:'Wk 4 · 22–28 Jun', status:'Defaulted', hrs:40} ],
+  'EMP-505': [ {label:'Wk 1 · 01–07 Jun', status:'Submitted', hrs:40}, {label:'Wk 2 · 08–14 Jun', status:'Defaulted', hrs:40},
+               {label:'Wk 3 · 15–21 Jun', status:'Defaulted', hrs:40}, {label:'Wk 4 · 22–28 Jun', status:'Defaulted', hrs:40} ]
+};
+function defaultSplit(eid){ var ws=DEFAULT_WEEKS[eid]||[], sub=0,subH=0,def=0,defH=0; ws.forEach(function(w){ if(w.status==='Submitted'){sub++;subH+=w.hrs;} else {def++;defH+=w.hrs;} }); return {weeks:ws, sub:sub, subH:subH, def:def, defH:defH}; }
+function showDefaultWeeks(eid){
+  var sp=defaultSplit(eid);
+  var rows=sp.weeks.map(function(w){ return '<tr><td>'+w.label+'</td><td>'+(w.status==='Submitted'?'<span class="chip chip-approved">Submitted</span>':'<span class="chip chip-defaulted">Defaulted (default hrs)</span>')+'</td><td class="num">'+w.hrs.toFixed(2)+'</td></tr>'; }).join('');
+  openModal('<div class="modal-header"><h4>'+esc(emp(eid).name)+' — '+LAST_MONTH+' weekly submission</h4><button class="modal-close" onclick="closeModal()">&times;</button></div>'+
+    '<div class="modal-body"><p style="font-size:12.5px;color:var(--rw-slate);margin:0 0 10px">Salary is held only for the <strong>defaulted</strong> weeks the employee missed by the payroll cut-off; the weeks they did submit are unaffected. <span class="brd-tag">#3 · BRD 4.4</span></p>'+
+    '<div class="tbl-wrap"><table><thead><tr><th>Week</th><th>Status</th><th class="num">Hours</th></tr></thead><tbody>'+rows+
+      '<tr style="font-weight:700;background:#faf9f6"><td>Total</td><td>'+sp.sub+' submitted · '+sp.def+' defaulted</td><td class="num">'+(sp.subH+sp.defH).toFixed(2)+'</td></tr></tbody></table></div></div>'+
+    '<div class="modal-footer"><button class="btn btn-outline" onclick="closeModal()">Close</button></div>');
+}
+function renderSalaryStopping(){
+  var payIndia = PAYROLL[0], list = defaultedList();
+  var h = band('Timesheet', 'Salary Stopping Tool',
+    'On the <strong>Payroll Cut-off</strong>, the system automatically lists every employee/contractor who <strong>did not submit</strong> their timesheet in time. Their salary is held (accounting is unaffected) until the manager corrects &amp; releases it. <span class="brd-tag">BRD 4.4</span>');
+  h += '<div class="rw-body">';
+  h += '<div class="info-banner">Auto-generated at the payroll cut-off for <strong>'+LAST_MONTH+'</strong> ('+PAYROLL_CUTOFF_LASTMONTH+'). A missed timesheet is <strong>auto-submitted with default values</strong> (standard hours) and <strong>locked</strong> — the employee cannot edit it; only the manager can. Salary hold release window: '+payIndia.holdRelease+' days. <span class="brd-tag">cut-off configuration</span></div>';
+  h += '<div class="warn-banner"><strong>Only un-submitted (Defaulted) timesheets stop salary.</strong> A timesheet that is submitted but merely <em>awaiting manager approval</em> does <strong>not</strong> stop salary — that delay is not the employee&rsquo;s fault. <span class="brd-tag">per direction</span></div>';
+  h += '<div class="card"><div class="card-toolbar"><span class="card-title">Salary-hold bucket — '+LAST_MONTH+' (missed submission by payroll cut-off)</span></div>'+
+    '<div class="tbl-wrap"><table><thead><tr><th>Emp ID</th><th>Employee</th><th>Month</th><th>Weeks (submitted / defaulted)</th><th class="num">Applied hrs</th><th class="num">Default hrs</th><th>Salary</th><th class="num">Window</th><th>Action</th></tr></thead><tbody id="salRows">';
+  if (!list.length){ h += '<tr><td colspan="9" style="color:var(--rw-slate)">No defaulted timesheets — everyone submitted by the payroll cut-off.</td></tr>'; }
+  list.forEach(function(x){
+    var e=x.e, released = x.st.mgrEdited, sp=defaultSplit(e.id);
+    h += '<tr><td>'+e.id+'</td><td>'+esc(e.name)+(e.kind==='Contractor'?' <span class="chip chip-warn">Contractor</span>':'')+'</td>'+
+      '<td>'+LAST_MONTH+'</td>'+
+      '<td><span class="chip chip-approved">'+sp.sub+' submitted</span> <span class="chip chip-defaulted">'+sp.def+' defaulted</span> '+
+        (released?'<span class="chip chip-approved" title="manager corrected the defaulted weeks">corrected</span> ':'')+
+        '<a href="#" onclick="showDefaultWeeks(\''+e.id+'\');return false;" style="font-size:11.5px;font-weight:600;color:var(--rw-info);text-decoration:none">view weeks &#8599;</a></td>'+
+      '<td class="num">'+sp.subH.toFixed(2)+'</td>'+
+      '<td class="num">'+sp.defH.toFixed(2)+'</td>'+
+      '<td>'+(released?'<span class="chip chip-approved">Released</span>':'<span class="chip chip-rejected">Held</span>')+'</td>'+
+      '<td class="num">'+payIndia.holdRelease+'d</td>'+
+      '<td>'+(released?'<span style="font-size:11.5px;color:var(--rw-slate)">Done</span>':'<button class="btn btn-primary btn-sm" onclick="mgrEditDefault(\''+e.id+'\')">Manager edit &amp; release</button>')+'</td></tr>';
+  });
+  h += '</tbody></table></div></div>';
+  h += discussHere('Approvals &amp; workflow — salary-stopping employee self-view; contractor hold &amp; window expiry');
+  h += '</div>';
+  document.getElementById('mainArea').innerHTML = h;
+}
+function mgrEditDefault(eid){
+  var st=MONTH_STATUS[eid] && MONTH_STATUS[eid][LAST_MONTH];
+  if (st){ st.mgrEdited=true; }   // stays a Defaulted record for audit, but now corrected → salary released
+  toast('Manager edited the defaulted timesheet for '+emp(eid).name+' — corrected, unlocked and salary released next cycle.');
+  renderSalaryStopping();
+}
+
+// ============================================================
+//  ADMIN — Period Control Table  [BRD: O2C Period Definition]
+// ============================================================
+var periodTab='mec';
+function renderPeriod(){
+  var h = band('Control Table · Admin', 'Period Control Table',
+    'The control table that governs the whole Time module — MEC / period close, client billing cut-offs, weekly timesheet cut-offs, payroll and the revision window. <strong>Only Finance / Admin can add or edit.</strong> <span class="brd-tag">O2C Period Definition</span>');
+  h += '<div class="rw-body">';
+  h += '<div class="tab-row">'+
+    ['mec:MEC / Period Close','client:Client Cut-off','ts:Timesheet Cut-offs','payroll:Payroll Config','revise:Revision Controls'].map(function(t){var k=t.split(':'); return '<button class="tab'+(periodTab===k[0]?' active':'')+'" onclick="periodTab=\''+k[0]+'\';renderPeriod()">'+k[1]+'</button>';}).join('')+'</div>';
+
+  if (periodTab==='mec'){
+    h += '<div class="warn-banner">Rules: default status is <strong>Closed</strong>; Finance can open/close any period but <strong>only one period may be Open at a time</strong>; periods cannot overlap; when the accounting date passes, the status auto-changes to Closed. <span class="brd-tag">BRD</span></div>';
+    h += '<div class="card"><div class="card-toolbar"><span class="card-title">Periods (MEC)</span><div class="card-toolbar-right"><button class="btn btn-outline btn-sm" onclick="toast(\'Add new period (Finance only).\')">+ Add Period</button></div></div>';
+    h += '<div class="tbl-wrap"><table><thead><tr><th>Period</th><th>Status</th><th>Start</th><th>End</th><th>Accounting</th><th>Delivery Cut-off</th><th>Finance Cut-off</th><th>Book Closure</th><th>MEC Close</th><th>Advance Close</th><th>Action</th></tr></thead><tbody>';
+    PERIODS.forEach(function(p,i){
+      h += '<tr><td><strong>'+p.name+'</strong></td><td>'+statusChip(p.status)+'</td><td>'+p.start+'</td><td>'+p.end+'</td><td>'+p.acct+'</td><td>'+p.delivery+'</td><td>'+p.finance+'</td><td>'+p.book+'</td><td>'+p.mec+'</td>'+
+        '<td>'+(p.advanceClose?'<span class="chip chip-warn">Advance Close</span>':'—')+'</td>'+
+        '<td>'+(p.status==='Open'
+          ? '<button class="btn btn-outline btn-sm" onclick="closePeriod('+i+')">Close</button> <button class="btn btn-outline btn-sm" onclick="toggleAdvClose('+i+')">'+(p.advanceClose?'Unmark':'Mark')+' Adv Close</button>'
+          : '<button class="btn btn-outline btn-sm" onclick="openPeriod('+i+')">Open</button>')+'</td></tr>';
+    });
+    h += '</tbody></table></div></div>';
+    h += '<div class="info-banner"><strong>Cut-off ordering (BRD example):</strong> Client Cut-off (before 10 Aug, Net 30) → Book Close → Payroll cut-off (26 Jul) → Finance Cut-off (after 2 Aug) → Delivery cut-off (weekly/monthly after 2 Aug); MEC period close 31 Jul. Corrections after each stage are handled differently (JV logic).</div>';
+    h += '<div class="card"><div class="card-body"><p class="section-title">Advance Close scenario <span class="brd-tag">BRD</span></p><p style="font-size:12.5px;line-height:1.6;margin:0">Finance may mark a period as <strong>Advance Close</strong> (e.g. start 28 Jun, finish 2 Jul) to submit/process billing before the standard month-end timeline. Defaulted hours are approved as if the manager approved; employees can later change defaults to actual, captured as a <strong>flag at each employee-day level</strong>.</p></div></div>';
+  }
+  else if (periodTab==='client'){
+    h += '<div class="info-banner">Client billing cycle is based on the MSA and need not match corporate close. Project / SOW cut-off overrides the MSA date if different. Used for projects that don\'t have a different date. <span class="brd-tag">BRD</span></div>';
+    h += '<div class="card"><div class="tbl-wrap"><table><thead><tr><th>Client</th><th>Client ID</th><th>Period</th><th>Status</th><th>Start</th><th>End</th><th>Client Cut-off</th><th>Terms</th></tr></thead><tbody>'+
+      CLIENT_CUTOFFS.map(function(c){return '<tr><td>'+esc(c.client)+'</td><td>'+c.clientId+'</td><td>'+c.period+'</td><td>'+statusChip(c.status)+'</td><td>'+c.start+'</td><td>'+c.end+'</td><td><strong>'+c.cutoff+'</strong></td><td>'+c.terms+'</td></tr>';}).join('')+
+      '</tbody></table></div></div>';
+  }
+  else if (periodTab==='ts'){
+    h += '<div class="info-banner">Weekly employee-timesheet cut-off. A job runs on this day/time in the employee\'s <strong>base-location local time</strong> to default un-submitted timesheets. <span class="brd-tag">BRD</span></div>';
+    h += '<div class="card"><div class="tbl-wrap"><table><thead><tr><th>Calendar Day</th><th>Time</th><th>Contractor Resubmit Period</th></tr></thead><tbody>'+
+      '<tr><td>'+TS_CUTOFF.day+'</td><td>'+TS_CUTOFF.time+'</td><td>'+TS_CUTOFF.contractorResubmit+' days</td></tr></tbody></table></div></div>';
+  }
+  else if (periodTab==='payroll'){
+    h += '<div class="info-banner">Payroll cut-off varies by business / country. One country can have more than one cut-off for a period; no overlapping dates. Salary-hold release period governs how long employees can resubmit defaulted timesheets. <span class="brd-tag">BRD</span></div>';
+    h += '<div class="card"><div class="tbl-wrap"><table><thead><tr><th>Country</th><th>Type</th><th>Start</th><th>End</th><th>Payout</th><th>Payroll Cut-off</th><th>Description</th><th>Hold Release</th></tr></thead><tbody>'+
+      PAYROLL.map(function(p){return '<tr><td>'+esc(p.country)+'</td><td>'+p.type+'</td><td>'+p.start+'</td><td>'+p.end+'</td><td>'+p.payout+'</td><td>'+p.cutoff+'</td><td>'+esc(p.desc)+'</td><td>'+p.holdRelease+' days</td></tr>';}).join('')+
+      '</tbody></table></div></div>';
+  }
+  else { // revision controls
+    h += '<div class="info-banner">Configure how far back the system accepts corrections, adjustments and backdated allocation / WBS changes. The BRD allows adjustments up to <strong>3 months</strong> from the current open period and recommends controlling the backdating window by configuration. <span class="brd-tag">BRD 4.2.1</span></div>';
+    h += '<div class="card"><div class="card-toolbar"><span class="card-title">Revision &amp; Adjustment Window (Finance-configurable)</span><div class="card-toolbar-right"><button class="btn btn-primary btn-sm" onclick="saveRevision()">Save Controls</button></div></div><div class="card-body"><div class="hdr-grid">'+
+      revInput('Adjustments allowed up to (months from open period)','adjustmentMonths',REVISION.adjustmentMonths)+
+      revInput('Backdated Project / WBS change allowed up to (months)','backdatedMonths',REVISION.backdatedMonths)+
+      revInput('Contractor resubmit window (days)','contractorResubmitDays',REVISION.contractorResubmitDays)+
+      revInput('Employee salary-hold resubmit window (days)','employeeResubmitDays',REVISION.employeeResubmitDays)+
+      '</div>'+
+      '<div class="hdr-item" style="margin-top:14px"><span class="form-label">Handling of corrections after book close</span>'+
+      '<select class="form-select" style="width:100%" id="revLate"><option '+(REVISION.lateHandling.indexOf('JV')>=0?'selected':'')+'>Post as JV / adjustment (net-off reversal + re-post)</option><option>Block entirely after book close</option><option>Allow, no JV (direct edit)</option></select></div>'+
+      '</div></div>';
+    h += '<div class="warn-banner">Effect: a correction dated within the window creates a net-off reversal on the old entry and a re-post on the new one (see Accrual Integration — <span class="chip chip-rejected">Cancel</span> / <span class="chip chip-approved">Adjustment</span>). Beyond the window, entry is blocked. <span class="brd-tag">BRD 4.2.1</span></div>';
+  }
+  h += discussHere('Cut-offs &amp; control — auto-close mechanism; weekly-vs-delivery cut-off; revision-window granularity');
+  h += '</div>';
+  document.getElementById('mainArea').innerHTML = h;
+}
+function revInput(label, key, val){ return '<div class="hdr-item"><span class="form-label">'+label+'</span><input class="form-input" style="width:100%" id="rev_'+key+'" value="'+val+'"></div>'; }
+function saveRevision(){
+  ['adjustmentMonths','backdatedMonths','contractorResubmitDays','employeeResubmitDays'].forEach(function(k){ var el=document.getElementById('rev_'+k); if(el) REVISION[k]=num(el.value); });
+  var lt=document.getElementById('revLate'); if(lt) REVISION.lateHandling=lt.value;
+  toast('Revision controls saved — adjustments allowed up to '+REVISION.adjustmentMonths+' month(s) from the open period.');
+}
+function onlyOneOpen(){ return PERIODS.filter(function(p){return p.status==='Open';}).length; }
+function openPeriod(i){ if(onlyOneOpen()>=1){ toast('Only one period can be Open at a time — close the current open period first.'); return; } PERIODS[i].status='Open'; renderPeriod(); toast(PERIODS[i].name+' opened.'); }
+function closePeriod(i){ PERIODS[i].status='Closed'; PERIODS[i].advanceClose=false; renderPeriod(); toast(PERIODS[i].name+' closed.'); }
+function toggleAdvClose(i){ PERIODS[i].advanceClose=!PERIODS[i].advanceClose; renderPeriod(); toast(PERIODS[i].name+(PERIODS[i].advanceClose?' marked Advance Close — defaulted hours can be processed early.':' Advance Close removed.')); }
+
+// ============================================================
+//  ACCRUAL INTEGRATION  [BRD Integrations]
+// ============================================================
+// day-wise billed / unbilled / leave for an employee×project across the open month (July) [#5]
+function accrualDayWise(empId, projId){
+  var out=[];
+  WEEKS.forEach(function(w){ var t=ensureTS(empId,w.idx); var absW=absenceForWeek(empId,w.idx);
+    var lines=t.lines.filter(function(l){return l.proj===projId;});
+    w.days.forEach(function(d,di){ if(!d.inMonth||d.weekend) return;
+      var bill=0,unb=0,reason='',tk='';
+      lines.forEach(function(l){ if(l.hrs[di]>0&&!tk)tk=l.task; if(l.type==='Billable')bill+=num(l.hrs[di]); else {unb+=num(l.hrs[di]); if(l.hrs[di]>0&&l.reason)reason=l.reason;} });
+      var leave = absW[di]==='Leave'?8:0;
+      if (bill||unb||leave) out.push({date:d.date, task:tk||(lines[0]?lines[0].task:'—'), bill:leave?0:bill, unb:unb, leave:leave, reason:absW[di]||reason||'—'});
+    });
+  });
+  return out;
+}
+function confirmedPairs(){ var out=[]; Object.keys(APPR).forEach(function(k){ if(APPR[k].monthConfirmed){ var p=k.split('|'); out.push({emp:p[0], proj:p[1]}); } }); return out; }
+function renderAccrual(){
+  var h = band('Downstream · Admin', 'Accrual Integration',
+    'On manager confirmation, the <strong>consolidated timesheet</strong> (employee × project × WBS × day — billed / unbilled / leave) <strong>plus adjustments</strong> is written to the <strong>Accrual system schema</strong> by filling its interface table. <span class="brd-tag">Accrual integration</span>');
+  h += '<div class="rw-body">';
+  h += '<div class="info-banner">Open period: <strong>July 2026</strong>. Only <strong>manager-confirmed</strong> months are loaded. The consolidated rows and day-wise <strong>Cancel (−)</strong> / <strong>Adjustment (+)</strong> rows are inserted into the accrual schema table. <strong>Default-hour corrections after the cut-off</strong> (a defaulted week later submitted &amp; approved) also post as adjustments. <span class="brd-tag">#3 · #10 · BRD 4.2.1</span></div>';
+  // Accrual system — schema table load (the missing integration): consolidated timesheet + adjustments
+  var loadCols=[['PERIOD','open accrual period'],['EMPLOYEE_ID / NAME','Worker (HCM)'],['PROJECT / WBS_TASK','Project + WBS'],['WORK_DATE','day'],['BILLABLE_HOURS / NON_BILLABLE_HOURS / LEAVE_HOURS','consolidated timesheet'],['UNBILLED_REASON','task / reason'],['ENTRY_TYPE','Actual · Default · Cancel · Adjustment'],['FLAG','Defaulted / Late / Correction / Overridden / Reversal / Adjustment'],['ACTION_DATE','manager approval date'],['SOURCE_TS_ID','O2C timesheet id']];
+  h += '<div class="card" style="border-left:3px solid var(--rw-info)"><div class="card-toolbar"><span class="card-title">Accrual System — Consolidated Timesheet + Adjustments (schema table load)</span><div class="card-toolbar-right"><span class="brd-tag">outbound · table load</span> <button class="btn btn-primary btn-sm" onclick="toast(\'Consolidated timesheet + adjustments inserted into ACCRUAL.XX_O2C_TIMESHEET_ACCRUAL_IF (mock).\')">Load &rarr; Accrual schema</button></div></div>'+
+    '<div class="card-body"><p style="font-size:12.5px;color:var(--rw-slate);margin:0 0 10px">The finalized month is <strong>written into the accrual system&rsquo;s schema</strong> by inserting rows into its interface table <code class="mono">ACCRUAL.XX_O2C_TIMESHEET_ACCRUAL_IF</code>: the <strong>consolidated timesheet</strong> (per employee × project × WBS × day) plus the day-wise <strong>Cancel(−)/Adjustment(+)</strong> rows shown below. Loaded only for <strong>manager-confirmed</strong> months.</p>'+
+    '<div class="tbl-wrap"><table><thead><tr><th>Interface-table column</th><th>Source</th></tr></thead><tbody>'+
+      loadCols.map(function(r){return '<tr><td class="mono">'+r[0]+'</td><td>'+esc(r[1])+'</td></tr>';}).join('')+
+    '</tbody></table></div></div></div>';
+
+  // (A) confirmed months
+  var pairs=confirmedPairs();
+  h += '<div class="card"><div class="card-toolbar"><span class="card-title">Confirmed months → sent to accrual</span><div class="card-toolbar-right"><button class="btn btn-outline btn-sm" onclick="toast(\'Accrual job run (mock).\')">Run Accrual Job</button></div></div>'+
+    '<div class="tbl-wrap"><table><thead><tr><th>Employee</th><th>Project</th><th>Month</th><th class="num">Billable</th><th class="num">Non-billable</th><th class="num">Leave</th><th>Flags</th></tr></thead><tbody>';
+  if(!pairs.length) h += '<tr><td colspan="7" style="color:var(--rw-slate)">No month confirmed yet — a manager confirms a month in Team Approvals.</td></tr>';
+  pairs.forEach(function(pr){ var e=emp(pr.emp), tot=empMonthTotals(e,pr.proj);
+    var fl={}; empWeeksForProj(e,pr.proj).forEach(function(w){ (wk(pr.emp,pr.proj,w).flags||[]).forEach(function(f){fl[f]=1;}); });
+    h += '<tr><td>'+esc(e.name)+' <span class="mono" style="color:var(--rw-slate)">'+e.id+'</span></td><td>'+esc(proj(pr.proj).name)+'</td><td>July 2026</td>'+
+      '<td class="num">'+tot.bill.toFixed(2)+'</td><td class="num">'+tot.nonbill.toFixed(2)+'</td><td class="num">'+tot.leave.toFixed(2)+'</td><td>'+(Object.keys(fl).length?flagChips(Object.keys(fl)):'—')+'</td></tr>';
+  });
+  h += '</tbody></table></div></div>';
+
+  // (B) day-wise extract billed/unbilled/leave for the confirmed employees
+  h += '<div class="card"><div class="card-toolbar"><span class="card-title">Day-wise extract — billed / unbilled / leave (employee × WBS × day)</span></div>'+
+    '<div class="tbl-wrap"><table><thead><tr><th>Employee</th><th>Project</th><th>WBS</th><th>Date</th><th class="num">Billed</th><th class="num">Unbilled</th><th class="num">Leave</th><th>Reason</th></tr></thead><tbody>';
+  if(!pairs.length) h += '<tr><td colspan="8" style="color:var(--rw-slate)">Nothing confirmed.</td></tr>';
+  pairs.forEach(function(pr){ var e=emp(pr.emp); accrualDayWise(pr.emp,pr.proj).slice(0,12).forEach(function(r){
+    h += '<tr><td>'+esc(e.name)+'</td><td>'+pr.proj+'</td><td>'+r.task+'</td><td>'+r.date+'</td><td class="num">'+r.bill.toFixed(2)+'</td><td class="num">'+r.unb.toFixed(2)+'</td><td class="num">'+r.leave.toFixed(2)+'</td><td>'+esc(r.reason)+'</td></tr>';
+  }); });
+  h += '</tbody></table></div><div style="padding:8px 16px;font-size:11.5px;color:var(--rw-slate)">Showing first 12 day-rows per confirmed employee.</div></div>';
+
+  // (C) Leave-Loss Coverage annexure (#6d)
+  var annex=llcAnnexure();
+  h += '<div class="card"><div class="card-toolbar"><span class="card-title">Invoice Annexure — Leave Loss Coverage (FCP)</span><div class="card-toolbar-right"><span class="brd-tag">flows with the timesheet · #6d</span></div></div>'+
+    '<div class="tbl-wrap"><table><thead><tr><th>Absent Employee</th><th>Date</th><th class="num">Hours (billed)</th><th>Covered by</th></tr></thead><tbody>';
+  if(!annex.length) h += '<tr><td colspan="4" style="color:var(--rw-slate)">No approved coverage yet — approve lines in Leave Loss Coverage.</td></tr>';
+  annex.forEach(function(r){ var au=LLC_UNBILLED.filter(function(u){return u.id===r.assigned;})[0];
+    h += '<tr><td>'+esc(r.name)+'</td><td>'+r.date+'</td><td class="num">'+r.hours.toFixed(2)+'</td><td>'+(au?esc(au.name)+' ('+au.id+')':r.assigned)+'</td></tr>';
+  });
+  h += '</tbody></table></div></div>';
+
+  // (D) Retro adjustments (Cancel − / Adjustment +) #10 — only manager-APPROVED ones post to accrual
+  var applied=ADJUSTMENTS.filter(function(x){return x.applied;});
+  var postable=applied.filter(function(x){return x.approved;});
+  var awaiting=applied.filter(function(x){return !x.approved;});
+  h += '<div class="card"><div class="card-toolbar"><span class="card-title">Adjustments — retro Project/WBS change (net-off)</span><div class="card-toolbar-right"><span class="brd-tag">posts only after manager approval · #10</span></div></div>'+
+    '<div class="tbl-wrap"><table><thead><tr><th>Type</th><th>Employee</th><th>Date</th><th>From period</th><th>Project</th><th>WBS</th><th class="num">Hours</th><th>Approval</th><th>Flag</th></tr></thead><tbody>';
+  if(!applied.length) h += '<tr><td colspan="9" style="color:var(--rw-slate)">No retro adjustments applied — see a closed month with a project/WBS change (e.g. Meera / June).</td></tr>';
+  postable.forEach(function(x){ (x.days||[]).forEach(function(d){
+    h += '<tr><td><span class="chip chip-rejected">Cancel</span></td><td>'+esc(x.name)+'</td><td>'+d.date+'</td><td>'+x.period+' → open period</td><td>'+esc(proj(x.oldProj).name)+'</td><td>'+x.oldTask+'</td><td class="num" style="color:var(--rw-danger)">-'+d.hrs.toFixed(2)+'</td><td><span class="chip chip-approved">Manager-approved</span></td><td>'+flagChip('Reversal')+'</td></tr>'+
+      '<tr><td><span class="chip chip-approved">Adjustment</span></td><td>'+esc(x.name)+'</td><td>'+d.date+'</td><td>open period</td><td>'+esc(proj(x.newProj).name)+'</td><td>'+x.newTask+'</td><td class="num" style="color:var(--rw-success)">+'+d.hrs.toFixed(2)+'</td><td><span class="chip chip-approved">Manager-approved</span></td><td>'+flagChip('Adjustment')+'</td></tr>';
+  }); });
+  awaiting.forEach(function(x){ (x.days||[]).forEach(function(d){
+    h += '<tr style="opacity:.6"><td>Reversal / Adjustment</td><td>'+esc(x.name)+'</td><td>'+d.date+'</td><td>'+x.period+' → open</td><td>'+esc(proj(x.oldProj).name)+' → '+esc(proj(x.newProj).name)+'</td><td>'+x.oldTask+' → '+x.newTask+'</td><td class="num">&plusmn;'+d.hrs.toFixed(2)+'</td><td><span class="chip chip-submitted">Awaiting manager approval — not posted</span></td><td>'+flagChip('Reversal')+' '+flagChip('Adjustment')+'</td></tr>';
+  }); });
+  h += '</tbody></table></div></div>';
+  h += '<div class="warn-banner">Retro rule: hours are <strong>reversed (−) from the old project</strong> and <strong>added (+) to the new project</strong> in the current open period — but <strong>only after the manager approves</strong> (in Team Approvals). Until then the pair is held and not posted. Adjustments allowed up to 3 months from the open period. <span class="brd-tag">BRD 4.2.1 · #10</span></div>';
+  h += discussHere('Adjustments &amp; accrual — accrual hand-off source-of-truth; email intimations on reversals');
+  h += '</div>';
+  document.getElementById('mainArea').innerHTML = h;
+}
+function adjHrs(adj){ return (adj.days||[]).reduce(function(s,d){return s+num(d.hrs);},0); }   // #10 total across the day-wise breakdown
+function applyAdjustment(i){ ADJUSTMENTS[i].applied=true; ADJUSTMENTS[i].approved=false; toast('Change applied day-wise — old lines cancelled (−), new lines added (+); routed to the manager for approval.'); renderMyTimesheet(); }
+// #10 manager approval of applied retro adjustments (for a project this manager owns — old or new)
+function mgrPendingAdjustments(){ return ADJUSTMENTS.filter(function(x){ return x.applied && !x.approved && (proj(x.oldProj).managerId===SELF.Manager || proj(x.newProj).managerId===SELF.Manager); }); }
+function approveAdjustment(idx){ ADJUSTMENTS[idx].approved=true; toast('Retro adjustment approved for '+ADJUSTMENTS[idx].name+' — the −/+ rows are now confirmed to accrual.'); renderTeam(); }
+function mgrAdjustmentsPanel(){
+  var pend=mgrPendingAdjustments();
+  var approvedMine=ADJUSTMENTS.filter(function(x){ return x.applied && x.approved && (proj(x.oldProj).managerId===SELF.Manager || proj(x.newProj).managerId===SELF.Manager); });
+  if (!pend.length && !approvedMine.length) return '';
+  var rows='';
+  pend.concat(approvedMine).forEach(function(x){ var i=ADJUSTMENTS.indexOf(x);
+    var days=x.days||[], n=Math.max(1,days.length);
+    var changeCell='<td rowspan="'+n+'">'+esc(proj(x.oldProj).name)+' · '+x.oldTask+' '+flagChip('Reversal')+'<br>&rarr; '+esc(proj(x.newProj).name)+' · '+x.newTask+' '+flagChip('Adjustment')+'<br><span style="font-size:11px;color:var(--rw-slate)">'+adjHrs(x).toFixed(2)+'h total · '+days.length+' day(s)</span></td>';
+    var statusCell='<td rowspan="'+n+'">'+(x.approved?'<span class="chip chip-approved">Approved → accrual</span>':'<span class="chip chip-submitted">Pending your approval</span>')+'</td>';
+    var actionCell='<td rowspan="'+n+'">'+(x.approved?'<span style="font-size:11.5px;color:var(--rw-slate)">Done</span>':'<button class="btn btn-primary btn-sm" onclick="approveAdjustment('+i+')">Approve adjustment</button>')+'</td>';
+    days.forEach(function(d,di){
+      rows += '<tr>'+
+        (di===0 ? '<td rowspan="'+n+'">'+esc(x.name)+' <span class="mono" style="color:var(--rw-slate)">'+x.emp+'</span></td><td rowspan="'+n+'">'+x.period+'</td>'+changeCell : '')+
+        '<td>'+d.date+'</td>'+
+        '<td class="num" style="color:var(--rw-danger)">-'+d.hrs.toFixed(2)+'</td>'+
+        '<td class="num" style="color:var(--rw-success)">+'+d.hrs.toFixed(2)+'</td>'+
+        (di===0 ? statusCell+actionCell : '')+'</tr>';
+    });
+  });
+  return '<div class="card"><div class="card-toolbar"><span class="card-title">Retro Project / WBS changes — pending your approval <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--rw-slate)">(day-wise)</span></span><div class="card-toolbar-right"><span class="brd-tag">#10 · Reversal / Adjustment</span></div></div>'+
+    '<div class="tbl-wrap"><table><thead><tr><th>Employee</th><th>From period</th><th>Change (old → new)</th><th>Date</th><th class="num">Cancel (−)</th><th class="num">Adjustment (+)</th><th>Status</th><th>Action</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
+    '<div style="padding:10px 16px;border-top:1px solid var(--rw-border);font-size:12px;color:var(--rw-slate)">The employee re-entered time in the changed project/task <strong>per day</strong> and cancelled the old. Approving confirms the day-wise '+flagChip('Reversal')+'(−) / '+flagChip('Adjustment')+'(+) rows into the open accrual period.</div></div>';
+}
+
+// ============================================================
+//  INTEGRATIONS (REST — text only, integrate later)
+// ============================================================
+function renderIntegrations(){
+  var h = band('Integration · Reference', 'Integrations — Oracle Fusion (OTL-centric)',
+    '<strong>Oracle Time &amp; Labor (OTL) is the system of record.</strong> This app prepopulates from HCM &amp; Projects, captures &amp; approves time, then pushes approved time into OTL (which natively feeds Project Costing &amp; Payroll) and, in parallel, to our other product. Endpoints below are the source of truth from the integration reference; <span class="q-tag">wired at integration phase</span>.');
+  h += '<div class="rw-body">';
+  h += '<div class="info-banner"><strong>Flow:</strong> 1) Prepopulate grid from Projects (WBS/Tasks) + resource assignments + work schedules + org calendars &nbsp;→&nbsp; 2) Employee creates/edits/submits &nbsp;→&nbsp; 3) Manager approves/rejects &nbsp;→&nbsp; 4) Push approved time to <strong>OTL</strong> (<code class="mono">timeRecordEventRequests</code>, processMode <code class="mono">TIME_SUBMIT</code>) &nbsp;→&nbsp; OTL feeds <strong>Project Costing</strong> &amp; <strong>Payroll</strong> natively (no direct write) &nbsp;→&nbsp; 5) Reconcile with <code class="mono">statusChangeRequests</code>. &nbsp;→&nbsp; 6) On month confirmation, <strong>write the consolidated timesheet + adjustments into the Accrual system schema</strong> (fill <code class="mono">ACCRUAL.XX_O2C_TIMESHEET_ACCRUAL_IF</code>).</div>';
+  var groups = [
+    {name:'Time & Labor (OTL) — core (HCM REST)', color:'#a23541', tag:'system of record', items:[
+      'POST /hcmRestApi/.../timeRecordEventRequests  (processMode TIME_SUBMIT — create + submit)',
+      'GET  /timeRecordGroups  (time cards; finders: personNumber, date range, groupType)',
+      'GET  /timeRecordGroups/{id}/child/timeRecords',
+      'GET  /timeRecordGroups/{id}/child/timeAttributes  (payroll time type, PROJECT, task)',
+      'POST /statusChangeRequests  (consumerCode e.g. PYR — reconcile after downstream consumes)']},
+    {name:'HCM — Worker & Assignment (prepopulation)', color:'#1f5d83', tag:'inbound', items:[
+      'GET  /hcmRestApi/.../workers  (filter q=PersonNumber=..; use workers for contingent/terminated)',
+      'GET  /workers/{id}  ·  POST/PATCH /workers',
+      'PersonNumber → PersonId hop (PascalCase workers vs camelCase absences); &effectiveDate=YYYY-MM-DD']},
+    {name:'Projects — WBS & Resource Assignments (prepopulation)', color:'#1f6a4a', tag:'inbound', items:[
+      'GET  /fscmRestApi/.../projects/{ProjectId}/child/Tasks  (WBS)',
+      'GET  /projectResourceAssignments  (filter by person/project)',
+      'POST /projectResourceAssignments  ·  action/adjustAssignmentSchedule, action/replaceResource']},
+    {name:'Work Schedules & Org Calendars (grid shape)', color:'#a26a0a', tag:'inbound / verify', items:[
+      'GET  /timeRecordGroups?groupType=Schedule   (preferred read path — confirm finder via /describe)',
+      'POST /scheduleRequests  (write/import — likely NOT a clean read path)',
+      'GET  /absenceCalendars  ·  action/findByAdvancedSearch  (org holidays)']},
+    {name:'Absences (overlap handling)', color:'#7a2f6a', tag:'inbound', items:[
+      'GET  /hcmRestApi/.../absences?q=personId=..;startDate>=..&limit=&offset=&onlyData=true',
+      'GET  /absences/{id}/child/absenceEntryDetails  ·  action/absenceDailyDetailsBreakdown']},
+    {name:'Accrual System — Consolidated Timesheet + Adjustments (schema table load)', color:'#1f6a4a', tag:'outbound · table load', items:[
+      'INSERT INTO  ACCRUAL.XX_O2C_TIMESHEET_ACCRUAL_IF   (consolidated timesheet: employee × project × WBS × day — billed/unbilled/leave)',
+      '            + day-wise  Cancel (−) / Adjustment (+)  rows  (retro & default-hour corrections)',
+      'via OIC / DB link into the accrual schema — loaded only for manager-confirmed months (ENTRY_TYPE, FLAG, ACTION_DATE, SOURCE_TS_ID)']},
+    {name:'Downstream — read / audit only', color:'#5b5d65', tag:'no direct write', items:[
+      'GET  /fscmRestApi/.../projectCosts  ·  /projectExpenditureBatches   (Project Costing — auto-populated by OTL)',
+      'GET  /hcmRestApi/.../payrollRelationships/.../payrollAssignments   (reference/validation)',
+      'GET  /fscmRestApi/.../receivablesInvoices  ·  /journalBatches/child/journalHeaders   (billing/GL audit)']}
+  ];
+  groups.forEach(function(g){
+    h += '<div class="card"><div class="card-toolbar"><span class="card-title" style="color:'+g.color+'">'+esc(g.name)+'</span><div class="card-toolbar-right"><span class="brd-tag">'+esc(g.tag)+'</span></div></div><div class="card-body"><div style="display:flex;flex-direction:column;gap:6px">'+
+      g.items.map(function(i){ return '<code class="mono" style="background:var(--rw-oyster);padding:6px 10px;border-radius:4px;display:block;white-space:pre-wrap">'+esc(i)+'</code>'; }).join('')+'</div></div></div>';
+  });
+  h += '<div class="warn-banner"><strong>Contracts:</strong> Enterprise Contracts is a CLM product, not a direct consumer of time — contract-billing terms are governed inside Projects/Project Billing. Flag to architecture if a specific contract linkage is needed. <strong>Auth:</strong> Basic or OAuth per environment. Prefer <code class="mono">/{resource}/describe</code> over published docs (pod may differ). Test POST/PATCH in non-PROD first.</div>';
+  h += discussHere('Integrations — OTL approval source-of-truth (app vs OTL); work-schedule read path; personNumber on absences');
+  h += '</div>';
+  document.getElementById('mainArea').innerHTML = h;
+}
+
+// ============================================================
+//  FINANCE — Calendar (sync from Fusion)  [BRD 4.1 calendar sources]
+// ============================================================
+var CAL_LAST_SYNC = '24-Jul-2026 06:00';
+var CALENDARS = {
+  corporate:{name:'Corporate Calendar & Standard Hours', by:'Country (city optional)', rows:[
+    {scope:'India', std:'8 hrs/day', workweek:'Mon–Fri', holidays:'15-Aug (Independence Day), 02-Oct'},
+    {scope:'United States', std:'8 hrs/day', workweek:'Mon–Fri', holidays:'04-Jul (Independence Day)'},
+    {scope:'United States · Boston (city)', std:'8 hrs/day', workweek:'Mon–Fri', holidays:'17-Jun (Bunker Hill Day)'}
+  ]},
+  client:{name:'Client Holiday Calendar', by:'Client × Country', rows:[
+    {scope:'Northwind Health · US', std:'—', workweek:'Mon–Fri', holidays:'04-Jul, 25-Dec (client-observed)'},
+    {scope:'King County · US', std:'—', workweek:'Mon–Fri', holidays:'04-Jul, 24-Jul (Seafair)'}
+  ]},
+  project:{name:'Project Standard Hours', by:'Project × Country', rows:[
+    {scope:'PRJ-1001 · US', std:'8 hrs/day', workweek:'Mon–Fri', holidays:'follows client'},
+    {scope:'PRJ-1002 · US', std:'9 hrs/day (FCP)', workweek:'Mon–Fri', holidays:'follows client'}
+  ]},
+  shift:{name:'Shift Configuration', by:'Client / Employee (overrides client calendar)', rows:[
+    {scope:'Regular', std:'8 hrs/day', workweek:'Mon–Fri', holidays:'—'},
+    {scope:'Night', std:'8 hrs/day', workweek:'Mon–Fri (night)', holidays:'—'},
+    {scope:'Split (6-day)', std:'6.5 hrs/day', workweek:'Mon–Sat', holidays:'—'}
+  ]}
+};
+var calTab='corporate';
+function renderCalendar(){
+  var h = band('Setup · Admin', 'Calendar — Fusion Sync',
+    'Synchronise the calendars the population job depends on. The BRD sources time from four calendar layers with a defined precedence: <strong>Shift → Client Holiday → Project Standard → Corporate</strong>. <span class="brd-tag">BRD 4.1</span>');
+  h += '<div class="rw-body">';
+  h += '<div class="card"><div class="card-body" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">'+
+    '<span class="mono" style="font-size:12px;color:var(--rw-slate)">Last Fusion sync: <strong id="calSync">'+CAL_LAST_SYNC+'</strong></span>'+
+    '<div style="margin-left:auto;display:flex;gap:8px">'+
+      '<button class="btn btn-outline btn-sm" onclick="syncCal(\'this\')">Sync current calendar</button>'+
+      '<button class="btn btn-primary btn-sm" onclick="syncCal(\'all\')">Sync all from Fusion</button></div></div></div>';
+  h += '<div class="info-banner">Precedence (BRD 4.1): the <strong>Shift calendar overrides the Client calendar</strong>; Client holidays override Project standard days; Project standard hours override Corporate. Corporate work-days/holidays are country-level, with optional <strong>city-level</strong> corporate holidays. A single screen configures all four layers below. <span class="brd-tag">BRD 4.1</span></div>';
+  h += '<div class="tab-row">'+Object.keys(CALENDARS).map(function(k){ return '<button class="tab'+(calTab===k?' active':'')+'" onclick="calTab=\''+k+'\';renderCalendar()">'+CALENDARS[k].name+'</button>'; }).join('')+'</div>';
+  var c = CALENDARS[calTab];
+  h += '<div class="card"><div class="card-toolbar"><span class="card-title">'+esc(c.name)+'</span><div class="card-toolbar-right"><span class="chip chip-open">Keyed by: '+esc(c.by)+'</span> <button class="btn btn-outline btn-sm" onclick="toast(\'Add calendar entry (Admin).\')">+ Add Entry</button></div></div>';
+  h += '<div class="tbl-wrap"><table><thead><tr><th>Scope</th><th>Standard Hours</th><th>Work Week</th><th>Holidays / Notes</th><th></th></tr></thead><tbody>'+
+    c.rows.map(function(r){ return '<tr><td>'+esc(r.scope)+'</td><td>'+esc(r.std)+'</td><td>'+esc(r.workweek)+'</td><td>'+esc(r.holidays)+'</td><td><button class="btn btn-ghost btn-sm" onclick="toast(\'Edit (Admin only).\')">Edit</button></td></tr>'; }).join('')+
+    '</tbody></table></div></div>';
+  h += discussHere('Cut-offs &amp; control — calendar storage shape; Fusion source per layer; city-level holidays');
+  h += '</div>';
+  document.getElementById('mainArea').innerHTML = h;
+}
+function syncCal(which){
+  CAL_LAST_SYNC = '24-Jul-2026 ' + '09:'+ (10+Math.floor((''+Object.keys(CALENDARS).length).length))+'0';
+  var el=document.getElementById('calSync'); if(el) el.textContent=CAL_LAST_SYNC;
+  toast(which==='all' ? 'All four calendar layers re-synced from Oracle Fusion.' : 'Synced the '+CALENDARS[calTab].name+' from Fusion.');
+}
+
+// ============================================================
+//  FINANCE — Sync Status (monthly + daily population jobs)  [BRD 4.1]
+// ============================================================
+function renderSyncStatus(){
+  var h = band('Operations · Admin', 'Sync Status — Population Jobs',
+    'Health of the time-population jobs: the <strong>monthly</strong> program (runs 1–2 days before month close, populates next month) and the <strong>daily</strong> process (handles allocation changes, new hires, exits, deputations, transfers, shift updates by action date). <span class="brd-tag">BRD 4.1</span>');
+  h += '<div class="rw-body">';
+  h += '<div class="stat-row">'+statCard('Monthly job','✓ Success')+statCard('Daily job (today)','⚠ 2 issues')+statCard('Records populated','1,284')+statCard('Exceptions','2')+'</div>';
+  h += '<div class="card"><div class="card-toolbar"><span class="card-title">Monthly population runs</span><div class="card-toolbar-right"><button class="btn btn-outline btn-sm" onclick="toast(\'Monthly job re-queued (mock).\')">Re-run</button></div></div>'+
+    '<div class="tbl-wrap"><table><thead><tr><th>Run</th><th>For Period</th><th>Started</th><th>Duration</th><th class="num">Employees</th><th class="num">Records</th><th>Status</th></tr></thead><tbody>'+
+    '<tr><td>MON-2026-07</td><td>July 2026</td><td>29-Jun 23:00</td><td>4m 12s</td><td class="num">312</td><td class="num">6,240</td><td>'+statusChip('Approved').replace('Approved','Success')+'</td></tr>'+
+    '<tr><td>MON-2026-08</td><td>August 2026</td><td>30-Jul 23:00</td><td>—</td><td class="num">—</td><td class="num">—</td><td><span class="chip chip-open">Scheduled</span></td></tr>'+
+    '</tbody></table></div></div>';
+  h += '<div class="card"><div class="card-toolbar"><span class="card-title">Daily process runs (action-date driven)</span></div>'+
+    '<div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Trigger types processed</th><th class="num">Changes</th><th class="num">OK</th><th class="num">Errors</th><th>Status</th><th></th></tr></thead><tbody>'+
+    '<tr><td>24-Jul-2026</td><td>Allocation %, New hire, Shift update</td><td class="num">18</td><td class="num">16</td><td class="num">2</td><td><span class="chip chip-rejected">2 errors</span></td><td><button class="btn btn-outline btn-sm" onclick="syncErrors()">View issues</button></td></tr>'+
+    '<tr><td>23-Jul-2026</td><td>Transfer, Deputation, Exit</td><td class="num">11</td><td class="num">11</td><td class="num">0</td><td>'+statusChip('Approved').replace('Approved','Success')+'</td><td></td></tr>'+
+    '<tr><td>22-Jul-2026</td><td>Allocation %, WBS change</td><td class="num">7</td><td class="num">7</td><td class="num">0</td><td>'+statusChip('Approved').replace('Approved','Success')+'</td><td></td></tr>'+
+    '</tbody></table></div></div>';
+  h += '<div class="card"><div class="card-toolbar"><span class="card-title">Open issues (24-Jul daily run)</span></div>'+
+    '<div class="tbl-wrap"><table><thead><tr><th>Employee</th><th>Type</th><th>Issue</th><th>Suggested action</th><th></th></tr></thead><tbody>'+
+    '<tr><td>EMP-518 (new hire)</td><td>New hire</td><td>No project allocation found — cannot populate time</td><td>Allocate to a project (or Bench/Unbilled) then re-run</td><td><button class="btn btn-outline btn-sm" onclick="toast(\'Retried for EMP-518 (mock).\')">Retry</button></td></tr>'+
+    '<tr><td>EMP-521</td><td>Shift update</td><td>Shift calendar missing for "Split (6-day)" in India</td><td>Sync Shift Configuration calendar from Fusion</td><td><button class="btn btn-outline btn-sm" onclick="go(\'calendar\')">Fix in Calendar</button></td></tr>'+
+    '</tbody></table></div></div>';
+  h += discussHere('Population of time — daily-process scope; retry / alerting policy; backdated re-trigger');
+  h += '</div>';
+  document.getElementById('mainArea').innerHTML = h;
+}
+function syncErrors(){
+  openModal('<div class="modal-header"><h4>Daily run issues — 24-Jul-2026</h4><button class="modal-close" onclick="closeModal()">&times;</button></div>'+
+    '<div class="modal-body"><ul class="q-list"><li><strong>EMP-518</strong> — new hire with no allocation; time not populated.</li><li><strong>EMP-521</strong> — shift calendar "Split (6-day)" missing for India.</li></ul>'+
+    '<p style="font-size:12px;color:var(--rw-slate)">Both are non-blocking for the rest of the batch; resolve and re-run just these records.</p></div>'+
+    '<div class="modal-footer"><button class="btn btn-outline" onclick="closeModal()">Close</button><button class="btn btn-primary" onclick="closeModal();toast(\'Re-ran 2 failed records (mock).\')">Re-run failed only</button></div>');
+}
+
+// ---------- init ----------
+seedHistory();
+seedScenarios();
+setRole('Employee', document.querySelector('.rw-role-btn'));
+</script>

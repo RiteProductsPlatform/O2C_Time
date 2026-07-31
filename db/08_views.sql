@@ -121,9 +121,16 @@ SELECT w.ts_week_id,
        w.total_hours,
        w.standard_hours,
        w.defaulted_flag,
+       -- EMPLOYEE or MANAGER. Projected because the screens need to explain a
+       -- Defaulted badge rather than just show it: only an EMPLOYEE default
+       -- locks the week and holds pay (RULE-016), and a manager looking at
+       -- their own lateness should not be told the employee failed to submit.
+       w.defaulted_by,
        w.late_submission_flag,
        w.advance_closure_flag,
        w.overridden_flag,
+       w.has_reversal_flag,
+       w.has_adjustment_flag,
        w.locked_flag,
        w.reject_reason,
        w.reject_remarks,

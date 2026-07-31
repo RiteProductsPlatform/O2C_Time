@@ -120,7 +120,20 @@ CREATE OR REPLACE PACKAGE oc_time_pkg AS
     p_actor      IN VARCHAR2 DEFAULT 'VBCS_USER',
     p_trace_id   IN VARCHAR2 DEFAULT NULL);
 
+  -- The two defaulting jobs. Both produce week_status 'Defaulted'; they differ
+  -- in who missed the cut-off, and that difference decides whether the
+  -- employee's pay is held (RULE-016, TIMESHEET_FLOW.html §01).
+  --
+  --   weekly   employee never submitted  -> DEFAULTED_BY 'EMPLOYEE', LOCKS,
+  --                                         holds salary
+  --   delivery manager never decided     -> DEFAULTED_BY 'MANAGER',  no lock,
+  --                                         never holds salary
   FUNCTION run_weekly_defaulting(
+    p_period_id IN NUMBER,
+    p_as_of     IN DATE     DEFAULT SYSDATE,
+    p_actor     IN VARCHAR2 DEFAULT 'SCHEDULER') RETURN NUMBER;     -- job_run_id
+
+  FUNCTION run_delivery_defaulting(
     p_period_id IN NUMBER,
     p_as_of     IN DATE     DEFAULT SYSDATE,
     p_actor     IN VARCHAR2 DEFAULT 'SCHEDULER') RETURN NUMBER;     -- job_run_id
@@ -1029,6 +1042,10 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
         UPDATE oc_ts_week
            SET week_status     = 'Defaulted',
                defaulted_flag  = 'Y',
+               -- The employee missed their own cut-off, so this is the default
+               -- that holds pay (RULE-016) and locks the week — only a manager
+               -- can edit it now.
+               defaulted_by    = 'EMPLOYEE',
                locked_flag     = 'Y',
                submitted_by    = p_actor,
                submitted_on    = SYSTIMESTAMP,
@@ -1049,6 +1066,78 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
     COMMIT;
     RETURN v_job;
   END run_weekly_defaulting;
+
+
+  -- The delivery cut-off: the MANAGER never decided on a submitted week.
+  --
+  -- Three deliberate differences from weekly defaulting, all from
+  -- TIMESHEET_FLOW.html §01:
+  --
+  --   * DEFAULTED_BY is 'MANAGER', and run_salary_stopping ignores those. The
+  --     employee did their part; holding their pay because their manager was
+  --     slow would invert RULE-016, whose whole point is that "awaiting
+  --     approval does not stop salary".
+  --   * The week is NOT locked. The manager is late, not barred — they can
+  --     still approve it, and the flow expects exactly that ("manager approves
+  --     late" -> Approved).
+  --   * Only 'Submitted' weeks are touched. A week that was never submitted is
+  --     the employee's default, already handled by the weekly job, and must not
+  --     be reclassified as the manager's.
+  FUNCTION run_delivery_defaulting(
+    p_period_id IN NUMBER,
+    p_as_of     IN DATE     DEFAULT SYSDATE,
+    p_actor     IN VARCHAR2 DEFAULT 'SCHEDULER') RETURN NUMBER
+  IS
+    v_job     NUMBER;
+    v_read    NUMBER := 0;
+    v_up      NUMBER := 0;
+    v_fail    NUMBER := 0;
+    v_cutoff  DATE;
+  BEGIN
+    v_job := start_job('Delivery Defaulting', 'DeliveryDefaulting',
+                       p_period_id, TRUNC(p_as_of), NULL, p_actor);
+
+    SELECT delivery_cutoff INTO v_cutoff
+      FROM oc_time_period WHERE period_id = p_period_id;
+
+    -- No delivery cut-off configured means there is nothing to miss. Finish the
+    -- job cleanly rather than defaulting every open week against a null date.
+    IF v_cutoff IS NULL OR TRUNC(p_as_of) <= v_cutoff THEN
+      finish_job(v_job, 0, 0, 0);
+      COMMIT;
+      RETURN v_job;
+    END IF;
+
+    FOR w IN (SELECT ts_week_id, employee_id
+                FROM oc_ts_week
+               WHERE period_id   = p_period_id
+                 AND week_status = 'Submitted')
+    LOOP
+      v_read := v_read + 1;
+      BEGIN
+        UPDATE oc_ts_week
+           SET week_status    = 'Defaulted',
+               defaulted_flag = 'Y',
+               defaulted_by   = 'MANAGER',
+               updated_by     = p_actor,
+               updated_on     = SYSTIMESTAMP
+         WHERE ts_week_id = w.ts_week_id;
+
+        log_event(w.ts_week_id, w.employee_id, NULL, p_period_id, 'WEEK', NULL,
+                  'Default', NULL,
+                  'Delivery cut-off passed with no manager decision',
+                  w.employee_id, NULL);
+        v_up := v_up + 1;
+      EXCEPTION WHEN OTHERS THEN
+        fail_record(v_job, 'TS_WEEK', TO_CHAR(w.ts_week_id), w.employee_id, SQLERRM);
+        v_fail := v_fail + 1;
+      END;
+    END LOOP;
+
+    finish_job(v_job, v_read, v_up, v_fail);
+    COMMIT;
+    RETURN v_job;
+  END run_delivery_defaulting;
 
 
   -- ═══════════════════════════════════════════════════════════
@@ -1543,14 +1632,26 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
     v_job := start_job('Salary Stopping', 'SalaryStopping',
                        p_period_id, TRUNC(SYSDATE), NULL, p_actor);
 
+    -- Only an EMPLOYEE-caused default holds pay (RULE-016,
+    -- TIMESHEET_FLOW.html §01). A week defaulted because the MANAGER missed the
+    -- delivery cut-off counts as still-submitted here: the employee did their
+    -- part, and "awaiting manager approval does not stop salary" is the rule
+    -- this whole job exists to implement. Reading week_status alone would hold
+    -- pay for the manager's lateness, which inverts it.
     FOR e IN (SELECT w.employee_id,
-                     COUNT(*)                                                   AS weeks_total,
-                     SUM(CASE WHEN w.week_status = 'Defaulted' THEN 1 ELSE 0 END) AS weeks_def,
-                     SUM(CASE WHEN w.week_status <> 'Defaulted' THEN 1 ELSE 0 END) AS weeks_sub,
-                     SUM(CASE WHEN w.week_status <> 'Defaulted'
-                              THEN w.total_hours ELSE 0 END)                     AS applied_hrs,
-                     SUM(CASE WHEN w.week_status  = 'Defaulted'
-                              THEN w.total_hours ELSE 0 END)                     AS default_hrs
+                     COUNT(*) AS weeks_total,
+                     SUM(CASE WHEN w.week_status = 'Defaulted'
+                               AND w.defaulted_by = 'EMPLOYEE'
+                              THEN 1 ELSE 0 END)                 AS weeks_def,
+                     SUM(CASE WHEN w.week_status = 'Defaulted'
+                               AND w.defaulted_by = 'EMPLOYEE'
+                              THEN 0 ELSE 1 END)                 AS weeks_sub,
+                     SUM(CASE WHEN w.week_status = 'Defaulted'
+                               AND w.defaulted_by = 'EMPLOYEE'
+                              THEN 0 ELSE w.total_hours END)     AS applied_hrs,
+                     SUM(CASE WHEN w.week_status = 'Defaulted'
+                               AND w.defaulted_by = 'EMPLOYEE'
+                              THEN w.total_hours ELSE 0 END)     AS default_hrs
                 FROM oc_ts_week     w
                 JOIN oc_time_worker k ON k.employee_id = w.employee_id
                WHERE w.period_id = p_period_id
@@ -1558,7 +1659,9 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
                  -- invoice-driven (RA-012 still open).
                  AND k.worker_type = 'Employee'
                GROUP BY w.employee_id
-              HAVING SUM(CASE WHEN w.week_status = 'Defaulted' THEN 1 ELSE 0 END) > 0)
+              HAVING SUM(CASE WHEN w.week_status = 'Defaulted'
+                               AND w.defaulted_by = 'EMPLOYEE'
+                              THEN 1 ELSE 0 END) > 0)
     LOOP
       v_read := v_read + 1;
 
@@ -1580,8 +1683,10 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
       v_up := v_up + 1;
     END LOOP;
 
-    -- An employee who no longer has any Defaulted week is released
-    -- automatically: the reason for the hold has gone.
+    -- An employee with no employee-caused default left is released
+    -- automatically: the reason for the hold has gone. Same filter as above —
+    -- a manager-caused default must not keep a hold alive any more than it may
+    -- create one.
     UPDATE oc_ts_salary_hold h
        SET salary_status = 'Released',
            released_by   = p_actor,
@@ -1592,7 +1697,8 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
        AND NOT EXISTS (SELECT 1 FROM oc_ts_week w
                         WHERE w.employee_id = h.employee_id
                           AND w.period_id   = h.period_id
-                          AND w.week_status = 'Defaulted');
+                          AND w.week_status = 'Defaulted'
+                          AND w.defaulted_by = 'EMPLOYEE');
 
     finish_job(v_job, v_read, v_up, 0);
     COMMIT;

@@ -27,8 +27,9 @@ define([
 
       await this.loadPeriods(context, $application);
 
-      const role = $application.variables.currentRole;
-      if (role === 'ROLE_TIME_MANAGER' || role === 'ROLE_TIME_ADMIN') {
+      // Manager only. PER-004's admin menu has no team pages, so loading the
+      // switcher for an admin would be a request whose answer is never shown.
+      if ($application.variables.currentRole === 'ROLE_TIME_MANAGER') {
         await this.loadManagers(context, $page, $application);
       }
     }

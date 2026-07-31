@@ -18,7 +18,9 @@ define(['resources/js/navModel'], (navModel) => {
     ROLE_TIME_NONE:       'No access',
   };
 
-  const MANAGER_ROLES = ['ROLE_TIME_MANAGER', 'ROLE_TIME_ADMIN'];
+  // Manager only — the admin menu (PER-004) has no team pages, so there is
+  // nothing for an acting-manager switch to change.
+  const MANAGER_ROLES = ['ROLE_TIME_MANAGER'];
 
   class PageModule {
 

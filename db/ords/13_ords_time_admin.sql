@@ -35,7 +35,8 @@
 --   POST sync/retry/:failedId                    retry one failed record
 --   POST jobs/populate/:periodId                 run the monthly population job
 --   POST jobs/daily                              run the daily action-date job
---   POST jobs/defaulting/:periodId               run the weekly defaulting job
+--   POST jobs/defaulting/:periodId               weekly cut-off  (employee)
+--   POST jobs/delivery-defaulting/:periodId      delivery cut-off (manager)
 --   GET  accrual/confirmed/:periodId             confirmed months
 --   GET  accrual/extract/:confirmId              day-wise extract
 --   GET  accrual/annexure/:periodId              leave-loss invoice annexure
@@ -387,6 +388,39 @@ BEGIN
         HTP.P('{"error":"' || REPLACE(SQLERRM,'"','\"') || '"}');
       END;
     ]');
+  COMMIT;
+END;
+/
+
+-- ── POST jobs/delivery-defaulting/:periodId  (RULE-007) ──────
+-- The manager side of the pair. Kept as its own endpoint rather than a flag on
+-- the one above because the two run on different schedules — weekly, against
+-- each week's own cut-off, versus once when the month's delivery cut-off passes
+-- — and because they must be separately re-runnable when one of them fails.
+BEGIN
+  ORDS.DEFINE_TEMPLATE(p_module_name => 'oc.time.admin',
+                       p_pattern => 'jobs/delivery-defaulting/:periodId');
+  ORDS.DEFINE_HANDLER(
+    p_module_name => 'oc.time.admin',
+    p_pattern => 'jobs/delivery-defaulting/:periodId',
+    p_method => 'POST',
+    p_source_type => ORDS.source_type_plsql,
+    p_source => q'~
+      DECLARE v_job NUMBER; v_up NUMBER;
+      BEGIN
+        v_job := oc_time_pkg.run_delivery_defaulting(
+                   :periodId,
+                   NVL(TO_DATE(:asOf,'YYYY-MM-DD'), SYSDATE),
+                   NVL(:actor,'VBCS_USER'));
+        SELECT records_upserted INTO v_up
+          FROM oc_time_sync_job WHERE job_run_id = v_job;
+        :status_code := 200;
+        HTP.P('{"jobRunId":' || v_job || ',"defaulted":' || v_up || '}');
+      EXCEPTION WHEN OTHERS THEN
+        :status_code := 400;
+        HTP.P('{"error":"' || REPLACE(SQLERRM,'"','\"') || '"}');
+      END;
+    ~');
   COMMIT;
 END;
 /
