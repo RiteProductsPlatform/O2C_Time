@@ -166,13 +166,28 @@ define([
         if (per.ok && per.body && per.body.items) {
           const rows = per.body.items;
 
-          $application.variables.periodOptionsArray = rows.map((r) => ({
+          const opts = rows.map((r) => ({
             value: r.period_id || r.PERIOD_ID,
             label: r.period_name || r.PERIOD_NAME,
             periodState: r.period_state || r.PERIOD_STATE,
             editableFlag: r.editable_flag || r.EDITABLE_FLAG,
             adjustmentAllowed: r.adjustment_allowed || r.ADJUSTMENT_ALLOWED,
           }));
+
+          // The array is what the chains read; the ADP is what seven pages bind
+          // into their month selector. Both are assigned explicitly.
+          //
+          // periodOptions is NOT live-bound to periodOptionsArray. The
+          // array-linked ADP pattern works at PAGE scope, where the variables
+          // initialise together — at APPLICATION scope the binding is evaluated
+          // during app-variable setup, and an ADP left half-initialised throws
+          // inside every oj-select-single that binds it, blanking the page.
+          $application.variables.periodOptionsArray = opts;
+          $application.variables.periodOptions = {
+            itemType: 'periodOptionType',
+            keyAttributes: 'value',
+            data: opts,
+          };
 
           // Default to the Open period; fall back to the newest row so the page
           // is never left with an empty selector.

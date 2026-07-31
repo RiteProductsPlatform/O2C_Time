@@ -406,7 +406,7 @@
       "defaultValue": {
         "itemType": "periodOptionType",
         "keyAttributes": "value",
-        "data": "{{ $application.variables.periodOptionsArray }}"
+        "data": []
       }
     }
   },
