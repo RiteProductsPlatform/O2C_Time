@@ -195,7 +195,7 @@ BEGIN
     p_module_name => 'oc.time.approval', p_pattern => 'approve/month',
     p_method => 'POST',
     p_source_type => ORDS.source_type_plsql,
-    p_source => q'[
+    p_source => q'~
       DECLARE v_done NUMBER := 0;
       BEGIN
         FOR e IN (SELECT emp FROM JSON_TABLE(TO_CLOB(:employees), '$[*]'
@@ -219,7 +219,7 @@ BEGIN
               REPLACE(REPLACE(SQLERRM,'ORA-'||LTRIM(TO_CHAR(ABS(SQLCODE)))||': ',''),'"','\"')
               || '"}');
       END;
-    ]');
+    ~');
   COMMIT;
 END;
 /
@@ -231,7 +231,7 @@ BEGIN
     p_module_name => 'oc.time.approval', p_pattern => 'reject/month',
     p_method => 'POST',
     p_source_type => ORDS.source_type_plsql,
-    p_source => q'[
+    p_source => q'~
       DECLARE v_done NUMBER := 0;
       BEGIN
         FOR e IN (SELECT emp FROM JSON_TABLE(TO_CLOB(:employees), '$[*]'
@@ -257,7 +257,7 @@ BEGIN
               REPLACE(REPLACE(SQLERRM,'ORA-'||LTRIM(TO_CHAR(ABS(SQLCODE)))||': ',''),'"','\"')
               || '"}');
       END;
-    ]');
+    ~');
   COMMIT;
 END;
 /
@@ -320,7 +320,7 @@ BEGIN
     p_module_name => 'oc.time.approval', p_pattern => 'approve/day/:id',
     p_method => 'POST',
     p_source_type => ORDS.source_type_plsql,
-    p_source => q'[
+    p_source => q'~
       DECLARE
         v_done   NUMBER := 0;
         v_status VARCHAR2(30);
@@ -341,7 +341,7 @@ BEGIN
               REPLACE(REPLACE(SQLERRM,'ORA-'||LTRIM(TO_CHAR(ABS(SQLCODE)))||': ',''),'"','\"')
               || '"}');
       END;
-    ]');
+    ~');
   COMMIT;
 END;
 /
@@ -352,7 +352,7 @@ BEGIN
     p_module_name => 'oc.time.approval', p_pattern => 'reject/day/:id',
     p_method => 'POST',
     p_source_type => ORDS.source_type_plsql,
-    p_source => q'[
+    p_source => q'~
       DECLARE v_done NUMBER := 0;
       BEGIN
         FOR d IN (SELECT dt FROM JSON_TABLE(TO_CLOB(:dates), '$[*]'
@@ -370,7 +370,7 @@ BEGIN
               REPLACE(REPLACE(SQLERRM,'ORA-'||LTRIM(TO_CHAR(ABS(SQLCODE)))||': ',''),'"','\"')
               || '"}');
       END;
-    ]');
+    ~');
   COMMIT;
 END;
 /
@@ -462,7 +462,7 @@ BEGIN
     p_module_name => 'oc.time.approval', p_pattern => 'advanceapprove',
     p_method => 'POST',
     p_source_type => ORDS.source_type_plsql,
-    p_source => q'[
+    p_source => q'~
       DECLARE v_done NUMBER := 0;
       BEGIN
         IF :employees IS NULL THEN
@@ -489,7 +489,7 @@ BEGIN
               REPLACE(REPLACE(SQLERRM,'ORA-'||LTRIM(TO_CHAR(ABS(SQLCODE)))||': ',''),'"','\"')
               || '"}');
       END;
-    ]');
+    ~');
   COMMIT;
 END;
 /

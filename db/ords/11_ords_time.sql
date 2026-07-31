@@ -236,7 +236,7 @@ BEGIN
   ORDS.DEFINE_HANDLER(
     p_module_name => 'oc.time', p_pattern => 'entries/batch', p_method => 'POST',
     p_source_type => ORDS.source_type_plsql,
-    p_source => q'[
+    p_source => q'~
       DECLARE
         v_saved NUMBER := 0;
       BEGIN
@@ -272,7 +272,7 @@ BEGIN
               REPLACE(REPLACE(SQLERRM,'ORA-'||LTRIM(TO_CHAR(ABS(SQLCODE)))||': ',''),'"','\"')
               || '"}');
       END;
-    ]');
+    ~');
   COMMIT;
 END;
 /

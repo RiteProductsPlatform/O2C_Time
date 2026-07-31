@@ -142,7 +142,7 @@ BEGIN
     p_module_name => 'oc.time.admin', p_pattern => 'calendar/sync/:layer',
     p_method => 'POST',
     p_source_type => ORDS.source_type_plsql,
-    p_source => q'[
+    p_source => q'~
       DECLARE
         v_job   NUMBER;
         v_n     NUMBER := 0;
@@ -209,7 +209,7 @@ BEGIN
         ROLLBACK; :status_code := 400;
         HTP.P('{"error":"' || REPLACE(SQLERRM,'"','\"') || '"}');
       END;
-    ]');
+    ~');
   COMMIT;
 END;
 /
