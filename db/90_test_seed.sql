@@ -479,6 +479,50 @@ BEGIN
 END;
 /
 
+PROMPT ============================================================
+PROMPT [DEV] Corporate calendar — Mon-Fri fallback (NO Fusion behind this DB)
+PROMPT ============================================================
+
+-- TEST DATA ONLY. A Mon-Fri CORPORATE layer so population has something to
+-- resolve against on a dev database with no Fusion behind it.
+--
+-- Never run this against an environment that syncs from Fusion. The rows are
+-- invented, they are indistinguishable from real ones in the UI, and because
+-- the loader upserts on (layer, scope_key, cal_date) they would block the real
+-- Fusion days for the same dates. SOURCE_SYSTEM is set to 'SEED' so they can at
+-- least be found and deleted:
+--
+--   DELETE FROM oc_time_calendar WHERE source_system = 'SEED';
+DECLARE
+  v_from DATE := TRUNC(ADD_MONTHS(SYSDATE,-1),'MM');
+  v_to   DATE := LAST_DAY(ADD_MONTHS(SYSDATE, 1));
+  TYPE t_tab IS TABLE OF VARCHAR2(60);
+  v_countries t_tab := t_tab('India','United States');
+  v_working   VARCHAR2(1);
+BEGIN
+  FOR c IN 1 .. v_countries.COUNT LOOP
+    FOR d IN 0 .. (v_to - v_from) LOOP
+      v_working := CASE WHEN TO_CHAR(v_from + d,'DY','NLS_DATE_LANGUAGE=ENGLISH')
+                             IN ('SAT','SUN') THEN 'N' ELSE 'Y' END;
+
+      INSERT INTO oc_time_calendar (
+        layer, precedence, scope_key, cal_date, is_working_day, std_hours,
+        source_system, synced_on, created_by)
+      SELECT 'CORPORATE', 1, v_countries(c), v_from + d, v_working,
+             CASE WHEN v_working = 'Y' THEN 8 ELSE 0 END,
+             'SEED', SYSTIMESTAMP, 'SEED'
+        FROM dual
+       WHERE NOT EXISTS (SELECT 1 FROM oc_time_calendar
+                          WHERE layer     = 'CORPORATE'
+                            AND scope_key = v_countries(c)
+                            AND cal_date  = v_from + d);
+    END LOOP;
+  END LOOP;
+  DBMS_OUTPUT.PUT_LINE('corporate calendar seeded.');
+END;
+/
+
+
 COMMIT;
 
 PROMPT ============================================================

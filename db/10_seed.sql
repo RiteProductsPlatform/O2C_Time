@@ -399,38 +399,46 @@ END;
 /
 
 PROMPT ============================================================
-PROMPT [11/11] Corporate calendar — Mon-Fri baseline for the seeded periods
+PROMPT [11/11] Corporate calendar — NOT seeded (sourced from Fusion)
 PROMPT ============================================================
 
--- A minimal CORPORATE layer so population has something to resolve against
--- before the real Fusion calendar sync runs. Scope key is the country; add one
--- row set per country you operate in.
-DECLARE
-  v_from DATE := TRUNC(ADD_MONTHS(SYSDATE,-1),'MM');
-  v_to   DATE := LAST_DAY(ADD_MONTHS(SYSDATE, 1));
-  TYPE t_tab IS TABLE OF VARCHAR2(60);
-  v_countries t_tab := t_tab('India','United States');
-  v_working   VARCHAR2(1);
-BEGIN
-  FOR c IN 1 .. v_countries.COUNT LOOP
-    FOR d IN 0 .. (v_to - v_from) LOOP
-      v_working := CASE WHEN TO_CHAR(v_from + d,'DY','NLS_DATE_LANGUAGE=ENGLISH')
-                             IN ('SAT','SUN') THEN 'N' ELSE 'Y' END;
+-- Deliberately empty.
+--
+-- Working days, shifts, work patterns and holidays are Fusion data (RA-005:
+-- "calendars are sourced from Oracle Fusion; no calendar authoring in the Time
+-- module"). Seeding a Mon-Fri baseline here would put rows in the CORPORATE
+-- layer that look authoritative but are invented, and because the loader
+-- upserts on (layer, scope_key, cal_date) those invented rows would then block
+-- the real ones for the same days.
+--
+-- The four Fusion sources and how they arrive:
+--
+--   work shift      HTS_SHIFTS_VL               -> SHIFTS extract
+--   work pattern    HTS_WORK_PATTERNS_VL        -> WORK_PATTERNS extract
+--                   + HTS_WORK_PATTERN_SHIFTS
+--   work schedule   PER_SCHEDULE_ASSIGNMENTS    -> WORK_SCHEDULES extract
+--   work calendar   PER_CALENDAR_EVENTS         -> CALENDAR extract
+--
+--   resolved day    HTS_SCHEDULE_SHIFTS_VL      -> WORKER_SHIFTS extract
+--                   (person x date x shift, already expanded by Fusion)
+--
+-- Load them with integration/bip/run_extract.py, then
+--   POST /oc/time/admin/calendar/sync/{CORPORATE|PROJECT|CLIENT|SHIFT}
+--
+-- For a local dev database with no Fusion behind it, 90_test_seed.sql has a
+-- Mon-Fri fallback. It is test data and is not part of this installer.
 
-      INSERT INTO oc_time_calendar (
-        layer, precedence, scope_key, cal_date, is_working_day, std_hours,
-        source_system, synced_on, created_by)
-      SELECT 'CORPORATE', 1, v_countries(c), v_from + d, v_working,
-             CASE WHEN v_working = 'Y' THEN 8 ELSE 0 END,
-             'SEED', SYSTIMESTAMP, 'SEED'
-        FROM dual
-       WHERE NOT EXISTS (SELECT 1 FROM oc_time_calendar
-                          WHERE layer     = 'CORPORATE'
-                            AND scope_key = v_countries(c)
-                            AND cal_date  = v_from + d);
-    END LOOP;
-  END LOOP;
-  DBMS_OUTPUT.PUT_LINE('corporate calendar seeded.');
+DECLARE
+  v_n NUMBER;
+BEGIN
+  SELECT COUNT(*) INTO v_n FROM oc_time_calendar;
+  IF v_n = 0 THEN
+    DBMS_OUTPUT.PUT_LINE(
+      'calendar: empty - load from Fusion before running population, or run '
+      || '90_test_seed.sql for a dev fallback.');
+  ELSE
+    DBMS_OUTPUT.PUT_LINE('calendar: ' || v_n || ' day(s) already present.');
+  END IF;
 END;
 /
 

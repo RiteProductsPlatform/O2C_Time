@@ -290,5 +290,124 @@ SELECT s.shift_code      AS shift_code,
 }
 
 
-ALL_EXTRACTS = [WORKERS, PROJECTS, TASKS, ALLOCATIONS, ABSENCES, CALENDAR, SHIFTS]
+# ── Fusion availability: the four objects the CORPORATE/SHIFT layers need ──
+#
+# Together these replace the Mon-Fri baseline that 10_seed.sql fabricates.
+# Fusion models availability in four parts, and OC_TIME_CALENDAR needs all of
+# them to resolve a day:
+#
+#   work shift     HTS_SHIFTS_VL              the catalogue of shift definitions
+#   work pattern   HTS_WORK_PATTERNS_VL       which shift falls on which day of
+#                  + HTS_WORK_PATTERN_SHIFTS  a repeating cycle
+#   work schedule  PER_SCHEDULE_ASSIGNMENTS   which worker is on which schedule
+#   work calendar  PER_CALENDAR_EVENTS        public holidays that override it
+#
+# WORKER_SHIFTS is the resolved output and the one that actually populates the
+# SHIFT layer - Fusion has already expanded pattern x schedule into concrete
+# person x date x shift rows, so there is no need to re-derive the cycle.
+
+WORK_PATTERNS = {
+    "name": "WORK_PATTERNS",
+    "target": "OC_TIME_CALENDAR (pattern reference)",
+    "integration": "INT-004",
+    "key": ["WORK_PATTERN_ID", "DAY_INDEX"],
+    "columns": ["WORK_PATTERN_ID", "WORK_PATTERN_NAME", "REPEAT_CYCLE",
+                "REPEAT_NUM", "DAY_INDEX", "SHIFT_ID", "SHIFT_NAME",
+                "DURATION", "BREAK_DURATION"],
+    "sql": """
+-- DAY_INDEX is the position within the repeat cycle, not a weekday: a 4-on
+-- 3-off pattern has DAY_INDEX 1..7 that does not line up with Mon..Sun. A day
+-- absent from this list is a non-working day in that pattern.
+SELECT wp.work_pattern_id      AS work_pattern_id,
+       wp.work_pattern_name    AS work_pattern_name,
+       wp.repeat_cycle         AS repeat_cycle,
+       wp.repeat_num           AS repeat_num,
+       wps.day_index           AS day_index,
+       wps.shift_id            AS shift_id,
+       sh.shift_name           AS shift_name,
+       wps.duration            AS duration,
+       wps.break_duration      AS break_duration
+  FROM hts_work_patterns_vl wp
+  LEFT JOIN hts_work_pattern_shifts wps
+    ON wps.work_pattern_id = wp.work_pattern_id
+  LEFT JOIN hts_shifts_vl sh
+    ON sh.shift_id = wps.shift_id
+ WHERE NVL(wp.template_flag,'N') = 'N'
+""",
+}
+
+
+WORK_SCHEDULES = {
+    "name": "WORK_SCHEDULES",
+    "target": "OC_TIME_CALENDAR (schedule assignment)",
+    "integration": "INT-004",
+    "key": ["EMPLOYEE_ID", "SCHEDULE_ID", "START_DATE"],
+    "columns": ["EMPLOYEE_ID", "SCHEDULE_ID", "RESOURCE_TYPE", "START_DATE",
+                "END_DATE", "PRIMARY_FLAG"],
+    "sql": """
+-- Which worker follows which schedule, and when.
+--
+-- RESOURCE_TYPE is 'ASSIGN' | 'DEP' | 'LEGALEMP' - there is no 'PERSON'. And
+-- for 'ASSIGN' the RESOURCE_ID is an ASSIGNMENT_ID, not a PERSON_ID, so joining
+-- it straight to PER_ALL_PEOPLE_F matches nothing at all. It has to go through
+-- the assignment.
+--
+-- 'DEP' and 'LEGALEMP' assign a schedule to a whole department or legal
+-- employer. They are deliberately excluded here: those are org-wide defaults
+-- that belong to the CORPORATE layer, whereas this feeds the per-worker one.
+SELECT papf.person_number                       AS employee_id,
+       sa.schedule_id                           AS schedule_id,
+       sa.resource_type                         AS resource_type,
+       TO_CHAR(sa.start_date,'YYYY-MM-DD')      AS start_date,
+       TO_CHAR(sa.end_date,'YYYY-MM-DD')        AS end_date,
+       NVL(sa.primary_flag,'N')                 AS primary_flag
+  FROM per_schedule_assignments sa
+  JOIN per_all_assignments_m paam
+    ON paam.assignment_id = sa.resource_id
+   AND paam.effective_latest_change = 'Y'
+   AND {ED} BETWEEN paam.effective_start_date AND paam.effective_end_date
+  JOIN per_all_people_f papf
+    ON papf.person_id = paam.person_id
+   AND {ED} BETWEEN papf.effective_start_date AND papf.effective_end_date
+ WHERE sa.resource_type = 'ASSIGN'
+   AND NVL(sa.end_date, {ED}) >= ADD_MONTHS({ED}, -12)
+""".replace("{ED}", ED),
+}
+
+
+WORKER_SHIFTS = {
+    "name": "WORKER_SHIFTS",
+    "target": "OC_TIME_CALENDAR (SHIFT layer)",
+    "integration": "INT-004",
+    "key": ["EMPLOYEE_ID", "CALENDAR_DATE"],
+    "columns": ["LAYER", "EMPLOYEE_ID", "CALENDAR_DATE", "IS_WORKING_DAY",
+                "SHIFT_CODE", "SHIFT_NAME", "STANDARD_HOURS"],
+    "sql": """
+-- The SHIFT layer, resolved. Fusion has already expanded work pattern x work
+-- schedule into concrete person x date x shift rows, so this reads the answer
+-- rather than recomputing the cycle.
+--
+-- RULE-011 is one shift per day, so the aggregate collapses any split shift to
+-- a single row and sums the duration. WORK_DURATION is MINUTES in HTS - hence
+-- the /60; taking it as hours would give every worker a 480-hour day.
+SELECT 'SHIFT'                                     AS layer,
+       papf.person_number                          AS employee_id,
+       TO_CHAR(ss.ref_date,'YYYY-MM-DD')           AS calendar_date,
+       'Y'                                         AS is_working_day,
+       MIN(TO_CHAR(ss.shift_id))                   AS shift_code,
+       MIN(ss.shift_name)                          AS shift_name,
+       ROUND(SUM(NVL(ss.work_duration,0)) / 60, 2) AS standard_hours
+  FROM hts_schedule_shifts_vl ss
+  JOIN per_all_people_f papf
+    ON papf.person_id = ss.person_id
+   AND ss.ref_date BETWEEN papf.effective_start_date AND papf.effective_end_date
+ WHERE ss.ref_date >= ADD_MONTHS({ED}, -3)
+   AND ss.ref_date <  ADD_MONTHS({ED},  3)
+ GROUP BY papf.person_number, ss.ref_date
+""".replace("{ED}", ED),
+}
+
+
+ALL_EXTRACTS = [WORKERS, PROJECTS, TASKS, ALLOCATIONS, ABSENCES,
+                CALENDAR, SHIFTS, WORK_PATTERNS, WORK_SCHEDULES, WORKER_SHIFTS]
 BY_NAME = {e["name"]: e for e in ALL_EXTRACTS}
