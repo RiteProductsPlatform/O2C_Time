@@ -145,11 +145,21 @@ DECLARE
                         WHERE lookup_type = p_type AND lookup_code = p_code);
   END;
 BEGIN
-  -- shift_type (from HCM)
-  seed('SHIFT_TYPE','Regular','Regular shift','Shift',10);
-  seed('SHIFT_TYPE','Night',  'Night shift',  'Shift',20);
-  seed('SHIFT_TYPE','Early',  'Early shift',  'Shift',30);
-  seed('SHIFT_TYPE','Split',  'Split shift',  'Shift',40);
+  -- SHIFT_TYPE is deliberately NOT seeded.
+  --
+  -- Shifts, workday patterns, work schedules and the calendar are all Fusion
+  -- data (RA-005). This dictionary used to seed 'Regular / Night / Early /
+  -- Split', which matches nothing in Fusion — the real categories on
+  -- HTS_SHIFTS_VL.SHIFT_CATEGORY are ORA_HTS_SHIFT_DAY, ORA_HTS_SHIFT_NIGHT and
+  -- customer-specific codes such as GSE_HTS_SHIFT_24HR. Invented codes in a
+  -- lookup table are worse than no codes: they read as authoritative and they
+  -- would never join to a real shift.
+  --
+  -- Nothing consumed it either. The app resolves a day's shift from
+  -- OC_TIME_CALENDAR.SHIFT_CODE (OC_TIME_PKG.resolve_day), which the Fusion sync
+  -- fills — the type is display metadata carried alongside, not a validation
+  -- list. See integration/bip: SHIFTS, WORK_PATTERNS, WORK_SCHEDULES,
+  -- WORKER_SHIFTS.
 
   -- accrual_entry_type (INT-014 ENTRY_TYPE)
   seed('ACCRUAL_ENTRY_TYPE','Actual',
