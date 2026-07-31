@@ -523,6 +523,84 @@ END;
 /
 
 
+PROMPT ============================================================
+PROMPT [DEV] OC_TIME_USER — a login for every test worker
+PROMPT ============================================================
+
+-- TEST DATA ONLY. One Active login per seeded worker, all with the same
+-- password, so the three access levels can be demonstrated by signing in as
+-- different people rather than by editing roles between clicks:
+--
+--   resource  RI2824  sampaul.jeevan@rite.digital        ROLE_TIME_EMPLOYEE
+--   manager   RI9001  navamani.solairajan@rite.digital   ROLE_TIME_MANAGER
+--   admin     RI2894  Santoshkumar.kanala@rite.digital   ROLE_TIME_ADMIN
+--
+-- Plus admin@rite.digital: the COMMON ADMIN. It has no worker row on purpose,
+-- which is exactly why OC_TIME_USER.APP_ROLE exists as an override - it proves
+-- an administrator who is not an HCM worker can still sign in and reach the
+-- admin pages.
+--
+-- Roles are NOT set here for the worker-backed logins. They come from
+-- OC_TIME_WORKER.APP_ROLE through V_OC_TIME_SIGNIN, so there is one source of
+-- truth and changing a worker's role changes what they can do at next sign-in.
+--
+-- Password for every account below is 'Rite@123'. Fine for a demo; do not carry
+-- these rows into an environment anyone else can reach.
+DECLARE
+  v_pwd CONSTANT VARCHAR2(30) := 'Rite@123';
+  v_n   PLS_INTEGER := 0;
+
+  -- Matched on EMAIL, not EMPLOYEE_ID. Email is the natural key of a login and
+  -- is the column carrying UK_OC_TU_EMAIL, so matching on anything else lets a
+  -- re-run take the NOT MATCHED branch and collide on the unique constraint.
+  PROCEDURE upsert_login(p_emp   IN VARCHAR2,
+                         p_email IN VARCHAR2,
+                         p_name  IN VARCHAR2,
+                         p_role  IN VARCHAR2) IS
+    v_email VARCHAR2(255) := LOWER(p_email);
+    v_hash  VARCHAR2(128) := oc_time_hash_password(LOWER(p_email), v_pwd);
+  BEGIN
+    MERGE INTO oc_time_user u
+    USING (SELECT v_email AS email FROM dual) s
+       ON (LOWER(u.email) = s.email)
+     WHEN MATCHED THEN UPDATE
+          SET u.employee_id   = p_emp,
+              u.full_name     = p_name,
+              u.app_role      = p_role,
+              u.password_hash = v_hash,
+              u.status        = 'Active',
+              u.failed_count  = 0,
+              u.updated_by    = 'TEST_SEED',
+              u.updated_on    = SYSTIMESTAMP
+     WHEN NOT MATCHED THEN
+          INSERT (employee_id, email, full_name, app_role,
+                  password_hash, status, created_by)
+          VALUES (p_emp, v_email, p_name, p_role,
+                  v_hash, 'Active', 'TEST_SEED');
+  END upsert_login;
+BEGIN
+  -- One login per seeded worker. Email and name are taken from the worker row
+  -- itself so the two can never disagree, and APP_ROLE is passed as NULL so the
+  -- role keeps coming from OC_TIME_WORKER.
+  FOR w IN (SELECT employee_id, employee_name, email
+              FROM oc_time_worker
+             WHERE email IS NOT NULL
+               AND (created_by = 'TEST_SEED' OR updated_by = 'TEST_SEED'))
+  LOOP
+    upsert_login(w.employee_id, w.email, w.employee_name, NULL);
+    v_n := v_n + 1;
+  END LOOP;
+
+  -- The common admin: no EMPLOYEE_ID, so the role must be set explicitly here.
+  upsert_login(NULL, 'admin@rite.digital',
+               'O2C Time Administrator', 'ROLE_TIME_ADMIN');
+
+  DBMS_OUTPUT.PUT_LINE(
+    'logins: ' || v_n || ' worker accounts + 1 common admin, password Rite@123.');
+END;
+/
+
+
 COMMIT;
 
 PROMPT ============================================================
@@ -602,6 +680,27 @@ SELECT a.employee_id, w.employee_name,
  ORDER BY a.absence_date, a.employee_id;
 
 PROMPT
+PROMPT --- Sign-in accounts (all password Rite@123) ----------------
+PROMPT --- EFFECTIVE_ROLE is what the app sees; ROLE_SOURCE says where it came from
+COLUMN email FORMAT A38
+COLUMN full_name FORMAT A26
+COLUMN effective_role FORMAT A22
+COLUMN role_source FORMAT A14
+SELECT u.email, u.full_name, u.status,
+       NVL(u.app_role, NVL(w.app_role,'ROLE_TIME_NONE')) AS effective_role,
+       CASE WHEN u.app_role IS NOT NULL THEN 'user override'
+            WHEN w.app_role IS NOT NULL THEN 'worker'
+            ELSE 'unresolved' END AS role_source
+  FROM oc_time_user u
+  LEFT JOIN oc_time_worker w ON w.employee_id = u.employee_id
+ WHERE u.created_by = 'TEST_SEED' OR u.updated_by = 'TEST_SEED'
+ ORDER BY CASE NVL(u.app_role, NVL(w.app_role,'ROLE_TIME_NONE'))
+            WHEN 'ROLE_TIME_ADMIN'   THEN 1
+            WHEN 'ROLE_TIME_MANAGER' THEN 2
+            ELSE 3 END,
+          u.email;
+
+PROMPT
 PROMPT --- Row counts ----------------------------------------------
 SELECT 'workers'      AS item, COUNT(*) AS cnt FROM oc_time_worker
 UNION ALL SELECT 'projects',      COUNT(*) FROM oc_time_project
@@ -609,7 +708,8 @@ UNION ALL SELECT 'tasks',         COUNT(*) FROM oc_time_task
 UNION ALL SELECT 'allocations',   COUNT(*) FROM oc_time_allocation
 UNION ALL SELECT 'absences',      COUNT(*) FROM oc_time_absence
 UNION ALL SELECT 'calendar days', COUNT(*) FROM oc_time_calendar
-UNION ALL SELECT 'open periods',  COUNT(*) FROM oc_time_period WHERE status = 'Open';
+UNION ALL SELECT 'open periods',  COUNT(*) FROM oc_time_period WHERE status = 'Open'
+UNION ALL SELECT 'logins',        COUNT(*) FROM oc_time_user;
 
 SET FEEDBACK ON
 

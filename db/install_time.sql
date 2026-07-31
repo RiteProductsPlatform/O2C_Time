@@ -8,17 +8,22 @@
 -- Every script is idempotent, so re-running the installer is safe and is the
 -- normal way to apply changes. Nothing is dropped.
 --
--- ── Prerequisites, both run as ADMIN (not as O2C_TIME) ───────
+-- ── Prerequisites, all run as ADMIN (not as O2C_TIME) ────────
 --
 -- 1. Privileges. RESOURCE does NOT include CREATE VIEW, and this module builds
 --    24 of them — without the explicit grant the install dies at 01 step [7/8]
 --    with ORA-01031 after the tables have already succeeded.
 --
+--    DBMS_CRYPTO is separate again: EXECUTE on it is not implied by anything,
+--    and without it 11_auth.sql stops on its own pre-flight because the
+--    password hash function cannot compile and nobody could sign in.
+--
 --     GRANT CONNECT, RESOURCE TO O2C_TIME;
 --     GRANT CREATE VIEW       TO O2C_TIME;
+--     GRANT EXECUTE ON DBMS_CRYPTO TO O2C_TIME;
 --     ALTER USER O2C_TIME QUOTA UNLIMITED ON DATA;   -- ADB tablespace is DATA
 --
--- 2. REST-enable the schema, or the ORDS modules in 11..13 cannot publish and
+-- 2. REST-enable the schema, or the ORDS modules in 12..15 cannot publish and
 --    every endpoint 404s. On Autonomous Database use ORDS_ADMIN as ADMIN —
 --    the classic ORDS.ENABLE_SCHEMA cannot enable a schema other than the
 --    caller's own unless the caller holds ORDS_ADMINISTRATOR_ROLE, which is
@@ -59,11 +64,12 @@ PROMPT
 -- point it looks like the DDL is at fault rather than the grant.
 DECLARE
   v_missing VARCHAR2(400);
+  v_n       PLS_INTEGER;
   PROCEDURE need(p_priv IN VARCHAR2) IS
-    v_n PLS_INTEGER;
+    v_cnt PLS_INTEGER;
   BEGIN
-    SELECT COUNT(*) INTO v_n FROM session_privs WHERE privilege = p_priv;
-    IF v_n = 0 THEN v_missing := v_missing || p_priv || ', '; END IF;
+    SELECT COUNT(*) INTO v_cnt FROM session_privs WHERE privilege = p_priv;
+    IF v_cnt = 0 THEN v_missing := v_missing || p_priv || ', '; END IF;
   END;
 BEGIN
   need('CREATE TABLE');
@@ -72,6 +78,14 @@ BEGIN
   need('CREATE TRIGGER');
   need('CREATE PROCEDURE');
 
+  -- Object grant, not a system privilege, so it is checked differently: if the
+  -- package is not visible at all then EXECUTE has not been granted. Checked
+  -- here rather than only in 11_auth.sql so a missing grant costs one second
+  -- instead of failing eleven scripts into the install.
+  SELECT COUNT(*) INTO v_n FROM all_objects
+   WHERE owner = 'SYS' AND object_name = 'DBMS_CRYPTO';
+  IF v_n = 0 THEN v_missing := v_missing || 'EXECUTE ON DBMS_CRYPTO, '; END IF;
+
   IF v_missing IS NOT NULL THEN
     RAISE_APPLICATION_ERROR(-20900,
       CHR(10) || 'Install stopped: ' || USER || ' is missing ' ||
@@ -79,6 +93,7 @@ BEGIN
       'Run as ADMIN, then re-run this installer:' || CHR(10) ||
       '  GRANT CONNECT, RESOURCE TO ' || USER || ';' || CHR(10) ||
       '  GRANT CREATE VIEW       TO ' || USER || ';' || CHR(10) ||
+      '  GRANT EXECUTE ON DBMS_CRYPTO TO ' || USER || ';' || CHR(10) ||
       '  ALTER USER ' || USER || ' QUOTA UNLIMITED ON DATA;');
   END IF;
 
@@ -143,15 +158,24 @@ PROMPT >>> 09 OC_TIME_PKG
 PROMPT >>> 10 seed (dictionaries, common tasks, PRJ-ORG, config, periods)
 @@10_seed.sql
 
+-- ── Sign-in ──────────────────────────────────────────────────
+-- After 09/10 because V_OC_TIME_SIGNIN reads OC_TIME_WORKER, OC_TIME_ALLOCATION
+-- and OC_TIME_PERIOD; before the ORDS surface, which calls its hash function.
+PROMPT >>> 11 auth (OC_TIME_USER, OC_TIME_SESSION, hash, sign-in view)
+@@11_auth.sql
+
 -- ── REST surface ─────────────────────────────────────────────
-PROMPT >>> 11 ORDS oc.time            (employee)
+PROMPT >>> 12 ORDS oc.time            (employee)
 @@ords/11_ords_time.sql
 
-PROMPT >>> 12 ORDS oc.time.approval   (manager)
+PROMPT >>> 13 ORDS oc.time.approval   (manager)
 @@ords/12_ords_time_approval.sql
 
-PROMPT >>> 13 ORDS oc.time.admin      (admin + accrual pull)
+PROMPT >>> 14 ORDS oc.time.admin      (admin + accrual pull)
 @@ords/13_ords_time_admin.sql
+
+PROMPT >>> 15 ORDS oc.time.auth       (login, logout, session, set-password)
+@@ords/14_ords_time_auth.sql
 
 -- ── Post-install verification ────────────────────────────────
 PROMPT
@@ -192,7 +216,7 @@ SELECT m.name, m.uri_prefix, m.status,
          JOIN user_ords_templates t2 ON t2.id = h.template_id
         WHERE t2.module_id = m.id)  AS handlers
   FROM user_ords_modules m
- WHERE m.name IN ('oc.time','oc.time.approval','oc.time.admin')
+ WHERE m.name IN ('oc.time','oc.time.approval','oc.time.admin','oc.time.auth')
  ORDER BY m.name;
 
 PROMPT --- Seed counts ---------------------------------------------
@@ -225,5 +249,12 @@ PROMPT #   4. Run population for the open period:
 PROMPT #      POST /oc/time/admin/jobs/populate/{periodId}
 PROMPT #   5. Point the VBCS service connection at this schema's ORDS base URL
 PROMPT #      (services/catalog.json -> backends.oc_time.servers[0].url).
+PROMPT #   6. Create sign-in accounts. OC_TIME_USER is empty after this install,
+PROMPT #      so nobody can log in yet. Either run 90_test_seed.sql for the demo
+PROMPT #      logins, or insert real ones:
+PROMPT #        INSERT INTO oc_time_user (employee_id, email, full_name, status)
+PROMPT #        VALUES ('RI2824','someone@rite.digital','Their Name','Invited');
+PROMPT #      An Invited user sets their own password at first sign-in via
+PROMPT #        POST /oc/time/auth/set-password  {email, newPassword}
 PROMPT ##############################################################
 PROMPT
