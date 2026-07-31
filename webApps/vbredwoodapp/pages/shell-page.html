@@ -1,147 +1,468 @@
-<!-- O2C Timesheet Module — application shell.
+<!-- O2C Timesheet Module — application shell -->
 
-     Redwood applayout frame (knowledge/09 §1): drawer + header + content area
-     with the messages banner, the toast and the router outlet.
+<!--
+  The styles are inline here, not in shell-page.css, deliberately and to match
+  the O2C main application: they describe the frame this file draws, so the two
+  are edited together. Per-PAGE styling stays in the page's own .css file.
+-->
+<style>
+  /* ── Redwood design tokens ── */
+  :root {
+    --rw-coal:     #2a2c33;
+    --rw-red:      #485053;
+    --rw-red-hov:  #374151;
+    --rw-forest:   #1f6a4a;
+    --rw-oyster:   #f6f6f4;
+    --rw-paper:    #ffffff;
+    --rw-slate:    #5b5d65;
+    --rw-ink-2:    #3a3c44;
+    --rw-border:   #dcdbd7;
+    --rw-border-2: #eceae6;
+    --rw-hover:    #f0efeb;
+    --rw-focus:    rgba(69,79,82,0.22);
+    --rw-success:  #1f6a4a;
+    --rw-warning:  #a26a0a;
+    --rw-danger:   #a73d2f;
+    --rw-info:     #1f5d83;
+    --shell-header-height: 56px;
+  }
 
-     Navigation is RBAC-driven (RULE-022). The nav list is data-driven from
-     $variables.navItemsDP, which bootstrapChain builds from the resolved role —
-     so a ROLE_TIME_NONE user genuinely receives an empty menu rather than a menu
-     of disabled items. navigateChain re-checks entitlement, so a hand-typed URL
-     is refused too.
+  /* ── Shell frame ── */
+  .rw-shell { display:flex; height:100vh; overflow:hidden; position:relative; }
 
-     Notifications go through the documented pipeline: any page chain fires
-     Actions.fireNotificationEvent -> vbNotification -> showNotificationMessage
-     -> messagesBannerADP -> oj-sp-messages-banner. No page writes banner state
-     directly, and no REST failure is left in the console. -->
+  /* Signed out: no chrome at all, so the login page owns the viewport. Driven
+     by one class on the parent rather than oj-bind-if around each part, so
+     there is a single condition to get wrong instead of three. */
+  .rw-shell.shell-guest .rw-sidebar,
+  .rw-shell.shell-guest .rw-topbar { display:none; }
 
-<div id="pageContent" class="oj-web-applayout-page rw-shell-page">
+  /* ── Right panel: topbar over scrollable content ── */
+  .rw-right-panel { flex:1; display:flex; flex-direction:column; overflow:hidden; min-width:0; }
 
-  <!-- ══════════════════ Navigation drawer ══════════════════ -->
-  <oj-drawer-popup edge="start" opened="{{ $variables.isDrawerOpen }}">
-    <div class="oj-flex oj-sm-flex-direction-column oj-bg-neutral-10
-                oj-sm-padding-6x-top oj-sm-padding-4x-start oj-sm-padding-4x-end rw-shell-drawer">
+  .rw-topbar { height:var(--shell-header-height); min-height:var(--shell-header-height);
+               background:#3a3530; border-bottom:3px solid #a23541;
+               display:flex; align-items:center; justify-content:space-between;
+               padding:0 20px; gap:12px; flex-shrink:0; }
+  .rw-topbar-left  { display:flex; align-items:center; gap:12px; min-width:0; }
+  .rw-topbar-title { font-size:15px; font-weight:600; color:#fff; letter-spacing:0.01em; white-space:nowrap; }
+  .rw-topbar-right { display:flex; align-items:center; gap:12px; }
+  .rw-topbar [class*="oj-ux-ico"],
+  .rw-topbar [class*="oj-ux-ico"]::before { color:rgba(255,255,255,0.85); }
 
-      <div class="oj-flex oj-sm-justify-content-space-between oj-sm-align-items-center oj-sm-margin-6x-bottom">
-        <h2 class="oj-typography-heading-sm oj-typography-bold oj-sm-margin-0">Menu</h2>
-        <oj-button chroming="borderless" display="icons"
-                   on-oj-action="[[ $listeners.toggleDrawer ]]">
-          <span slot="startIcon" class="oj-ux-ico-close"></span>
-          <span>Close menu</span>
-        </oj-button>
+  .rw-topbar-hamburger { background:transparent; border:none; color:rgba(255,255,255,0.85);
+                         cursor:pointer; font-size:18px; padding:6px 8px; border-radius:3px;
+                         line-height:1; display:flex; align-items:center; font-family:inherit; }
+  .rw-topbar-hamburger:hover { background:rgba(255,255,255,0.10); color:#fff; }
+
+  /* Period and acting-manager selectors sit in the topbar because they are
+     context for every page, not a control belonging to any one of them. */
+  .rw-topbar-context { display:flex; align-items:center; gap:8px; }
+  .rw-topbar-context oj-select-single { min-width:150px; }
+  .rw-topbar-context .oj-text-field-container {
+    --oj-text-field-height: 30px;
+    --oj-text-field-bg-color: rgba(255,255,255,0.10);
+    --oj-text-field-border-color: rgba(255,255,255,0.25);
+    --oj-text-field-text-color: #fff;
+  }
+
+  .rw-user-badge  { display:flex; align-items:center; gap:8px; padding:4px 10px 4px 4px;
+                    border-radius:3px; }
+  .rw-user-avatar { width:30px; height:30px; border-radius:50%; background:#3b82f6; color:#fff;
+                    font-size:11px; font-weight:700; display:flex; align-items:center;
+                    justify-content:center; letter-spacing:.02em; flex-shrink:0; }
+  .rw-user-name   { font-size:13px; font-weight:600; color:rgba(255,255,255,0.90); white-space:nowrap; }
+  .rw-role-badge  { padding:2px 8px; border-radius:3px; font-size:10.5px; font-weight:600;
+                    background:rgba(255,255,255,0.15); color:rgba(255,255,255,0.85);
+                    letter-spacing:.04em; text-transform:uppercase; white-space:nowrap; }
+
+  /* ── Sidebar: push layout, right-hand side ── */
+  .rw-sidebar { width:240px; min-width:240px; background:#3a3530; color:#fff;
+                display:flex; flex-direction:column; flex-shrink:0;
+                overflow:hidden; transition:width 0.25s ease, min-width 0.25s ease; }
+  .rw-sidebar.collapsed { width:0; min-width:0; }
+  .rw-sidebar [class*="oj-ux-ico"],
+  .rw-sidebar [class*="oj-ux-ico"]::before { color:rgba(255,255,255,0.85); }
+
+  .rw-sidebar-logo { height:var(--shell-header-height); min-height:var(--shell-header-height);
+                     padding:0 12px; border-bottom:1px solid rgba(255,255,255,0.08);
+                     display:flex; align-items:center; gap:10px; flex-shrink:0; }
+  .rw-sidebar-logo-texts { flex:1; min-width:0; }
+  .rw-sidebar-logo-title { font-size:15px; font-weight:700; color:#fff; margin:0; }
+  .rw-sidebar-logo-sub   { font-size:11px; color:rgba(255,255,255,0.55); margin-top:3px;
+                           letter-spacing:.04em; text-transform:uppercase; }
+  .rw-sidebar-toggle { background:transparent; border:none; color:rgba(255,255,255,0.70);
+                       cursor:pointer; font-size:18px; padding:4px 6px; border-radius:3px;
+                       line-height:1; flex-shrink:0; font-family:inherit; }
+  .rw-sidebar-toggle:hover { background:rgba(255,255,255,0.10); color:#fff; }
+
+  .rw-sidebar-nav { flex:1; overflow-y:auto; padding:8px; }
+  .rw-nav-group-title { font-size:10.5px; font-weight:700; color:rgba(255,255,255,0.45);
+                        text-transform:uppercase; letter-spacing:.08em; padding:14px 12px 6px; }
+  .rw-nav-item { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:6px;
+                 font-size:13px; font-weight:600; color:rgba(255,255,255,0.95);
+                 cursor:pointer; transition:background 0.12s, color 0.12s; position:relative;
+                 user-select:none; border:none; background:transparent; width:100%;
+                 text-align:left; font-family:inherit; }
+  .rw-nav-item:hover  { background:rgba(255,255,255,0.10); color:#fff; }
+  .rw-nav-item.active { background:rgba(255,255,255,0.15); color:#fff; font-weight:700; }
+  .rw-nav-item.active::before { content:''; position:absolute; left:0; top:6px; bottom:6px;
+                                width:3px; background:#fff; border-radius:0 2px 2px 0; }
+
+  /* A role that resolves to nothing gets an explanation, not an empty panel —
+     empty reads as a loading failure. */
+  .rw-nav-empty { padding:16px 12px; font-size:12px; line-height:1.5; color:rgba(255,255,255,0.65); }
+
+  /* ── Main content area ── */
+  .rw-main { flex:1; overflow-y:auto; overflow-x:hidden; background:var(--rw-oyster); padding:20px 24px; }
+  .rw-main [class*="oj-ux-ico"],
+  .rw-main [class*="oj-ux-ico"]::before { color:#485053; }
+
+  /* The login page draws its own full-bleed layout, so the shell's padding and
+     oyster background come off underneath it. */
+  .rw-shell.shell-guest .rw-main { padding:0; background:#fff; }
+
+  /* ── Shell-level failure (not a page error, which goes to the banner) ── */
+  .rw-shell-error { max-width:640px; margin:48px auto; background:#fff;
+                    border:1px solid var(--rw-border); border-left:3px solid var(--rw-danger);
+                    border-radius:4px; padding:18px 20px; }
+  .rw-shell-error-title { font-size:15px; font-weight:700; color:var(--rw-coal); margin-bottom:6px; }
+  .rw-shell-error-body  { font-size:13px; line-height:1.6; color:var(--rw-slate); }
+
+  /* ── Shared page furniture, used by every page in the flow ── */
+  .page-band { background:
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.025) 0 1px, transparent 1px 16px),
+      repeating-linear-gradient(115deg, rgba(0,0,0,0.05) 0 1px, transparent 1px 28px),
+      linear-gradient(135deg, #374151 0%, #4b5563 50%, #6b7280 100%);
+    margin:-20px -24px 0; padding:26px 32px 24px; position:relative; color:#fff; }
+  .page-band > * { position:relative; z-index:1; }
+  .page-band-header { display:flex; align-items:center; gap:14px; margin-bottom:14px; flex-wrap:wrap; }
+  .page-band-back { background:transparent; border:none; color:#fff; cursor:pointer; opacity:0.85;
+                    font-size:18px; padding:4px 8px; border-radius:3px; line-height:1; font-family:inherit; }
+  .page-band-back:hover { background:rgba(255,255,255,0.10); opacity:1; }
+  .page-band-title { font-family:Georgia,"Times New Roman",serif; font-size:28px; font-weight:400;
+                     color:#fff; letter-spacing:-0.3px; flex:1; min-width:0; line-height:1.2; }
+  .page-band-sub { font-size:13px; color:rgba(255,255,255,0.75); }
+  .page-band-actions { display:flex; gap:8px; align-items:center; }
+
+  .filter-bar { display:flex; align-items:flex-end; gap:10px; padding:10px 14px; background:#fff;
+                border:1px solid var(--rw-border); border-radius:4px; margin:14px 0; flex-wrap:wrap; }
+  .filter-field { display:flex; flex-direction:column; gap:4px; }
+
+  .tbl-wrap { background:#fff; border:1px solid var(--rw-border); border-radius:4px; overflow:auto; }
+  .tbl-wrap table { width:100%; border-collapse:collapse; font-size:13px; }
+  .tbl-wrap thead th { background:#f5f4f0; padding:8px 12px; text-align:left;
+                       font-size:11px; font-weight:600; color:var(--rw-slate);
+                       text-transform:uppercase; letter-spacing:0.6px;
+                       border-bottom:1px solid var(--rw-border); white-space:nowrap; }
+  .tbl-wrap tbody td { padding:8px 12px; border-bottom:1px solid var(--rw-border-2);
+                       color:var(--rw-ink-2); vertical-align:middle; }
+  .tbl-wrap tbody tr:hover { background:#faf9f6; }
+  .tbl-wrap tbody tr:last-child td { border-bottom:none; }
+
+  .oj-table-column-header-cell { background:#f5f4f0 !important; color:var(--rw-slate) !important;
+    font-size:11px !important; font-weight:600 !important; text-transform:uppercase !important;
+    letter-spacing:0.6px !important; padding:8px 12px !important;
+    border-bottom:1px solid var(--rw-border) !important; white-space:nowrap; }
+  .oj-table-data-cell { padding:8px 12px !important; font-size:13px !important;
+    color:var(--rw-ink-2) !important; border-bottom:1px solid var(--rw-border-2) !important;
+    vertical-align:middle !important; }
+  .oj-table-body-row:hover .oj-table-data-cell { background:#faf9f6 !important; }
+  .oj-table-container { border:none !important; border-radius:0 !important; }
+
+  .page-floating-card { background:#fff; border:1px solid var(--rw-border); border-radius:4px;
+                        margin-top:14px; box-shadow:0 2px 12px rgba(0,0,0,0.08); overflow:hidden; }
+  .page-card-toolbar { display:flex; align-items:center; gap:8px; padding:10px 14px;
+                       border-bottom:1px solid var(--rw-border); flex-wrap:wrap; }
+  .page-card-toolbar-right { margin-left:auto; display:flex; gap:8px; align-items:center; }
+  .page-floating-card .tbl-wrap { border:none; border-radius:0; }
+
+  .btn { display:inline-flex; align-items:center; gap:6px; padding:6px 14px; border-radius:3px;
+         font-size:13px; font-weight:600; cursor:pointer; border:1px solid transparent;
+         transition:background 0.12s, border-color 0.12s; white-space:nowrap; line-height:1.4;
+         min-height:32px; font-family:inherit; }
+  .btn:focus-visible { outline:none; box-shadow:0 0 0 2px var(--rw-focus); }
+  .btn:disabled { opacity:0.5; cursor:not-allowed; }
+  .btn-primary { background:var(--rw-coal); color:#fff; }
+  .btn-primary:hover:not(:disabled) { background:#1a1c22; }
+  .btn-outline { background:#fff; color:var(--rw-ink-2); border-color:var(--rw-border); }
+  .btn-outline:hover:not(:disabled) { background:var(--rw-hover); border-color:#c5c3bd; }
+  .btn-ghost { background:transparent; color:var(--rw-ink-2); border-color:transparent; }
+  .btn-ghost:hover:not(:disabled) { background:var(--rw-hover); }
+  .btn-danger { background:var(--rw-danger); color:#fff; }
+  .btn-danger:hover:not(:disabled) { background:#8b2f23; }
+  .btn-sm { padding:4px 10px; font-size:12px; min-height:28px; }
+  .btn-icon { padding:6px 7px; border-radius:3px; background:transparent; border:none;
+              cursor:pointer; color:var(--rw-slate); transition:background 0.12s, color 0.12s;
+              display:inline-flex; align-items:center; font-family:inherit; }
+  .btn-icon:hover { background:var(--rw-hover); color:var(--rw-ink-2); }
+
+  .form-label { display:block; font-size:11px; font-weight:600; color:var(--rw-slate);
+                text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px; }
+  .form-input { width:100%; height:32px; padding:0 10px; border:1px solid var(--rw-border);
+                border-radius:3px; font-size:13px; color:var(--rw-ink-2); outline:none;
+                background:#fff; transition:border-color 0.12s, box-shadow 0.12s; }
+  .form-input:focus { border-color:var(--rw-red); box-shadow:0 0 0 2px var(--rw-focus); }
+  .form-row { display:grid; gap:16px; margin-bottom:16px; }
+  .form-row-2 { grid-template-columns:1fr 1fr; }
+  .form-row-3 { grid-template-columns:1fr 1fr 1fr; }
+  .required { color:var(--rw-danger); margin-left:2px; }
+
+  /* Status chips — one per timesheet status in the 7-status model. */
+  .chip { display:inline-flex; align-items:center; padding:2px 8px; border-radius:3px;
+          font-size:11px; font-weight:600; white-space:nowrap; letter-spacing:.02em; }
+  .chip-draft     { background:#eceae6; color:#5b5d65; }
+  .chip-submitted { background:#dbe7f4; color:#1f4a7a; }
+  .chip-approved  { background:#e2f1ea; color:#1f6a4a; }
+  .chip-rejected  { background:#f4dad6; color:#8a2f23; }
+  .chip-confirmed { background:#e4dbf2; color:#4a2a7a; }
+  .chip-cancelled { background:#f0eadb; color:#6b5b1f; }
+  .chip-pending   { background:#fbf3d8; color:#7a5a00; }
+  .chip-yes       { background:#e2f1ea; color:#1f6a4a; }
+  .chip-no        { background:#eceae6; color:#5b5d65; }
+
+  .stat-card  { background:#fff; border:1px solid var(--rw-border); border-radius:4px; padding:16px 18px; }
+  .stat-label { font-size:11px; font-weight:600; color:var(--rw-slate); text-transform:uppercase;
+                letter-spacing:0.6px; margin-bottom:6px; }
+  .stat-value { font-size:26px; font-weight:600; color:var(--rw-coal); letter-spacing:-0.4px; }
+  .stat-sub   { font-size:12px; color:var(--rw-slate); margin-top:4px; }
+
+  .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  .grid-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px; }
+  .grid-4 { display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:14px; }
+
+  .detail-section { background:#fff; border:1px solid var(--rw-border); border-radius:4px;
+                    padding:18px; margin-bottom:14px; }
+  .section-title  { font-size:13px; font-weight:600; color:var(--rw-coal); margin-bottom:14px;
+                    padding-bottom:10px; border-bottom:1px solid var(--rw-border);
+                    text-transform:uppercase; letter-spacing:.06em; }
+
+  .info-banner  { background:#eaf1f5; border-left:3px solid #1f5d83; border-radius:3px;
+                  padding:10px 14px; margin-bottom:14px; font-size:13px; color:#1f4a6a; }
+  .warn-banner  { background:#fbf3d8; border-left:3px solid #a96b00; border-radius:3px;
+                  padding:10px 14px; margin-bottom:12px; font-size:13px; color:#7a5a00; }
+  .error-banner { background:#fef2f2; border-left:3px solid var(--rw-danger); border-radius:3px;
+                  padding:10px 14px; margin-bottom:12px; font-size:13px; color:#991b1b; }
+
+  .divider { border:none; border-top:1px solid var(--rw-border); margin:14px 0; }
+  .text-muted { color:var(--rw-slate); font-size:12px; }
+  .mb-4 { margin-bottom:14px; }
+  .mt-4 { margin-top:14px; }
+
+  ::-webkit-scrollbar { width:6px; height:6px; }
+  ::-webkit-scrollbar-track { background:transparent; }
+  ::-webkit-scrollbar-thumb { background:rgba(91,93,101,0.25); border-radius:3px; }
+  ::-webkit-scrollbar-thumb:hover { background:rgba(91,93,101,0.55); }
+
+  /* ── Login and set-password pages ── */
+  .login-wrap { min-height:100vh; background:#fff; display:flex; flex-direction:column; }
+  .login-topbar { display:flex; align-items:center; gap:10px; padding:14px 24px; background:#fff;
+                  border-bottom:1px solid #eaeaea; flex-shrink:0; }
+  .login-brand-texts { display:flex; flex-direction:column; line-height:1; }
+  .login-brand-title { font-size:15px; font-weight:700; color:#1a1c22; letter-spacing:-0.1px; }
+  .login-brand-sub   { font-size:10px; color:#5b5d65; text-transform:uppercase;
+                       letter-spacing:0.6px; margin-top:2px; }
+
+  .login-split { flex:1; display:flex; min-height:0; }
+  .login-hero { flex:1; background:linear-gradient(145deg,#1a1c22 0%,#2d3748 55%,#3a3530 100%);
+                display:flex; align-items:center; justify-content:center; padding:52px 56px;
+                position:relative; overflow:hidden; }
+  .login-hero::before { content:''; position:absolute; inset:0; pointer-events:none; background:
+      repeating-linear-gradient(115deg, rgba(255,255,255,0.025) 0 1px, transparent 1px 28px),
+      repeating-linear-gradient(0deg,   rgba(255,255,255,0.015) 0 1px, transparent 1px 16px); }
+  .login-hero-inner { position:relative; z-index:1; max-width:420px; }
+  .login-hero-title { font-size:30px; font-weight:700; color:#fff; letter-spacing:-0.4px;
+                      margin:0 0 14px; line-height:1.2; }
+  .login-hero-sub { font-size:14px; color:rgba(255,255,255,0.60); line-height:1.65; margin:0 0 36px; }
+  .login-hero-features { display:flex; flex-direction:column; gap:12px; }
+  .login-feature-item { font-size:13px; color:rgba(255,255,255,0.78); display:flex;
+                        align-items:center; gap:10px; line-height:1.4; }
+  .login-feature-check { width:20px; height:20px; background:rgba(255,255,255,0.12); border-radius:50%;
+                         display:inline-flex; align-items:center; justify-content:center;
+                         font-size:10px; color:#42A5F5; flex-shrink:0; font-weight:700; }
+
+  .login-form-panel { width:500px; flex-shrink:0; display:flex; align-items:center;
+                      justify-content:center; padding:52px 48px; background:#fff; }
+  .login-card { width:100%; max-width:380px; }
+  .login-form-header { display:flex; align-items:center; gap:14px; margin-bottom:28px; }
+  .login-form-icon { width:48px; height:48px; background:#EEF4FC; border-radius:12px;
+                     display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .login-logo { font-size:20px; font-weight:700; color:#1a1c22; letter-spacing:-0.2px; margin:0; }
+  .login-sub  { font-size:13px; color:#5b5d65; margin-top:2px; }
+  .login-field { margin-bottom:16px; }
+  .login-error { background:#fef2f2; color:#991b1b; padding:10px 14px; border-radius:4px;
+                 font-size:13px; margin-bottom:16px; border:1px solid #fecdca; line-height:1.5; }
+  .login-ok    { background:#e6f4ea; color:#1e7d32; padding:10px 14px; border-radius:4px;
+                 font-size:13px; margin-bottom:16px; border:1px solid #a5d6a7; line-height:1.5; }
+  .login-hint  { background:#f6f6f4; color:#5b5d65; padding:10px 14px; border-radius:4px;
+                 font-size:12px; margin-bottom:16px; border:1px solid var(--rw-border); line-height:1.6; }
+  .btn-login { display:flex; align-items:center; justify-content:center; width:100%; height:44px;
+               background:#1565C0; color:#fff; font-size:14px; font-weight:600; border:none;
+               border-radius:4px; cursor:pointer; transition:background 0.15s;
+               letter-spacing:0.01em; font-family:inherit; }
+  .btn-login:hover:not(:disabled) { background:#0d47a1; }
+  .btn-login:disabled { background:#90a4c8; cursor:not-allowed; }
+  .login-alt { margin-top:20px; text-align:center; font-size:13px; color:var(--rw-slate); }
+  .login-alt-link { color:#1565C0; font-weight:600; cursor:pointer; background:none; border:none;
+                    font-size:13px; font-family:inherit; padding:0; }
+  .login-alt-link:hover { text-decoration:underline; }
+
+  /* Oracle JET call-to-action buttons, recoloured to the module's grey. */
+  :root {
+    --oj-button-call-to-action-chrome-bg-color:        #485053;
+    --oj-button-call-to-action-chrome-bg-color-hover:  #374151;
+    --oj-button-call-to-action-chrome-bg-color-active: #374151;
+  }
+</style>
+
+<!-- Oracle pillar theme: sets the gallery CDN variables the oj-sp headers use -->
+<oj-sp-pillar-theme></oj-sp-pillar-theme>
+
+<div :class="[[ $application.variables.isLoggedIn ? 'rw-shell' : 'rw-shell shell-guest' ]]">
+
+  <!-- ══ Right panel: topbar + router outlet ══════════════════ -->
+  <div class="rw-right-panel">
+
+    <header class="rw-topbar">
+      <div class="rw-topbar-left">
+        <span class="rw-topbar-title">O2C Timesheet</span>
       </div>
 
-      <!-- The list only renders once the role is known, so a menu is never
-           shown for an unresolved user. -->
-      <oj-bind-if test="[[ $variables.navReady && $variables.navItemsArray.length > 0 ]]">
-        <oj-navigation-list class="oj-sm-width-full"
-                            drill-mode="none"
-                            edge="start"
-                            data="[[ $variables.navItemsDP ]]"
-                            selection="{{ $application.variables.activeNav }}"
-                            on-selection-changed="[[ $listeners.onNavSelectionChanged ]]">
-          <template slot="itemTemplate" data-oj-as="item">
-            <li :id="[[ item.data.id ]]">
-              <a href="#">
-                <span :class="[[ item.data.iconClass ]]"></span>
-                <span class="oj-navigationlist-item-label oj-typography-body-sm oj-typography-semi-bold">
-                  <oj-bind-text value="[[ item.data.label ]]"></oj-bind-text>
-                </span>
-              </a>
-            </li>
-          </template>
-        </oj-navigation-list>
-      </oj-bind-if>
+      <div class="rw-topbar-right">
 
-      <!-- No entitlement (PER-005 / RULE-022) -->
-      <oj-bind-if test="[[ $variables.navReady && $variables.navItemsArray.length === 0 ]]">
-        <div class="oj-typography-body-sm oj-text-color-secondary oj-sm-padding-2x" role="status">
-          You are not authorized to access this application.
-        </div>
-      </oj-bind-if>
+        <!--
+          Period context (RULE-004 / RULE-007). In the topbar because every page
+          is scoped to the selected month; a per-page copy would let two pages
+          disagree about which month the user is looking at.
+        -->
+        <div class="rw-topbar-context">
+          <oj-select-single id="shellPeriodSelect"
+            data="[[ $application.variables.periodOptions ]]"
+            value="{{ $application.variables.selectedPeriodId }}"
+            item-text="label"
+            label-hint="Period"
+            label-edge="none"
+            placeholder="Period"
+            on-value-changed="[[$listeners.periodChanged]]">
+            <template slot="noData">
+              <span class="text-muted">No periods defined</span>
+            </template>
+          </oj-select-single>
 
-    </div>
-  </oj-drawer-popup>
-
-  <!-- ══════════════════ Header ══════════════════ -->
-  <header role="banner" class="oj-web-applayout-header oj-sm-padding-4x-horizontal rw-shell-header">
-    <div class="oj-flex-bar oj-sm-align-items-center rw-shell-bar">
-
-      <div class="oj-flex-bar-start oj-sm-align-items-center">
-        <oj-button chroming="borderless" display="icons"
-                   class="oj-color-invert"
-                   on-oj-action="[[ $listeners.toggleDrawer ]]">
-          <span slot="startIcon" class="oj-ux-ico-menu"></span>
-          <span>Open menu</span>
-        </oj-button>
-        <span class="oj-ux-ico-clock oj-sm-margin-2x-start" role="img" aria-label="Timesheet"></span>
-        <h1 class="oj-typography-heading-sm oj-typography-bold oj-sm-margin-0 oj-sm-margin-2x-start rw-shell-title">
-          O2C&nbsp;Time
-        </h1>
-      </div>
-
-      <div class="oj-flex-bar-end oj-sm-align-items-center oj-sm-gap-4x">
-
-        <!-- Manager switcher (ACT-011). Managers and admins only. -->
-        <oj-bind-if test="[[ ($application.variables.currentRole === 'ROLE_TIME_MANAGER'
-                          || $application.variables.currentRole === 'ROLE_TIME_ADMIN')
-                          && $variables.managerOptionsArray.length > 1 ]]">
-          <oj-form-layout label-edge="none" max-columns="1" class="rw-shell-switcher">
-            <oj-select-single label-hint="Logged in as manager"
-                              data="[[ $variables.managerOptions ]]"
-                              value="{{ $application.variables.actingManagerId }}"
-                              item-text="label"
-                              on-value-changed="[[ $listeners.switchManager ]]">
+          <!-- ACT-011: a split employee reports into more than one manager, so
+               a manager can switch identity to review each team in turn. -->
+          <oj-bind-if test="[[ $page.functions.canSwitchManager(
+                                 $application.variables.currentRole,
+                                 $variables.managerOptionsArray) ]]">
+            <oj-select-single id="shellManagerSelect"
+              data="[[ $variables.managerOptions ]]"
+              value="{{ $application.variables.actingManagerId }}"
+              item-text="label"
+              label-hint="Reviewing team of"
+              label-edge="none"
+              placeholder="Acting as"
+              on-value-changed="[[$listeners.switchManager]]">
+              <template slot="noData">
+                <span class="text-muted">No other teams</span>
+              </template>
             </oj-select-single>
-          </oj-form-layout>
-        </oj-bind-if>
+          </oj-bind-if>
+        </div>
 
-        <div class="oj-flex oj-sm-flex-direction-column rw-shell-user">
-          <span class="oj-typography-body-sm oj-typography-semi-bold">
-            <oj-bind-text value="[[ $application.variables.employeeName ]]"></oj-bind-text>
+        <div class="rw-user-badge">
+          <div class="rw-user-avatar">
+            <oj-bind-text value="[[ $page.functions.initials($application.variables.userName) ]]"></oj-bind-text>
+          </div>
+          <span class="rw-user-name">
+            <oj-bind-text value="[[ $application.variables.userName ]]"></oj-bind-text>
           </span>
-          <span class="oj-typography-body-xs rw-shell-user-role">
+          <span class="rw-role-badge">
             <oj-bind-text value="[[ $page.functions.roleLabel($application.variables.currentRole) ]]"></oj-bind-text>
           </span>
         </div>
 
+        <oj-button display="icons" chroming="borderless"
+                   on-oj-action="[[$listeners.doLogout]]" title="Sign out">
+          <span slot="startIcon" class="oj-ux-ico-log-out"></span>
+          Sign out
+        </oj-button>
+
+        <button class="rw-topbar-hamburger" title="Toggle menu"
+                on-click="[[$listeners.toggleSidebar]]">&#9776;</button>
       </div>
-    </div>
-  </header>
+    </header>
 
-  <!-- ══════════════════ Content ══════════════════ -->
-  <div class="oj-flex oj-sm-flex-wrap-nowrap oj-sm-height-full">
-    <div class="oj-flex-item oj-web-applayout-content-nopad oj-web-applayout-max-width rw-shell-content">
+    <div class="rw-main">
+      <oj-vb-content id="vbRouterContent" config="[[vbRouterFlow]]"></oj-vb-content>
 
-      <div class="oj-flex">
-        <oj-sp-messages-banner data="[[ $variables.messagesBannerADP ]]"
-                               class="oj-flex-item oj-sm-12 oj-md-12"
-                               on-sp-close="[[ $listeners.messagesBannerSpClose ]]">
-        </oj-sp-messages-banner>
-      </div>
-
-      <oj-sp-messages-toast primary-text="[[ $variables.messageToast ]]" id="messageToast"></oj-sp-messages-toast>
-
-      <!-- Sign-in / entitlement failure. Shown instead of an empty page so the
-           user is told why nothing loaded. -->
-      <oj-bind-if test="[[ $variables.signInError ]]">
-        <div class="oj-sm-padding-4x rw-shell-error" role="alert">
-          <oj-bind-text value="[[ $variables.signInError ]]"></oj-bind-text>
+      <!-- Shown only when the shell itself could not establish who the user is.
+           An ordinary page error goes to the banner below, not here. -->
+      <oj-bind-if test="[[ $variables.shellError ]]">
+        <div class="rw-shell-error">
+          <div class="rw-shell-error-title">Cannot open the Time module</div>
+          <div class="rw-shell-error-body">
+            <oj-bind-text value="[[ $variables.shellError ]]"></oj-bind-text>
+          </div>
         </div>
       </oj-bind-if>
 
-      <!-- No config binding. The scaffold shipped config="[[ vbRouterFlow ]]",
-           but that implicit variable only resolves for the flow the scaffold
-           declared; with the flows re-pointed it evaluates to undefined and the
-           outlet renders nothing at all — a blank page with no error. Left
-           unbound, the outlet uses the page's own router, whose default comes
-           from routerFlow in shell-page.json and whose route is then set by
-           navigateChain. -->
-      <div class="oj-flex oj-sm-width-full">
-        <oj-vb-content id="vbRouterContent" class="oj-flex-item oj-sm-width-full">
-        </oj-vb-content>
-      </div>
-
+      <oj-sp-messages-banner data="[[ $variables.messagesBannerADP ]]"
+        on-sp-close="[[$listeners.messagesBannerSpClose]]">
+      </oj-sp-messages-banner>
+      <oj-sp-messages-toast primary-text="[[ $variables.messageToast ]]" id="messageToast">
+      </oj-sp-messages-toast>
     </div>
+
   </div>
+
+  <!-- ══ Sidebar ══════════════════════════════════════════════
+       Derived from the role by resources/js/navModel, not filled by a chain, so
+       it cannot go stale: change the role and the menu follows in the same
+       render. RULE-022 is enforced by omission — a role is never handed an item
+       it may not open — and navigateToPageChain re-checks the SAME model for a
+       hand-typed URL.
+  ══════════════════════════════════════════════════════════ -->
+  <aside :class="[[ $variables.sidebarCollapsed ? 'rw-sidebar collapsed' : 'rw-sidebar' ]]">
+
+    <div class="rw-sidebar-logo">
+      <div class="rw-sidebar-logo-texts">
+        <div class="rw-sidebar-logo-title">Timesheet</div>
+        <div class="rw-sidebar-logo-sub">O2C Platform</div>
+      </div>
+      <button class="rw-sidebar-toggle" title="Close menu"
+              on-click="[[$listeners.toggleSidebar]]">&#10005;</button>
+    </div>
+
+    <nav class="rw-sidebar-nav">
+      <oj-bind-for-each data="[[ $page.functions.navGroups($application.variables.currentRole) ]]">
+        <template>
+          <div>
+            <div class="rw-nav-group-title">
+              <oj-bind-text value="[[ $current.data.title ]]"></oj-bind-text>
+            </div>
+            <oj-bind-for-each data="[[ $current.data.items ]]">
+              <template>
+                <button type="button"
+                        :class="[[ $page.functions.navItemClass(
+                                     $current.data.page,
+                                     $application.variables.activeNav) ]]"
+                        :data-page="[[ $current.data.page ]]"
+                        on-click="[[$listeners.navClick]]">
+                  <span :class="[[ $current.data.icon ]]" style="font-size:14px;"></span>
+                  <oj-bind-text value="[[ $current.data.label ]]"></oj-bind-text>
+                </button>
+              </template>
+            </oj-bind-for-each>
+          </div>
+        </template>
+      </oj-bind-for-each>
+
+      <oj-bind-if test="[[ $page.functions.hasNoNav($application.variables.currentRole) ]]">
+        <div class="rw-nav-empty">
+          You are signed in, but your account has not been granted access to any
+          part of the Time module. Contact your administrator.
+        </div>
+      </oj-bind-if>
+    </nav>
+  </aside>
 
 </div>

@@ -1,9 +1,0 @@
-{
-  "id": "client-timesheets",
-  "description": "PAGE-002 Client Timesheets — upload customer-approved (signed) timesheets per Project + Billing Period (PROC-011).",
-  "defaultPage": "client-timesheets",
-  "chains": {},
-  "services": {},
-  "types": {},
-  "variables": {}
-}

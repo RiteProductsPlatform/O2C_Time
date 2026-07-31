@@ -5,6 +5,12 @@
   "routerStrategy": "path",
   "chains": {},
   "configuration": {},
+  "imports": {
+    "css": [
+      "/resources/css/redwood-overrides.css",
+      "https://static.oracle.com/cdn/fnd/gallery/2507.0.3/images/iconfont/ojuxIconFont.min.css"
+    ]
+  },
   "requirejs": {
     "paths": {
       "oj-sp": "https://static.oracle.com/cdn/spectra-ui/oj-sp/2604.1.0",
@@ -241,7 +247,11 @@
       ]
     }
   },
-  "services": {},
+  "services": {
+    "oc_time": {
+      "path": "./services/oc_time/service.json"
+    }
+  },
   "translations": {
     "appBundle": {
       "path": "./resources/strings/appBundle/nls/appBundle-strings"
@@ -261,6 +271,26 @@
     }
   },
   "variables": {
+    "isLoggedIn": {
+      "type": "boolean",
+      "defaultValue": false,
+      "description": "The application signs users in itself against oc.time.auth rather than relying on the identity VB hands it, so that the common administrator - who need not be a worker in HCM - can get in. The shell hides its chrome while this is false."
+    },
+    "sessionToken": {
+      "type": "string",
+      "defaultValue": "",
+      "description": "Bearer token from POST /oc/time/auth/login. Valid 24 hours; mirrored into localStorage so a refresh does not force a re-login."
+    },
+    "currentUserId": {
+      "type": "number",
+      "defaultValue": null,
+      "description": "OC_TIME_USER.USER_ID. The login identity, distinct from employeeId - the common admin has one without the other."
+    },
+    "userName": {
+      "type": "string",
+      "defaultValue": "",
+      "description": "Display name in the topbar. Same value as employeeName for worker logins."
+    },
     "currentEmail": {
       "type": "string",
       "defaultValue": "",
@@ -353,8 +383,8 @@
     },
     "activeNav": {
       "type": "string",
-      "defaultValue": "my-timesheet",
-      "description": "Highlights the current item in the shell navigation list."
+      "defaultValue": "main-my-timesheet",
+      "description": "Highlights the current item in the shell navigation list. Holds the page id inside the single 'main' flow."
     },
     "traceId": {
       "type": "string",
@@ -415,9 +445,24 @@
     "configuration": {},
     "embedding": "deny"
   },
+  "//security": [
+    "requiresAuthentication is FALSE on purpose, and it is not a relaxation.",
+    "",
+    "The module authenticates against its own OC_TIME_USER store through",
+    "oc.time.auth, the same way the main O2C application does. If VB's own",
+    "gate were on as well, the identity provider would decide who gets in and",
+    "the app would only be able to look that person up - which is exactly the",
+    "model that left the common administrator with no way to sign in, since",
+    "they need not exist as a worker in HCM.",
+    "",
+    "Every page is still behind the login: the shell renders no navigation and",
+    "no router outlet content until isLoggedIn is true, and every ORDS write",
+    "carries the session token. Security sheet RBAC is enforced on the role",
+    "resolved by V_OC_TIME_SIGNIN, not on anything the browser asserts."
+  ],
   "security": {
     "access": {
-      "requiresAuthentication": true
+      "requiresAuthentication": false
     }
   },
   "flows": {},
@@ -425,6 +470,10 @@
     "stopValidationPreLoading": true
   },
   "events": {
+    "sessionEstablished": {
+      "payloadType": {},
+      "description": "Fired once a session exists, by whichever path created it — the login form, or the shell restoring a stored token. The shell answers by loading the context every page depends on (the period list, the manager switcher). An event rather than a direct call because the login page lives in the 'main' flow and cannot reach the shell page's chains."
+    },
     "spShowToast": {
       "payloadType": {
         "message": "string"

@@ -1,9 +1,0 @@
-{
-  "id": "salary-stopping",
-  "description": "PAGE-007 Salary Stopping Tool — holds for employees whose timesheet defaulted, and the release once it is corrected (PROC-007, RULE-016).",
-  "defaultPage": "salary-stopping",
-  "chains": {},
-  "services": {},
-  "types": {},
-  "variables": {}
-}

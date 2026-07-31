@@ -1,9 +1,0 @@
-{
-  "id": "view-timesheet",
-  "description": "PAGE-004 View Timesheet (Monthly Summary) — per-employee summary, bulk approve/reject, and the single all-employees Confirm Month to accrual (PER-003).",
-  "defaultPage": "view-timesheet",
-  "chains": {},
-  "services": {},
-  "types": {},
-  "variables": {}
-}

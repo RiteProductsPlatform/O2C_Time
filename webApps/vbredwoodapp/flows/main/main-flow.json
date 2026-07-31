@@ -1,0 +1,19 @@
+{
+  "//": [
+    "Every page of the module lives in this one flow, matching the O2C main",
+    "application. The earlier structure gave each page its own flow, which is",
+    "why nothing rendered: the shell hosts a single router outlet, so pages in",
+    "eleven sibling flows had nowhere to be drawn. One flow, one outlet.",
+    "",
+    "defaultPage is the login. checkSessionChain on the shell replaces it with",
+    "the role's landing page as soon as a valid session is found, so a user with",
+    "a live token never sees it."
+  ],
+  "id": "main",
+  "description": "O2C Timesheet Module - all pages, hosted by the shell's router outlet.",
+  "defaultPage": "main-login",
+  "chains": {},
+  "services": {},
+  "types": {},
+  "variables": {}
+}

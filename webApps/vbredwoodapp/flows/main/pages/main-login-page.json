@@ -1,0 +1,64 @@
+{
+  "description": "Sign in against oc.time.auth. The default page of the 'main' flow, so an unauthenticated visit lands here without a redirect; checkSessionChain on the shell replaces it immediately when a stored token is still valid.",
+  "variables": {
+    "email": {
+      "type": "string",
+      "defaultValue": "",
+      "input": "fromUrl",
+      "description": "Prefilled when arriving back from set-password, so the user does not retype the address they just used."
+    },
+    "password": {
+      "type": "string",
+      "defaultValue": ""
+    },
+    "errorMessage": {
+      "type": "string",
+      "defaultValue": "",
+      "input": "none",
+      "description": "Shown verbatim from the server where there is one. Those messages are written to be read ('Set your password before signing in'), and rewording them here would lose the distinction the endpoint was careful to make."
+    },
+    "isSigningIn": {
+      "type": "boolean",
+      "defaultValue": false,
+      "input": "none"
+    }
+  },
+  "types": {},
+  "chains": {},
+  "eventListeners": {
+    "doLogin": {
+      "chains": [
+        {
+          "chain": "loginChain",
+          "parameters": {
+            "event": "{{ $event }}"
+          }
+        }
+      ]
+    },
+    "goToSetPassword": {
+      "chains": [
+        {
+          "chain": "goToSetPasswordChain"
+        }
+      ]
+    }
+  },
+  "imports": {
+    "components": {
+      "oj-input-text": {
+        "path": "ojs/ojinputtext"
+      },
+      "oj-input-password": {
+        "path": "ojs/ojinputpassword"
+      },
+      "oj-bind-if": {
+        "path": "ojs/ojbindif"
+      },
+      "oj-bind-text": {
+        "path": "ojs/ojbindtext"
+      }
+    }
+  },
+  "translations": {}
+}

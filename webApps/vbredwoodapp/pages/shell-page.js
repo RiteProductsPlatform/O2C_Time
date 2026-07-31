@@ -1,31 +1,75 @@
-/* Copyright (c) 2026, Oracle and/or its affiliates */
+/* O2C Timesheet Module — shell page module */
 
-define([], () => {
+define(['resources/js/navModel'], (navModel) => {
   'use strict';
+
+  /**
+   * Presentation helpers for the shell's bindings.
+   *
+   * S1 forbids expressions inside [[ ]], and these exist to honour it: each one
+   * replaces a ternary or a chain of string operations that would otherwise sit
+   * in the HTML, where it cannot be read, reused or tested.
+   */
+  const ROLE_LABELS = {
+    ROLE_TIME_ADMIN:      'Finance / Admin',
+    ROLE_TIME_MANAGER:    'Manager',
+    ROLE_TIME_EMPLOYEE:   'Employee',
+    ROLE_TIME_CONTRACTOR: 'Contractor',
+    ROLE_TIME_NONE:       'No access',
+  };
+
+  const MANAGER_ROLES = ['ROLE_TIME_MANAGER', 'ROLE_TIME_ADMIN'];
 
   class PageModule {
 
-    /**
-     * Human-readable name for the signed-in role.
-     *
-     * A page function rather than a ternary chain in the binding: S1 forbids
-     * conditional logic inside [[ ]], and this is the kind of mapping that would
-     * otherwise be duplicated wherever the role is shown.
-     */
-    roleLabel(role) {
-      switch (role) {
-        case 'ROLE_TIME_EMPLOYEE':   return 'Employee';
-        case 'ROLE_TIME_CONTRACTOR': return 'Contractor';
-        case 'ROLE_TIME_MANAGER':    return 'Manager';
-        case 'ROLE_TIME_ADMIN':      return 'Finance / Admin';
-        default:                     return 'No access';
+    /** Up to two initials for the topbar avatar. */
+    initials(fullName) {
+      const parts = String(fullName || '').trim().split(/\s+/).filter(Boolean);
+      if (!parts.length) {
+        return '?';
       }
+      return parts.map((w) => w.charAt(0)).join('').substring(0, 2).toUpperCase();
     }
 
-    // The signed-in identity is NOT read here. `this.securityContext` is not a
-    // VBCS page-module API — it is always undefined, which is what stranded the
-    // app on "Could not determine the signed-in user". bootstrapChain reads VB's
-    // built-in $application.user instead.
+    /**
+     * ROLE_TIME_MANAGER reads as a database constant, not as a job. The badge
+     * shows the human word; the raw role stays the value every check compares.
+     */
+    roleLabel(role) {
+      return ROLE_LABELS[role] || '';
+    }
+
+    /**
+     * The sidebar for the current role.
+     *
+     * Read straight from the nav model on each render rather than cached into a
+     * page variable by a chain — so the menu cannot lag the role, and there is
+     * one definition of who may see what rather than two that drift.
+     */
+    navGroups(role) {
+      return navModel.groupsFor(role);
+    }
+
+    /** True when the role is entitled to nothing, so the nav can say why. */
+    hasNoNav(role) {
+      return navModel.groupsFor(role).length === 0;
+    }
+
+    /**
+     * ACT-011. Offered only to a manager or admin who genuinely has more than
+     * one team to review; a manager with a single team gains nothing from a
+     * selector whose only option is themselves.
+     */
+    canSwitchManager(role, managerOptions) {
+      return MANAGER_ROLES.indexOf(role) !== -1
+        && Array.isArray(managerOptions)
+        && managerOptions.length > 1;
+    }
+
+    /** Active state for a sidebar item. */
+    navItemClass(page, activeNav) {
+      return page === activeNav ? 'rw-nav-item active' : 'rw-nav-item';
+    }
   }
 
   return PageModule;

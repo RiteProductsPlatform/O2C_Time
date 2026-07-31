@@ -1,9 +1,0 @@
-{
-  "id": "accrual-integration",
-  "description": "PAGE-011 Accrual Integration — confirmed project-months, the extract handed to accrual, and the leave-loss invoice annexure (INT-014).",
-  "defaultPage": "accrual-integration",
-  "chains": {},
-  "services": {},
-  "types": {},
-  "variables": {}
-}

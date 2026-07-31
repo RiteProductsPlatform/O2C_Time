@@ -1,44 +1,23 @@
 {
-  "description": "O2C Timesheet shell — Redwood applayout frame: drawer navigation (RBAC, RULE-022), the manager switcher (ACT-011), the app-wide messages banner and toast, and the router outlet.",
-  "routerFlow": "my-timesheet",
+  "description": "O2C Timesheet shell — topbar with the period and acting-manager context, the RBAC sidebar (RULE-022), the app-wide messages banner and toast, and the single router outlet that hosts the 'main' flow.",
+  "routerFlow": "main",
   "variables": {
-    "navReady": {
+    "sidebarCollapsed": {
       "type": "boolean",
-      "defaultValue": false,
+      "defaultValue": true,
       "input": "none",
-      "description": "False until bootstrapChain has resolved the signed-in worker. The nav stays hidden until then so a menu is never rendered for an unknown role."
+      "description": "Push-layout sidebar state. A page variable rather than a DOM class toggle, so the markup stays declarative and the state survives a re-render. Starts closed, matching the main O2C application."
     },
-    "signInError": {
-      "type": "string",
-      "defaultValue": "",
-      "input": "none"
-    },
-    "isDrawerOpen": {
-      "type": "boolean",
-      "defaultValue": false
-    },
-    "currentRoute": {
+    "shellError": {
       "type": "string",
       "defaultValue": "",
       "input": "none",
-      "description": "The flow the router is actually on. onNavSelectionChain compares against this so a programmatic selection write (bootstrap, in-page drill-down) cannot re-trigger navigation."
-    },
-    "navItemsArray": {
-      "type": "any[]",
-      "defaultValue": [],
-      "description": "Built by bootstrapChain from the resolved role. RULE-022 is enforced here by omission — a role never receives an item it is not entitled to — and again in navigateChain for typed URLs."
-    },
-    "navItemsDP": {
-      "type": "vb/ArrayDataProvider2",
-      "defaultValue": {
-        "itemType": "navItemType",
-        "keyAttributes": "id",
-        "data": "{{ $page.variables.navItemsArray }}"
-      }
+      "description": "Set only when the shell could not establish the signed-in identity — a dead session, an unreachable service. Page-level errors go to messagesBannerADP instead."
     },
     "managerOptionsArray": {
       "type": "any[]",
-      "defaultValue": []
+      "defaultValue": [],
+      "input": "none"
     },
     "managerOptions": {
       "type": "vb/ArrayDataProvider2",
@@ -47,7 +26,7 @@
         "keyAttributes": "value",
         "data": "{{ $page.variables.managerOptionsArray }}"
       },
-      "description": "Manager switcher (ACT-011): a split employee reports into more than one manager, so the acting manager can change identity to review each team."
+      "description": "Live-bound to the array above. Safe at PAGE scope — the two initialise together; the same pattern at APPLICATION scope leaves the ADP half-built and blanks every select that binds it."
     },
     "messageToast": {
       "type": "string"
@@ -75,12 +54,6 @@
       "secondaryText": "any",
       "secondaryActionLabel": "string"
     },
-    "navItemType": {
-      "id": "string",
-      "label": "string",
-      "icon": "string",
-      "iconClass": "string"
-    },
     "managerOptType": {
       "value": "string",
       "label": "string"
@@ -91,24 +64,48 @@
     "vbEnter": {
       "chains": [
         {
-          "chain": "bootstrapChain"
+          "chain": "checkSessionChain"
         }
       ]
     },
-    "onNavSelectionChanged": {
+    "application:sessionEstablished": {
       "chains": [
         {
-          "chain": "onNavSelectionChain",
+          "chain": "loadContextChain"
+        }
+      ]
+    },
+    "navClick": {
+      "chains": [
+        {
+          "chain": "navigateToPageChain",
           "parameters": {
-            "target": "{{ $event.detail.value }}"
+            "page": "{{ $event.currentTarget.dataset.page }}"
           }
         }
       ]
     },
-    "toggleDrawer": {
+    "doLogout": {
       "chains": [
         {
-          "chain": "toggleDrawerChain"
+          "chain": "logoutChain"
+        }
+      ]
+    },
+    "toggleSidebar": {
+      "chains": [
+        {
+          "chain": "toggleSidebarChain"
+        }
+      ]
+    },
+    "periodChanged": {
+      "chains": [
+        {
+          "chain": "periodChangedChain",
+          "parameters": {
+            "periodId": "{{ $event.detail.value }}"
+          }
         }
       ]
     },
@@ -155,17 +152,14 @@
   },
   "imports": {
     "components": {
+      "oj-sp-pillar-theme": {
+        "path": "oj-sp/pillar-theme/loader"
+      },
       "oj-sp-messages-banner": {
         "path": "oj-sp/messages-banner/loader"
       },
       "oj-sp-messages-toast": {
         "path": "oj-sp/messages-toast/loader"
-      },
-      "oj-drawer-popup": {
-        "path": "ojs/ojdrawerpopup"
-      },
-      "oj-navigation-list": {
-        "path": "ojs/ojnavigationlist"
       },
       "oj-button": {
         "path": "ojs/ojbutton"
@@ -173,14 +167,14 @@
       "oj-select-single": {
         "path": "ojs/ojselectsingle"
       },
-      "oj-form-layout": {
-        "path": "ojs/ojformlayout"
-      },
       "oj-bind-if": {
         "path": "ojs/ojbindif"
       },
       "oj-bind-text": {
         "path": "ojs/ojbindtext"
+      },
+      "oj-bind-for-each": {
+        "path": "ojs/ojbindforeach"
       }
     }
   },

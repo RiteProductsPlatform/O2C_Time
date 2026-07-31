@@ -1,9 +1,0 @@
-{
-  "id": "approval-detail",
-  "description": "PAGE-005 Approval Detail — weekly and date-wise approve/reject, override & approve, with the change history (PER-003).",
-  "defaultPage": "approval-detail",
-  "chains": {},
-  "services": {},
-  "types": {},
-  "variables": {}
-}

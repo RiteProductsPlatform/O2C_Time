@@ -49,10 +49,10 @@ define([
         displayMode: 'transient',
       });
 
-      // Land back on the manager landing page so the new team is loaded.
+      // Land back on the approvals page so the new team is loaded.
       await Actions.callChain(context, {
-        chain: 'navigateChain',
-        params: { target: 'team-approvals' },
+        chain: 'navigateToPageChain',
+        params: { page: 'main-team-approvals' },
       });
     }
   }

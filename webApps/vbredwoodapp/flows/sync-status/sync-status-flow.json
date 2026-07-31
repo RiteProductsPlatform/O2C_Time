@@ -1,9 +1,0 @@
-{
-  "id": "sync-status",
-  "description": "PAGE-010 Sync Status — job health and the failed-record queue (PROC-014, ACT-031, ACT-032).",
-  "defaultPage": "sync-status",
-  "chains": {},
-  "services": {},
-  "types": {},
-  "variables": {}
-}

@@ -1,9 +1,0 @@
-{
-  "id": "leave-loss-coverage",
-  "description": "PAGE-006 Leave Loss Coverage — cover an FCP absentee with an unbilled colleague so the absence counts as billed (PROC-006).",
-  "defaultPage": "leave-loss-coverage",
-  "chains": {},
-  "services": {},
-  "types": {},
-  "variables": {}
-}

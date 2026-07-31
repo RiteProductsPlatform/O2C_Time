@@ -1,0 +1,37 @@
+/**
+ * O2C Timesheet Module — Redwood theme overrides.
+ *
+ * Loaded application-wide from app-flow.json imports.css. Anything that must
+ * reach INSIDE an oj-sp component's shadow DOM belongs here as a CSS custom
+ * property; the shell's own layout stays in shell-page.html so it travels with
+ * the markup it styles.
+ *
+ * Deliberately small. The main O2C application's copy of this file grew a long
+ * tail of per-page hacks; the equivalents here live in the per-page CSS files
+ * next to the pages that need them.
+ */
+
+/* Oracle's page-header colour strip. Same asset the main application uses, so
+   the two products look like one suite. */
+oj-sp-header-general-overview .oj-sp-header-general-overview-header-strip {
+  background-image: var(--oj-sp-theme-page-header-strip,
+    url(https://static.oracle.com/cdn/fnd/gallery/2601.0.0/images/color-strip-hcm-2x.webp));
+}
+
+/* oj-sp-smart-search-page adds its own padding between the hero and the page
+   body. The shell already spaces .rw-main, so without this every search page
+   sits noticeably lower than every other page. */
+oj-sp-smart-search-page [class*="header-content"],
+oj-sp-smart-search-page [class*="content-panel"],
+oj-sp-smart-search-page [class*="content-container"] {
+  padding-top: 0 !important;
+  margin-top: 0 !important;
+}
+
+/* JET's date and number inputs inherit a larger control height than the rest of
+   the timesheet grid, which makes a week of seven day cells taller than the row
+   it sits in. */
+.oc-time-grid .oj-inputnumber-wrapper,
+.oc-time-grid .oj-text-field-container {
+  --oj-text-field-height: 30px;
+}
