@@ -5,12 +5,6 @@
   "routerStrategy": "path",
   "chains": {},
   "configuration": {},
-  "imports": {
-    "css": [
-      "/resources/css/o2ctime.css",
-      "https://static.oracle.com/cdn/fnd/gallery/2507.0.3/images/iconfont/ojuxIconFont.min.css"
-    ]
-  },
   "requirejs": {
     "paths": {
       "oj-sp": "https://static.oracle.com/cdn/spectra-ui/oj-sp/2604.1.0",
@@ -421,13 +415,6 @@
     "configuration": {},
     "embedding": "deny"
   },
-  "//security": [
-    "Security sheet: every page is authn_pattern = 'JWT (token)' with RBAC by role.",
-    "requiresAuthentication MUST stay true. With it false VBCS serves the app",
-    "anonymously, never challenges for a sign-in, and leaves $application.user",
-    "empty - which strands bootstrapChain on 'Could not determine the signed-in",
-    "user' with no way to sign in."
-  ],
   "security": {
     "access": {
       "requiresAuthentication": true
