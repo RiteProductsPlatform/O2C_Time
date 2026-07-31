@@ -724,10 +724,16 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
     RETURN v_job;
   EXCEPTION WHEN OTHERS THEN
     ROLLBACK;
-    UPDATE oc_time_sync_job
-       SET job_status = 'Failed', finished_on = SYSTIMESTAMP,
-           message = SUBSTR(SQLERRM,1,2000)
-     WHERE job_run_id = v_job;
+    -- SQLERRM is a PL/SQL function and cannot be referenced inside a SQL
+    -- statement (ORA-00904). Capture it into a local first, then write that.
+    DECLARE
+      v_err VARCHAR2(2000) := SUBSTR(SQLERRM, 1, 2000);
+    BEGIN
+      UPDATE oc_time_sync_job
+         SET job_status = 'Failed', finished_on = SYSTIMESTAMP,
+             message = v_err
+       WHERE job_run_id = v_job;
+    END;
     COMMIT;
     RAISE;
   END populate_month;
@@ -1446,6 +1452,7 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
     v_date    DATE;
     v_absent  VARCHAR2(50);
     v_ok      NUMBER;
+    v_clash   NUMBER;
   BEGIN
     SELECT project_id, absence_date, absent_employee_id
       INTO v_project, v_date, v_absent
@@ -1461,15 +1468,26 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
        AND al.status         = 'Active'
        AND al.billing_status = 'Unbilled';
 
+    -- Is the candidate themselves absent that day, or already covering someone
+    -- else on it? EXISTS is a SQL construct and cannot appear in a PL/SQL IF
+    -- (PLS-00204), so both tests are evaluated in SQL. CASE WHEN EXISTS rather
+    -- than COUNT(*) keeps the short-circuit: it stops at the first hit instead
+    -- of counting every match.
+    SELECT CASE WHEN EXISTS (SELECT 1 FROM oc_time_absence ab
+                              WHERE ab.employee_id  = p_cover_employee_id
+                                AND ab.absence_date = v_date)
+                THEN 1 ELSE 0 END
+         + CASE WHEN EXISTS (SELECT 1 FROM oc_ts_leave_loss_cover c
+                              WHERE c.cover_employee_id = p_cover_employee_id
+                                AND c.absence_date      = v_date
+                                AND c.llc_id           <> p_llc_id)
+                THEN 1 ELSE 0 END
+      INTO v_clash
+      FROM dual;
+
     IF v_ok = 0
        OR p_cover_employee_id = v_absent
-       OR EXISTS (SELECT 1 FROM oc_time_absence ab
-                   WHERE ab.employee_id  = p_cover_employee_id
-                     AND ab.absence_date = v_date)
-       OR EXISTS (SELECT 1 FROM oc_ts_leave_loss_cover c
-                   WHERE c.cover_employee_id = p_cover_employee_id
-                     AND c.absence_date      = v_date
-                     AND c.llc_id           <> p_llc_id) THEN
+       OR v_clash > 0 THEN
       RAISE_APPLICATION_ERROR(-20014,
         'This colleague cannot cover (billed, absent, or already assigned).');
     END IF;
