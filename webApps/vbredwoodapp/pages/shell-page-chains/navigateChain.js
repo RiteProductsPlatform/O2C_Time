@@ -18,9 +18,9 @@ define([
    * hand-typed URL must not reach a page the role is not entitled to. The menu
    * omits the item; this chain refuses the navigation.
    *
-   * Each destination is its own flow with a single page of the same name, so
-   * this crosses a flow boundary every time — navigateToFlow, per the
-   * navigation rules, never navigateToPage.
+   * Each destination is its own flow with a single page of the same name,
+   * addressed relative to the shell — see the note on the navigate call below
+   * for why this is navigateToPage and not navigateToFlow.
    */
   class navigateChain extends ActionChain {
 
@@ -68,9 +68,17 @@ define([
       $application.variables.activeNav = target;
       $page.variables.isDrawerOpen = false;
 
-      await Actions.navigateToFlow(context, {
-        flow: target,
-        page: target,
+      // 'shell/<flow>/<page>', not navigateToFlow.
+      //
+      // These flows are hosted by the SHELL PAGE's router outlet (the
+      // oj-vb-content in shell-page.html), so they are children of the shell
+      // page, not application-level flows. navigateToFlow drives the
+      // application router, which is not what renders here — it resolves to
+      // nothing and the content area simply stays blank, with no error.
+      //
+      // Each flow has a single page of the same name, hence the repeat.
+      await Actions.navigateToPage(context, {
+        page: 'shell/' + target + '/' + target,
         history: 'push',
       });
     }

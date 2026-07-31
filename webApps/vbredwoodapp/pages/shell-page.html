@@ -129,8 +129,15 @@
         </div>
       </oj-bind-if>
 
-      <div class="oj-flex">
-        <oj-vb-content id="vbRouterContent" class="oj-flex-item" config="[[ vbRouterFlow ]]">
+      <!-- No config binding. The scaffold shipped config="[[ vbRouterFlow ]]",
+           but that implicit variable only resolves for the flow the scaffold
+           declared; with the flows re-pointed it evaluates to undefined and the
+           outlet renders nothing at all — a blank page with no error. Left
+           unbound, the outlet uses the page's own router, whose default comes
+           from routerFlow in shell-page.json and whose route is then set by
+           navigateChain. -->
+      <div class="oj-flex oj-sm-width-full">
+        <oj-vb-content id="vbRouterContent" class="oj-flex-item oj-sm-width-full">
         </oj-vb-content>
       </div>
 
