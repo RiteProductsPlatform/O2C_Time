@@ -73,7 +73,16 @@ BEGIN
              (SELECT NVL(SUM(alloc_pct),0) FROM oc_time_allocation al
                WHERE al.employee_id = w.employee_id AND al.status = 'Active')
                AS total_alloc_pct,
-             oc_time_pkg.get_open_period_id AS open_period_id
+             -- Deliberately NOT oc_time_pkg.get_open_period_id: that function
+             -- RAISES ORA-20017 when nothing is Open, which is right for the
+             -- callers that cannot proceed without a period (populate_daily,
+             -- apply_adjustment, jobs/daily) but fatal here. Sign-in must never
+             -- depend on a period being open, or nobody can log in between
+             -- periods or before the first one is set up - the whole app becomes
+             -- unreachable with a 555. NULL is a perfectly good answer; the shell
+             -- already treats it as "no open period".
+             (SELECT p.period_id FROM oc_time_period p
+               WHERE p.status = 'Open' AND ROWNUM = 1) AS open_period_id
         FROM oc_time_worker w
         LEFT JOIN oc_time_worker m ON m.employee_id = w.manager_emp_id
        WHERE UPPER(w.email) = UPPER(:employeeId)
