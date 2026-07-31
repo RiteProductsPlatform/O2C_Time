@@ -22,23 +22,10 @@ define([], () => {
       }
     }
 
-    /**
-     * Signed-in user's email.
-     *
-     * The employee id (HCM PersonNumber) is NOT derivable from the token, so
-     * bootstrapChain resolves it from OC_TIME_WORKER by email. This function
-     * only supplies the email, and deliberately returns '' rather than a guess
-     * when the security context is missing, so bootstrapChain can show a real
-     * error instead of silently loading someone else's timesheet.
-     */
-    currentUserEmail() {
-      try {
-        const p = this.securityContext && this.securityContext.userProfile;
-        return (p && (p.email || p.username)) || '';
-      } catch (e) {
-        return '';
-      }
-    }
+    // The signed-in identity is NOT read here. `this.securityContext` is not a
+    // VBCS page-module API — it is always undefined, which is what stranded the
+    // app on "Could not determine the signed-in user". bootstrapChain reads VB's
+    // built-in $application.user instead.
   }
 
   return PageModule;

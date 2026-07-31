@@ -421,9 +421,16 @@
     "configuration": {},
     "embedding": "deny"
   },
+  "//security": [
+    "Security sheet: every page is authn_pattern = 'JWT (token)' with RBAC by role.",
+    "requiresAuthentication MUST stay true. With it false VBCS serves the app",
+    "anonymously, never challenges for a sign-in, and leaves $application.user",
+    "empty - which strands bootstrapChain on 'Could not determine the signed-in",
+    "user' with no way to sign in."
+  ],
   "security": {
     "access": {
-      "requiresAuthentication": false
+      "requiresAuthentication": true
     }
   },
   "flows": {},

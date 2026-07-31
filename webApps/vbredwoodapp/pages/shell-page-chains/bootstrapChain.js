@@ -29,13 +29,24 @@ define([
     async run(context) {
       const { $page, $application } = context;
 
-      const email = $page.functions.currentUserEmail();
+      // VB's built-in user variable is the source of the signed-in identity. It
+      // is populated only when security.access.requiresAuthentication is true;
+      // under anonymous access it is empty, so the app must be configured to
+      // authenticate (Security sheet: JWT + RBAC on every page).
+      const user  = $application.user || {};
+      const email = user.email || user.username || user.userId || '';
+
       $application.variables.currentEmail = email;
 
       if (!email) {
         $application.variables.currentRole = 'ROLE_TIME_NONE';
-        $page.variables.signInError =
-          'Could not determine the signed-in user. Please sign in again.';
+        // Distinguish "not signed in" from "signed in but unknown to the module"
+        // — the two need completely different actions from the user.
+        $page.variables.signInError = (user.isAuthenticated === false)
+          ? 'You are not signed in. Reload the page to sign in.'
+          : 'Signed in, but no email address was returned by the identity ' +
+            'provider, so your worker record cannot be resolved. Contact your ' +
+            'administrator.';
         $page.variables.navItemsArray = [];
         $page.variables.navReady = true;
         return;
