@@ -433,6 +433,46 @@ BEGIN EXECUTE IMMEDIATE
 EXCEPTION WHEN OTHERS THEN IF SQLCODE = -955 THEN NULL; ELSE RAISE; END IF; END;
 /
 
+PROMPT ============================================================
+PROMPT [8/8] OC_TIME_PROJECT — main O2C application project id
+PROMPT ============================================================
+
+-- MAIN_PROJECT_ID is OC_PROJECT.PROJECT_ID in the main O2C application.
+--
+-- It has to be stored because the two systems have completely separate id
+-- spaces: ours is Fusion's PJF_PROJECTS_ALL_B.PROJECT_ID, theirs is an identity
+-- column in their schema. The only thing common to both is the project NUMBER
+-- (Fusion SEGMENT1 = OC_PROJECT.PROJECT_NUMBER, unique on both sides), so that
+-- is the join, resolved once and cached here rather than looked up per push.
+--
+-- Left NULL until resolved. A project with no MAIN_PROJECT_ID cannot be pushed,
+-- and V_OC_TS_O2C_PUSH_HEADER surfaces that as a blocked row rather than
+-- silently dropping the month.
+DECLARE
+  v_n PLS_INTEGER := 0;
+BEGIN
+  BEGIN
+    EXECUTE IMMEDIATE 'ALTER TABLE oc_time_project ADD main_project_id NUMBER';
+    v_n := v_n + 1;
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLCODE = -1430 THEN NULL; ELSE RAISE; END IF;
+  END;
+  BEGIN
+    EXECUTE IMMEDIATE
+      'ALTER TABLE oc_time_project ADD main_project_synced_on TIMESTAMP';
+    v_n := v_n + 1;
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLCODE = -1430 THEN NULL; ELSE RAISE; END IF;
+  END;
+  DBMS_OUTPUT.PUT_LINE('main O2C mapping columns added: ' || v_n);
+END;
+/
+
+BEGIN EXECUTE IMMEDIATE
+  'CREATE INDEX ix_oc_tprj_main ON oc_time_project(main_project_id)';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE = -955 THEN NULL; ELSE RAISE; END IF; END;
+/
+
 PROMPT
 PROMPT ============================================================
 PROMPT time/02_time_master complete.

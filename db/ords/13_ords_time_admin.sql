@@ -9,8 +9,16 @@
 -- surfaces:
 --   * PAGE-009 Calendar sync, PAGE-010 Sync status, PAGE-011 Accrual
 --     integration, PAGE-012 Integration reference;
---   * the O2C accrual application, which PULLS from
---     XX_O2C_TIMESHEET_ACCRUAL_IF and acknowledges the batch.
+--   * the hand-off to the main O2C application. Its timesheet -> accrual chain
+--     already exists, so on confirmation we PUSH the consolidated month into
+--     OC_TIMESHEET_HEADER / OC_TIMESHEET_LINE through its own import API and it
+--     generates the accrual. The push/* endpoints below serve exactly the two
+--     payloads that API expects. This replaces the RitePulse feed.
+--
+--   * the older accrual PULL from XX_O2C_TIMESHEET_ACCRUAL_IF, kept because the
+--     interface table is now the staging set the push reads from - Reversal rows
+--     are stored negative there, so a SUM nets a retro correction with no sign
+--     handling - and because a second consumer may still want to pull.
 --
 -- Period Control is exposed READ-ONLY. PAGE-008 was removed as an admin screen
 -- on 29-Jul and is reference data maintained outside the app, but the cut-off
@@ -33,6 +41,9 @@
 --   GET  accrual/annexure/:periodId              leave-loss invoice annexure
 --   GET  accrual/pull/:periodYear/:periodMonth   *** accrual PULLS here ***
 --   POST accrual/ack/:batchId                    accrual acknowledges a batch
+--   GET  push/header/:confirmId                  main O2C hand-off, per employee
+--   GET  push/line/:confirmId/:employeeId        main O2C hand-off, per day
+--   POST push/ack/:confirmId                     pusher reports the outcome
 --   GET  integrations                            PAGE-012 reference catalogue
 --   GET  compliance/:periodId                    status dashboard (REP-005)
 --   GET  config                                  business configuration
@@ -597,6 +608,93 @@ BEGIN
       SELECT config_id, config_name, config_type, config_value, scope_key, description
         FROM oc_time_config
        ORDER BY config_type, config_name
+    ]');
+  COMMIT;
+END;
+/
+
+-- ── GET push/header/:confirmId  (main O2C hand-off) ──────────
+-- What the pusher POSTs to /oc/accrual/timesheet/import, one row per employee.
+-- PUSH_STATE is READY or BLOCKED: a project with no MAIN_PROJECT_ID is returned
+-- rather than filtered out, so a month that cannot be handed over is visible.
+BEGIN
+  ORDS.DEFINE_TEMPLATE(p_module_name => 'oc.time.admin', p_pattern => 'push/header/:confirmId');
+  ORDS.DEFINE_HANDLER(
+    p_module_name => 'oc.time.admin', p_pattern => 'push/header/:confirmId',
+    p_method => 'GET',
+    p_source_type => ORDS.source_type_collection_feed,
+    p_source => q'[
+      SELECT project_id, project_number, employee_id, employee_name,
+             billing_status, period_year, period_month,
+             billable_hours, non_billable_hours, leave_hours,
+             working_days, status, push_state
+        FROM v_oc_ts_o2c_push_header
+       WHERE confirm_id = :confirmId
+       ORDER BY employee_id
+    ]');
+  COMMIT;
+END;
+/
+
+-- ── GET push/line/:confirmId/:employeeId ─────────────────────
+-- The day rows for one employee, POSTed to
+-- /oc/accrual/timesheet/lines/import/{tsHeaderId} once the header returns its id.
+BEGIN
+  ORDS.DEFINE_TEMPLATE(p_module_name => 'oc.time.admin', p_pattern => 'push/line/:confirmId/:employeeId');
+  ORDS.DEFINE_HANDLER(
+    p_module_name => 'oc.time.admin', p_pattern => 'push/line/:confirmId/:employeeId',
+    p_method => 'GET',
+    p_source_type => ORDS.source_type_collection_feed,
+    p_source => q'[
+      SELECT entry_date, billable_hours, non_billable_hours, is_leave, remarks
+        FROM v_oc_ts_o2c_push_line
+       WHERE confirm_id = :confirmId
+         AND employee_id = :employeeId
+       ORDER BY entry_date
+    ]');
+  COMMIT;
+END;
+/
+
+-- ── POST push/ack/:confirmId ─────────────────────────────────
+-- The pusher reports the outcome so PAGE-011 can show whether a confirmed month
+-- actually reached the main application. PARTNER_STATUS is reused for this: it
+-- was reserved for exactly this second hand-off.
+BEGIN
+  ORDS.DEFINE_TEMPLATE(p_module_name => 'oc.time.admin', p_pattern => 'push/ack/:confirmId');
+  ORDS.DEFINE_HANDLER(
+    p_module_name => 'oc.time.admin', p_pattern => 'push/ack/:confirmId',
+    p_method => 'POST',
+    p_source_type => ORDS.source_type_plsql,
+    p_mimes_allowed => 'application/json',
+    p_source => q'[
+      DECLARE
+        v_status VARCHAR2(20) := NVL(:status, 'Failed');
+        v_msg    VARCHAR2(2000) := :message;
+      BEGIN
+        IF v_status NOT IN ('Pending','Success','Failed','Skipped') THEN
+          :status_code := 400;
+          HTP.P('{"error":"status must be Pending, Success, Failed or Skipped"}');
+          RETURN;
+        END IF;
+        UPDATE oc_ts_month_confirm
+           SET partner_status    = v_status,
+               partner_pushed_on = SYSTIMESTAMP
+         WHERE confirm_id = :confirmId;
+        IF SQL%ROWCOUNT = 0 THEN
+          ROLLBACK; :status_code := 404;
+          HTP.P('{"error":"No confirmation with that id"}');
+          RETURN;
+        END IF;
+        COMMIT;
+        :status_code := 200;
+        HTP.P('{"confirmId":' || :confirmId || ',"partnerStatus":"' || v_status || '"}');
+      EXCEPTION WHEN OTHERS THEN
+        ROLLBACK; :status_code := 500;
+        HTP.P('{"error":"' ||
+              REPLACE(REPLACE(SQLERRM,'ORA-'||LTRIM(TO_CHAR(ABS(SQLCODE)))||': ',''),'"','\"')
+              || '"}');
+      END;
     ]');
   COMMIT;
 END;

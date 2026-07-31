@@ -278,6 +278,77 @@ SELECT w.period_id,
  GROUP BY w.period_id, pe.period_name, w.period_year, w.period_month,
           w.week_index, w.week_start, wk.manager_emp_id;
 
+PROMPT ============================================================
+PROMPT [6/6] V_OC_TS_O2C_PUSH_* — consolidated push to the main O2C app
+PROMPT ============================================================
+
+-- The hand-off to the main O2C application's timesheet -> accrual chain.
+--
+--   POST /oc/accrual/timesheet/import             -> OC_TIMESHEET_HEADER
+--   POST /oc/accrual/timesheet/lines/import/{id}  -> OC_TIMESHEET_LINE
+--   POST /oc/accrual/accruals/generate            -> their accrual takes over
+--
+-- Both endpoints upsert, so re-confirming a month is safe and self-correcting.
+--
+-- Source is XX_O2C_TIMESHEET_ACCRUAL_IF, not the live tables. That matters: the
+-- interface rows are the frozen, manager-confirmed set, and Reversal rows are
+-- already stored with NEGATIVE hours, so a plain SUM nets a retro correction
+-- against its Adjustment pair with no sign handling. Summing OC_TS_ENTRY instead
+-- would double-count every adjusted day.
+--
+-- Two deliberate reductions, because their model is coarser than ours:
+--   * no task dimension  - their line is UNIQUE (ts_header_id, entry_date), so
+--     a day's task lines collapse into one row. Task detail stays here, where
+--     OC_TS_ENTRY remains the system of record for it.
+--   * 7 statuses -> 4    - their CHK allows Draft|Submitted|Approved|Rejected.
+--     Anything we have confirmed is, by definition, manager-approved.
+
+CREATE OR REPLACE VIEW v_oc_ts_o2c_push_header AS
+SELECT i.confirm_id,
+       p.main_project_id                          AS project_id,     -- THEIR id
+       i.project_number,
+       i.employee_id,
+       MAX(i.employee_name)                       AS employee_name,
+       -- Their CHK is Billable | Non-Billable. A month with any billable hour
+       -- is billable; only a wholly non-billable month is flagged as such.
+       CASE WHEN SUM(i.billable_hours) > 0
+            THEN 'Billable' ELSE 'Non-Billable' END AS billing_status,
+       i.period_year,
+       i.period_month,
+       ROUND(SUM(i.billable_hours), 2)            AS billable_hours,
+       ROUND(SUM(i.non_billable_hours), 2)        AS non_billable_hours,
+       ROUND(SUM(i.leave_hours), 2)               AS leave_hours,
+       COUNT(DISTINCT i.work_date)                AS working_days,
+       'Approved'                                 AS status,
+       -- A project that has never been mapped cannot be pushed. Surfaced as a
+       -- row with a reason rather than dropped, so a blocked month is visible
+       -- instead of silently missing from the main app.
+       CASE WHEN p.main_project_id IS NULL
+            THEN 'BLOCKED: no MAIN_PROJECT_ID for ' || i.project_number
+            ELSE 'READY' END                      AS push_state
+  FROM xx_o2c_timesheet_accrual_if i
+  LEFT JOIN oc_time_project p
+    ON p.project_number = i.project_number
+ GROUP BY i.confirm_id, p.main_project_id, i.project_number,
+          i.employee_id, i.period_year, i.period_month;
+
+CREATE OR REPLACE VIEW v_oc_ts_o2c_push_line AS
+SELECT i.confirm_id,
+       i.employee_id,
+       i.project_number,
+       TO_CHAR(i.work_date,'YYYY-MM-DD')      AS entry_date,
+       ROUND(SUM(i.billable_hours), 2)        AS billable_hours,
+       ROUND(SUM(i.non_billable_hours), 2)    AS non_billable_hours,
+       -- Their line carries a single IS_LEAVE flag, not leave hours. A day with
+       -- any leave is marked; the hours themselves are already in the header.
+       CASE WHEN SUM(i.leave_hours) > 0 THEN 'Y' ELSE 'N' END AS is_leave,
+       -- Entry types present on the day, so a corrected day is identifiable in
+       -- the main app without it needing to model reversals.
+       LISTAGG(DISTINCT i.entry_type, ',')
+         WITHIN GROUP (ORDER BY i.entry_type)   AS remarks
+  FROM xx_o2c_timesheet_accrual_if i
+ GROUP BY i.confirm_id, i.employee_id, i.project_number, i.work_date;
+
 PROMPT
 PROMPT ============================================================
 PROMPT time/07_accrual_interface complete.
