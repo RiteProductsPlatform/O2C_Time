@@ -59,16 +59,44 @@ PROMPT ##############################################################
 PROMPT
 
 -- ── Pre-flight: privileges ───────────────────────────────────
--- Checked up front because the failure is otherwise misleading: RESOURCE grants
--- CREATE TABLE but not CREATE VIEW, so scripts 01 and 02 build their tables,
--- then 01 step [7/8] dies on the first view with a bare ORA-01031 — by which
--- point it looks like the DDL is at fault rather than the grant.
+-- Reported up front because the failure is otherwise misleading: RESOURCE
+-- grants CREATE TABLE but not CREATE VIEW, so scripts 01 and 02 build their
+-- tables, then 01 step [7/8] dies on the first view with a bare ORA-01031 — by
+-- which point it looks like the DDL is at fault rather than the grant.
+--
+-- A WARNING, NOT A GATE — and that is deliberate (01-Aug-2026).
+--
+-- This block used to RAISE, and it stopped a perfectly good install dead. The
+-- tell was that it named CREATE TABLE / SEQUENCE / TRIGGER / PROCEDURE but not
+-- CREATE VIEW: the first four come from the RESOURCE role, CREATE VIEW had been
+-- granted directly. SESSION_PRIVS shows only what is enabled in the CURRENT
+-- session, so wherever roles are not enabled — some tool connections, and any
+-- definer's-rights context — every role-derived privilege reads as missing
+-- while direct grants read as present.
+--
+-- So the query below also looks through the roles granted to the user. But a
+-- pre-flight that cannot be trusted must not be able to block: if it is wrong
+-- again, the real DDL fails immediately afterwards with a specific ORA-01031 on
+-- the exact object, which is a better diagnostic than a guess made up front.
 DECLARE
   v_missing VARCHAR2(400);
+
   PROCEDURE need(p_priv IN VARCHAR2) IS
     v_cnt PLS_INTEGER;
   BEGIN
-    SELECT COUNT(*) INTO v_cnt FROM session_privs WHERE privilege = p_priv;
+    -- Three sources: the session, privileges granted directly to the user, and
+    -- privileges reachable through any role granted to them. The last is what
+    -- SESSION_PRIVS alone misses when roles are not enabled.
+    SELECT COUNT(*) INTO v_cnt FROM (
+      SELECT privilege FROM session_privs
+      UNION
+      SELECT privilege FROM user_sys_privs
+      UNION
+      SELECT rsp.privilege
+        FROM role_sys_privs  rsp
+        JOIN user_role_privs urp ON urp.granted_role = rsp.role
+    ) WHERE privilege = p_priv;
+
     IF v_cnt = 0 THEN v_missing := v_missing || p_priv || ', '; END IF;
   END;
 BEGIN
@@ -84,16 +112,23 @@ BEGIN
   -- substitution, the token side is weaker and is recorded as debt.
 
   IF v_missing IS NOT NULL THEN
-    RAISE_APPLICATION_ERROR(-20900,
-      CHR(10) || 'Install stopped: ' || USER || ' is missing ' ||
-      RTRIM(v_missing, ', ') || CHR(10) ||
-      'Run as ADMIN, then re-run this installer:' || CHR(10) ||
-      '  GRANT CONNECT, RESOURCE TO ' || USER || ';' || CHR(10) ||
-      '  GRANT CREATE VIEW       TO ' || USER || ';' || CHR(10) ||
-      '  ALTER USER ' || USER || ' QUOTA UNLIMITED ON DATA;');
+    DBMS_OUTPUT.PUT_LINE('WARNING: could not confirm ' ||
+      RTRIM(v_missing, ', ') || ' for ' || USER || '.');
+    DBMS_OUTPUT.PUT_LINE(
+      '         The install continues. If a privilege really is missing the');
+    DBMS_OUTPUT.PUT_LINE(
+      '         next script fails with ORA-01031 naming the object. To grant:');
+    DBMS_OUTPUT.PUT_LINE('           GRANT CONNECT, RESOURCE TO ' || USER || ';');
+    DBMS_OUTPUT.PUT_LINE('           GRANT CREATE VIEW       TO ' || USER || ';');
+    DBMS_OUTPUT.PUT_LINE('           ALTER USER ' || USER ||
+                         ' QUOTA UNLIMITED ON DATA;');
+  ELSE
+    DBMS_OUTPUT.PUT_LINE('Privileges OK for ' || USER || '.');
   END IF;
-
-  DBMS_OUTPUT.PUT_LINE('Privileges OK for ' || USER || '.');
+EXCEPTION WHEN OTHERS THEN
+  -- Even the check failing must not stop the install.
+  DBMS_OUTPUT.PUT_LINE('NOTE: privilege pre-flight could not run - ' ||
+                       SUBSTR(SQLERRM, 1, 150));
 END;
 /
 
