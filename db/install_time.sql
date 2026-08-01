@@ -14,14 +14,15 @@
 --    24 of them — without the explicit grant the install dies at 01 step [7/8]
 --    with ORA-01031 after the tables have already succeeded.
 --
---    DBMS_CRYPTO is separate again: EXECUTE on it is not implied by anything,
---    and without it 11_auth.sql stops on its own pre-flight because the
---    password hash function cannot compile and nobody could sign in.
---
 --     GRANT CONNECT, RESOURCE TO O2C_TIME;
 --     GRANT CREATE VIEW       TO O2C_TIME;
---     GRANT EXECUTE ON DBMS_CRYPTO TO O2C_TIME;
 --     ALTER USER O2C_TIME QUOTA UNLIMITED ON DATA;   -- ADB tablespace is DATA
+--
+--    No DBMS_CRYPTO grant is needed. Sign-in hashes with STANDARD_HASH, a SQL
+--    built-in that produces byte-identical SHA-256, and mints session tokens
+--    with oc_time_new_token. The token generator is weaker than
+--    DBMS_CRYPTO.RANDOMBYTES and says so in 11_auth.sql — restore it before
+--    PROD (one line, plus the grant).
 --
 -- 2. REST-enable the schema, or the ORDS modules in 12..15 cannot publish and
 --    every endpoint 404s. On Autonomous Database use ORDS_ADMIN as ADMIN —
@@ -64,7 +65,6 @@ PROMPT
 -- point it looks like the DDL is at fault rather than the grant.
 DECLARE
   v_missing VARCHAR2(400);
-  v_n       PLS_INTEGER;
   PROCEDURE need(p_priv IN VARCHAR2) IS
     v_cnt PLS_INTEGER;
   BEGIN
@@ -78,13 +78,10 @@ BEGIN
   need('CREATE TRIGGER');
   need('CREATE PROCEDURE');
 
-  -- Object grant, not a system privilege, so it is checked differently: if the
-  -- package is not visible at all then EXECUTE has not been granted. Checked
-  -- here rather than only in 11_auth.sql so a missing grant costs one second
-  -- instead of failing eleven scripts into the install.
-  SELECT COUNT(*) INTO v_n FROM all_objects
-   WHERE owner = 'SYS' AND object_name = 'DBMS_CRYPTO';
-  IF v_n = 0 THEN v_missing := v_missing || 'EXECUTE ON DBMS_CRYPTO, '; END IF;
+  -- DBMS_CRYPTO is deliberately NOT required. Sign-in uses STANDARD_HASH for
+  -- passwords and oc_time_new_token for session tokens, both of which need no
+  -- grant. See the security note in 11_auth.sql: the hash side is an exact
+  -- substitution, the token side is weaker and is recorded as debt.
 
   IF v_missing IS NOT NULL THEN
     RAISE_APPLICATION_ERROR(-20900,
@@ -93,7 +90,6 @@ BEGIN
       'Run as ADMIN, then re-run this installer:' || CHR(10) ||
       '  GRANT CONNECT, RESOURCE TO ' || USER || ';' || CHR(10) ||
       '  GRANT CREATE VIEW       TO ' || USER || ';' || CHR(10) ||
-      '  GRANT EXECUTE ON DBMS_CRYPTO TO ' || USER || ';' || CHR(10) ||
       '  ALTER USER ' || USER || ' QUOTA UNLIMITED ON DATA;');
   END IF;
 

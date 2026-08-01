@@ -105,7 +105,11 @@ BEGIN
           RETURN;
         END IF;
 
-        v_tok := RAWTOHEX(DBMS_CRYPTO.RANDOMBYTES(32));
+        -- Via the function, not inline, so the token recipe lives in exactly
+        -- one place — and so restoring DBMS_CRYPTO.RANDOMBYTES later is a
+        -- one-line change there rather than a hunt through the handlers.
+        -- See the security note on oc_time_new_token in 11_auth.sql.
+        v_tok := oc_time_new_token;
 
         -- Clear this user's expired rows on the way through, so the table is
         -- self-maintaining without a scheduled job.

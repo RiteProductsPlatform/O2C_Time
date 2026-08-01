@@ -21,9 +21,11 @@
 -- common admin, who is a real login but not necessarily a worker in HCM and so
 -- may have no OC_TIME_WORKER row to take a role from.
 --
--- PREREQUISITE — as a privileged user, once:
---     GRANT EXECUTE ON DBMS_CRYPTO TO O2C_TIME;
--- Without it oc_time_hash_password will not compile and nobody can sign in.
+-- NO GRANTS BEYOND THE ORDINARY ONES. Nothing here needs DBMS_CRYPTO — see the
+-- note on oc_time_hash_password and oc_time_new_token below, and §  SECURITY
+-- DEBT at the foot of this file. That was a deliberate decision on
+-- 01-Aug-2026 to avoid a DBA round trip; the hash side costs nothing, the token
+-- side is weaker and is written down as debt rather than hidden.
 --
 -- Requirement refs: PER-001..005, RULE-022, NFR-005, Security sheet (JWT/RBAC)
 -- Idempotent. Depends on: time/02_time_master.sql
@@ -32,28 +34,7 @@ SET DEFINE OFF
 SET SERVEROUTPUT ON
 
 PROMPT ============================================================
-PROMPT [1/5] Pre-flight — DBMS_CRYPTO must be executable
-PROMPT ============================================================
-
-DECLARE
-  v_n PLS_INTEGER;
-BEGIN
-  SELECT COUNT(*) INTO v_n
-    FROM all_objects
-   WHERE owner = 'SYS' AND object_name = 'DBMS_CRYPTO';
-
-  IF v_n = 0 THEN
-    RAISE_APPLICATION_ERROR(-20900,
-      CHR(10) || 'DBMS_CRYPTO is not visible to ' || USER || '.' || CHR(10) ||
-      'Run as a privileged user, then re-run this script:' || CHR(10) ||
-      '  GRANT EXECUTE ON DBMS_CRYPTO TO ' || USER || ';');
-  END IF;
-  DBMS_OUTPUT.PUT_LINE('DBMS_CRYPTO visible.');
-END;
-/
-
-PROMPT ============================================================
-PROMPT [2/5] OC_TIME_USER — one login per person
+PROMPT [1/5] OC_TIME_USER — one login per person
 PROMPT ============================================================
 
 BEGIN
@@ -96,7 +77,7 @@ EXCEPTION WHEN OTHERS THEN IF SQLCODE = -955 THEN NULL; ELSE RAISE; END IF; END;
 /
 
 PROMPT ============================================================
-PROMPT [3/5] OC_TIME_SESSION — bearer tokens
+PROMPT [2/5] OC_TIME_SESSION — bearer tokens
 PROMPT ============================================================
 
 BEGIN
@@ -128,7 +109,7 @@ EXCEPTION WHEN OTHERS THEN IF SQLCODE = -955 THEN NULL; ELSE RAISE; END IF; END;
 /
 
 PROMPT ============================================================
-PROMPT [4/5] OC_TIME_HASH_PASSWORD
+PROMPT [3/5] OC_TIME_HASH_PASSWORD
 PROMPT ============================================================
 
 -- Deliberately identical to the main application's oc_hash_password: SHA-256
@@ -138,17 +119,84 @@ PROMPT ============================================================
 --
 -- Same algorithm as the main app on purpose - if the two user stores are ever
 -- merged, the hashes are directly comparable and nobody has to reset a password.
+--
+-- STANDARD_HASH, not DBMS_CRYPTO.HASH. This is a pure substitution, not a
+-- compromise: both hash the same bytes with the same algorithm and return the
+-- same 64 hex characters, so a hash written by either function verifies against
+-- the other and the main app's stored hashes still compare directly. The only
+-- difference is that STANDARD_HASH is a SQL built-in needing no grant, while
+-- DBMS_CRYPTO is a SYS package that is not granted to PUBLIC.
+--
+--   RAWTOHEX(DBMS_CRYPTO.HASH(UTL_RAW.CAST_TO_RAW(s), DBMS_CRYPTO.HASH_SH256))
+--   = RAWTOHEX(STANDARD_HASH(s, 'SHA256'))
+--
+-- Deterministic, so it is fine in the SQL of a MERGE (90_test_seed.sql does
+-- exactly that) without a DETERMINISTIC hint being load-bearing.
 CREATE OR REPLACE FUNCTION oc_time_hash_password(
   p_email    VARCHAR2,
   p_password VARCHAR2
-) RETURN VARCHAR2
+) RETURN VARCHAR2 DETERMINISTIC
 IS
 BEGIN
   RETURN RAWTOHEX(
-    DBMS_CRYPTO.HASH(
-      UTL_RAW.CAST_TO_RAW(LOWER(p_email) || ':' || p_password),
-      DBMS_CRYPTO.HASH_SH256));
+    STANDARD_HASH(LOWER(p_email) || ':' || p_password, 'SHA256'));
 END oc_time_hash_password;
+/
+
+PROMPT ============================================================
+PROMPT [4/5] OC_TIME_NEW_TOKEN — session token generator
+PROMPT ============================================================
+
+-- Returns a 64-character hex session token, the same shape the main
+-- application's oc_auth issues, so nothing downstream changes.
+--
+-- ─────────────────────────────────────────────────────────────
+-- THIS IS THE WEAK PART. Read before changing anything here.
+-- ─────────────────────────────────────────────────────────────
+--
+-- The right way to make a bearer token is DBMS_CRYPTO.RANDOMBYTES(32) — a
+-- cryptographically secure generator, 256 bits of real entropy. It is not used
+-- because DBMS_CRYPTO needs a grant we chose not to ask for (01-Aug-2026).
+--
+-- What is here instead mixes the unpredictability that IS available without a
+-- grant, then hashes it so the output is uniform and the inputs cannot be read
+-- back off the token:
+--
+--   SYS_GUID()        unique, but on many platforms partly derived from host,
+--                     process and time — so not unpredictable on its own
+--   DBMS_RANDOM       a PRNG, not a CSPRNG; seeded from time and session
+--   SYSTIMESTAMP      nanosecond precision, but an attacker can guess the
+--                     rough window a session was created in
+--
+-- Hashing does NOT add entropy. It only spreads what the inputs have across all
+-- 256 bits and hides their structure. So a determined attacker who knows
+-- roughly when a session began has a smaller search space than 2^256. In
+-- practice guessing a live token is still very hard; cryptographically, it is
+-- not a guarantee.
+--
+-- What limits the damage meanwhile: tokens expire in 24 hours, are deleted on
+-- logout and on any password change, and every session row is per-user, so a
+-- guessed token buys one person's timesheet for less than a day.
+--
+-- TO PUT THIS RIGHT — one line, once the grant exists:
+--
+--   GRANT EXECUTE ON DBMS_CRYPTO TO O2C_TIME;
+--
+--   RETURN RAWTOHEX(DBMS_CRYPTO.RANDOMBYTES(32));
+--
+-- Existing sessions keep working; the column and the length do not change.
+-- Do this before PROD (NFR-005, Security sheet).
+CREATE OR REPLACE FUNCTION oc_time_new_token RETURN VARCHAR2
+IS
+  v_seed VARCHAR2(400);
+BEGIN
+  v_seed := RAWTOHEX(SYS_GUID())
+         || RAWTOHEX(SYS_GUID())
+         || TO_CHAR(SYSTIMESTAMP, 'YYYYMMDDHH24MISSFF9')
+         || DBMS_RANDOM.STRING('X', 32);
+
+  RETURN RAWTOHEX(STANDARD_HASH(v_seed, 'SHA256'));
+END oc_time_new_token;
 /
 
 PROMPT ============================================================
