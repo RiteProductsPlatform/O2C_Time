@@ -250,6 +250,9 @@
   "services": {
     "oc_time": {
       "path": "./services/oc_time/service.json"
+    },
+    "fa_hcm": {
+      "path": "./services/fa_hcm/service.json"
     }
   },
   "translations": {

@@ -1,8 +1,16 @@
 {
   "description": "PAGE-012 Integrations — OTL-centric reference of the Oracle Fusion integration surfaces (ACT-034). Text reference, wired at the integration phase; the catalogue is data in OC_TIME_LOOKUP so an endpoint change needs no redeploy.",
   "variables": {
-    "rowsRaw": { "type": "any[]", "defaultValue": [], "input": "none" },
-    "rows":    { "type": "any[]", "defaultValue": [], "input": "none" },
+    "rowsRaw": {
+      "type": "any[]",
+      "defaultValue": [],
+      "input": "none"
+    },
+    "rows": {
+      "type": "any[]",
+      "defaultValue": [],
+      "input": "none"
+    },
     "rowsADP": {
       "type": "vb/ArrayDataProvider2",
       "defaultValue": {
@@ -14,7 +22,13 @@
     "areaFilter": {
       "type": "string",
       "defaultValue": "",
-      "onValueChanged": { "chains": [ { "chain": "filterIntegrationsChain" } ] }
+      "onValueChanged": {
+        "chains": [
+          {
+            "chain": "filterIntegrationsChain"
+          }
+        ]
+      }
     },
     "areaOptions": {
       "type": "vb/ArrayDataProvider2",
@@ -22,47 +36,133 @@
         "itemType": "strLovType",
         "keyAttributes": "value",
         "data": [
-          { "value": "",            "label": "All areas" },
-          { "value": "Prepopulate", "label": "Prepopulate (inbound)" },
-          { "value": "Push",        "label": "Push to OTL (outbound)" },
-          { "value": "Readback",    "label": "Read-back" },
-          { "value": "Accrual",     "label": "Accrual hand-off" },
-          { "value": "Audit",       "label": "Audit / visibility" },
-          { "value": "Reference",   "label": "Reference" },
-          { "value": "Persistence", "label": "Our own store" },
-          { "value": "Investigate", "label": "To investigate" }
+          {
+            "value": "",
+            "label": "All areas"
+          },
+          {
+            "value": "Prepopulate",
+            "label": "Prepopulate (inbound)"
+          },
+          {
+            "value": "Push",
+            "label": "Push to OTL (outbound)"
+          },
+          {
+            "value": "Readback",
+            "label": "Read-back"
+          },
+          {
+            "value": "Accrual",
+            "label": "Accrual hand-off"
+          },
+          {
+            "value": "Audit",
+            "label": "Audit / visibility"
+          },
+          {
+            "value": "Reference",
+            "label": "Reference"
+          },
+          {
+            "value": "Persistence",
+            "label": "Our own store"
+          },
+          {
+            "value": "Investigate",
+            "label": "To investigate"
+          }
         ]
       }
     },
-    "busy": { "type": "boolean", "defaultValue": false, "input": "none" }
-  },
-
-  "types": {
-    "strLovType": { "value": "string", "label": "string" },
-    "intRowType": {
-      "integrationId": "string", "area": "string",
-      "fusionSource": "string", "objectUsage": "string",
-      "restResource": "string", "loadPattern": "string", "notes": "string"
+    "busy": {
+      "type": "boolean",
+      "defaultValue": false,
+      "input": "none"
+    },
+    "probing": {
+      "type": "boolean",
+      "defaultValue": false,
+      "input": "none"
+    },
+    "probeState": {
+      "type": "string",
+      "defaultValue": "",
+      "input": "none",
+      "description": "'' | 'ok' | 'fail'. Kept separate from probeMessage so the panel can pick its styling without parsing the text."
+    },
+    "probeMessage": {
+      "type": "string",
+      "defaultValue": "",
+      "input": "none",
+      "description": "The diagnosis, built by probeDiagnosis() so each failure names who can fix it."
     }
   },
-
-  "chains": {},
-
-  "eventListeners": {
-    "vbEnter": { "chains": [ { "chain": "enterChain" } ] },
-    "reload":  { "chains": [ { "chain": "loadIntegrationsChain" } ] }
+  "types": {
+    "strLovType": {
+      "value": "string",
+      "label": "string"
+    },
+    "intRowType": {
+      "integrationId": "string",
+      "area": "string",
+      "fusionSource": "string",
+      "objectUsage": "string",
+      "restResource": "string",
+      "loadPattern": "string",
+      "notes": "string"
+    }
   },
-
+  "chains": {},
+  "eventListeners": {
+    "vbEnter": {
+      "chains": [
+        {
+          "chain": "enterChain"
+        }
+      ]
+    },
+    "reload": {
+      "chains": [
+        {
+          "chain": "loadIntegrationsChain"
+        }
+      ]
+    },
+    "testFusion": {
+      "chains": [
+        {
+          "chain": "testFusionChain"
+        }
+      ]
+    }
+  },
   "imports": {
     "components": {
-      "oj-sp-general-overview-page": { "path": "oj-sp/general-overview-page/loader" },
-      "oj-button":          { "path": "ojs/ojbutton" },
-      "oj-select-single":   { "path": "ojs/ojselectsingle" },
-      "oj-form-layout":     { "path": "ojs/ojformlayout" },
-      "oj-table":           { "path": "ojs/ojtable" },
-      "oj-progress-circle": { "path": "ojs/ojprogress-circle" },
-      "oj-bind-if":         { "path": "ojs/ojbindif" },
-      "oj-bind-text":       { "path": "ojs/ojbindtext" }
+      "oj-sp-general-overview-page": {
+        "path": "oj-sp/general-overview-page/loader"
+      },
+      "oj-button": {
+        "path": "ojs/ojbutton"
+      },
+      "oj-select-single": {
+        "path": "ojs/ojselectsingle"
+      },
+      "oj-form-layout": {
+        "path": "ojs/ojformlayout"
+      },
+      "oj-table": {
+        "path": "ojs/ojtable"
+      },
+      "oj-progress-circle": {
+        "path": "ojs/ojprogress-circle"
+      },
+      "oj-bind-if": {
+        "path": "ojs/ojbindif"
+      },
+      "oj-bind-text": {
+        "path": "ojs/ojbindtext"
+      }
     }
   }
 }

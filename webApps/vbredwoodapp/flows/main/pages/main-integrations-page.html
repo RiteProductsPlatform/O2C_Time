@@ -37,6 +37,50 @@
       </div>
     </div>
 
+    <!-- ══════════════════ Fusion connection ══════════════════
+         The one thing on this page that actually calls out. It asks HCM for a
+         single worker through VB's server-side proxy: the cheapest request that
+         still proves routing, authentication and payload shape together.
+
+         Separated from the catalogue above on purpose — that is reference text
+         read from OC_TIME_LOOKUP, this touches a live system. -->
+    <div class="oj-sm-padding-4x rw-metric">
+      <div class="oj-flex oj-sm-justify-content-space-between oj-sm-align-items-start oj-sm-flex-wrap oj-sm-gap-3x">
+        <div>
+          <h2 class="oj-typography-heading-xs oj-sm-margin-0">Fusion connection</h2>
+          <p class="oj-typography-body-sm rw-metric-label oj-sm-margin-1x-top oj-sm-margin-0-bottom">
+            Asks HCM for one worker through the VB proxy. No credential reaches
+            this browser.
+          </p>
+        </div>
+        <oj-button chroming="callToAction" disabled="[[ $variables.probing ]]"
+                   on-oj-action="[[ $listeners.testFusion ]]">
+          <span slot="startIcon" class="oj-ux-ico-plug"></span>
+          <span>
+            <oj-bind-text value="[[ $page.functions.probeLabel($variables.probing) ]]"></oj-bind-text>
+          </span>
+        </oj-button>
+      </div>
+
+      <oj-bind-if test="[[ $variables.probeState === 'ok' ]]">
+        <div class="oj-sm-padding-3x oj-sm-margin-3x-top rw-notice" role="status">
+          <div class="oj-typography-body-md oj-typography-semi-bold">Connected</div>
+          <div class="oj-typography-body-sm oj-sm-margin-1x-top">
+            <oj-bind-text value="[[ $variables.probeMessage ]]"></oj-bind-text>
+          </div>
+        </div>
+      </oj-bind-if>
+
+      <oj-bind-if test="[[ $variables.probeState === 'fail' ]]">
+        <div class="oj-sm-padding-3x oj-sm-margin-3x-top rw-notice rw-notice-warning" role="alert">
+          <div class="oj-typography-body-md oj-typography-semi-bold">Not connected</div>
+          <div class="oj-typography-body-sm oj-sm-margin-1x-top">
+            <oj-bind-text value="[[ $variables.probeMessage ]]"></oj-bind-text>
+          </div>
+        </div>
+      </oj-bind-if>
+    </div>
+
     <div class="oj-sm-padding-4x rw-metric">
       <h2 class="oj-typography-heading-xs oj-sm-margin-0 oj-sm-margin-3x-bottom">
         Catalogue

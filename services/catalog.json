@@ -2,23 +2,77 @@
   "//": [
     "O2C Timesheet Module — VBCS backend catalogue.",
     "",
-    "The module is a STANDALONE application, so it has exactly one backend of",
-    "its own: the ORDS surface over its own ATP schema. Fusion and OTL are",
-    "reached through OIC, never directly from the browser, so they are not",
-    "declared here — that keeps Fusion OAuth credentials out of the client",
-    "entirely (NFR-005, Security sheet 'No secrets in client').",
+    "TWO backends:",
     "",
-    "Replace the url per environment; never commit a PROD URL (Instructions",
-    "sheet: 'Keep values environment-neutral')."
+    "  oc_time   the module's own ORDS surface over its ATP schema. Everything",
+    "            transactional goes here, and every business rule lives behind",
+    "            it in OC_TIME_PKG.",
+    "",
+    "  fa        Oracle Fusion, added 01-Aug-2026 alongside the Oracle Cloud",
+    "            Applications backend configured in VB Studio.",
+    "",
+    "An earlier version of this file said Fusion must never be declared here",
+    "because it would put OAuth credentials in the client. That was wrong. A VB",
+    "backend is a SERVER-SIDE PROXY: the runtime attaches the credentials and",
+    "forwards the call, so nothing secret reaches the browser. NFR-005 is about",
+    "secrets in the client and this puts none there.",
+    "",
+    "What the proxy does not settle is where the data then lives — see the note",
+    "on the fa backend below.",
+    "",
+    "Replace the urls per environment; never commit a PROD url (Instructions",
+    "sheet: 'Keep values environment-neutral').",
+    "",
+    "VB Studio owns the fa section. If Designer rewrites it, keep Designer's",
+    "version — these comments are the only part worth carrying forward."
   ],
   "backends": {
     "oc_time": {
       "servers": [
         {
           "url": "https://ords-sit.rite.digital/ords/o2c_time",
-          "description": "ORDS — O2C Timesheet modules oc.time / oc.time.approval / oc.time.admin"
+          "description": "ORDS — oc.time / oc.time.approval / oc.time.admin / oc.time.auth"
         }
       ]
+    },
+    "fa": {
+      "//": [
+        "Oracle Fusion, reached through VB's server-side proxy.",
+        "",
+        "NOTE ON USE. The module is built so master data lands in the OC_TIME_*",
+        "cache tables and every page reads it back through ORDS — which is what",
+        "lets OC_TIME_PKG enforce the rules over all of it. Data a page fetches",
+        "straight from Fusion does not pass through that, so no rule sees it.",
+        "",
+        "Calling Fusion live was chosen deliberately (01-Aug-2026). For a lookup",
+        "the cache cannot answer that is sound. For anything a rule must later",
+        "validate, the value has to be written back through ORDS or the rule is",
+        "simply bypassed."
+      ],
+      "servers": [
+        {
+          "url": "https://fa-etao-dev20-saasfademo1.ds-fa.oraclepdemos.com",
+          "description": "Fusion SaaS pod (dev20 / saasfademo1)"
+        }
+      ],
+      "backends": {
+        "hcm": {
+          "servers": [
+            {
+              "url": "/hcmRestApi/resources/11.13.18.05",
+              "description": "HCM — workers, assignments, absences, work schedules (INT-001, INT-004..006)"
+            }
+          ]
+        },
+        "scm": {
+          "servers": [
+            {
+              "url": "/fscmRestApi/resources/11.13.18.05",
+              "description": "PPM / Financials — projects, tasks, resource assignments (INT-002, INT-003, INT-010, INT-012)"
+            }
+          ]
+        }
+      }
     }
   }
 }
