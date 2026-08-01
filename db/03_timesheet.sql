@@ -133,6 +133,70 @@ EXCEPTION WHEN OTHERS THEN
 END;
 /
 
+-- ── Migration: DEFAULTED_BY on an already-installed schema ───
+--
+-- The CREATE above is skipped when the table exists, so a column added to it
+-- later never reaches an environment that was installed before. DEFAULTED_BY
+-- was added with the revision-2 status model; without this block, OC_TIME_PKG
+-- fails to compile on those schemas with ORA-00904 the moment anything writes
+-- it, which reads as a broken package rather than a missing column.
+--
+-- Nothing is dropped. The column is nullable, so it is safe to add to a table
+-- with rows in it; the two CHECKs are added after, and only once the existing
+-- rows have been back-filled.
+DECLARE
+  v_n PLS_INTEGER;
+BEGIN
+  SELECT COUNT(*) INTO v_n FROM user_tab_columns
+   WHERE table_name = 'OC_TS_WEEK' AND column_name = 'DEFAULTED_BY';
+
+  IF v_n = 0 THEN
+    EXECUTE IMMEDIATE
+      'ALTER TABLE oc_ts_week ADD (defaulted_by VARCHAR2(10 CHAR))';
+    DBMS_OUTPUT.PUT_LINE('OC_TS_WEEK.DEFAULTED_BY added.');
+  END IF;
+
+  -- Any week already sitting at 'Defaulted' predates the distinction. It got
+  -- there through run_weekly_defaulting, which is the employee cut-off, so
+  -- EMPLOYEE is the correct reading rather than a guess. Doing this before the
+  -- CHECK goes on is the point: chk_oc_tsw_defby_req would reject those rows.
+  --
+  -- EXECUTE IMMEDIATE, not a plain UPDATE: static SQL is resolved when this
+  -- block compiles, which is before the ALTER above has run on a schema that
+  -- lacks the column. A literal UPDATE here would fail with PLS-00904 on
+  -- exactly the schemas this migration exists to fix.
+  EXECUTE IMMEDIATE q'~
+    UPDATE oc_ts_week SET defaulted_by = 'EMPLOYEE'
+     WHERE week_status = 'Defaulted' AND defaulted_by IS NULL~';
+
+  IF SQL%ROWCOUNT > 0 THEN
+    DBMS_OUTPUT.PUT_LINE('  back-filled ' || SQL%ROWCOUNT ||
+                         ' existing Defaulted week(s) as EMPLOYEE.');
+  END IF;
+  COMMIT;
+END;
+/
+
+DECLARE
+  v_n PLS_INTEGER;
+BEGIN
+  SELECT COUNT(*) INTO v_n FROM user_constraints
+   WHERE constraint_name = 'CHK_OC_TSW_DEFBY';
+  IF v_n = 0 THEN
+    EXECUTE IMMEDIATE q'~ALTER TABLE oc_ts_week ADD CONSTRAINT chk_oc_tsw_defby
+      CHECK (defaulted_by IS NULL OR defaulted_by IN ('EMPLOYEE','MANAGER'))~';
+  END IF;
+
+  SELECT COUNT(*) INTO v_n FROM user_constraints
+   WHERE constraint_name = 'CHK_OC_TSW_DEFBY_REQ';
+  IF v_n = 0 THEN
+    EXECUTE IMMEDIATE q'~ALTER TABLE oc_ts_week ADD CONSTRAINT chk_oc_tsw_defby_req
+      CHECK ((week_status = 'Defaulted' AND defaulted_by IS NOT NULL)
+             OR (week_status <> 'Defaulted'))~';
+  END IF;
+END;
+/
+
 BEGIN EXECUTE IMMEDIATE 'CREATE INDEX ix_oc_tsw_period ON oc_ts_week(period_id, week_status)';
 EXCEPTION WHEN OTHERS THEN IF SQLCODE = -955 THEN NULL; ELSE RAISE; END IF; END;
 /

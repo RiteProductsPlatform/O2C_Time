@@ -134,9 +134,15 @@ BEGIN
       MESSAGE        VARCHAR2(2000 CHAR),
       TRACE_ID       VARCHAR2(64 CHAR),            -- OBS-003 / OBS-004
       TRIGGERED_BY   VARCHAR2(100 CHAR) DEFAULT 'SCHEDULER' NOT NULL,
+      -- DeliveryDefaulting is the manager-side twin of WeeklyDefaulting, and
+      -- AccrualTopUp posts adjustments approved after a month was confirmed.
+      -- Both are separate job types rather than reusing the neighbouring one
+      -- because the telemetry has to tell them apart: they run on different
+      -- schedules and a failure in each means something different.
       CONSTRAINT chk_oc_tsj_type   CHECK (job_type IN
         ('MonthlyPopulation','DailyActionDate','CalendarSync','MasterSync',
-         'WeeklyDefaulting','SalaryStopping','AccrualHandoff','OtlPush')),
+         'WeeklyDefaulting','DeliveryDefaulting','SalaryStopping',
+         'AccrualHandoff','AccrualTopUp','OtlPush')),
       CONSTRAINT chk_oc_tsj_status CHECK (job_status IN
         ('Running','Success','Failed','Partial')),
       CONSTRAINT fk_oc_tsj_period  FOREIGN KEY (period_id)
@@ -148,6 +154,42 @@ EXCEPTION WHEN OTHERS THEN
   IF SQLCODE = -955 THEN
     DBMS_OUTPUT.PUT_LINE('OC_TIME_SYNC_JOB already exists - skipped.');
   ELSE RAISE; END IF;
+END;
+/
+
+-- The CREATE above is skipped on a schema that already has the table, so a
+-- widened CHECK never reaches an installed environment through it. This
+-- re-states the constraint every run: the file has to be re-runnable, and a job
+-- type the constraint does not know about fails at INSERT with ORA-02290 —
+-- which reads as a broken job rather than a stale constraint.
+--
+-- Rebuilt rather than altered because Oracle has no ALTER ... MODIFY CONSTRAINT
+-- for a CHECK condition. Nothing is dropped but the constraint itself, and it
+-- is recreated in the same statement block.
+DECLARE
+  v_n PLS_INTEGER;
+BEGIN
+  SELECT COUNT(*) INTO v_n FROM user_constraints
+   WHERE constraint_name = 'CHK_OC_TSJ_TYPE';
+
+  IF v_n > 0 THEN
+    EXECUTE IMMEDIATE
+      'ALTER TABLE oc_time_sync_job DROP CONSTRAINT chk_oc_tsj_type';
+  END IF;
+
+  EXECUTE IMMEDIATE q'~
+    ALTER TABLE oc_time_sync_job ADD CONSTRAINT chk_oc_tsj_type CHECK (job_type IN
+      ('MonthlyPopulation','DailyActionDate','CalendarSync','MasterSync',
+       'WeeklyDefaulting','DeliveryDefaulting','SalaryStopping',
+       'AccrualHandoff','AccrualTopUp','OtlPush'))~';
+
+  DBMS_OUTPUT.PUT_LINE('CHK_OC_TSJ_TYPE refreshed (10 job types).');
+EXCEPTION WHEN OTHERS THEN
+  -- ORA-02293: an existing row holds a job type not in the new list. Report it
+  -- rather than leaving the table with no type constraint at all.
+  DBMS_OUTPUT.PUT_LINE('WARNING: could not refresh CHK_OC_TSJ_TYPE - ' ||
+                       SUBSTR(SQLERRM, 1, 200));
+  RAISE;
 END;
 /
 
