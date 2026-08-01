@@ -11,3 +11,22 @@
 .apdt-row-pick {
   margin: 0;
 }
+
+/* ── ACT-018 CSV download link ───────────────────────────────
+   An anchor, not an oj-button: SES blocks browser globals in page modules, so
+   the browser has to be the one fetching the file. Styled to sit level with the
+   buttons beside it, the same approach the client-documents page takes. */
+.ad-export-link {
+  align-items: center;
+  color: var(--oj-core-text-color-primary, inherit);
+  display: inline-flex;
+  font-size: 0.875rem;
+  gap: 0.25rem;
+  min-height: 2rem;
+  padding: 0.25rem 0.5rem;
+  text-decoration: none;
+}
+
+.ad-export-link:hover {
+  text-decoration: underline;
+}

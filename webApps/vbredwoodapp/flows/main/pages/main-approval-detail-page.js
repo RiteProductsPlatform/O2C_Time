@@ -34,6 +34,22 @@ define([], () => {
     }
 
     /**
+     * ACT-018 download. A direct ORDS URL rather than a callRest: the browser
+     * has to fetch this itself for the Save dialog to appear, and the handler
+     * sets the filename in Content-Disposition.
+     */
+    dayExportUrl(tsWeekId) {
+      if (!tsWeekId) { return ''; }
+      return this.$application.variables.ordsBaseUrl +
+             '/oc/time/approval/days/' + tsWeekId + '/export';
+    }
+
+    /** Accessible name for the download link. */
+    dayExportLabel(weekLabel) {
+      return 'Download ' + (weekLabel || 'this week') + ' as CSV';
+    }
+
+    /**
      * Selects or clears a whole DATE in the daily view.
      *
      * A date has several task lines and the BRD approves at date level, not line

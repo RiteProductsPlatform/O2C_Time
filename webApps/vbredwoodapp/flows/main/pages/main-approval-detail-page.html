@@ -228,6 +228,21 @@
             <span class="oj-typography-body-sm rw-metric-label">
               <oj-bind-text value="[[ $variables.selectedDates.length ]]"></oj-bind-text> dates selected
             </span>
+
+            <!-- ACT-018, download half only. The upload half is on hold by
+                 decision (01-Aug-2026), so this is a read-out for working in
+                 Excel — nothing comes back through it.
+
+                 A plain anchor, not a button calling window.open: SES blocks
+                 browser globals in page modules, and letting the browser
+                 stream the file is what gives the Save dialog for free. -->
+            <a class="ad-export-link"
+               :href="[[ $page.functions.dayExportUrl($variables.weekId) ]]"
+               :aria-label="[[ $page.functions.dayExportLabel($variables.weekLabel) ]]"
+               target="_blank" rel="noopener">
+              <span class="oj-ux-ico-download" aria-hidden="true"></span>
+              <span>Download CSV</span>
+            </a>
             <oj-button chroming="borderless"
                        on-oj-action="[[ function(){ $page.functions.selectAllDates(); } ]]">
               <span>Select all dates</span>

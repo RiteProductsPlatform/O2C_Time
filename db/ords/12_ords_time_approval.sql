@@ -16,6 +16,7 @@
 --   GET  summary/:projectId/:periodId            monthly summary per employee
 --   GET  weeks/:projectId/:periodId/:employeeId  weekly detail rows
 --   GET  days/:tsWeekId                          daily line-wise detail
+--   GET  days/:tsWeekId/export                   the same rows as CSV (ACT-018)
 --   POST approve/month                           approve selected employees
 --   POST reject/month                            reject selected employees
 --   POST approve/week/:id                        approve one week
@@ -183,6 +184,86 @@ BEGIN
        WHERE ts_week_id = :tsWeekId
        ORDER BY entry_date, project_name, task_code
     ]');
+  COMMIT;
+END;
+/
+
+-- ── GET days/:tsWeekId/export  (ACT-018, download half) ──────
+--
+-- The day-wise grid as CSV, for a manager who would rather read a week in Excel
+-- than on screen. DOWNLOAD ONLY: the upload half of ACT-018 is deliberately not
+-- built (decision 01-Aug-2026, on hold). Nothing here is read back, which is
+-- why plain CSV is safe — Excel reformatting 8.00 to 8 on save costs nothing
+-- when no one parses the file again.
+--
+-- Emitted with OWA_UTIL rather than as a collection feed so the response
+-- carries text/csv and a filename; a feed would hand the browser JSON.
+BEGIN
+  ORDS.DEFINE_TEMPLATE(p_module_name => 'oc.time.approval',
+                       p_pattern => 'days/:tsWeekId/export');
+  ORDS.DEFINE_HANDLER(
+    p_module_name => 'oc.time.approval', p_pattern => 'days/:tsWeekId/export',
+    p_method => 'GET',
+    p_source_type => ORDS.source_type_plsql,
+    p_source => q'~
+      DECLARE
+        v_emp   VARCHAR2(200);
+        v_range VARCHAR2(60);
+        v_file  VARCHAR2(200);
+
+        -- RFC 4180: wrap in quotes and double any embedded quote. Task and
+        -- project names carry commas often enough that skipping this would
+        -- shift every later column on those rows.
+        FUNCTION csv(p IN VARCHAR2) RETURN VARCHAR2 IS
+        BEGIN
+          IF p IS NULL THEN RETURN ''; END IF;
+          RETURN '"' || REPLACE(p, '"', '""') || '"';
+        END;
+      BEGIN
+        SELECT employee_name, week_range INTO v_emp, v_range
+          FROM v_oc_ts_week_detail WHERE ts_week_id = :tsWeekId;
+
+        -- Spaces and slashes out of the filename: a raw week range like
+        -- "13-Jul to 19-Jul" survives Content-Disposition badly across browsers.
+        v_file := 'timesheet-' ||
+                  REGEXP_REPLACE(LOWER(v_emp || '-' || v_range),
+                                 '[^a-z0-9]+', '-') || '.csv';
+
+        OWA_UTIL.mime_header('text/csv', FALSE);
+        HTP.P('Content-Disposition: attachment; filename="' || v_file || '"');
+        OWA_UTIL.http_header_close;
+
+        HTP.P('entry_id,entry_date,day,project,task,hours,entry_type,' ||
+              'billable_type,unbilled_reason,shift,standard_hours,day_status');
+
+        FOR d IN (SELECT ts_entry_id, entry_date, day_name,
+                         project_name, task_code, task_name, hours, entry_type,
+                         billable_type, unbilled_reason, shift_code,
+                         standard_hours, day_status
+                    FROM v_oc_ts_day_detail
+                   WHERE ts_week_id = :tsWeekId
+                   ORDER BY entry_date, project_name, task_code)
+        LOOP
+          HTP.P(d.ts_entry_id                             || ',' ||
+                TO_CHAR(d.entry_date, 'YYYY-MM-DD')       || ',' ||
+                csv(d.day_name)                           || ',' ||
+                csv(d.project_name)                       || ',' ||
+                csv(d.task_code || ' ' || d.task_name)    || ',' ||
+                TO_CHAR(d.hours, 'FM99990.00')            || ',' ||
+                csv(d.entry_type)                         || ',' ||
+                csv(d.billable_type)                      || ',' ||
+                csv(d.unbilled_reason)                    || ',' ||
+                csv(d.shift_code)                         || ',' ||
+                TO_CHAR(d.standard_hours, 'FM99990.00')   || ',' ||
+                csv(d.day_status));
+        END LOOP;
+      EXCEPTION WHEN NO_DATA_FOUND THEN
+        -- Plain text, not JSON: the browser is navigating to this URL, so
+        -- whatever comes back is what the user reads.
+        OWA_UTIL.mime_header('text/plain', TRUE);
+        HTP.P('No such week.');
+      END;
+    ~');
   COMMIT;
 END;
 /

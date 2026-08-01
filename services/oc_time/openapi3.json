@@ -3103,6 +3103,34 @@
           }
         }
       }
+    },
+    "/oc/time/approval/days/{tsWeekId}/export": {
+      "get": {
+        "operationId": "exportDaysCsv",
+        "summary": "ACT-018 (download half). The day-wise rows as CSV. Fetched directly by the browser via an anchor, not through callRest, so the response can carry Content-Disposition. The upload half is deliberately not built.",
+        "parameters": [
+          {
+            "name": "tsWeekId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "CSV file",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
