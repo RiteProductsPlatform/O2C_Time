@@ -22,9 +22,11 @@ define([
     async run(context, { event } = {}) {
       const { $page, $application } = context;
 
-      // The form's native submit would reload the page and lose the whole SPA.
-      if (event && typeof event.preventDefault === 'function') {
-        event.preventDefault();
+      // One listener serves the button and both input fields, so Enter signs in
+      // from either. Every other keystroke lands here too and must leave without
+      // doing anything.
+      if (event && event.type === 'keyup' && event.key !== 'Enter') {
+        return;
       }
 
       const email    = ($page.variables.email || '').trim();

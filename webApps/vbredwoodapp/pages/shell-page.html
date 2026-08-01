@@ -526,7 +526,11 @@
                         :data-page="[[ $current.data.page ]]"
                         on-click="[[$listeners.navClick]]">
                   <span :class="[[ $current.data.icon ]]" style="font-size:14px;"></span>
-                  <oj-bind-text value="[[ $current.data.label ]]"></oj-bind-text>
+                  <!-- Wrapped: an oj-bind-text directly inside a button renders
+                       nothing, which would leave every nav item as a bare icon. -->
+                  <span>
+                    <oj-bind-text value="[[ $current.data.label ]]"></oj-bind-text>
+                  </span>
                 </button>
               </template>
             </oj-bind-for-each>

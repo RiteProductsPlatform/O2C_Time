@@ -63,12 +63,15 @@
         </oj-bind-if>
 
         <!--
-          A form element, so the browser submits on Enter by default. The main
-          O2C application attaches a document-level keydown listener and clicks a
-          hidden button to get the same effect; this needs no listener to leak
-          and no hidden control to keep in the DOM.
+          NOT a <form on-submit>. That was the first attempt and the button did
+          nothing at all: no request ever left the browser. on-click on a plain
+          button is the binding this codebase already proves works — the shell
+          nav uses it, and so does the main O2C application's own login.
+
+          type="button" as well, so that even if this markup is later moved
+          inside a form, Enter cannot trigger a native submit and reload the SPA.
         -->
-        <form on-submit="[[$listeners.doLogin]]">
+        <div>
 
           <div class="login-field">
             <oj-input-text id="loginEmail"
@@ -77,25 +80,35 @@
               label-edge="inside"
               required="true"
               autocomplete="username"
-              placeholder="you@rite.digital">
+              placeholder="you@rite.digital"
+              on-keyup="[[$listeners.doLogin]]">
             </oj-input-text>
           </div>
 
           <div class="login-field">
+            <!-- Enter anywhere in the credentials signs in. The chain ignores
+                 every key but Enter, so this costs nothing when it is not one. -->
             <oj-input-password id="loginPassword"
               value="{{ $variables.password }}"
               label-hint="Password"
               label-edge="inside"
               required="true"
-              autocomplete="current-password">
+              autocomplete="current-password"
+              on-keyup="[[$listeners.doLogin]]">
             </oj-input-password>
           </div>
 
-          <button type="submit" class="btn-login"
-                  :disabled="[[ $variables.isSigningIn ]]">
-            <oj-bind-text value="[[ $page.functions.signInLabel($variables.isSigningIn) ]]"></oj-bind-text>
+          <!-- oj-bind-text MUST be wrapped in a span inside a button. Unwrapped
+               it renders nothing and you get a button with no label — which is
+               exactly what happened here. -->
+          <button type="button" class="btn-login"
+                  :disabled="[[ $variables.isSigningIn ]]"
+                  on-click="[[$listeners.doLogin]]">
+            <span>
+              <oj-bind-text value="[[ $page.functions.signInLabel($variables.isSigningIn) ]]"></oj-bind-text>
+            </span>
           </button>
-        </form>
+        </div>
 
         <div class="login-alt">
           First time here, or been invited?
