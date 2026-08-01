@@ -132,14 +132,24 @@ PROMPT ============================================================
 --
 -- Deterministic, so it is fine in the SQL of a MERGE (90_test_seed.sql does
 -- exactly that) without a DETERMINISTIC hint being load-bearing.
+--
+-- STANDARD_HASH is a SQL function, NOT a PL/SQL one, so it cannot appear in a
+-- PL/SQL expression — `RETURN RAWTOHEX(STANDARD_HASH(...))` fails to compile
+-- with PLS-00201 "identifier must be declared". It has to be reached through a
+-- SQL statement, hence SELECT ... INTO ... FROM dual. Same family as SQLERRM
+-- (SQL-only in reverse) and EXISTS.
 CREATE OR REPLACE FUNCTION oc_time_hash_password(
   p_email    VARCHAR2,
   p_password VARCHAR2
 ) RETURN VARCHAR2 DETERMINISTIC
 IS
+  v_hash VARCHAR2(128 CHAR);
 BEGIN
-  RETURN RAWTOHEX(
-    STANDARD_HASH(LOWER(p_email) || ':' || p_password, 'SHA256'));
+  SELECT RAWTOHEX(
+           STANDARD_HASH(LOWER(p_email) || ':' || p_password, 'SHA256'))
+    INTO v_hash
+    FROM dual;
+  RETURN v_hash;
 END oc_time_hash_password;
 /
 
@@ -186,16 +196,22 @@ PROMPT ============================================================
 --
 -- Existing sessions keep working; the column and the length do not change.
 -- Do this before PROD (NFR-005, Security sheet).
+-- As with oc_time_hash_password: STANDARD_HASH is SQL-only, so it is reached
+-- through SELECT ... FROM dual rather than called directly.
 CREATE OR REPLACE FUNCTION oc_time_new_token RETURN VARCHAR2
 IS
-  v_seed VARCHAR2(400);
+  v_seed  VARCHAR2(400 CHAR);
+  v_token VARCHAR2(64 CHAR);
 BEGIN
   v_seed := RAWTOHEX(SYS_GUID())
          || RAWTOHEX(SYS_GUID())
          || TO_CHAR(SYSTIMESTAMP, 'YYYYMMDDHH24MISSFF9')
          || DBMS_RANDOM.STRING('X', 32);
 
-  RETURN RAWTOHEX(STANDARD_HASH(v_seed, 'SHA256'));
+  SELECT RAWTOHEX(STANDARD_HASH(v_seed, 'SHA256'))
+    INTO v_token
+    FROM dual;
+  RETURN v_token;
 END oc_time_new_token;
 /
 
