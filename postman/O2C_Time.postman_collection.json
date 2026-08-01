@@ -1,0 +1,2249 @@
+{
+  "info": {
+    "name": "O2C Timesheet Module (ORDS)",
+    "description": "O2C Timesheet Module - the ORDS surface.\n\nGenerated from services/oc_time/openapi3.json, so no request can point at a path that is not deployed. Regenerate with postman/build_collection.py.\n\nSTART HERE: run \"1. Auth\" -> \"login\". Its test script stores the token and the signed-in employee id as collection variables; every other request reads them from there.\n\nperiodId, projectId and tsWeekId start empty. The GET requests that list them (getPeriods, getManagerProjects, getWeeks) tell you what to fill in.\n\nSign in as a different persona by changing the email collection variable:\n  admin@rite.digital              ROLE_TIME_ADMIN   (no worker row)\n  navamani.solairajan@rite.digital ROLE_TIME_MANAGER RI9001\n  sampaul.jeevan@rite.digital     ROLE_TIME_EMPLOYEE RI2824\nAll seeded with password Rite@123 (test data only).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Auth  (oc.time.auth)",
+      "item": [
+        {
+          "name": "login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Sign in. Returns a 64-hex bearer token valid 24 hours, plus the role resolved by V_OC_TIME_SIGNIN. Unknown email and wrong password deliberately return the same 401.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\",\n  \"client_info\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const r = pm.response.json();",
+                  "if (pm.response.code === 200 && r.token) {",
+                  "  pm.collectionVariables.set('token', r.token);",
+                  "  pm.collectionVariables.set('actorEmpId', r.employeeId || '');",
+                  "  pm.collectionVariables.set('actorEmail', pm.collectionVariables.get('email'));",
+                  "  if (r.employeeId) { pm.collectionVariables.set('employeeId', r.employeeId); }",
+                  "  console.log('token saved -', r.role, r.employeeId || '(no worker row)');",
+                  "} else {",
+                  "  console.log('login failed', pm.response.code, pm.response.text());",
+                  "}",
+                  "pm.test('200 and a 64-character token', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(r.token).to.have.lengthOf(64);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "getSession",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/auth/session/{{token}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "auth",
+                "session",
+                "{{token}}"
+              ]
+            },
+            "description": "Resolve a token to an identity. An unknown or expired token returns 200 with an empty items array, not an error."
+          }
+        },
+        {
+          "name": "logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/auth/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "auth",
+                "logout"
+              ]
+            },
+            "description": "End a session. 200 whether or not the token existed - an already-dead session is a successful logout to the caller.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{token}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "setPassword",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/auth/set-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "auth",
+                "set-password"
+              ]
+            },
+            "description": "First-time setup for an Invited account (omit currentPassword) or a self-service change for an Active one. Drops every session for the user.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"currentPassword\": \"\",\n  \"newPassword\": \"\",\n  \"actor\": \"{{actorEmail}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Employee  (oc.time)",
+      "item": [
+        {
+          "name": "applyAdjustment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/adjustments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "adjustments"
+              ]
+            },
+            "description": "Apply a day-wise retro Project/WBS change (ACT-009)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"employeeId\": \"{{employeeId}}\",\n  \"workDate\": \"\",\n  \"oldProjectId\": 0,\n  \"oldTaskId\": 0,\n  \"oldHours\": 0,\n  \"newProjectId\": 0,\n  \"newTaskId\": 0,\n  \"newHours\": 0,\n  \"reason\": \"\",\n  \"adjKind\": \"\",\n  \"actor\": \"{{actorEmail}}\",\n  \"traceId\": \"{{$guid}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "getMyAdjustments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/adjustments/{{employeeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "adjustments",
+                "{{employeeId}}"
+              ]
+            },
+            "description": "My retro adjustments and their approval status"
+          }
+        },
+        {
+          "name": "getAllocation",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/allocation/{{employeeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "allocation",
+                "{{employeeId}}"
+              ]
+            },
+            "description": "Allocation pop-up: project / client / alloc % / approving manager (ACT-008)"
+          }
+        },
+        {
+          "name": "uploadClientDoc",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/clientdocs",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "clientdocs"
+              ]
+            },
+            "description": "Upload a signed client timesheet (ACT-010)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectId\": \"{{projectId}}\",\n  \"periodId\": \"{{periodId}}\",\n  \"displayMode\": \"\",\n  \"weekIndex\": 0,\n  \"docName\": \"\",\n  \"mimeType\": \"\",\n  \"content\": \"\",\n  \"remarks\": \"\",\n  \"actor\": \"{{actorEmail}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "downloadClientDoc",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/clientdocs/{{id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "clientdocs",
+                "{{id}}"
+              ]
+            },
+            "description": "Download a client timesheet document"
+          }
+        },
+        {
+          "name": "deleteClientDoc",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/clientdocs/{{id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "clientdocs",
+                "{{id}}"
+              ]
+            },
+            "description": "Remove a client timesheet document"
+          }
+        },
+        {
+          "name": "getClientDocs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/clientdocs/{{projectId}}/{{periodId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "clientdocs",
+                "{{projectId}}",
+                "{{periodId}}"
+              ]
+            },
+            "description": "Client timesheet documents for a project + billing period (metadata only)"
+          }
+        },
+        {
+          "name": "getCutoffs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/cutoffs/{{periodId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "cutoffs",
+                "{{periodId}}"
+              ]
+            },
+            "description": "Cut-off dates (FLD-003 employee display, FLD-036 manager panel)"
+          }
+        },
+        {
+          "name": "saveEntriesBatch",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/entries/batch",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "entries",
+                "batch"
+              ]
+            },
+            "description": "Save the whole grid in one transaction",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cells\": [\n    {\n      \"tsWeekId\": 0,\n      \"projectId\": 0,\n      \"taskId\": 0,\n      \"entryDate\": \"\",\n      \"hours\": 0,\n      \"unbilledReason\": \"\"\n    }\n  ],\n  \"source\": \"\",\n  \"actor\": \"{{actorEmail}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "saveEntry",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/entry",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "entry"
+              ]
+            },
+            "description": "Save one grid cell",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tsWeekId\": \"{{tsWeekId}}\",\n  \"projectId\": \"{{projectId}}\",\n  \"taskId\": 0,\n  \"entryDate\": \"\",\n  \"hours\": 0,\n  \"unbilledReason\": \"\",\n  \"source\": \"\",\n  \"actor\": \"{{actorEmail}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "getWeekGrid",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/grid/{{tsWeekId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "grid",
+                "{{tsWeekId}}"
+              ]
+            },
+            "description": "The weekly grid: one row per project-task line, hours pivoted Mon..Sun"
+          }
+        },
+        {
+          "name": "removeLine",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/line/{{tsWeekId}}/{{projectId}}/{{taskId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "line",
+                "{{tsWeekId}}",
+                "{{projectId}}",
+                "{{taskId}}"
+              ]
+            },
+            "description": "Remove a project-task line from the week (ACT-004)"
+          }
+        },
+        {
+          "name": "getLookups",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/lookups/{{type}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "lookups",
+                "{{type}}"
+              ]
+            },
+            "description": "Any seeded dictionary (TIMESHEET_STATUS, WORKFLOW_FLAG, REJECTION_REASON, ...)"
+          }
+        },
+        {
+          "name": "getMe",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/me/{{employeeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "me",
+                "{{employeeId}}"
+              ]
+            },
+            "description": "Signed-in worker: role, manager, standard hours, total allocation %"
+          }
+        },
+        {
+          "name": "getPeriods",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/periods",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "periods"
+              ]
+            },
+            "description": "Month LOV with editability (FLD-001, RULE-004, RULE-007)"
+          }
+        },
+        {
+          "name": "getMyProjects",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/projects/{{employeeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "projects",
+                "{{employeeId}}"
+              ]
+            },
+            "description": "Allocated projects plus the Organization (Non-Billable) project"
+          }
+        },
+        {
+          "name": "getRejection",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/rejection/{{tsWeekId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "rejection",
+                "{{tsWeekId}}"
+              ]
+            },
+            "description": "Rejection reason, remarks and the specific rejected dates (#5)"
+          }
+        },
+        {
+          "name": "getShiftRow",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/shift/{{tsWeekId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "shift",
+                "{{tsWeekId}}"
+              ]
+            },
+            "description": "Per-day shift + standard hours row (read-only from HCM, RULE-011)"
+          }
+        },
+        {
+          "name": "getTaskLov",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/tasks/{{projectId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "tasks",
+                "{{projectId}}"
+              ]
+            },
+            "description": "Task LOV: project WBS + the common non-billable tasks (RULE-010)"
+          }
+        },
+        {
+          "name": "ensureWeek",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/weeks/ensure",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "weeks",
+                "ensure"
+              ]
+            },
+            "description": "Create or find the week containing a date (weeks are clipped to the month)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"employeeId\": \"{{employeeId}}\",\n  \"onDate\": \"\",\n  \"actor\": \"{{actorEmail}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "getMyWeeks",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/weeks/{{employeeId}}/{{periodId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "weeks",
+                "{{employeeId}}",
+                "{{periodId}}"
+              ]
+            },
+            "description": "Weeks in the month with status and the 8 workflow flags"
+          }
+        },
+        {
+          "name": "submitWeek",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/weeks/{{id}}/submit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "weeks",
+                "{{id}}",
+                "submit"
+              ]
+            },
+            "description": "Submit the week for approval (ACT-002)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"actor\": \"{{actorEmail}}\",\n  \"traceId\": \"{{$guid}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Manager  (oc.time.approval)",
+      "item": [
+        {
+          "name": "approveAdjustment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/approval/adjustments/{{id}}/approve",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "approval",
+                "adjustments",
+                "{{id}}",
+                "approve"
+              ]
+            },
+            "description": "Approve a retro adjustment; posts the Reversal(-)/Adjustment(+) pair (ACT-021)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"actorEmpId\": \"{{actorEmpId}}\",\n  \"actor\": \"{{actorEmail}}\",\n  \"traceId\": \"{{$guid}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "getMgrAdjustments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/approval/adjustments/{{managerId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "approval",
+                "adjustments",
+                "{{managerId}}"
+              ]
+            },
+            "description": "Retro adjustments awaiting this manager (old and new project managers both see them)"
+          }
+        },
+        {
+          "name": "advanceApprove",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/approval/advanceapprove",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "approval",
+                "advanceapprove"
+              ]
+            },
+            "description": "Advance-approve a future month at month level (ACT-024, PROC-010)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectId\": \"{{projectId}}\",\n  \"periodId\": \"{{periodId}}\",\n  \"employees\": [\n    \"\"\n  ],\n  \"actorEmpId\": \"{{actorEmpId}}\",\n  \"actor\": \"{{actorEmail}}\",\n  \"traceId\": \"{{$guid}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "approveAllWeeks",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/approval/approve/allweeks",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "approval",
+                "approve",
+                "allweeks"
+              ]
+            },
+            "description": "Approve every pending week for an employee on a project (ACT-019)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectId\": \"{{projectId}}\",\n  \"periodId\": \"{{periodId}}\",\n  \"employeeId\": \"{{employeeId}}\",\n  \"actorEmpId\": \"{{actorEmpId}}\",\n  \"actor\": \"{{actorEmail}}\",\n  \"traceId\": \"{{$guid}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "approveDays",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/approval/approve/day/{{id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "approval",
+                "approve",
+                "day",
+                "{{id}}"
+              ]
+            },
+            "description": "Approve selected dates; the week closes when all days are approved (ACT-017)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dates\": [\n    \"\"\n  ],\n  \"actorEmpId\": \"{{actorEmpId}}\",\n  \"actor\": \"{{actorEmail}}\",\n  \"traceId\": \"{{$guid}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "approveMonth",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/approval/approve/month",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "approval",
+                "approve",
+                "month"
+              ]
+            },
+            "description": "Approve the selected employees' month (ACT-012)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectId\": \"{{projectId}}\",\n  \"periodId\": \"{{periodId}}\",\n  \"employees\": [\n    \"\"\n  ],\n  \"actorEmpId\": \"{{actorEmpId}}\",\n  \"actor\": \"{{actorEmail}}\",\n  \"traceId\": \"{{$guid}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "approveWeek",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/approval/approve/week/{{id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "approval",
+                "approve",
+                "week",
+                "{{id}}"
+              ]
+            },
+            "description": "Approve one week; marks every working day approved (ACT-014)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"actorEmpId\": \"{{actorEmpId}}\",\n  \"actor\": \"{{actorEmail}}\",\n  \"traceId\": \"{{$guid}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "getWeekAudit",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/approval/audit/{{tsWeekId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "approval",
+                "audit",
+                "{{tsWeekId}}"
+              ]
+            },
+            "description": "Change history for a week: overrides, adjustments, who and when (REP-007)"
+          }
+        },
+        {
+          "name": "confirmMonth",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/approval/confirm",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "approval",
+                "confirm"
+              ]
+            },
+            "description": "Confirm the project month for ALL employees at once and fill the accrual interface (ACT-020)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectId\": \"{{projectId}}\",\n  \"periodId\": \"{{periodId}}\",\n  \"confirmType\": \"\",\n  \"actorEmpId\": \"{{actorEmpId}}\",\n  \"actor\": \"{{actorEmail}}\",\n  \"traceId\": \"{{$guid}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "getDayDetail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/approval/days/{{tsWeekId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "approval",
+                "days",
+                "{{tsWeekId}}"
+              ]
+            },
+            "description": "Line-wise daily detail with billable Type and Unbilled Reason (manager only)"
+          }
+        },
+        {
+          "name": "exportDaysCsv",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/approval/days/{{tsWeekId}}/export",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "approval",
+                "days",
+                "{{tsWeekId}}",
+                "export"
+              ]
+            },
+            "description": "ACT-018 (download half). The day-wise rows as CSV. Fetched directly by the browser via an anchor, not through callRest, so the response can carry Content-Disposition. The upload half is deliberately not built."
+          }
+        },
+        {
+          "name": "getLlcCover",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/approval/llc/cover/{{projectId}}/{{absenceDate}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "approval",
+                "llc",
+                "cover",
+                "{{projectId}}",
+                "{{absenceDate}}"
+              ]
+            },
+            "description": "Eligible cover LOV: unbilled on the project, not absent, not already assigned (RULE-014)"
+          }
+        },
+        {
+          "name": "generateLlc",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/approval/llc/generate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "approval",
+                "llc",
+                "generate"
+              ]
+            },
+            "description": "Build the absentee list from HCM absences (LOP/maternity excluded)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectId\": \"{{projectId}}\",\n  \"periodId\": \"{{periodId}}\",\n  \"actor\": \"{{actorEmail}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "approveCover",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/approval/llc/{{id}}/approve",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "approval",
+                "llc",
+                "{{id}}",
+                "approve"
+              ]
+            },
+            "description": "Approve the coverage; absence hours become billed (ACT-023)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"actorEmpId\": \"{{actorEmpId}}\",\n  \"actor\": \"{{actorEmail}}\",\n  \"traceId\": \"{{$guid}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "assignCover",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/approval/llc/{{id}}/assign",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "approval",
+                "llc",
+                "{{id}}",
+                "assign"
+              ]
+            },
+            "description": "Assign a covering colleague (ACT-022)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"coverEmployeeId\": \"\",\n  \"actor\": \"{{actorEmail}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "getLlc",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/approval/llc/{{projectId}}/{{periodId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "approval",
+                "llc",
+                "{{projectId}}",
+                "{{periodId}}"
+              ]
+            },
+            "description": "Leave-loss absentee lines for an FCP + Leave Loss project (PAGE-006)"
+          }
+        },
+        {
+          "name": "getManagers",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/approval/managers/{{employeeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "approval",
+                "managers",
+                "{{employeeId}}"
+              ]
+            },
+            "description": "Manager switcher for split employees (ACT-011)"
+          }
+        },
+        {
+          "name": "overrideEntry",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/approval/override/{{tsEntryId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "approval",
+                "override",
+                "{{tsEntryId}}"
+              ]
+            },
+            "description": "Override an hour cell; the original is retained in the audit trail (ACT-016)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"newHours\": 0,\n  \"reason\": \"\",\n  \"actorEmpId\": \"{{actorEmpId}}\",\n  \"actor\": \"{{actorEmail}}\",\n  \"traceId\": \"{{$guid}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "finishOverride",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/approval/override/{{tsWeekId}}/finish",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "approval",
+                "override",
+                "{{tsWeekId}}",
+                "finish"
+              ]
+            },
+            "description": "Close the overridden week as 'Overridden and approved'",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"actorEmpId\": \"{{actorEmpId}}\",\n  \"actor\": \"{{actorEmail}}\",\n  \"traceId\": \"{{$guid}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "getMgrProjects",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/approval/projects/{{managerId}}/{{periodId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "approval",
+                "projects",
+                "{{managerId}}",
+                "{{periodId}}"
+              ]
+            },
+            "description": "Manager landing: projects managed, month status, confirm gate, pending adjustments"
+          }
+        },
+        {
+          "name": "rejectDays",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/approval/reject/day/{{id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "approval",
+                "reject",
+                "day",
+                "{{id}}"
+              ]
+            },
+            "description": "Reject selected dates with reason + remarks (ACT-015)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dates\": [\n    \"\"\n  ],\n  \"reason\": \"\",\n  \"remarks\": \"\",\n  \"actorEmpId\": \"{{actorEmpId}}\",\n  \"actor\": \"{{actorEmail}}\",\n  \"traceId\": \"{{$guid}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "rejectMonth",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/approval/reject/month",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "approval",
+                "reject",
+                "month"
+              ]
+            },
+            "description": "Reject the selected employees' month with a mandatory reason (ACT-013)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectId\": \"{{projectId}}\",\n  \"periodId\": \"{{periodId}}\",\n  \"employees\": [\n    \"\"\n  ],\n  \"reason\": \"\",\n  \"remarks\": \"\",\n  \"actorEmpId\": \"{{actorEmpId}}\",\n  \"actor\": \"{{actorEmail}}\",\n  \"traceId\": \"{{$guid}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "rejectWeek",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/approval/reject/week/{{id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "approval",
+                "reject",
+                "week",
+                "{{id}}"
+              ]
+            },
+            "description": "Reject one week with reason + remarks (ACT-015)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"\",\n  \"remarks\": \"\",\n  \"actorEmpId\": \"{{actorEmpId}}\",\n  \"actor\": \"{{actorEmail}}\",\n  \"traceId\": \"{{$guid}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "runSalaryStopping",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/approval/salaryhold/run/{{periodId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "approval",
+                "salaryhold",
+                "run",
+                "{{periodId}}"
+              ]
+            },
+            "description": "Run the salary-stopping job for the period (RULE-016)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"actor\": \"{{actorEmail}}\",\n  \"traceId\": \"{{$guid}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "releaseSalaryHold",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/approval/salaryhold/{{id}}/release",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "approval",
+                "salaryhold",
+                "{{id}}",
+                "release"
+              ]
+            },
+            "description": "Release the salary hold once the defaulted timesheet is corrected (ACT-026)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"actorEmpId\": \"{{actorEmpId}}\",\n  \"remarks\": \"\",\n  \"actor\": \"{{actorEmail}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "getSalaryHold",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/approval/salaryhold/{{periodId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "approval",
+                "salaryhold",
+                "{{periodId}}"
+              ]
+            },
+            "description": "Defaulted employees with submitted vs defaulted weeks and applied vs default hours"
+          }
+        },
+        {
+          "name": "getSalaryHoldWeeks",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/approval/salaryhold/{{periodId}}/{{employeeId}}/weeks",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "approval",
+                "salaryhold",
+                "{{periodId}}",
+                "{{employeeId}}",
+                "weeks"
+              ]
+            },
+            "description": "Weeks breakdown pop-up: submitted vs defaulted, applied vs default hours (#3)"
+          }
+        },
+        {
+          "name": "getMonthSummary",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/approval/summary/{{projectId}}/{{periodId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "approval",
+                "summary",
+                "{{projectId}}",
+                "{{periodId}}"
+              ]
+            },
+            "description": "Per-employee monthly summary for multi-select approve/reject (PAGE-004)"
+          }
+        },
+        {
+          "name": "getMgrWeeks",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/approval/weeks/{{projectId}}/{{periodId}}/{{employeeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "approval",
+                "weeks",
+                "{{projectId}}",
+                "{{periodId}}",
+                "{{employeeId}}"
+              ]
+            },
+            "description": "Weekly detail rows for one employee on one project (PAGE-005)"
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Admin  (oc.time.admin)",
+      "item": [
+        {
+          "name": "ackAccrual",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/admin/accrual/ack/{{batchId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "admin",
+                "accrual",
+                "ack",
+                "{{batchId}}"
+              ]
+            },
+            "description": "Acknowledge a pulled batch: Y = stored, E = rejected",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"\",\n  \"message\": \"\",\n  \"actor\": \"{{actorEmail}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "getLlcAnnexure",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/admin/accrual/annexure/{{periodId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "admin",
+                "accrual",
+                "annexure",
+                "{{periodId}}"
+              ]
+            },
+            "description": "Leave-loss invoice annexure: approved coverage as billed hours (REP-002)"
+          }
+        },
+        {
+          "name": "getConfirmedMonths",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/admin/accrual/confirmed/{{periodId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "admin",
+                "accrual",
+                "confirmed",
+                "{{periodId}}"
+              ]
+            },
+            "description": "Confirmed project-months with OTL and accrual hand-off state (PAGE-011)"
+          }
+        },
+        {
+          "name": "getAccrualExtract",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/admin/accrual/extract/{{confirmId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "admin",
+                "accrual",
+                "extract",
+                "{{confirmId}}"
+              ]
+            },
+            "description": "Day-wise billed/unbilled/leave extract plus Reversal/Adjustment rows (REP-001)"
+          }
+        },
+        {
+          "name": "pullAccrual",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/admin/accrual/pull/{{periodYear}}/{{periodMonth}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "admin",
+                "accrual",
+                "pull",
+                "{{periodYear}}",
+                "{{periodMonth}}"
+              ]
+            },
+            "description": "THE ACCRUAL PULL — unprocessed interface rows for a month (INT-014)"
+          }
+        },
+        {
+          "name": "getCalendarLayers",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/admin/calendar/layers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "admin",
+                "calendar",
+                "layers"
+              ]
+            },
+            "description": "The four calendar layer cards with sync state (PAGE-009)"
+          }
+        },
+        {
+          "name": "syncCalendarLayer",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/admin/calendar/sync/{{layer}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "admin",
+                "calendar",
+                "sync",
+                "{{layer}}"
+              ]
+            },
+            "description": "Upsert one calendar layer from Fusion (ACT-030)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"days\": [\n    {\n      \"scopeKey\": \"\",\n      \"calDate\": \"\",\n      \"isWorkingDay\": \"\",\n      \"stdHours\": 0,\n      \"holidayName\": \"\",\n      \"shiftCode\": \"\"\n    }\n  ],\n  \"actor\": \"{{actorEmail}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "getCalendarDays",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/admin/calendar/{{layer}}/{{scopeKey}}/{{fromDate}}/{{toDate}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "admin",
+                "calendar",
+                "{{layer}}",
+                "{{scopeKey}}",
+                "{{fromDate}}",
+                "{{toDate}}"
+              ]
+            },
+            "description": "Calendar days for one layer + scope"
+          }
+        },
+        {
+          "name": "getCompliance",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/admin/compliance/{{periodId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "admin",
+                "compliance",
+                "{{periodId}}"
+              ]
+            },
+            "description": "Timesheet compliance dashboard: 9 statuses + flags by week and manager (REP-005)"
+          }
+        },
+        {
+          "name": "getConfig",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/admin/config",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "admin",
+                "config"
+              ]
+            },
+            "description": "Business configuration (CFG-010 .. CFG-015). Never contains secrets."
+          }
+        },
+        {
+          "name": "getIntegrations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/admin/integrations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "admin",
+                "integrations"
+              ]
+            },
+            "description": "Integration reference catalogue (PAGE-012)"
+          }
+        },
+        {
+          "name": "runAccrualJob",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/admin/jobs/accrual/{{periodId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "admin",
+                "jobs",
+                "accrual",
+                "{{periodId}}"
+              ]
+            },
+            "description": "ACT-033. Post retro adjustments approved after their month was confirmed. Idempotent.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"actor\": \"{{actorEmail}}\",\n  \"traceId\": \"{{$guid}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "runDailyProcess",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/admin/jobs/daily",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "admin",
+                "jobs",
+                "daily"
+              ]
+            },
+            "description": "Run the daily action-date process (allocation change, hire, exit, transfer, shift)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"actionDate\": \"\",\n  \"scopeKey\": \"\",\n  \"actor\": \"{{actorEmail}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "runDefaulting",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/admin/jobs/defaulting/{{periodId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "admin",
+                "jobs",
+                "defaulting",
+                "{{periodId}}"
+              ]
+            },
+            "description": "Run the weekly cut-off defaulting job (RULE-006)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"asOf\": \"\",\n  \"actor\": \"{{actorEmail}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "runDeliveryDefaulting",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/admin/jobs/delivery-defaulting/{{periodId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "admin",
+                "jobs",
+                "delivery-defaulting",
+                "{{periodId}}"
+              ]
+            },
+            "description": "Run the delivery cut-off defaulting job (RULE-007). Defaults submitted weeks the manager never decided on; DEFAULTED_BY=MANAGER, week not locked, never holds salary.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"asOf\": \"\",\n  \"actor\": \"{{actorEmail}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "runPopulation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/admin/jobs/populate/{{periodId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "admin",
+                "jobs",
+                "populate",
+                "{{periodId}}"
+              ]
+            },
+            "description": "Run the monthly population job (ACT-031, PROC-001)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"employeeId\": \"{{employeeId}}\",\n  \"actor\": \"{{actorEmail}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "getAdminPeriods",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/admin/periods",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "admin",
+                "periods"
+              ]
+            },
+            "description": "Period control, read-only (PAGE-008 is reference data maintained outside the app)"
+          }
+        },
+        {
+          "name": "ackPush",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/admin/push/ack/{{confirmId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "admin",
+                "push",
+                "ack",
+                "{{confirmId}}"
+              ]
+            },
+            "description": "DORMANT by instruction - built, not switched on. Confirmed months are held locally and nothing is written to the main O2C accrual tables. Driven by integration/o2c/push_timesheet.py, never by the browser. The pusher reports the outcome; recorded as PARTNER_STATUS, which stays Pending while the push is off.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"\",\n  \"message\": \"\",\n  \"actor\": \"{{actorEmail}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "getPushHeader",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/admin/push/header/{{confirmId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "admin",
+                "push",
+                "header",
+                "{{confirmId}}"
+              ]
+            },
+            "description": "DORMANT by instruction - built, not switched on. Confirmed months are held locally and nothing is written to the main O2C accrual tables. Driven by integration/o2c/push_timesheet.py, never by the browser. One header row per employee for a confirmed month."
+          }
+        },
+        {
+          "name": "getPushLines",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/admin/push/line/{{confirmId}}/{{employeeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "admin",
+                "push",
+                "line",
+                "{{confirmId}}",
+                "{{employeeId}}"
+              ]
+            },
+            "description": "DORMANT by instruction - built, not switched on. Confirmed months are held locally and nothing is written to the main O2C accrual tables. Driven by integration/o2c/push_timesheet.py, never by the browser. Day-wise lines for one employee."
+          }
+        },
+        {
+          "name": "getSyncFailed",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/admin/sync/failed",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "admin",
+                "sync",
+                "failed"
+              ]
+            },
+            "description": "Failed-record queue (new hire without allocation, missing shift calendar)"
+          }
+        },
+        {
+          "name": "retryFailed",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/admin/sync/retry/{{failedId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "admin",
+                "sync",
+                "retry",
+                "{{failedId}}"
+              ]
+            },
+            "description": "Retry one failed record (ACT-032)",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"actor\": \"{{actorEmail}}\",\n  \"traceId\": \"{{$guid}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "getSyncStatus",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/admin/sync/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "admin",
+                "sync",
+                "status"
+              ]
+            },
+            "description": "Latest run per job: monthly population, daily action-date, calendar, defaulting (PAGE-010)"
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://ords-sit.rite.digital/ords/o2c_time"
+    },
+    {
+      "key": "email",
+      "value": "admin@rite.digital"
+    },
+    {
+      "key": "password",
+      "value": "Rite@123"
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "actorEmail",
+      "value": "admin@rite.digital"
+    },
+    {
+      "key": "actorEmpId",
+      "value": ""
+    },
+    {
+      "key": "employeeId",
+      "value": "RI2824"
+    },
+    {
+      "key": "periodId",
+      "value": ""
+    },
+    {
+      "key": "projectId",
+      "value": ""
+    },
+    {
+      "key": "tsWeekId",
+      "value": ""
+    },
+    {
+      "key": "periodYear",
+      "value": "2026"
+    },
+    {
+      "key": "periodMonth",
+      "value": "7"
+    },
+    {
+      "key": "confirmId",
+      "value": ""
+    },
+    {
+      "key": "batchId",
+      "value": ""
+    }
+  ]
+}
