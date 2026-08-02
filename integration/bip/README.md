@@ -19,10 +19,28 @@ explicitly to run them; that is how they get verified.
 
 ## Use
 
+Credentials come from four environment variables. **bash:**
+
 ```sh
 export FUSION_BASE_URL=https://<pod>.<domain>
 export FUSION_USER=<integration service account>
 export FUSION_PASSWORD=<password>
+export ORDS_BASE_URL=https://<host>/ords/o2c_time    # --load only
+```
+
+**PowerShell** — `export` is not a PowerShell command, and this repo is worked
+on from Windows:
+
+```powershell
+$env:FUSION_BASE_URL = "https://<pod>.<domain>"
+$env:FUSION_USER     = "<integration service account>"
+$env:FUSION_PASSWORD = "<password>"
+$env:ORDS_BASE_URL   = "https://<host>/ords/o2c_time"   # --load only
+```
+
+They last for the session only, which is the point — nothing is written to disk.
+
+```sh
 
 python run_extract.py --check                       # connectivity + entitlements
 python run_extract.py --validate                    # compile + row counts, writes nothing
@@ -31,10 +49,12 @@ python run_extract.py --run ALL --chunked --out ./extracts
 python run_extract.py --run WORKERS --effective-date 2026-08-01
 
 # the full inbound path: extract AND load into the cache
-export ORDS_BASE_URL=https://ords-sit.rite.digital/ords/o2c_time
 python run_extract.py --load ALL
 python run_extract.py --load WORKERS,PROJECTS
 ```
+
+Every mode needs one of `--check / --deploy / --validate / --run / --load`;
+running the script bare prints usage and exits, on purpose.
 
 `--run` writes CSV. `--load` does the same extract and then POSTs it into the
 `OC_TIME_*` cache. Until `--load` existed the inbound path **stopped at the
