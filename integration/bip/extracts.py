@@ -119,19 +119,43 @@ SELECT p.project_id                            AS project_id,
        org.name                                AS organization,
        -- The project manager. CrewRite routes approval to a crew lead; here it
        -- is the project manager, and RULE-015 depends on it — an employee's
-       -- week goes to THIS person, and a manager's own week to theirs. Without
-       -- it OC_TIME_PROJECT.PROJECT_MANAGER_ID stays null and no project has an
-       -- approver, so the manager landing page is empty for everyone.
-       pm.person_number                        AS project_manager_id,
+       -- week goes to THIS person. Without it PROJECT_MANAGER_ID stays null, no
+       -- project has an approver, and the manager landing page is empty for
+       -- everyone. 366 of 732 projects on this pod have one.
+       --
+       -- A SCALAR SUBQUERY, not a join, and that is deliberate: a project can
+       -- carry the same role more than once over time, and a join would emit
+       -- one project row per party — silently duplicating projects into a MERGE
+       -- keyed on project_number.
+       --
+       -- Exact match on 'Project Manager'. A LIKE '%PROJECT MANAGER%' also
+       -- catches 'Associate Project Manager', which is a different person and a
+       -- different authority.
+       (SELECT MIN(pm.person_number)
+          FROM pjf_project_parties mpp
+          JOIN pjt_project_roles_vl r
+            ON r.project_role_id = mpp.project_role_id
+          JOIN per_all_people_f pm
+            ON pm.person_id = mpp.resource_source_id
+           AND {ED} BETWEEN pm.effective_start_date AND pm.effective_end_date
+         WHERE mpp.project_id = p.project_id
+           AND mpp.project_party_type = 'IN'
+           AND r.name = 'Project Manager'
+           AND {ED} BETWEEN NVL(mpp.start_date_active, {ED})
+                        AND NVL(mpp.end_date_active,   {ED}))
+                                               AS project_manager_id,
        -- TIME_ENTRY_ENABLED (CrewRite CR-B-BR08, Reuse Assessment §2.4).
        -- Without a filter every active project in the enterprise reaches the
-       -- employee's picker — 423 on this pod. Fusion has no such flag, so it is
-       -- derived: a project is chargeable only if somebody is actually assigned
-       -- to it. That is self-limiting and true by construction, since you can
-       -- only charge to a project you hold an assignment on.
-       CASE WHEN EXISTS (SELECT 1 FROM pjf_project_parties ip
-                          WHERE ip.project_id = p.project_id
-                            AND ip.project_party_type = 'IN')
+       -- employee's picker: 732 here.
+       --
+       -- PJS_TRACK_TIME on the project party is Fusion's OWN answer to this, so
+       -- it beats deriving one. On this pod it selects 55 projects — the ones
+       -- somebody actually tracks time against. An earlier version guessed "has
+       -- any internal party", which would have let 327 through.
+       CASE WHEN EXISTS (SELECT 1 FROM pjf_project_parties tp
+                          WHERE tp.project_id = p.project_id
+                            AND tp.project_party_type = 'IN'
+                            AND tp.pjs_track_time = 'Y')
             THEN 'Y' ELSE 'N' END              AS time_entry_enabled
   FROM pjf_projects_all_b p
   JOIN pjf_projects_all_tl ptl
@@ -149,24 +173,6 @@ SELECT p.project_id                            AS project_id,
     ON cpp.project_id = p.project_id AND cpp.project_party_type = 'CO'
   LEFT JOIN hz_parties cust
     ON cust.party_id = cpp.resource_source_id
-  -- Project manager: an INTERNAL party ('IN', per README note 6) whose role
-  -- name says Project Manager. Matched on the role name rather than a role id
-  -- because the id is instance-specific while the delivered name is not.
-  --
-  -- ⚠ The one join in this extract not confirmed against a pod. If
-  -- PROJECT_MANAGER_ID comes back empty for every project, the role name is
-  -- worded differently here — list what exists with:
-  --     SELECT DISTINCT rtl.project_role_name FROM pjf_project_role_types_tl rtl
-  LEFT JOIN pjf_project_parties mpp
-    ON mpp.project_id = p.project_id
-   AND mpp.project_party_type = 'IN'
-  LEFT JOIN pjf_project_role_types_tl mrole
-    ON mrole.project_role_id = mpp.project_role_id
-   AND mrole.language = USERENV('LANG')
-   AND UPPER(mrole.project_role_name) LIKE '%PROJECT MANAGER%'
-  LEFT JOIN per_all_people_f pm
-    ON pm.person_id = mpp.resource_source_id
-   AND {ED} BETWEEN pm.effective_start_date AND pm.effective_end_date
  WHERE NVL(p.completion_date, {ED}) >= ADD_MONTHS({ED}, -12)
 """.replace("{ED}", ED),
 }
@@ -470,40 +476,51 @@ SELECT 'SHIFT'                                     AS layer,
 # ══════════════════════════════════════════════════════════════
 # POET — expenditure type (INT-007 prerequisite)
 #
-# ⚠ NOT YET VERIFIED AGAINST A POD. Everything else in this file was confirmed
-# by running it; these two were not, and are written from the standard Fusion
-# PPM model rather than from a live result. They are here so they can be checked
-# rather than reasoned about:
+# Verified against the pod on 02-Aug-2026, and the answer was not the expected
+# one. Recorded here because it is the kind of thing that gets re-guessed:
 #
-#     python run_extract.py --validate --only EXP_TYPES,TASK_EXP_TYPES
+#   * PJF_EXP_TYPES_B exists and holds 268 types. The column is
+#     EXPENDITURE_CATEGORY_ID, not EXPENDITURE_CATEGORY.
 #
-# --validate compiles the SQL and reports row counts without writing anything,
-# so a wrong object name comes back as an error and a wrong literal comes back
-# as zero rows. Both are the failure modes note 6 in the README warns about.
+#   * PJF_TXN_CONTROLS DOES NOT EXIST on this pod. The only object matching
+#     %TXN_CONTROL% is PJC_TXN_CONTROLS_STAGE, a staging table. So there are no
+#     live transaction controls to read an expenditure type from, and a
+#     TASK_EXP_TYPES extract was removed rather than left failing.
 #
-# The expenditure ORGANIZATION half of POET is already handled — it comes from
-# the WORKERS extract above and needs nothing here.
+# That settles the open question from the README: expenditure type is NOT a per
+# task attribute here. It comes from configuration —
+# OC_TIME_CONFIG DEFAULT_EXPENDITURE_TYPE, seeded to 'Regular Labor', which is
+# one of the four labour types on this pod carrying UOM = HOURS (alongside
+# Overtime, Supervisory and Miscellaneous Labor).
+#
+# EXP_TYPES stays as a reference extract: it is what tells an administrator
+# which values are legal before they change that configuration.
+#
+# The expenditure ORGANIZATION half of POET is unaffected — it comes from the
+# WORKERS extract above.
 # ══════════════════════════════════════════════════════════════
 
 EXP_TYPES = {
     "name": "EXP_TYPES",
-    "target": "(reference — no cache table yet)",
+    "target": "(reference — the legal values for DEFAULT_EXPENDITURE_TYPE)",
     "integration": "INT-002",
     "key": ["EXPENDITURE_TYPE_ID"],
     "columns": ["EXPENDITURE_TYPE_ID", "EXPENDITURE_TYPE_NAME",
-                "EXPENDITURE_CATEGORY", "UNIT_OF_MEASURE",
+                "EXPENDITURE_CATEGORY_ID", "UNIT_OF_MEASURE",
                 "START_DATE", "END_DATE"],
-    "verified": False,
     "sql": """
--- The master list. Small — tens of rows, not thousands — and worth having on
--- its own because it answers "what may an expenditure type be?" before any
--- question about which task carries which.
+-- The master list: 268 rows on the reference pod. Worth having because it
+-- answers "what may an expenditure type be?" before anyone edits the config.
 --
--- _TL for the name, following note 7: on this family the base table carries the
--- ids and the translated table the display name.
+-- UNIT_OF_MEASURE is the useful filter, not the name: a timesheet needs an
+-- HOURS type. Several 'Labor' types on this pod are DOLLARS (Craft Labor
+-- Straight Time, Consultant Labor...) and would be wrong for hours.
+--
+-- _TL for the name, following note 7: the base table carries ids, the
+-- translated table the display name.
 SELECT etb.expenditure_type_id                      AS expenditure_type_id,
        ettl.expenditure_type_name                   AS expenditure_type_name,
-       etb.expenditure_category                     AS expenditure_category,
+       etb.expenditure_category_id                  AS expenditure_category_id,
        etb.unit_of_measure                          AS unit_of_measure,
        TO_CHAR(etb.start_date_active,'YYYY-MM-DD')  AS start_date,
        TO_CHAR(etb.end_date_active,'YYYY-MM-DD')    AS end_date
@@ -516,47 +533,9 @@ SELECT etb.expenditure_type_id                      AS expenditure_type_id,
 }
 
 
-TASK_EXP_TYPES = {
-    "name": "TASK_EXP_TYPES",
-    "target": "OC_TIME_TASK.EXPENDITURE_TYPE",
-    "integration": "INT-002",
-    "key": ["TASK_ID"],
-    "columns": ["TASK_ID", "PROJECT_ID", "PROJECT_NUMBER",
-                "EXPENDITURE_TYPE_NAME", "CONTROL_LEVEL"],
-    "verified": False,
-    "sql": """
--- Which expenditure type a task may be charged with.
---
--- In Fusion this is not a column on the task. It is expressed as TRANSACTION
--- CONTROLS, which can sit at project level or task level, so a task inherits
--- its project's control when it has none of its own. CONTROL_LEVEL is returned
--- so the loader can tell the two apart rather than silently preferring one.
---
--- If a pod turns out not to use transaction controls at all this returns zero
--- rows — which is an answer, not a failure: it means the implementation uses a
--- single labour expenditure type and OC_TIME_TASK.EXPENDITURE_TYPE should be
--- set from configuration instead of per task.
-SELECT tc.task_id                                   AS task_id,
-       tc.project_id                                AS project_id,
-       p.segment1                                   AS project_number,
-       ettl.expenditure_type_name                   AS expenditure_type_name,
-       CASE WHEN tc.task_id IS NULL THEN 'PROJECT' ELSE 'TASK' END
-                                                    AS control_level
-  FROM pjf_txn_controls tc
-  JOIN pjf_projects_all_b p
-    ON p.project_id = tc.project_id
-  JOIN pjf_exp_types_tl ettl
-    ON ettl.expenditure_type_id = tc.expenditure_type_id
-   AND ettl.language = USERENV('LANG')
- WHERE tc.expenditure_type_id IS NOT NULL
-   AND NVL(tc.chargeable_flag,'Y') = 'Y'
-""".replace("{ED}", ED),
-}
-
-
 ALL_EXTRACTS = [WORKERS, PROJECTS, TASKS, ALLOCATIONS, ABSENCES,
                 CALENDAR, SHIFTS, WORK_PATTERNS, WORK_SCHEDULES, WORKER_SHIFTS,
-                EXP_TYPES, TASK_EXP_TYPES]
+                EXP_TYPES]
 BY_NAME = {e["name"]: e for e in ALL_EXTRACTS}
 
 # The ones proven against a pod. --run ALL uses this, so an unverified extract

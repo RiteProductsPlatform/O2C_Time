@@ -10,12 +10,11 @@ extracts.py      the extract definitions (SQL + column contract)
 run_extract.py   CLI: check / validate / deploy / run
 ```
 
-**Verified vs not.** Ten extracts have been run against a pod; two — `EXP_TYPES`
-and `TASK_EXP_TYPES`, both added for POET — have not. `--run ALL` and
-`--validate` deliberately **exclude** the unverified ones, because an extract
-whose object name or literal is wrong returns zero rows while reporting success
-(note 2), and that would quietly blank a column nobody had checked. Name them
-explicitly to run them; that is how they get verified.
+**All eleven extracts have been run against a pod.** The `verified` flag and
+the VERIFIED/ALL split in `run_extract.py` remain, because they are what keeps a
+newly-added extract out of the monthly MasterSync until somebody has actually
+run it — an extract with a wrong object name returns zero rows while reporting
+success (note 2).
 
 ## Use
 
@@ -76,10 +75,7 @@ production service account.
 | `ABSENCES` | INT-006 | `OC_TIME_ABSENCE` | `ANC_PER_ABS_ENTRIES`, `ANC_PER_ABS_ENTRY_DTLS`, `ANC_ABSENCE_TYPES_VL` |
 | `CALENDAR` | INT-005 | `OC_TIME_CALENDAR` | `PER_CALENDAR_EVENTS` |
 | `SHIFTS` | INT-004 | `OC_TIME_CALENDAR` (SHIFT layer) | `HTS_SHIFTS_VL` |
-| `EXP_TYPES` ⚠ | INT-002 | reference only | `PJF_EXP_TYPES_B/_TL` |
-| `TASK_EXP_TYPES` ⚠ | INT-002 | `OC_TIME_TASK.EXPENDITURE_TYPE` | `PJF_TXN_CONTROLS`, `PJF_EXP_TYPES_TL` |
-
-⚠ = written from the standard Fusion model, **not** yet confirmed by running it.
+| `EXP_TYPES` | INT-002 | reference — legal values for the config | `PJF_EXP_TYPES_B/_TL` |
 
 The SELECT alias list **is** the CSV header **is** the upsert column list, so the
 three cannot drift.
@@ -177,55 +173,62 @@ is fixed.
 Workers who disappear from an extract are **not** deleted — `STATUS` carries
 `Terminated` for that, and a delete would break FKs from existing timesheets.
 
-## POET, and what is still open
+## POET — settled 02-Aug-2026
 
 An OTL time card needs Project / Organization / Expenditure type / Task.
 
-**Organization — done.** `WORKERS` returns `EXPENDITURE_ORG` from
+**Organization — from the worker.** `WORKERS` returns `EXPENDITURE_ORG` from
 `PER_ALL_ASSIGNMENTS_M.ORGANIZATION_ID` through `HR_ALL_ORGANIZATION_UNITS_F_VL`
-— the same table already joined for `LEGAL_EMPLOYER`, on a different key. The
-two are **not** interchangeable: the legal employer is who employs the person,
-the expenditure organization is the costing unit the work books to. Reading one
-for the other sends cost to the wrong place while looking entirely plausible.
-`OC_TIME_ALLOCATION.EXPENDITURE_ORG` is a per-project override, left null unless
-someone sets it, so the worker's own value applies by default.
+— the same table already joined for `LEGAL_EMPLOYER`, on a different key.
 
-**Expenditure type — open.** In Fusion this is not a column on the task; it is
-expressed as transaction controls that can sit at project or task level. `TASKS`
-therefore sends `EXPENDITURE_TYPE` as NULL, and `sync/task` applies
-`NVL(payload, existing)` so that never erases a value. Settle it with:
+They are **not** interchangeable, and the pod proves it: 5,988 workers all have
+a legal employer, but only 4,759 have an expenditure organization, across 686
+distinct organizations. The legal employer is who employs the person; the
+expenditure organization is the costing unit the work books to. The 1,229 with
+neither are a real data gap, and `V_OC_TIME_POET_READINESS` is what surfaces it.
 
-```sh
-python run_extract.py --validate EXP_TYPES,TASK_EXP_TYPES
-```
+`OC_TIME_ALLOCATION.EXPENDITURE_ORG` is a per-project override, normally null,
+so the worker's own value applies by default.
 
-| Result | Meaning |
-|---|---|
-| rows returned | good — wire `TASK_EXP_TYPES` into the load |
-| `ORA-00942` | wrong object name; the model differs on this pod |
-| **0 rows, no error** | this pod does not use transaction controls. Not a failure — it means one labour expenditure type is used throughout and the value belongs in configuration |
+**Expenditure type — from configuration, not from the task.** This was the open
+question and the answer was not the expected one:
 
-The third is the likeliest on a demo pod, which is why the count matters more
-than the absence of an error.
+- `PJF_EXP_TYPES_B` exists with 262 active types (30 of them `UOM = HOURS`), but
+  the column is `EXPENDITURE_CATEGORY_ID`, not `EXPENDITURE_CATEGORY`.
+- **`PJF_TXN_CONTROLS` does not exist on this pod.** The only object matching
+  `%TXN_CONTROL%` is `PJC_TXN_CONTROLS_STAGE`, a staging table.
 
-## Two more joins that need confirming
+So there are no live transaction controls to read a per-task expenditure type
+from, and the `TASK_EXP_TYPES` extract was removed rather than left failing.
+The value lives in `OC_TIME_CONFIG.defaultExpenditureType`, seeded to
+`Regular Labor`.
 
-Both are new and neither has been run against a pod.
+Run `EXP_TYPES` before changing that config: several types named `...Labor` are
+`DOLLARS` (Craft Labor Straight Time, Consultant Labor…) and would be wrong for
+hours. The UOM is the constraint that matters, not the name.
 
-**`PROJECTS.PROJECT_MANAGER_ID`** — matched on a party of type `IN` whose role
-name contains "Project Manager". This one matters more than it looks: RULE-015
-routes every approval through it, so if it comes back empty no project has an
-approver and the manager landing page is empty for everyone. If so, list the
-role names that actually exist:
+## Two joins that were wrong, and what they are now
 
-```sql
-SELECT DISTINCT project_role_name FROM pjf_project_role_types_tl;
-```
+Both were written from the standard Fusion model and both were wrong. Recorded
+because the corrections are not guessable.
 
-**`PROJECTS.TIME_ENTRY_ENABLED`** — Fusion has no such flag, so it is derived:
-`Y` when the project has at least one internal party. That is self-limiting and
-true by construction, since you can only charge to a project you are assigned
-to. If the split looks wrong, this is the expression to change.
+**`PROJECTS.PROJECT_MANAGER_ID`.** The role table is `PJT_PROJECT_ROLES_VL` —
+prefix **`PJT_`**, not `PJF_` — and its column is `NAME`, not
+`PROJECT_ROLE_NAME`. Matched on `= 'Project Manager'` exactly, because
+`LIKE '%PROJECT MANAGER%'` also catches *Associate Project Manager*, a different
+person with different authority.
+
+Written as a **scalar subquery, not a join**: a project can carry the same role
+more than once over time, and a join would emit one project row per party,
+silently duplicating projects into a MERGE keyed on project number.
+
+187 of 424 projects resolve to a manager. RULE-015 routes every approval through
+this, so the 237 without one have no approver — visible, not silent.
+
+**`PROJECTS.TIME_ENTRY_ENABLED`.** Fusion does have an answer for this after
+all: `PJF_PROJECT_PARTIES.PJS_TRACK_TIME`. Using it selects **48** projects out
+of 424. The earlier guess — "has any internal party" — would have let 327
+through, which is most of the way back to the problem §2.4 describes.
 
 ## Scheduling
 

@@ -356,6 +356,20 @@ BEGIN
        'FLD-087 Days a contractor can resubmit a defaulted timesheet.');
   seed('maxClientDocBytes',     'business',    '26214400',
        'Security PAGE-002 attachment policy: 25MB ceiling.');
+  -- POET's E. Configuration rather than a per-task value, and that is a finding
+  -- rather than a shortcut: expenditure type is not an attribute of the task in
+  -- Fusion, it comes from transaction controls — and PJF_TXN_CONTROLS does not
+  -- exist on this pod (verified 02-Aug-2026; only PJC_TXN_CONTROLS_STAGE, a
+  -- staging table). So there is nothing per task to read.
+  --
+  -- 'Regular Labor' is one of 30 types on the pod carrying UOM = HOURS, which is
+  -- the constraint that matters: several types named '...Labor' are DOLLARS
+  -- (Craft Labor Straight Time, Consultant Labor...) and would be wrong for a
+  -- timesheet. Run the EXP_TYPES extract to see the legal values before
+  -- changing this.
+  seed('defaultExpenditureType','business',    'Regular Labor',
+       'POET expenditure type for the OTL push (INT-007). Must be a Fusion '
+       || 'expenditure type with UOM = HOURS; see the EXP_TYPES extract.');
   DBMS_OUTPUT.PUT_LINE('config seeded.');
 END;
 /
