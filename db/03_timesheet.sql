@@ -24,7 +24,7 @@ SET DEFINE OFF
 SET SERVEROUTPUT ON
 
 PROMPT ============================================================
-PROMPT [1/7] OC_TS_WEEK — weekly header
+PROMPT [1/8] OC_TS_WEEK — weekly header
 PROMPT ============================================================
 
 -- WEEK_STATUS — 7 statuses (revised 30-Jul-2026, down from 9):
@@ -208,7 +208,7 @@ EXCEPTION WHEN OTHERS THEN IF SQLCODE = -955 THEN NULL; ELSE RAISE; END IF; END;
 /
 
 PROMPT ============================================================
-PROMPT [2/7] OC_TS_ENTRY — day x project x task grid cell
+PROMPT [2/8] OC_TS_ENTRY — day x project x task grid cell
 PROMPT ============================================================
 
 -- ENTRY_TYPE (Data_Dictionaries accrual_entry_type) — the same four values the
@@ -302,7 +302,7 @@ EXCEPTION WHEN OTHERS THEN IF SQLCODE = -955 THEN NULL; ELSE RAISE; END IF; END;
 /
 
 PROMPT ============================================================
-PROMPT [3/7] OC_TS_ENTRY — derive billable type & reason from task
+PROMPT [3/8] OC_TS_ENTRY — derive billable type & reason from task
 PROMPT ============================================================
 
 -- FLD-012 is hidden from the employee and derived, never typed: the task
@@ -341,7 +341,7 @@ END;
 /
 
 PROMPT ============================================================
-PROMPT [4/7] OC_TS_WEEK — audit trigger
+PROMPT [4/8] OC_TS_WEEK — audit trigger
 PROMPT ============================================================
 
 CREATE OR REPLACE TRIGGER trg_oc_tsw_audit
@@ -362,7 +362,7 @@ END;
 /
 
 PROMPT ============================================================
-PROMPT [5/7] OC_TS_ENTRY — roll hours up to the week
+PROMPT [5/8] OC_TS_ENTRY — roll hours up to the week
 PROMPT ============================================================
 
 -- Recomputes the week totals from its entries after any line change, and
@@ -428,7 +428,7 @@ END trg_oc_tsw_totals;
 /
 
 PROMPT ============================================================
-PROMPT [6/7] V_OC_TS_WEEK_GRID — employee weekly grid (PAGE-001)
+PROMPT [6/8] V_OC_TS_WEEK_GRID — employee weekly grid (PAGE-001)
 PROMPT ============================================================
 
 -- One row per project-task line per week, hours pivoted Mon..Sun so the VBCS
@@ -477,7 +477,7 @@ SELECT w.ts_week_id,
           e.task_id, t.task_code, t.task_name, t.task_type;
 
 PROMPT ============================================================
-PROMPT [7/7] V_OC_TS_DAY_SHIFT — per-day shift & standard row (PAGE-001)
+PROMPT [7/8] V_OC_TS_DAY_SHIFT — per-day shift & standard row (PAGE-001)
 PROMPT ============================================================
 
 -- FLD-008 / FLD-011 / RULE-011: the day-wise shift row above the grid. Shift is
@@ -497,6 +497,91 @@ SELECT e.ts_week_id,
   FROM oc_ts_entry e
   JOIN oc_ts_week  w ON w.ts_week_id = e.ts_week_id
  GROUP BY e.ts_week_id, w.employee_id, e.entry_date;
+
+PROMPT ============================================================
+PROMPT [8/8] OC_TS_ENTRY — POET carried onto the entry
+PROMPT ============================================================
+
+-- doc/CrewRite_Reuse_Assessment.md §2.1: "carry both onto OC_TS_ENTRY at
+-- population time so the entry is self-describing".
+--
+-- The values could be joined from OC_TIME_TASK and OC_TIME_WORKER whenever they
+-- are needed, so this is denormalisation and it needs a reason. It has two.
+--
+-- 1. AN ENTRY IS AN ACCOUNTING FACT AND MUST NOT DRIFT. An expenditure type
+--    changed in Fusion next quarter would silently rewrite what last quarter's
+--    approved, confirmed, pushed hours were costed as. Stamping the value at
+--    population makes the entry say what it was actually charged under — the
+--    same argument that put names beside ids on XX_O2C_TIMESHEET_ACCRUAL_IF.
+--
+-- 2. The OTL push reads at employee x day x WBS. Joining back through task and
+--    allocation for every row, to reach values that were fixed months earlier,
+--    is work done repeatedly to get an answer that cannot change.
+--
+-- NULL on existing rows, and correctly so: nothing knew these values when those
+-- entries were made. V_OC_TIME_POET_READINESS reports on the master data, which
+-- is where the gap is fixed; back-filling entries would invent history.
+DECLARE
+  v_n PLS_INTEGER := 0;
+
+  PROCEDURE add_col(p_col IN VARCHAR2, p_type IN VARCHAR2) IS
+  BEGIN
+    EXECUTE IMMEDIATE 'ALTER TABLE oc_ts_entry ADD ' || p_col || ' ' || p_type;
+    v_n := v_n + 1;
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLCODE = -1430 THEN NULL; ELSE RAISE; END IF;
+  END;
+BEGIN
+  add_col('expenditure_type', 'VARCHAR2(80 CHAR)');
+  add_col('expenditure_org',  'VARCHAR2(240 CHAR)');
+  DBMS_OUTPUT.PUT_LINE('OC_TS_ENTRY POET columns added: ' || v_n);
+END;
+/
+
+-- Stamp them as the row is written, so no caller has to remember to.
+--
+-- A trigger rather than a change to populate_daily / populate_month because
+-- entries are created from several places — population, the employee's own
+-- add-line, adjustment reversal pairs — and a rule enforced in one of them is a
+-- rule missing from the others. Only fills what the caller left NULL, so an
+-- explicit value (a correction, a back-dated adjustment carrying the original
+-- coding) still wins.
+CREATE OR REPLACE TRIGGER trg_oc_tse_poet
+BEFORE INSERT ON oc_ts_entry
+FOR EACH ROW
+WHEN (NEW.expenditure_type IS NULL OR NEW.expenditure_org IS NULL)
+DECLARE
+  v_type VARCHAR2(80 CHAR);
+  v_org  VARCHAR2(240 CHAR);
+BEGIN
+  IF :NEW.expenditure_type IS NULL AND :NEW.task_id IS NOT NULL THEN
+    BEGIN
+      SELECT t.expenditure_type INTO v_type
+        FROM oc_time_task t WHERE t.task_id = :NEW.task_id;
+      :NEW.expenditure_type := v_type;
+    EXCEPTION WHEN NO_DATA_FOUND THEN NULL;
+    END;
+  END IF;
+
+  IF :NEW.expenditure_org IS NULL THEN
+    -- NVL(allocation, worker): the allocation override first, the person's own
+    -- organization otherwise. Same cascade V_OC_TIME_POET_READINESS counts on
+    -- and the same shape V_OC_TIME_SIGNIN uses for the role.
+    BEGIN
+      SELECT NVL(MAX(a.expenditure_org), MAX(wk.expenditure_org)) INTO v_org
+        FROM oc_ts_week w
+        JOIN oc_time_worker wk ON wk.employee_id = w.employee_id
+        LEFT JOIN oc_time_allocation a
+               ON a.employee_id = w.employee_id
+              AND a.project_id  = :NEW.project_id
+              AND a.status      = 'Active'
+       WHERE w.ts_week_id = :NEW.ts_week_id;
+      :NEW.expenditure_org := v_org;
+    EXCEPTION WHEN NO_DATA_FOUND THEN NULL;
+    END;
+  END IF;
+END;
+/
 
 PROMPT
 PROMPT ============================================================

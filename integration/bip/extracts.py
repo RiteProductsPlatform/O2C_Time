@@ -106,7 +106,7 @@ PROJECTS = {
     "key": ["PROJECT_NUMBER"],
     "columns": ["PROJECT_ID", "PROJECT_NUMBER", "PROJECT_NAME", "PROJECT_TYPE",
                 "CUSTOMER_NAME", "PROJECT_STATUS", "START_DATE", "END_DATE",
-                "ORGANIZATION"],
+                "ORGANIZATION", "PROJECT_MANAGER_ID", "TIME_ENTRY_ENABLED"],
     "sql": """
 SELECT p.project_id                            AS project_id,
        p.segment1                              AS project_number,
@@ -116,7 +116,23 @@ SELECT p.project_id                            AS project_id,
        p.project_status_code                   AS project_status,
        TO_CHAR(p.start_date,'YYYY-MM-DD')      AS start_date,
        TO_CHAR(p.completion_date,'YYYY-MM-DD') AS end_date,
-       org.name                                AS organization
+       org.name                                AS organization,
+       -- The project manager. CrewRite routes approval to a crew lead; here it
+       -- is the project manager, and RULE-015 depends on it — an employee's
+       -- week goes to THIS person, and a manager's own week to theirs. Without
+       -- it OC_TIME_PROJECT.PROJECT_MANAGER_ID stays null and no project has an
+       -- approver, so the manager landing page is empty for everyone.
+       pm.person_number                        AS project_manager_id,
+       -- TIME_ENTRY_ENABLED (CrewRite CR-B-BR08, Reuse Assessment §2.4).
+       -- Without a filter every active project in the enterprise reaches the
+       -- employee's picker — 423 on this pod. Fusion has no such flag, so it is
+       -- derived: a project is chargeable only if somebody is actually assigned
+       -- to it. That is self-limiting and true by construction, since you can
+       -- only charge to a project you hold an assignment on.
+       CASE WHEN EXISTS (SELECT 1 FROM pjf_project_parties ip
+                          WHERE ip.project_id = p.project_id
+                            AND ip.project_party_type = 'IN')
+            THEN 'Y' ELSE 'N' END              AS time_entry_enabled
   FROM pjf_projects_all_b p
   JOIN pjf_projects_all_tl ptl
     ON ptl.project_id = p.project_id AND ptl.language = USERENV('LANG')
@@ -133,6 +149,24 @@ SELECT p.project_id                            AS project_id,
     ON cpp.project_id = p.project_id AND cpp.project_party_type = 'CO'
   LEFT JOIN hz_parties cust
     ON cust.party_id = cpp.resource_source_id
+  -- Project manager: an INTERNAL party ('IN', per README note 6) whose role
+  -- name says Project Manager. Matched on the role name rather than a role id
+  -- because the id is instance-specific while the delivered name is not.
+  --
+  -- ⚠ The one join in this extract not confirmed against a pod. If
+  -- PROJECT_MANAGER_ID comes back empty for every project, the role name is
+  -- worded differently here — list what exists with:
+  --     SELECT DISTINCT rtl.project_role_name FROM pjf_project_role_types_tl rtl
+  LEFT JOIN pjf_project_parties mpp
+    ON mpp.project_id = p.project_id
+   AND mpp.project_party_type = 'IN'
+  LEFT JOIN pjf_project_role_types_tl mrole
+    ON mrole.project_role_id = mpp.project_role_id
+   AND mrole.language = USERENV('LANG')
+   AND UPPER(mrole.project_role_name) LIKE '%PROJECT MANAGER%'
+  LEFT JOIN per_all_people_f pm
+    ON pm.person_id = mpp.resource_source_id
+   AND {ED} BETWEEN pm.effective_start_date AND pm.effective_end_date
  WHERE NVL(p.completion_date, {ED}) >= ADD_MONTHS({ED}, -12)
 """.replace("{ED}", ED),
 }
@@ -145,7 +179,8 @@ TASKS = {
     "key": ["TASK_ID"],
     "columns": ["TASK_ID", "PROJECT_ID", "PROJECT_NUMBER", "TASK_NUMBER",
                 "TASK_NAME", "CHARGEABLE_FLAG", "BILLABLE_FLAG",
-                "WBS_LEVEL", "PARENT_TASK_ID", "START_DATE", "END_DATE"],
+                "WBS_LEVEL", "PARENT_TASK_ID", "START_DATE", "END_DATE",
+                "EXPENDITURE_TYPE"],
     "sql": """
 SELECT e.proj_element_id                        AS task_id,
        e.project_id                             AS project_id,
@@ -158,7 +193,18 @@ SELECT e.proj_element_id                        AS task_id,
        e.denorm_wbs_level                       AS wbs_level,
        e.denorm_parent_element_id               AS parent_task_id,
        TO_CHAR(e.start_date,'YYYY-MM-DD')       AS start_date,
-       TO_CHAR(e.completion_date,'YYYY-MM-DD')  AS end_date
+       TO_CHAR(e.completion_date,'YYYY-MM-DD')  AS end_date,
+       -- POET's E. Deliberately NULL here, not omitted.
+       --
+       -- The column has to exist because it is part of this extract's contract
+       -- with POST sync/task, and the loader sends what the contract declares.
+       -- It is null because expenditure type is not an attribute of the task in
+       -- Fusion — it comes from transaction controls, which TASK_EXP_TYPES
+       -- reads and which nobody has yet confirmed this pod uses.
+       --
+       -- Harmless meanwhile: sync/task applies
+       -- NVL(payload, existing), so a null never erases a value already set.
+       CAST(NULL AS VARCHAR2(80))               AS expenditure_type
   FROM pjf_proj_elements_b e
   JOIN pjf_proj_elements_tl etl
     ON etl.proj_element_id = e.proj_element_id AND etl.language = USERENV('LANG')

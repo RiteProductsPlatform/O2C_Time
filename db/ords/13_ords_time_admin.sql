@@ -30,6 +30,11 @@
 --   GET  calendar/layers                         the four layer cards
 --   GET  calendar/:layer/:scopeKey/:from/:to     calendar days for a layer
 --   POST calendar/sync/:layer                    upsert a layer from Fusion
+--   POST sync/worker                             INT-001 master upsert
+--   POST sync/project                            INT-002 master upsert
+--   POST sync/task                               INT-002 master upsert (POET E)
+--   POST sync/allocation                         INT-003 master upsert
+--   POST sync/absence                            INT-006 master upsert
 --   GET  sync/status                             job cards
 --   GET  poet/readiness                          what blocks the OTL push
 --   GET  sync/failed                             failed-record queue
@@ -207,6 +212,602 @@ BEGIN
         COMMIT; :status_code := 200;
         HTP.P('{"layer":"' || v_layer || '","daysSynced":' || v_n ||
               ',"jobRunId":' || v_job || '}');
+      EXCEPTION WHEN OTHERS THEN
+        ROLLBACK; :status_code := 400;
+        HTP.P('{"error":"' || REPLACE(SQLERRM,'"','\"') || '"}');
+      END;
+    ~');
+  COMMIT;
+END;
+/
+
+-- ══════════════════════════════════════════════════════════════
+-- INBOUND MASTER-DATA SYNC  (INT-001 .. INT-003, INT-006)
+--
+-- The loader half of integration/bip. Until these existed the extracts wrote a
+-- CSV and stopped: nothing carried a row into the cache, so the whole inbound
+-- path ended at a file on someone's disk.
+--
+-- Same shape as calendar/sync/:layer above, which is the working precedent:
+-- POST a JSON array, MERGE server-side, record a job. Doing the MERGE here
+-- rather than in Python keeps the upsert next to the constraints it has to
+-- satisfy, and means any caller — BIP loader, OIC, a manual repair — gets
+-- identical behaviour.
+--
+-- Common contract for all five:
+--   :rows      JSON array of records
+--   :jobRunId  optional. Omit on the first chunk to open a job; pass the id
+--              back on later chunks so a 6,000-row load is ONE job row, not
+--              twelve. That is what makes the Sync Status page readable.
+--   :final     'Y' on the last chunk, which closes the job.
+--
+-- ORDER MATTERS: worker -> project -> task -> allocation -> absence.
+-- OC_TIME_ALLOCATION has foreign keys to both project and worker, and
+-- OC_TIME_TASK to project. Load allocations first and every row fails.
+--
+-- Rows that fail land in OC_TIME_SYNC_FAILED rather than aborting the chunk —
+-- one worker with a missing manager must not cost the other 5,975. The
+-- existing POST sync/retry/:failedId then works on them unchanged.
+-- ══════════════════════════════════════════════════════════════
+
+-- ── POST sync/worker  (INT-001) ──────────────────────────────
+BEGIN
+  ORDS.DEFINE_TEMPLATE(p_module_name => 'oc.time.admin', p_pattern => 'sync/worker');
+  ORDS.DEFINE_HANDLER(
+    p_module_name => 'oc.time.admin', p_pattern => 'sync/worker',
+    p_method => 'POST',
+    p_source_type => ORDS.source_type_plsql,
+    p_mimes_allowed => 'application/json',
+    p_source => q'~
+      DECLARE
+        v_job  NUMBER := :jobRunId;
+        v_ok   NUMBER := 0;
+        v_fail NUMBER := 0;
+        v_err  VARCHAR2(2000);
+      BEGIN
+        IF v_job IS NULL THEN
+          INSERT INTO oc_time_sync_job (job_name, job_type, scope_key,
+                                        job_status, triggered_by, trace_id)
+          VALUES ('Master Sync - WORKERS', 'MasterSync', 'WORKER',
+                  'Running', NVL(:actor,'BIP_LOADER'), NVL(:traceId, SYS_GUID()))
+          RETURNING job_run_id INTO v_job;
+        END IF;
+
+        FOR r IN (SELECT * FROM JSON_TABLE(TO_CLOB(:rows), '$[*]'
+                    COLUMNS (
+                      employee_id       VARCHAR2(50)  PATH '$.EMPLOYEE_ID',
+                      employee_name     VARCHAR2(200) PATH '$.EMPLOYEE_NAME',
+                      email             VARCHAR2(200) PATH '$.EMAIL',
+                      worker_type       VARCHAR2(20)  PATH '$.WORKER_TYPE',
+                      base_country      VARCHAR2(60)  PATH '$.BASE_COUNTRY',
+                      std_hours_per_day NUMBER        PATH '$.STD_HOURS_PER_DAY',
+                      manager_emp_id    VARCHAR2(50)  PATH '$.MANAGER_EMP_ID',
+                      legal_employer    VARCHAR2(200) PATH '$.LEGAL_EMPLOYER',
+                      expenditure_org   VARCHAR2(240) PATH '$.EXPENDITURE_ORG',
+                      hire_date         VARCHAR2(10)  PATH '$.HIRE_DATE',
+                      termination_date  VARCHAR2(10)  PATH '$.TERMINATION_DATE',
+                      status            VARCHAR2(20)  PATH '$.STATUS')))
+        LOOP
+          BEGIN
+            MERGE INTO oc_time_worker w
+            USING (SELECT r.employee_id AS eid FROM dual) s
+               ON (w.employee_id = s.eid)
+             WHEN MATCHED THEN UPDATE
+                  SET w.employee_name     = r.employee_name,
+                      w.email             = LOWER(r.email),
+                      w.worker_type       = NVL(r.worker_type,'Employee'),
+                      w.base_country      = r.base_country,
+                      w.std_hours_per_day = NVL(r.std_hours_per_day, 8),
+                      w.manager_emp_id    = r.manager_emp_id,
+                      w.legal_employer    = r.legal_employer,
+                      w.expenditure_org   = r.expenditure_org,
+                      w.hire_date         = TO_DATE(r.hire_date,'YYYY-MM-DD'),
+                      w.termination_date  = TO_DATE(r.termination_date,'YYYY-MM-DD'),
+                      w.status            = NVL(r.status,'Active'),
+                      w.fusion_synced_on  = SYSTIMESTAMP,
+                      w.source_system     = 'FUSION',
+                      w.source_method     = 'BIP',
+                      w.sync_job_run_id   = v_job,
+                      w.updated_by        = NVL(:actor,'BIP_LOADER')
+                  -- APP_ROLE is deliberately NOT touched. It is the app's own
+                  -- entitlement, set here and not present in HCM; overwriting it
+                  -- from an extract would silently demote every manager on the
+                  -- next sync.
+             WHEN NOT MATCHED THEN
+                  INSERT (employee_id, employee_name, email, worker_type,
+                          base_country, std_hours_per_day, manager_emp_id,
+                          legal_employer, expenditure_org, hire_date,
+                          termination_date, status, fusion_synced_on,
+                          source_system, source_method, sync_job_run_id, created_by)
+                  VALUES (r.employee_id, r.employee_name, LOWER(r.email),
+                          NVL(r.worker_type,'Employee'), r.base_country,
+                          NVL(r.std_hours_per_day, 8), r.manager_emp_id,
+                          r.legal_employer, r.expenditure_org,
+                          TO_DATE(r.hire_date,'YYYY-MM-DD'),
+                          TO_DATE(r.termination_date,'YYYY-MM-DD'),
+                          NVL(r.status,'Active'), SYSTIMESTAMP,
+                          'FUSION', 'BIP', v_job, NVL(:actor,'BIP_LOADER'));
+            v_ok := v_ok + 1;
+          EXCEPTION WHEN OTHERS THEN
+            v_err := SUBSTR(SQLERRM, 1, 2000);
+            INSERT INTO oc_time_sync_failed (job_run_id, entity_type, entity_key,
+                                             employee_id, failure_reason,
+                                             failure_code, trace_id)
+            VALUES (v_job, 'WORKER', r.employee_id, r.employee_id,
+                    v_err, SQLCODE, NVL(:traceId,'BIP'));
+            v_fail := v_fail + 1;
+          END;
+        END LOOP;
+
+        UPDATE oc_time_sync_job
+           SET records_read     = NVL(records_read,0)     + v_ok + v_fail,
+               records_upserted = NVL(records_upserted,0) + v_ok,
+               records_failed   = NVL(records_failed,0)   + v_fail,
+               job_status  = CASE WHEN NVL(:final,'N') = 'Y'
+                                  THEN CASE WHEN NVL(records_failed,0) + v_fail > 0
+                                            THEN 'Partial' ELSE 'Success' END
+                                  ELSE 'Running' END,
+               finished_on = CASE WHEN NVL(:final,'N') = 'Y'
+                                  THEN SYSTIMESTAMP END,
+               message     = 'WORKERS upserted ' ||
+                             (NVL(records_upserted,0) + v_ok)
+         WHERE job_run_id = v_job;
+
+        COMMIT; :status_code := 200;
+        HTP.P('{"jobRunId":' || v_job || ',"upserted":' || v_ok ||
+              ',"failed":' || v_fail || '}');
+      EXCEPTION WHEN OTHERS THEN
+        ROLLBACK; :status_code := 400;
+        HTP.P('{"error":"' || REPLACE(SQLERRM,'"','\"') || '"}');
+      END;
+    ~');
+  COMMIT;
+END;
+/
+
+-- ── POST sync/project  (INT-002) ─────────────────────────────
+-- TIME_ENTRY_ENABLED is set from the payload and defaults to 'N'. That is what
+-- keeps this pod's 423 projects out of the employee picker: a project appears
+-- for time entry only when the extract says it should.
+BEGIN
+  ORDS.DEFINE_TEMPLATE(p_module_name => 'oc.time.admin', p_pattern => 'sync/project');
+  ORDS.DEFINE_HANDLER(
+    p_module_name => 'oc.time.admin', p_pattern => 'sync/project',
+    p_method => 'POST',
+    p_source_type => ORDS.source_type_plsql,
+    p_mimes_allowed => 'application/json',
+    p_source => q'~
+      DECLARE
+        v_job  NUMBER := :jobRunId;
+        v_ok   NUMBER := 0;
+        v_fail NUMBER := 0;
+        v_err  VARCHAR2(2000);
+      BEGIN
+        IF v_job IS NULL THEN
+          INSERT INTO oc_time_sync_job (job_name, job_type, scope_key,
+                                        job_status, triggered_by, trace_id)
+          VALUES ('Master Sync - PROJECTS', 'MasterSync', 'PROJECT',
+                  'Running', NVL(:actor,'BIP_LOADER'), NVL(:traceId, SYS_GUID()))
+          RETURNING job_run_id INTO v_job;
+        END IF;
+
+        FOR r IN (SELECT * FROM JSON_TABLE(TO_CLOB(:rows), '$[*]'
+                    COLUMNS (
+                      project_number     VARCHAR2(60)  PATH '$.PROJECT_NUMBER',
+                      project_name       VARCHAR2(240) PATH '$.PROJECT_NAME',
+                      fusion_project_id  VARCHAR2(50)  PATH '$.PROJECT_ID',
+                      customer_name      VARCHAR2(240) PATH '$.CUSTOMER_NAME',
+                      project_type       VARCHAR2(20)  PATH '$.PROJECT_TYPE',
+                      project_manager_id VARCHAR2(50)  PATH '$.PROJECT_MANAGER_ID',
+                      time_entry_enabled VARCHAR2(1)   PATH '$.TIME_ENTRY_ENABLED',
+                      start_date         VARCHAR2(10)  PATH '$.START_DATE',
+                      end_date           VARCHAR2(10)  PATH '$.END_DATE',
+                      status             VARCHAR2(20)  PATH '$.STATUS')))
+        LOOP
+          BEGIN
+            MERGE INTO oc_time_project p
+            USING (SELECT r.project_number AS pn FROM dual) s
+               ON (p.project_number = s.pn)
+             WHEN MATCHED THEN UPDATE
+                  SET p.project_name       = r.project_name,
+                      p.fusion_project_id  = r.fusion_project_id,
+                      p.customer_name      = r.customer_name,
+                      p.project_manager_id = r.project_manager_id,
+                      p.time_entry_enabled = NVL(r.time_entry_enabled,'N'),
+                      p.project_start_date = TO_DATE(r.start_date,'YYYY-MM-DD'),
+                      p.project_end_date   = TO_DATE(r.end_date,'YYYY-MM-DD'),
+                      p.status             = NVL(r.status,'Active'),
+                      p.fusion_synced_on   = SYSTIMESTAMP,
+                      p.source_system      = 'FUSION',
+                      p.source_method      = 'BIP',
+                      p.sync_job_run_id    = v_job,
+                      p.updated_by         = NVL(:actor,'BIP_LOADER')
+                  -- REVENUE_MODEL and LEAVE_LOSS_FLAG are NOT synced: they are
+                  -- commercial attributes this module owns, not Fusion's.
+             WHEN NOT MATCHED THEN
+                  INSERT (project_number, project_name, fusion_project_id,
+                          customer_name, project_type, project_manager_id,
+                          time_entry_enabled, project_start_date, project_end_date,
+                          status, fusion_synced_on, source_system, source_method,
+                          sync_job_run_id, created_by)
+                  VALUES (r.project_number, r.project_name, r.fusion_project_id,
+                          r.customer_name, NVL(r.project_type,'Billable'),
+                          r.project_manager_id, NVL(r.time_entry_enabled,'N'),
+                          TO_DATE(r.start_date,'YYYY-MM-DD'),
+                          TO_DATE(r.end_date,'YYYY-MM-DD'),
+                          NVL(r.status,'Active'), SYSTIMESTAMP,
+                          'FUSION', 'BIP', v_job, NVL(:actor,'BIP_LOADER'));
+            v_ok := v_ok + 1;
+          EXCEPTION WHEN OTHERS THEN
+            v_err := SUBSTR(SQLERRM, 1, 2000);
+            INSERT INTO oc_time_sync_failed (job_run_id, entity_type, entity_key,
+                                             failure_reason, failure_code, trace_id)
+            VALUES (v_job, 'PROJECT', r.project_number, v_err, SQLCODE,
+                    NVL(:traceId,'BIP'));
+            v_fail := v_fail + 1;
+          END;
+        END LOOP;
+
+        UPDATE oc_time_sync_job
+           SET records_read     = NVL(records_read,0)     + v_ok + v_fail,
+               records_upserted = NVL(records_upserted,0) + v_ok,
+               records_failed   = NVL(records_failed,0)   + v_fail,
+               job_status  = CASE WHEN NVL(:final,'N') = 'Y'
+                                  THEN CASE WHEN NVL(records_failed,0) + v_fail > 0
+                                            THEN 'Partial' ELSE 'Success' END
+                                  ELSE 'Running' END,
+               finished_on = CASE WHEN NVL(:final,'N') = 'Y' THEN SYSTIMESTAMP END,
+               message     = 'PROJECTS upserted ' ||
+                             (NVL(records_upserted,0) + v_ok)
+         WHERE job_run_id = v_job;
+
+        COMMIT; :status_code := 200;
+        HTP.P('{"jobRunId":' || v_job || ',"upserted":' || v_ok ||
+              ',"failed":' || v_fail || '}');
+      EXCEPTION WHEN OTHERS THEN
+        ROLLBACK; :status_code := 400;
+        HTP.P('{"error":"' || REPLACE(SQLERRM,'"','\"') || '"}');
+      END;
+    ~');
+  COMMIT;
+END;
+/
+
+-- ── POST sync/task  (INT-002) ────────────────────────────────
+-- Keyed on (project, task code) rather than the Fusion task id, because
+-- UK_OC_TTSK_WBS is what the table actually enforces. EXPENDITURE_TYPE is
+-- carried here — it is POET's E and the reason the OTL push is blocked.
+BEGIN
+  ORDS.DEFINE_TEMPLATE(p_module_name => 'oc.time.admin', p_pattern => 'sync/task');
+  ORDS.DEFINE_HANDLER(
+    p_module_name => 'oc.time.admin', p_pattern => 'sync/task',
+    p_method => 'POST',
+    p_source_type => ORDS.source_type_plsql,
+    p_mimes_allowed => 'application/json',
+    p_source => q'~
+      DECLARE
+        v_job  NUMBER := :jobRunId;
+        v_ok   NUMBER := 0;
+        v_fail NUMBER := 0;
+        v_pid  NUMBER;
+        v_err  VARCHAR2(2000);
+      BEGIN
+        IF v_job IS NULL THEN
+          INSERT INTO oc_time_sync_job (job_name, job_type, scope_key,
+                                        job_status, triggered_by, trace_id)
+          VALUES ('Master Sync - TASKS', 'MasterSync', 'TASK',
+                  'Running', NVL(:actor,'BIP_LOADER'), NVL(:traceId, SYS_GUID()))
+          RETURNING job_run_id INTO v_job;
+        END IF;
+
+        FOR r IN (SELECT * FROM JSON_TABLE(TO_CLOB(:rows), '$[*]'
+                    COLUMNS (
+                      project_number    VARCHAR2(60)  PATH '$.PROJECT_NUMBER',
+                      fusion_task_id    VARCHAR2(50)  PATH '$.TASK_ID',
+                      task_code         VARCHAR2(60)  PATH '$.TASK_NUMBER',
+                      task_name         VARCHAR2(240) PATH '$.TASK_NAME',
+                      chargeable_flag   VARCHAR2(1)   PATH '$.CHARGEABLE_FLAG',
+                      billable_flag     VARCHAR2(1)   PATH '$.BILLABLE_FLAG',
+                      expenditure_type  VARCHAR2(80)  PATH '$.EXPENDITURE_TYPE')))
+        LOOP
+          BEGIN
+            SELECT project_id INTO v_pid
+              FROM oc_time_project WHERE project_number = r.project_number;
+
+            MERGE INTO oc_time_task t
+            USING (SELECT v_pid AS pid, UPPER(r.task_code) AS tc FROM dual) s
+               ON (t.project_id = s.pid AND UPPER(t.task_code) = s.tc)
+             WHEN MATCHED THEN UPDATE
+                  SET t.task_name        = r.task_name,
+                      t.fusion_task_id   = r.fusion_task_id,
+                      t.chargeable_flag  = NVL(r.chargeable_flag,'Y'),
+                      t.billable_type    = CASE WHEN NVL(r.billable_flag,'Y') = 'Y'
+                                                THEN 'Billable' ELSE 'Non-billable' END,
+                      t.expenditure_type = NVL(r.expenditure_type, t.expenditure_type),
+                      t.fusion_synced_on = SYSTIMESTAMP,
+                      t.source_system    = 'FUSION',
+                      t.source_method    = 'BIP',
+                      t.sync_job_run_id  = v_job,
+                      t.updated_by       = NVL(:actor,'BIP_LOADER')
+             WHEN NOT MATCHED THEN
+                  INSERT (project_id, fusion_task_id, task_code, task_name,
+                          task_type, billable_type, chargeable_flag,
+                          expenditure_type, fusion_synced_on, source_system,
+                          source_method, sync_job_run_id, created_by)
+                  VALUES (v_pid, r.fusion_task_id, r.task_code, r.task_name,
+                          'WBS',
+                          CASE WHEN NVL(r.billable_flag,'Y') = 'Y'
+                               THEN 'Billable' ELSE 'Non-billable' END,
+                          NVL(r.chargeable_flag,'Y'), r.expenditure_type,
+                          SYSTIMESTAMP, 'FUSION', 'BIP', v_job,
+                          NVL(:actor,'BIP_LOADER'));
+            v_ok := v_ok + 1;
+          EXCEPTION
+            WHEN NO_DATA_FOUND THEN
+              -- The project is not in the cache. Almost always ordering: the
+              -- PROJECTS chunk has not been loaded yet, or that project was
+              -- filtered out of it.
+              INSERT INTO oc_time_sync_failed (job_run_id, entity_type, entity_key,
+                                               failure_reason, failure_code, trace_id)
+              VALUES (v_job, 'TASK', r.project_number || '/' || r.task_code,
+                      'No project ' || r.project_number ||
+                      ' in the cache - load PROJECTS before TASKS.',
+                      100, NVL(:traceId,'BIP'));
+              v_fail := v_fail + 1;
+            WHEN OTHERS THEN
+              v_err := SUBSTR(SQLERRM, 1, 2000);
+              INSERT INTO oc_time_sync_failed (job_run_id, entity_type, entity_key,
+                                               failure_reason, failure_code, trace_id)
+              VALUES (v_job, 'TASK', r.project_number || '/' || r.task_code,
+                      v_err, SQLCODE, NVL(:traceId,'BIP'));
+              v_fail := v_fail + 1;
+          END;
+        END LOOP;
+
+        UPDATE oc_time_sync_job
+           SET records_read     = NVL(records_read,0)     + v_ok + v_fail,
+               records_upserted = NVL(records_upserted,0) + v_ok,
+               records_failed   = NVL(records_failed,0)   + v_fail,
+               job_status  = CASE WHEN NVL(:final,'N') = 'Y'
+                                  THEN CASE WHEN NVL(records_failed,0) + v_fail > 0
+                                            THEN 'Partial' ELSE 'Success' END
+                                  ELSE 'Running' END,
+               finished_on = CASE WHEN NVL(:final,'N') = 'Y' THEN SYSTIMESTAMP END,
+               message     = 'TASKS upserted ' || (NVL(records_upserted,0) + v_ok)
+         WHERE job_run_id = v_job;
+
+        COMMIT; :status_code := 200;
+        HTP.P('{"jobRunId":' || v_job || ',"upserted":' || v_ok ||
+              ',"failed":' || v_fail || '}');
+      EXCEPTION WHEN OTHERS THEN
+        ROLLBACK; :status_code := 400;
+        HTP.P('{"error":"' || REPLACE(SQLERRM,'"','\"') || '"}');
+      END;
+    ~');
+  COMMIT;
+END;
+/
+
+-- ── POST sync/allocation  (INT-003) ──────────────────────────
+-- The project resource assignment: what each employee may charge to. Carries
+-- the EXPENDITURE_ORG override and the contractor PO reference.
+BEGIN
+  ORDS.DEFINE_TEMPLATE(p_module_name => 'oc.time.admin', p_pattern => 'sync/allocation');
+  ORDS.DEFINE_HANDLER(
+    p_module_name => 'oc.time.admin', p_pattern => 'sync/allocation',
+    p_method => 'POST',
+    p_source_type => ORDS.source_type_plsql,
+    p_mimes_allowed => 'application/json',
+    p_source => q'~
+      DECLARE
+        v_job  NUMBER := :jobRunId;
+        v_ok   NUMBER := 0;
+        v_fail NUMBER := 0;
+        v_pid  NUMBER;
+        v_n    NUMBER;
+        v_err  VARCHAR2(2000);
+      BEGIN
+        IF v_job IS NULL THEN
+          INSERT INTO oc_time_sync_job (job_name, job_type, scope_key,
+                                        job_status, triggered_by, trace_id)
+          VALUES ('Master Sync - ALLOCATIONS', 'MasterSync', 'ALLOCATION',
+                  'Running', NVL(:actor,'BIP_LOADER'), NVL(:traceId, SYS_GUID()))
+          RETURNING job_run_id INTO v_job;
+        END IF;
+
+        FOR r IN (SELECT * FROM JSON_TABLE(TO_CLOB(:rows), '$[*]'
+                    COLUMNS (
+                      project_number   VARCHAR2(60)  PATH '$.PROJECT_NUMBER',
+                      employee_id      VARCHAR2(50)  PATH '$.EMPLOYEE_ID',
+                      alloc_pct        NUMBER        PATH '$.ALLOC_PCT',
+                      client_role      VARCHAR2(120) PATH '$.CLIENT_ROLE',
+                      expenditure_org  VARCHAR2(240) PATH '$.EXPENDITURE_ORG',
+                      po_number        VARCHAR2(60)  PATH '$.PO_NUMBER',
+                      po_line_number   VARCHAR2(30)  PATH '$.PO_LINE_NUMBER',
+                      price_type       VARCHAR2(30)  PATH '$.PRICE_TYPE',
+                      start_date       VARCHAR2(10)  PATH '$.START_DATE',
+                      end_date         VARCHAR2(10)  PATH '$.END_DATE')))
+        LOOP
+          BEGIN
+            SELECT project_id INTO v_pid
+              FROM oc_time_project WHERE project_number = r.project_number;
+
+            SELECT COUNT(*) INTO v_n
+              FROM oc_time_worker WHERE employee_id = r.employee_id;
+            IF v_n = 0 THEN
+              RAISE_APPLICATION_ERROR(-20001,
+                'No worker ' || r.employee_id ||
+                ' in the cache - load WORKERS before ALLOCATIONS.');
+            END IF;
+
+            -- UK_OC_TAL_ASSIGN is (project, employee, start_date), but the
+            -- extract already collapses each pair to ONE span, so matching on
+            -- the pair alone is right here: a changed start date is the same
+            -- assignment moving, not a second one.
+            MERGE INTO oc_time_allocation a
+            USING (SELECT v_pid AS pid, r.employee_id AS eid FROM dual) s
+               ON (a.project_id = s.pid AND a.employee_id = s.eid)
+             WHEN MATCHED THEN UPDATE
+                  SET a.alloc_pct        = NVL(r.alloc_pct, a.alloc_pct),
+                      a.client_role      = r.client_role,
+                      a.expenditure_org  = r.expenditure_org,
+                      a.po_number        = r.po_number,
+                      a.po_line_number   = r.po_line_number,
+                      a.price_type       = r.price_type,
+                      a.end_date         = TO_DATE(r.end_date,'YYYY-MM-DD'),
+                      a.fusion_synced_on = SYSTIMESTAMP,
+                      a.source_system    = 'FUSION',
+                      a.source_method    = 'BIP',
+                      a.sync_job_run_id  = v_job,
+                      a.updated_by       = NVL(:actor,'BIP_LOADER')
+                  -- BILLING_STATUS and APPROVING_MANAGER_ID stay: the first is
+                  -- this module's own commercial classification, the second is
+                  -- resolved from the project manager, not the assignment.
+             WHEN NOT MATCHED THEN
+                  INSERT (project_id, employee_id, alloc_pct, client_role,
+                          expenditure_org, po_number, po_line_number, price_type,
+                          start_date, end_date, fusion_synced_on, source_system,
+                          source_method, sync_job_run_id, created_by)
+                  VALUES (v_pid, r.employee_id, NVL(r.alloc_pct,100),
+                          r.client_role, r.expenditure_org, r.po_number,
+                          r.po_line_number, r.price_type,
+                          NVL(TO_DATE(r.start_date,'YYYY-MM-DD'), TRUNC(SYSDATE)),
+                          TO_DATE(r.end_date,'YYYY-MM-DD'), SYSTIMESTAMP,
+                          'FUSION', 'BIP', v_job, NVL(:actor,'BIP_LOADER'));
+            v_ok := v_ok + 1;
+          EXCEPTION
+            WHEN NO_DATA_FOUND THEN
+              INSERT INTO oc_time_sync_failed (job_run_id, entity_type, entity_key,
+                                               employee_id, failure_reason,
+                                               failure_code, trace_id)
+              VALUES (v_job, 'ALLOCATION',
+                      r.project_number || '/' || r.employee_id, r.employee_id,
+                      'No project ' || r.project_number ||
+                      ' in the cache - load PROJECTS before ALLOCATIONS.',
+                      100, NVL(:traceId,'BIP'));
+              v_fail := v_fail + 1;
+            WHEN OTHERS THEN
+              v_err := SUBSTR(SQLERRM, 1, 2000);
+              INSERT INTO oc_time_sync_failed (job_run_id, entity_type, entity_key,
+                                               employee_id, failure_reason,
+                                               failure_code, trace_id)
+              VALUES (v_job, 'ALLOCATION',
+                      r.project_number || '/' || r.employee_id, r.employee_id,
+                      v_err, SQLCODE, NVL(:traceId,'BIP'));
+              v_fail := v_fail + 1;
+          END;
+        END LOOP;
+
+        UPDATE oc_time_sync_job
+           SET records_read     = NVL(records_read,0)     + v_ok + v_fail,
+               records_upserted = NVL(records_upserted,0) + v_ok,
+               records_failed   = NVL(records_failed,0)   + v_fail,
+               job_status  = CASE WHEN NVL(:final,'N') = 'Y'
+                                  THEN CASE WHEN NVL(records_failed,0) + v_fail > 0
+                                            THEN 'Partial' ELSE 'Success' END
+                                  ELSE 'Running' END,
+               finished_on = CASE WHEN NVL(:final,'N') = 'Y' THEN SYSTIMESTAMP END,
+               message     = 'ALLOCATIONS upserted ' ||
+                             (NVL(records_upserted,0) + v_ok)
+         WHERE job_run_id = v_job;
+
+        COMMIT; :status_code := 200;
+        HTP.P('{"jobRunId":' || v_job || ',"upserted":' || v_ok ||
+              ',"failed":' || v_fail || '}');
+      EXCEPTION WHEN OTHERS THEN
+        ROLLBACK; :status_code := 400;
+        HTP.P('{"error":"' || REPLACE(SQLERRM,'"','\"') || '"}');
+      END;
+    ~');
+  COMMIT;
+END;
+/
+
+-- ── POST sync/absence  (INT-006) ─────────────────────────────
+-- Read-only in this app: absences generate the Leave row and the leave-loss
+-- absentee list, and are never re-sent downstream (RULE-008).
+BEGIN
+  ORDS.DEFINE_TEMPLATE(p_module_name => 'oc.time.admin', p_pattern => 'sync/absence');
+  ORDS.DEFINE_HANDLER(
+    p_module_name => 'oc.time.admin', p_pattern => 'sync/absence',
+    p_method => 'POST',
+    p_source_type => ORDS.source_type_plsql,
+    p_mimes_allowed => 'application/json',
+    p_source => q'~
+      DECLARE
+        v_job  NUMBER := :jobRunId;
+        v_ok   NUMBER := 0;
+        v_fail NUMBER := 0;
+        v_err  VARCHAR2(2000);
+      BEGIN
+        IF v_job IS NULL THEN
+          INSERT INTO oc_time_sync_job (job_name, job_type, scope_key,
+                                        job_status, triggered_by, trace_id)
+          VALUES ('Master Sync - ABSENCES', 'MasterSync', 'ABSENCE',
+                  'Running', NVL(:actor,'BIP_LOADER'), NVL(:traceId, SYS_GUID()))
+          RETURNING job_run_id INTO v_job;
+        END IF;
+
+        FOR r IN (SELECT * FROM JSON_TABLE(TO_CLOB(:rows), '$[*]'
+                    COLUMNS (
+                      employee_id     VARCHAR2(50)  PATH '$.EMPLOYEE_ID',
+                      absence_date    VARCHAR2(10)  PATH '$.ABSENCE_DATE',
+                      absence_type    VARCHAR2(100) PATH '$.ABSENCE_TYPE',
+                      absence_hours   NUMBER        PATH '$.DURATION_HOURS',
+                      approval_status VARCHAR2(30)  PATH '$.APPROVAL_STATUS')))
+        LOOP
+          BEGIN
+            MERGE INTO oc_time_absence ab
+            USING (SELECT r.employee_id AS eid,
+                          TO_DATE(r.absence_date,'YYYY-MM-DD') AS ad,
+                          r.absence_type AS at FROM dual) s
+               ON (ab.employee_id = s.eid AND ab.absence_date = s.ad
+               AND ab.absence_type = s.at)
+             WHEN MATCHED THEN UPDATE
+                  SET ab.absence_hours    = NVL(r.absence_hours, 0),
+                      ab.approval_status  = NVL(r.approval_status,'Approved'),
+                      ab.fusion_synced_on = SYSTIMESTAMP,
+                      ab.source_system    = 'FUSION',
+                      ab.source_method    = 'BIP',
+                      ab.sync_job_run_id  = v_job,
+                      ab.updated_by       = NVL(:actor,'BIP_LOADER')
+             WHEN NOT MATCHED THEN
+                  INSERT (employee_id, absence_date, absence_type, absence_hours,
+                          approval_status, fusion_synced_on, source_system,
+                          source_method, sync_job_run_id, created_by)
+                  VALUES (r.employee_id, TO_DATE(r.absence_date,'YYYY-MM-DD'),
+                          r.absence_type, NVL(r.absence_hours,0),
+                          NVL(r.approval_status,'Approved'), SYSTIMESTAMP,
+                          'FUSION', 'BIP', v_job, NVL(:actor,'BIP_LOADER'));
+            v_ok := v_ok + 1;
+          EXCEPTION WHEN OTHERS THEN
+            v_err := SUBSTR(SQLERRM, 1, 2000);
+            INSERT INTO oc_time_sync_failed (job_run_id, entity_type, entity_key,
+                                             employee_id, failure_reason,
+                                             failure_code, trace_id)
+            VALUES (v_job, 'ABSENCE',
+                    r.employee_id || '/' || r.absence_date, r.employee_id,
+                    v_err, SQLCODE, NVL(:traceId,'BIP'));
+            v_fail := v_fail + 1;
+          END;
+        END LOOP;
+
+        UPDATE oc_time_sync_job
+           SET records_read     = NVL(records_read,0)     + v_ok + v_fail,
+               records_upserted = NVL(records_upserted,0) + v_ok,
+               records_failed   = NVL(records_failed,0)   + v_fail,
+               job_status  = CASE WHEN NVL(:final,'N') = 'Y'
+                                  THEN CASE WHEN NVL(records_failed,0) + v_fail > 0
+                                            THEN 'Partial' ELSE 'Success' END
+                                  ELSE 'Running' END,
+               finished_on = CASE WHEN NVL(:final,'N') = 'Y' THEN SYSTIMESTAMP END,
+               message     = 'ABSENCES upserted ' ||
+                             (NVL(records_upserted,0) + v_ok)
+         WHERE job_run_id = v_job;
+
+        COMMIT; :status_code := 200;
+        HTP.P('{"jobRunId":' || v_job || ',"upserted":' || v_ok ||
+              ',"failed":' || v_fail || '}');
       EXCEPTION WHEN OTHERS THEN
         ROLLBACK; :status_code := 400;
         HTP.P('{"error":"' || REPLACE(SQLERRM,'"','\"') || '"}');

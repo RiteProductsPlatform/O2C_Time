@@ -23,7 +23,7 @@ SET DEFINE OFF
 SET SERVEROUTPUT ON
 
 PROMPT ============================================================
-PROMPT [1/9] OC_TIME_WORKER — HCM worker / assignment cache
+PROMPT [1/11] OC_TIME_WORKER — HCM worker / assignment cache
 PROMPT ============================================================
 
 BEGIN
@@ -74,7 +74,7 @@ EXCEPTION WHEN OTHERS THEN IF SQLCODE = -955 THEN NULL; ELSE RAISE; END IF; END;
 /
 
 PROMPT ============================================================
-PROMPT [2/9] OC_TIME_PROJECT — PPM project cache
+PROMPT [2/11] OC_TIME_PROJECT — PPM project cache
 PROMPT ============================================================
 
 -- PROJECT_TYPE (Data_Dictionaries project_type):
@@ -130,7 +130,7 @@ EXCEPTION WHEN OTHERS THEN IF SQLCODE = -955 THEN NULL; ELSE RAISE; END IF; END;
 /
 
 PROMPT ============================================================
-PROMPT [3/9] OC_TIME_TASK — WBS tasks + common non-billable tasks
+PROMPT [3/11] OC_TIME_TASK — WBS tasks + common non-billable tasks
 PROMPT ============================================================
 
 -- RULE-010: a charged task must be in the project's WBS OR be a common task.
@@ -198,7 +198,7 @@ EXCEPTION WHEN OTHERS THEN IF SQLCODE = -955 THEN NULL; ELSE RAISE; END IF; END;
 /
 
 PROMPT ============================================================
-PROMPT [4/9] OC_TIME_ALLOCATION — PPM resource assignment cache
+PROMPT [4/11] OC_TIME_ALLOCATION — PPM resource assignment cache
 PROMPT ============================================================
 
 -- INT-003. Drives (a) which projects appear in the employee's grid (FLD-006),
@@ -257,7 +257,7 @@ EXCEPTION WHEN OTHERS THEN IF SQLCODE = -955 THEN NULL; ELSE RAISE; END IF; END;
 /
 
 PROMPT ============================================================
-PROMPT [5/9] OC_TIME_ABSENCE — HCM absence cache
+PROMPT [5/11] OC_TIME_ABSENCE — HCM absence cache
 PROMPT ============================================================
 
 -- INT-006. Leave is HR-sourced and NOT selectable by the employee (RULE-008):
@@ -303,7 +303,7 @@ EXCEPTION WHEN OTHERS THEN IF SQLCODE = -955 THEN NULL; ELSE RAISE; END IF; END;
 /
 
 PROMPT ============================================================
-PROMPT [6/9] Master-data audit triggers
+PROMPT [6/11] Master-data audit triggers
 PROMPT ============================================================
 
 CREATE OR REPLACE TRIGGER trg_oc_tw_audit
@@ -358,7 +358,7 @@ END;
 /
 
 PROMPT ============================================================
-PROMPT [7/9] Master caches — sync provenance columns
+PROMPT [7/11] Master caches — sync provenance columns
 PROMPT ============================================================
 
 -- Which transport last wrote each cached row, and on which run.
@@ -434,7 +434,7 @@ EXCEPTION WHEN OTHERS THEN IF SQLCODE = -955 THEN NULL; ELSE RAISE; END IF; END;
 /
 
 PROMPT ============================================================
-PROMPT [8/9] OC_TIME_PROJECT — main O2C application project id
+PROMPT [8/11] OC_TIME_PROJECT — main O2C application project id
 PROMPT ============================================================
 
 -- MAIN_PROJECT_ID is OC_PROJECT.PROJECT_ID in the main O2C application.
@@ -474,7 +474,7 @@ EXCEPTION WHEN OTHERS THEN IF SQLCODE = -955 THEN NULL; ELSE RAISE; END IF; END;
 /
 
 PROMPT ============================================================
-PROMPT [9/9] POET — expenditure type and organization (INT-007)
+PROMPT [9/11] POET — expenditure type and organization (INT-007)
 PROMPT ============================================================
 
 -- An OTL time card is keyed on POET: Project / Organization / Expenditure type
@@ -526,6 +526,77 @@ BEGIN
   DBMS_OUTPUT.PUT_LINE('POET columns added: ' || v_n || ' (0 = already present)');
 END;
 /
+
+PROMPT ============================================================
+PROMPT [10/11] Inbound guards — time-entry filter, contractor PO
+PROMPT ============================================================
+
+-- Two columns the real Fusion sync needs and the twelve-row test seed never
+-- exposed. Both from doc/CrewRite_Reuse_Assessment.md, where they are recorded
+-- as verified-absent gaps.
+--
+-- TIME_ENTRY_ENABLED (§2.4) — WITHOUT THIS THE PROJECT PICKER IS UNUSABLE.
+-- We filter projects on status = 'Active' alone. In a real instance that is
+-- every active project in the enterprise: this pod has 423, against the four in
+-- the seed. All of them would reach V_OC_TS_TASK_LOV and the employee's project
+-- picker, including projects nobody charges time to. CrewRite solved it with a
+-- 'Crew Time Entry Enabled' flag (CR-B-BR08) and the same shape works here.
+--
+-- Defaults to 'N', deliberately. A project appears for time entry only when
+-- something says it should, so a newly synced project cannot silently widen
+-- what employees can charge to. That does mean the sync must set it — which is
+-- exactly the point of a default that fails closed.
+--
+-- PO_NUMBER / PO_LINE_NUMBER / PRICE_TYPE (§2.5) — contingent workers.
+-- We model contractors and RULE-021 gives their unbilled hours an exception
+-- path, but we hold no purchase-order reference. CrewRite makes PO mandatory
+-- when the system person type is CWK, because that time creates AP receipts by
+-- pass-through. This also gives RA-012 something concrete: contractors are
+-- excluded from salary stopping precisely because their pay is invoice-driven,
+-- and a PO is what makes invoice-driven time actionable.
+--
+-- Nullable, and not constrained to Contractor here: the check belongs in
+-- OC_TIME_PKG with the other rules, not in the DDL, so it can carry a message.
+DECLARE
+  v_n PLS_INTEGER := 0;
+
+  PROCEDURE add_col(p_table IN VARCHAR2, p_col IN VARCHAR2, p_type IN VARCHAR2) IS
+  BEGIN
+    EXECUTE IMMEDIATE 'ALTER TABLE ' || p_table || ' ADD ' || p_col || ' ' || p_type;
+    v_n := v_n + 1;
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLCODE = -1430 THEN NULL; ELSE RAISE; END IF;
+  END;
+BEGIN
+  add_col('oc_time_project',    'time_entry_enabled', 'CHAR(1) DEFAULT ''N''');
+  add_col('oc_time_allocation', 'po_number',          'VARCHAR2(60 CHAR)');
+  add_col('oc_time_allocation', 'po_line_number',     'VARCHAR2(30 CHAR)');
+  add_col('oc_time_allocation', 'price_type',         'VARCHAR2(30 CHAR)');
+
+  DBMS_OUTPUT.PUT_LINE('inbound guard columns added: ' || v_n);
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE 'ALTER TABLE oc_time_project ADD CONSTRAINT ' ||
+    'chk_oc_tprj_tee CHECK (time_entry_enabled IN (''Y'',''N''))';
+EXCEPTION WHEN OTHERS THEN
+  IF SQLCODE IN (-2264, -2275, -2261) THEN NULL; ELSE RAISE; END IF;
+END;
+/
+
+-- The seeded test projects predate the flag and would vanish from the picker
+-- the moment it starts being enforced. Only the four PRJ-% rows the test seed
+-- created — a real synced project stays 'N' until the sync says otherwise.
+UPDATE oc_time_project
+   SET time_entry_enabled = 'Y'
+ WHERE project_number LIKE 'PRJ-%'
+   AND NVL(time_entry_enabled,'N') = 'N';
+COMMIT;
+
+PROMPT ============================================================
+PROMPT [11/11] POET readiness view
+PROMPT ============================================================
 
 -- What is stopping the OTL push, per project.
 --

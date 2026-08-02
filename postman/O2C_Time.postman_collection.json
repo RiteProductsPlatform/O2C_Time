@@ -2129,6 +2129,76 @@
           }
         },
         {
+          "name": "syncAbsence",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/admin/sync/absence",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "admin",
+                "sync",
+                "absence"
+              ]
+            },
+            "description": "INT-006 master-data upsert. HCM absences. Read-only in this app and never re-sent downstream (RULE-008). Chunked: omit jobRunId on the first call, pass it back on later ones so the load is one job row; final=Y closes it. Bad rows go to OC_TIME_SYNC_FAILED rather than aborting the chunk.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rows\": [\n    {}\n  ],\n  \"jobRunId\": 0,\n  \"final\": \"\",\n  \"actor\": \"{{actorEmail}}\",\n  \"traceId\": \"{{$guid}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "syncAllocation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/admin/sync/allocation",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "admin",
+                "sync",
+                "allocation"
+              ]
+            },
+            "description": "INT-003 master-data upsert. Project resource assignments. Load WORKERS and PROJECTS first - FKs to both. Chunked: omit jobRunId on the first call, pass it back on later ones so the load is one job row; final=Y closes it. Bad rows go to OC_TIME_SYNC_FAILED rather than aborting the chunk.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rows\": [\n    {}\n  ],\n  \"jobRunId\": 0,\n  \"final\": \"\",\n  \"actor\": \"{{actorEmail}}\",\n  \"traceId\": \"{{$guid}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
           "name": "getSyncFailed",
           "request": {
             "method": "GET",
@@ -2147,6 +2217,41 @@
               ]
             },
             "description": "Failed-record queue (new hire without allocation, missing shift calendar)"
+          }
+        },
+        {
+          "name": "syncProject",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/admin/sync/project",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "admin",
+                "sync",
+                "project"
+              ]
+            },
+            "description": "INT-002 master-data upsert. PPM projects. TIME_ENTRY_ENABLED defaults to N so a synced project cannot silently widen what employees may charge to. Chunked: omit jobRunId on the first call, pass it back on later ones so the load is one job row; final=Y closes it. Bad rows go to OC_TIME_SYNC_FAILED rather than aborting the chunk.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rows\": [\n    {}\n  ],\n  \"jobRunId\": 0,\n  \"final\": \"\",\n  \"actor\": \"{{actorEmail}}\",\n  \"traceId\": \"{{$guid}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
           }
         },
         {
@@ -2204,6 +2309,76 @@
               ]
             },
             "description": "Latest run per job: monthly population, daily action-date, calendar, defaulting (PAGE-010)"
+          }
+        },
+        {
+          "name": "syncTask",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/admin/sync/task",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "admin",
+                "sync",
+                "task"
+              ]
+            },
+            "description": "INT-002 master-data upsert. PPM WBS tasks, carrying EXPENDITURE_TYPE (POET’s E). Load PROJECTS first - the FK is to project. Chunked: omit jobRunId on the first call, pass it back on later ones so the load is one job row; final=Y closes it. Bad rows go to OC_TIME_SYNC_FAILED rather than aborting the chunk.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rows\": [\n    {}\n  ],\n  \"jobRunId\": 0,\n  \"final\": \"\",\n  \"actor\": \"{{actorEmail}}\",\n  \"traceId\": \"{{$guid}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "syncWorker",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/admin/sync/worker",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "admin",
+                "sync",
+                "worker"
+              ]
+            },
+            "description": "INT-001 master-data upsert. HCM workers. APP_ROLE is never overwritten - it is this app’s entitlement, not HCM’s. Chunked: omit jobRunId on the first call, pass it back on later ones so the load is one job row; final=Y closes it. Bad rows go to OC_TIME_SYNC_FAILED rather than aborting the chunk.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rows\": [\n    {}\n  ],\n  \"jobRunId\": 0,\n  \"final\": \"\",\n  \"actor\": \"{{actorEmail}}\",\n  \"traceId\": \"{{$guid}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
           }
         }
       ]

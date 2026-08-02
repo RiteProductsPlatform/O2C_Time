@@ -147,6 +147,109 @@ def cmd_run(args) -> int:
     return rc
 
 
+# Which sync endpoint each extract loads through, and in what order.
+#
+# ORDER IS A FOREIGN-KEY CONSTRAINT, not a preference. OC_TIME_ALLOCATION has
+# FKs to both project and worker, OC_TIME_TASK to project. Load allocations
+# first and every row lands in OC_TIME_SYNC_FAILED.
+LOAD_ORDER = [
+    ("WORKERS", "worker"),
+    ("PROJECTS", "project"),
+    ("TASKS", "task"),
+    ("ALLOCATIONS", "allocation"),
+    ("ABSENCES", "absence"),
+]
+
+# 500 rows per POST. Small enough that one CLOB stays comfortable and a failure
+# costs little to repeat; large enough that 5,976 workers is twelve calls.
+CHUNK = 500
+
+
+def cmd_load(args) -> int:
+    """
+    Extract from Fusion, then POST into the ORDS cache.
+
+    This is the step that did not exist: --run wrote a CSV and stopped, so the
+    inbound path ended at a file and OC_TIME_* stayed empty.
+
+    The MERGE deliberately lives in ORDS, not here. It sits next to the
+    constraints it has to satisfy, and any caller — this loader, OIC, a manual
+    repair — gets identical behaviour. This end only chunks and reports.
+    """
+    import json
+    import urllib.request
+
+    base = args.ords_base or os.environ.get("ORDS_BASE_URL")
+    if not base:
+        raise SystemExit("--load needs --ords-base or ORDS_BASE_URL "
+                         "(e.g. https://host/ords/o2c_time)")
+    base = base.rstrip("/")
+
+    c = _client(args)
+    eff = args.effective_date
+    selected = {e["name"] for e in _selected(args.load)}
+    rc = 0
+
+    for name, entity in LOAD_ORDER:
+        if name not in selected:
+            continue
+
+        ex = BY_NAME[name]
+        try:
+            rows = _run_one(c, ex, eff, args.chunked)
+        except BipError as exc:
+            print("  FAILED  %-12s extract: %s" % (name, str(exc)[:120]))
+            rc = 1
+            continue
+
+        cols = ex["columns"]
+        job_id: Optional[int] = None
+        up = fail = 0
+        t0 = time.time()
+
+        for i in range(0, len(rows), CHUNK):
+            chunk = [{k: r.get(k, "") for k in cols} for r in rows[i:i + CHUNK]]
+            payload = {
+                "rows": chunk,
+                "actor": "BIP_LOADER",
+                # The job id threads through every chunk so a 6,000-row load is
+                # ONE row on the Sync Status page rather than twelve.
+                "jobRunId": job_id,
+                "final": "Y" if i + CHUNK >= len(rows) else "N",
+            }
+            req = urllib.request.Request(
+                "%s/oc/time/admin/sync/%s" % (base, entity),
+                data=json.dumps(payload).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST")
+            try:
+                with urllib.request.urlopen(req, timeout=300) as resp:
+                    body = json.loads(resp.read().decode("utf-8"))
+            except Exception as exc:                      # noqa: BLE001
+                print("  FAILED  %-12s chunk %d: %s"
+                      % (name, i // CHUNK, str(exc)[:120]))
+                rc = 1
+                break
+
+            if body.get("error"):
+                print("  FAILED  %-12s chunk %d: %s"
+                      % (name, i // CHUNK, body["error"][:120]))
+                rc = 1
+                break
+
+            job_id = body.get("jobRunId", job_id)
+            up += body.get("upserted", 0)
+            fail += body.get("failed", 0)
+
+        flag = "  <-- check sync/failed" if fail else ""
+        print("  %-12s %6d upserted  %4d failed  %5.1fs  job %s%s"
+              % (name, up, fail, time.time() - t0, job_id, flag))
+
+    print("\nRows that failed are queued in OC_TIME_SYNC_FAILED and visible on "
+          "the Sync Status page; POST sync/retry/{failedId} re-drives one.")
+    return rc
+
+
 def _selected(value: str) -> List[Dict]:
     """
     Resolve the --run / --validate / --deploy selector to extract definitions.
@@ -190,11 +293,16 @@ def main(argv=None) -> int:
                    help="compile and count rows, write nothing")
     g.add_argument("--run", nargs="?", const="ALL", metavar="NAMES",
                    help="run and write CSV")
+    g.add_argument("--load", nargs="?", const="ALL", metavar="NAMES",
+                   help="run AND post into the ORDS cache (the full inbound path)")
     ap.add_argument("--out", default="./extracts", help="CSV output directory")
     ap.add_argument("--effective-date", default=date.today().isoformat(),
                     help="AS OF date for the effective-dated joins (YYYY-MM-DD)")
     ap.add_argument("--chunked", action="store_true",
                     help="stage and page the output — use for bulk extracts")
+    ap.add_argument("--ords-base", default=None,
+                    help="ORDS base for --load, e.g. https://host/ords/o2c_time "
+                         "(or set ORDS_BASE_URL)")
     ap.add_argument("--insecure", action="store_true",
                     help="skip TLS verification (lower environments only)")
     ap.add_argument("--verbose", action="store_true")
@@ -209,6 +317,8 @@ def main(argv=None) -> int:
             return cmd_validate(args)
         if args.run:
             return cmd_run(args)
+        if args.load:
+            return cmd_load(args)
     except BipError as exc:
         print("ERROR: %s" % exc, file=sys.stderr)
         return 1

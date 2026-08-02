@@ -946,6 +946,98 @@
         }
       }
     },
+    "/oc/time/admin/sync/absence": {
+      "post": {
+        "operationId": "syncAbsence",
+        "summary": "INT-006 master-data upsert. HCM absences. Read-only in this app and never re-sent downstream (RULE-008). Chunked: omit jobRunId on the first call, pass it back on later ones so the load is one job row; final=Y closes it. Bad rows go to OC_TIME_SYNC_FAILED rather than aborting the chunk.",
+        "x-vb": {
+          "actionHint": "create"
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "rows": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    }
+                  },
+                  "jobRunId": {
+                    "type": "integer"
+                  },
+                  "final": {
+                    "type": "string"
+                  },
+                  "actor": {
+                    "type": "string"
+                  },
+                  "traceId": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "jobRunId, upserted, failed"
+          },
+          "400": {
+            "description": "The chunk could not be processed at all"
+          }
+        }
+      }
+    },
+    "/oc/time/admin/sync/allocation": {
+      "post": {
+        "operationId": "syncAllocation",
+        "summary": "INT-003 master-data upsert. Project resource assignments. Load WORKERS and PROJECTS first - FKs to both. Chunked: omit jobRunId on the first call, pass it back on later ones so the load is one job row; final=Y closes it. Bad rows go to OC_TIME_SYNC_FAILED rather than aborting the chunk.",
+        "x-vb": {
+          "actionHint": "create"
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "rows": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    }
+                  },
+                  "jobRunId": {
+                    "type": "integer"
+                  },
+                  "final": {
+                    "type": "string"
+                  },
+                  "actor": {
+                    "type": "string"
+                  },
+                  "traceId": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "jobRunId, upserted, failed"
+          },
+          "400": {
+            "description": "The chunk could not be processed at all"
+          }
+        }
+      }
+    },
     "/oc/time/admin/sync/failed": {
       "get": {
         "operationId": "getSyncFailed",
@@ -986,6 +1078,52 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/oc/time/admin/sync/project": {
+      "post": {
+        "operationId": "syncProject",
+        "summary": "INT-002 master-data upsert. PPM projects. TIME_ENTRY_ENABLED defaults to N so a synced project cannot silently widen what employees may charge to. Chunked: omit jobRunId on the first call, pass it back on later ones so the load is one job row; final=Y closes it. Bad rows go to OC_TIME_SYNC_FAILED rather than aborting the chunk.",
+        "x-vb": {
+          "actionHint": "create"
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "rows": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    }
+                  },
+                  "jobRunId": {
+                    "type": "integer"
+                  },
+                  "final": {
+                    "type": "string"
+                  },
+                  "actor": {
+                    "type": "string"
+                  },
+                  "traceId": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "jobRunId, upserted, failed"
+          },
+          "400": {
+            "description": "The chunk could not be processed at all"
           }
         }
       }
@@ -1070,6 +1208,98 @@
             "description": "Cache-buster. A GET refreshed after a write must not be served from a browser 304."
           }
         ]
+      }
+    },
+    "/oc/time/admin/sync/task": {
+      "post": {
+        "operationId": "syncTask",
+        "summary": "INT-002 master-data upsert. PPM WBS tasks, carrying EXPENDITURE_TYPE (POET’s E). Load PROJECTS first - the FK is to project. Chunked: omit jobRunId on the first call, pass it back on later ones so the load is one job row; final=Y closes it. Bad rows go to OC_TIME_SYNC_FAILED rather than aborting the chunk.",
+        "x-vb": {
+          "actionHint": "create"
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "rows": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    }
+                  },
+                  "jobRunId": {
+                    "type": "integer"
+                  },
+                  "final": {
+                    "type": "string"
+                  },
+                  "actor": {
+                    "type": "string"
+                  },
+                  "traceId": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "jobRunId, upserted, failed"
+          },
+          "400": {
+            "description": "The chunk could not be processed at all"
+          }
+        }
+      }
+    },
+    "/oc/time/admin/sync/worker": {
+      "post": {
+        "operationId": "syncWorker",
+        "summary": "INT-001 master-data upsert. HCM workers. APP_ROLE is never overwritten - it is this app’s entitlement, not HCM’s. Chunked: omit jobRunId on the first call, pass it back on later ones so the load is one job row; final=Y closes it. Bad rows go to OC_TIME_SYNC_FAILED rather than aborting the chunk.",
+        "x-vb": {
+          "actionHint": "create"
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "rows": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    }
+                  },
+                  "jobRunId": {
+                    "type": "integer"
+                  },
+                  "final": {
+                    "type": "string"
+                  },
+                  "actor": {
+                    "type": "string"
+                  },
+                  "traceId": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "jobRunId, upserted, failed"
+          },
+          "400": {
+            "description": "The chunk could not be processed at all"
+          }
+        }
       }
     },
     "/oc/time/allocation/{employeeId}": {

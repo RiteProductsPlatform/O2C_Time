@@ -29,7 +29,17 @@ python run_extract.py --validate                    # compile + row counts, writ
 python run_extract.py --deploy                      # publish models (once per pod)
 python run_extract.py --run ALL --chunked --out ./extracts
 python run_extract.py --run WORKERS --effective-date 2026-08-01
+
+# the full inbound path: extract AND load into the cache
+export ORDS_BASE_URL=https://ords-sit.rite.digital/ords/o2c_time
+python run_extract.py --load ALL
+python run_extract.py --load WORKERS,PROJECTS
 ```
+
+`--run` writes CSV. `--load` does the same extract and then POSTs it into the
+`OC_TIME_*` cache. Until `--load` existed the inbound path **stopped at the
+file** — the CSVs were written and nothing carried a row into the database, so
+the only master data the app ever had came from `90_test_seed.sql`.
 
 `--deploy` needs **BI Data Model Developer**. `--run` alone needs only the right
 to run the models someone else deployed — that is the right split for a
@@ -111,35 +121,91 @@ side is collapsed by the outer `GROUP BY` into one span (earliest start, latest
 end). `BILLABLE_PERCENT` is **SUM**med, not MAXed — one person can hold two
 concurrent assignments on a project and RULE-001 cares about the combined load.
 
+## How --load works
+
+Chunks of 500 rows to `POST /oc/time/admin/sync/{entity}`. The MERGE lives in
+ORDS, not here — next to the constraints it has to satisfy, so this loader, OIC
+and a manual repair all behave identically.
+
+**Order is a foreign-key constraint, not a preference:**
+
+```
+WORKERS -> PROJECTS -> TASKS -> ALLOCATIONS -> ABSENCES
+```
+
+`OC_TIME_ALLOCATION` has FKs to both project and worker, `OC_TIME_TASK` to
+project. Load allocations first and every row fails. `--load ALL` walks this
+order regardless of the order you name things in.
+
+**One job row per entity, not per chunk.** The first chunk opens an
+`OC_TIME_SYNC_JOB` and the response returns its id; later chunks pass it back.
+So 5,976 workers is one line on the Sync Status page, not twelve.
+
+**A bad row does not cost the batch.** Failures go to `OC_TIME_SYNC_FAILED` with
+the reason, and the run continues — one worker with a missing manager must not
+lose the other 5,975. `POST sync/retry/{failedId}` re-drives one once the cause
+is fixed.
+
+**What the sync deliberately does not overwrite:**
+
+| Column | Why |
+|---|---|
+| `OC_TIME_WORKER.APP_ROLE` | this app's entitlement, not HCM's — syncing it would demote every manager |
+| `OC_TIME_PROJECT.REVENUE_MODEL`, `LEAVE_LOSS_FLAG` | commercial attributes this module owns |
+| `OC_TIME_ALLOCATION.BILLING_STATUS` | our own classification |
+
+Workers who disappear from an extract are **not** deleted — `STATUS` carries
+`Terminated` for that, and a delete would break FKs from existing timesheets.
+
 ## POET, and what is still open
 
 An OTL time card needs Project / Organization / Expenditure type / Task.
 
-**Organization — done.** `WORKERS` now returns `EXPENDITURE_ORG` from
+**Organization — done.** `WORKERS` returns `EXPENDITURE_ORG` from
 `PER_ALL_ASSIGNMENTS_M.ORGANIZATION_ID` through `HR_ALL_ORGANIZATION_UNITS_F_VL`
 — the same table already joined for `LEGAL_EMPLOYER`, on a different key. The
 two are **not** interchangeable: the legal employer is who employs the person,
 the expenditure organization is the costing unit the work books to. Reading one
 for the other sends cost to the wrong place while looking entirely plausible.
+`OC_TIME_ALLOCATION.EXPENDITURE_ORG` is a per-project override, left null unless
+someone sets it, so the worker's own value applies by default.
 
 **Expenditure type — open.** In Fusion this is not a column on the task; it is
-expressed as transaction controls that can sit at project or task level. Verify
-before relying on either extract:
+expressed as transaction controls that can sit at project or task level. `TASKS`
+therefore sends `EXPENDITURE_TYPE` as NULL, and `sync/task` applies
+`NVL(payload, existing)` so that never erases a value. Settle it with:
 
 ```sh
 python run_extract.py --validate EXP_TYPES,TASK_EXP_TYPES
 ```
 
-Three outcomes, and each means something different:
-
 | Result | Meaning |
 |---|---|
-| rows returned | good — wire the loader to set `OC_TIME_TASK.EXPENDITURE_TYPE` |
+| rows returned | good — wire `TASK_EXP_TYPES` into the load |
 | `ORA-00942` | wrong object name; the model differs on this pod |
-| **0 rows, no error** | this pod does not use transaction controls. Not a failure — it means one labour expenditure type is used throughout and the value belongs in configuration, not per task |
+| **0 rows, no error** | this pod does not use transaction controls. Not a failure — it means one labour expenditure type is used throughout and the value belongs in configuration |
 
-The third is the likeliest on a demo pod and is why the count matters more than
-the absence of an error.
+The third is the likeliest on a demo pod, which is why the count matters more
+than the absence of an error.
+
+## Two more joins that need confirming
+
+Both are new and neither has been run against a pod.
+
+**`PROJECTS.PROJECT_MANAGER_ID`** — matched on a party of type `IN` whose role
+name contains "Project Manager". This one matters more than it looks: RULE-015
+routes every approval through it, so if it comes back empty no project has an
+approver and the manager landing page is empty for everyone. If so, list the
+role names that actually exist:
+
+```sql
+SELECT DISTINCT project_role_name FROM pjf_project_role_types_tl;
+```
+
+**`PROJECTS.TIME_ENTRY_ENABLED`** — Fusion has no such flag, so it is derived:
+`Y` when the project has at least one internal party. That is self-limiting and
+true by construction, since you can only charge to a project you are assigned
+to. If the split looks wrong, this is the expression to change.
 
 ## Scheduling
 
