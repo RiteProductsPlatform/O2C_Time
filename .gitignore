@@ -18,3 +18,7 @@ integration/bip/tmp/
 # CLAUDE.md is local operating notes, not a project deliverable.
 .mcp.json
 CLAUDE.md
+
+# Fusion credentials for the BIP loader. The .example is committed, the real
+# one never is.
+integration/bip/.env

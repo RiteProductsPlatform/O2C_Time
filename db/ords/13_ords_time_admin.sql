@@ -151,10 +151,17 @@ BEGIN
     p_source_type => ORDS.source_type_plsql,
     p_source => q'~
       DECLARE
+        -- Same ORA-17004 fix as the sync/* handlers below: :days is a JSON
+        -- array and cannot be bound by name.
+        v_body  CLOB := :body_text;
+        v_actor VARCHAR2(100);
         v_job   NUMBER;
         v_n     NUMBER := 0;
         v_layer VARCHAR2(12) := UPPER(:layer);
       BEGIN
+        SELECT NVL(actor,'VBCS_USER') INTO v_actor
+          FROM JSON_TABLE(v_body, '$'
+                 COLUMNS (actor VARCHAR2(100) PATH '$.actor'));
         IF v_layer NOT IN ('CORPORATE','PROJECT','CLIENT','SHIFT') THEN
           :status_code := 400;
           HTP.P('{"error":"Layer must be CORPORATE, PROJECT, CLIENT or SHIFT."}');
@@ -164,12 +171,12 @@ BEGIN
         INSERT INTO oc_time_sync_job (
           job_name, job_type, scope_key, job_status, triggered_by, trace_id)
         VALUES ('Calendar Sync - ' || v_layer, 'CalendarSync', v_layer,
-                'Running', NVL(:actor,'VBCS_USER'), SYS_GUID())
+                'Running', v_actor, SYS_GUID())
         RETURNING job_run_id INTO v_job;
 
         FOR d IN (SELECT scope_key, cal_date, is_working_day, std_hours,
                          holiday_name, shift_code
-                    FROM JSON_TABLE(TO_CLOB(:days), '$[*]'
+                    FROM JSON_TABLE(v_body, '$.days[*]'
                            COLUMNS (
                              scope_key      VARCHAR2(120) PATH '$.scopeKey',
                              cal_date       VARCHAR2(10)  PATH '$.calDate',
@@ -190,7 +197,7 @@ BEGIN
                     c.shift_code     = d.shift_code,
                     c.source_system  = 'FUSION',
                     c.synced_on      = SYSTIMESTAMP,
-                    c.updated_by     = NVL(:actor,'VBCS_USER')
+                    c.updated_by     = v_actor
            WHEN NOT MATCHED THEN
                 INSERT (layer, precedence, scope_key, cal_date, is_working_day,
                         std_hours, holiday_name, shift_code, source_system,
@@ -199,7 +206,7 @@ BEGIN
                         TO_DATE(d.cal_date,'YYYY-MM-DD'),
                         NVL(d.is_working_day,'Y'), d.std_hours, d.holiday_name,
                         d.shift_code, 'FUSION', SYSTIMESTAMP,
-                        NVL(:actor,'VBCS_USER'));
+                        v_actor);
           v_n := v_n + 1;
         END LOOP;
 
@@ -260,20 +267,37 @@ BEGIN
     p_mimes_allowed => 'application/json',
     p_source => q'~
       DECLARE
-        v_job  NUMBER := :jobRunId;
+        -- :body_text is ORDS's implicit CLOB of the whole payload. The
+        -- scalars are read out of it with JSON_TABLE rather than bound by name
+        -- because a payload carrying a JSON ARRAY cannot be bound field by
+        -- field at all - ORDS has no SQL type for the array and the whole
+        -- request fails with ORA-17004 before any of this runs.
+        v_body  CLOB := :body_text;
+        v_job   NUMBER;
+        v_actor VARCHAR2(100);
+        v_final VARCHAR2(1);
+        v_trace VARCHAR2(64);
         v_ok   NUMBER := 0;
         v_fail NUMBER := 0;
         v_err  VARCHAR2(2000);
       BEGIN
+        SELECT job_run_id, NVL(actor,'BIP_LOADER'), NVL(fin,'N'), trace
+          INTO v_job, v_actor, v_final, v_trace
+          FROM JSON_TABLE(v_body, '$'
+                 COLUMNS (job_run_id NUMBER        PATH '$.jobRunId',
+                          actor      VARCHAR2(100) PATH '$.actor',
+                          fin        VARCHAR2(1)   PATH '$.final',
+                          trace      VARCHAR2(64)  PATH '$.traceId'));
+
         IF v_job IS NULL THEN
           INSERT INTO oc_time_sync_job (job_name, job_type, scope_key,
                                         job_status, triggered_by, trace_id)
           VALUES ('Master Sync - WORKERS', 'MasterSync', 'WORKER',
-                  'Running', NVL(:actor,'BIP_LOADER'), NVL(:traceId, SYS_GUID()))
+                  'Running', v_actor, NVL(v_trace, SYS_GUID()))
           RETURNING job_run_id INTO v_job;
         END IF;
 
-        FOR r IN (SELECT * FROM JSON_TABLE(TO_CLOB(:rows), '$[*]'
+        FOR r IN (SELECT * FROM JSON_TABLE(v_body, '$.rows[*]'
                     COLUMNS (
                       employee_id       VARCHAR2(50)  PATH '$.EMPLOYEE_ID',
                       employee_name     VARCHAR2(200) PATH '$.EMPLOYEE_NAME',
@@ -308,7 +332,7 @@ BEGIN
                       w.source_system     = 'FUSION',
                       w.source_method     = 'BIP',
                       w.sync_job_run_id   = v_job,
-                      w.updated_by        = NVL(:actor,'BIP_LOADER')
+                      w.updated_by        = v_actor
                   -- APP_ROLE is deliberately NOT touched. It is the app's own
                   -- entitlement, set here and not present in HCM; overwriting it
                   -- from an extract would silently demote every manager on the
@@ -326,7 +350,7 @@ BEGIN
                           TO_DATE(r.hire_date,'YYYY-MM-DD'),
                           TO_DATE(r.termination_date,'YYYY-MM-DD'),
                           NVL(r.status,'Active'), SYSTIMESTAMP,
-                          'FUSION', 'BIP', v_job, NVL(:actor,'BIP_LOADER'));
+                          'FUSION', 'BIP', v_job, v_actor);
             v_ok := v_ok + 1;
           EXCEPTION WHEN OTHERS THEN
             v_err := SUBSTR(SQLERRM, 1, 2000);
@@ -334,7 +358,7 @@ BEGIN
                                              employee_id, failure_reason,
                                              failure_code, trace_id)
             VALUES (v_job, 'WORKER', r.employee_id, r.employee_id,
-                    v_err, SQLCODE, NVL(:traceId,'BIP'));
+                    v_err, SQLCODE, NVL(v_trace,'BIP'));
             v_fail := v_fail + 1;
           END;
         END LOOP;
@@ -343,11 +367,11 @@ BEGIN
            SET records_read     = NVL(records_read,0)     + v_ok + v_fail,
                records_upserted = NVL(records_upserted,0) + v_ok,
                records_failed   = NVL(records_failed,0)   + v_fail,
-               job_status  = CASE WHEN NVL(:final,'N') = 'Y'
+               job_status  = CASE WHEN v_final = 'Y'
                                   THEN CASE WHEN NVL(records_failed,0) + v_fail > 0
                                             THEN 'Partial' ELSE 'Success' END
                                   ELSE 'Running' END,
-               finished_on = CASE WHEN NVL(:final,'N') = 'Y'
+               finished_on = CASE WHEN v_final = 'Y'
                                   THEN SYSTIMESTAMP END,
                message     = 'WORKERS upserted ' ||
                              (NVL(records_upserted,0) + v_ok)
@@ -378,20 +402,37 @@ BEGIN
     p_mimes_allowed => 'application/json',
     p_source => q'~
       DECLARE
-        v_job  NUMBER := :jobRunId;
+        -- :body_text is ORDS's implicit CLOB of the whole payload. The
+        -- scalars are read out of it with JSON_TABLE rather than bound by name
+        -- because a payload carrying a JSON ARRAY cannot be bound field by
+        -- field at all - ORDS has no SQL type for the array and the whole
+        -- request fails with ORA-17004 before any of this runs.
+        v_body  CLOB := :body_text;
+        v_job   NUMBER;
+        v_actor VARCHAR2(100);
+        v_final VARCHAR2(1);
+        v_trace VARCHAR2(64);
         v_ok   NUMBER := 0;
         v_fail NUMBER := 0;
         v_err  VARCHAR2(2000);
       BEGIN
+        SELECT job_run_id, NVL(actor,'BIP_LOADER'), NVL(fin,'N'), trace
+          INTO v_job, v_actor, v_final, v_trace
+          FROM JSON_TABLE(v_body, '$'
+                 COLUMNS (job_run_id NUMBER        PATH '$.jobRunId',
+                          actor      VARCHAR2(100) PATH '$.actor',
+                          fin        VARCHAR2(1)   PATH '$.final',
+                          trace      VARCHAR2(64)  PATH '$.traceId'));
+
         IF v_job IS NULL THEN
           INSERT INTO oc_time_sync_job (job_name, job_type, scope_key,
                                         job_status, triggered_by, trace_id)
           VALUES ('Master Sync - PROJECTS', 'MasterSync', 'PROJECT',
-                  'Running', NVL(:actor,'BIP_LOADER'), NVL(:traceId, SYS_GUID()))
+                  'Running', v_actor, NVL(v_trace, SYS_GUID()))
           RETURNING job_run_id INTO v_job;
         END IF;
 
-        FOR r IN (SELECT * FROM JSON_TABLE(TO_CLOB(:rows), '$[*]'
+        FOR r IN (SELECT * FROM JSON_TABLE(v_body, '$.rows[*]'
                     COLUMNS (
                       project_number     VARCHAR2(60)  PATH '$.PROJECT_NUMBER',
                       project_name       VARCHAR2(240) PATH '$.PROJECT_NAME',
@@ -421,7 +462,7 @@ BEGIN
                       p.source_system      = 'FUSION',
                       p.source_method      = 'BIP',
                       p.sync_job_run_id    = v_job,
-                      p.updated_by         = NVL(:actor,'BIP_LOADER')
+                      p.updated_by         = v_actor
                   -- REVENUE_MODEL and LEAVE_LOSS_FLAG are NOT synced: they are
                   -- commercial attributes this module owns, not Fusion's.
              WHEN NOT MATCHED THEN
@@ -436,14 +477,14 @@ BEGIN
                           TO_DATE(r.start_date,'YYYY-MM-DD'),
                           TO_DATE(r.end_date,'YYYY-MM-DD'),
                           NVL(r.status,'Active'), SYSTIMESTAMP,
-                          'FUSION', 'BIP', v_job, NVL(:actor,'BIP_LOADER'));
+                          'FUSION', 'BIP', v_job, v_actor);
             v_ok := v_ok + 1;
           EXCEPTION WHEN OTHERS THEN
             v_err := SUBSTR(SQLERRM, 1, 2000);
             INSERT INTO oc_time_sync_failed (job_run_id, entity_type, entity_key,
                                              failure_reason, failure_code, trace_id)
             VALUES (v_job, 'PROJECT', r.project_number, v_err, SQLCODE,
-                    NVL(:traceId,'BIP'));
+                    NVL(v_trace,'BIP'));
             v_fail := v_fail + 1;
           END;
         END LOOP;
@@ -452,11 +493,11 @@ BEGIN
            SET records_read     = NVL(records_read,0)     + v_ok + v_fail,
                records_upserted = NVL(records_upserted,0) + v_ok,
                records_failed   = NVL(records_failed,0)   + v_fail,
-               job_status  = CASE WHEN NVL(:final,'N') = 'Y'
+               job_status  = CASE WHEN v_final = 'Y'
                                   THEN CASE WHEN NVL(records_failed,0) + v_fail > 0
                                             THEN 'Partial' ELSE 'Success' END
                                   ELSE 'Running' END,
-               finished_on = CASE WHEN NVL(:final,'N') = 'Y' THEN SYSTIMESTAMP END,
+               finished_on = CASE WHEN v_final = 'Y' THEN SYSTIMESTAMP END,
                message     = 'PROJECTS upserted ' ||
                              (NVL(records_upserted,0) + v_ok)
          WHERE job_run_id = v_job;
@@ -486,21 +527,38 @@ BEGIN
     p_mimes_allowed => 'application/json',
     p_source => q'~
       DECLARE
-        v_job  NUMBER := :jobRunId;
+        -- :body_text is ORDS's implicit CLOB of the whole payload. The
+        -- scalars are read out of it with JSON_TABLE rather than bound by name
+        -- because a payload carrying a JSON ARRAY cannot be bound field by
+        -- field at all - ORDS has no SQL type for the array and the whole
+        -- request fails with ORA-17004 before any of this runs.
+        v_body  CLOB := :body_text;
+        v_job   NUMBER;
+        v_actor VARCHAR2(100);
+        v_final VARCHAR2(1);
+        v_trace VARCHAR2(64);
         v_ok   NUMBER := 0;
         v_fail NUMBER := 0;
         v_pid  NUMBER;
         v_err  VARCHAR2(2000);
       BEGIN
+        SELECT job_run_id, NVL(actor,'BIP_LOADER'), NVL(fin,'N'), trace
+          INTO v_job, v_actor, v_final, v_trace
+          FROM JSON_TABLE(v_body, '$'
+                 COLUMNS (job_run_id NUMBER        PATH '$.jobRunId',
+                          actor      VARCHAR2(100) PATH '$.actor',
+                          fin        VARCHAR2(1)   PATH '$.final',
+                          trace      VARCHAR2(64)  PATH '$.traceId'));
+
         IF v_job IS NULL THEN
           INSERT INTO oc_time_sync_job (job_name, job_type, scope_key,
                                         job_status, triggered_by, trace_id)
           VALUES ('Master Sync - TASKS', 'MasterSync', 'TASK',
-                  'Running', NVL(:actor,'BIP_LOADER'), NVL(:traceId, SYS_GUID()))
+                  'Running', v_actor, NVL(v_trace, SYS_GUID()))
           RETURNING job_run_id INTO v_job;
         END IF;
 
-        FOR r IN (SELECT * FROM JSON_TABLE(TO_CLOB(:rows), '$[*]'
+        FOR r IN (SELECT * FROM JSON_TABLE(v_body, '$.rows[*]'
                     COLUMNS (
                       project_number    VARCHAR2(60)  PATH '$.PROJECT_NUMBER',
                       fusion_task_id    VARCHAR2(50)  PATH '$.TASK_ID',
@@ -528,7 +586,7 @@ BEGIN
                       t.source_system    = 'FUSION',
                       t.source_method    = 'BIP',
                       t.sync_job_run_id  = v_job,
-                      t.updated_by       = NVL(:actor,'BIP_LOADER')
+                      t.updated_by       = v_actor
              WHEN NOT MATCHED THEN
                   INSERT (project_id, fusion_task_id, task_code, task_name,
                           task_type, billable_type, chargeable_flag,
@@ -540,7 +598,7 @@ BEGIN
                                THEN 'Billable' ELSE 'Non-billable' END,
                           NVL(r.chargeable_flag,'Y'), r.expenditure_type,
                           SYSTIMESTAMP, 'FUSION', 'BIP', v_job,
-                          NVL(:actor,'BIP_LOADER'));
+                          v_actor);
             v_ok := v_ok + 1;
           EXCEPTION
             WHEN NO_DATA_FOUND THEN
@@ -552,14 +610,14 @@ BEGIN
               VALUES (v_job, 'TASK', r.project_number || '/' || r.task_code,
                       'No project ' || r.project_number ||
                       ' in the cache - load PROJECTS before TASKS.',
-                      100, NVL(:traceId,'BIP'));
+                      100, NVL(v_trace,'BIP'));
               v_fail := v_fail + 1;
             WHEN OTHERS THEN
               v_err := SUBSTR(SQLERRM, 1, 2000);
               INSERT INTO oc_time_sync_failed (job_run_id, entity_type, entity_key,
                                                failure_reason, failure_code, trace_id)
               VALUES (v_job, 'TASK', r.project_number || '/' || r.task_code,
-                      v_err, SQLCODE, NVL(:traceId,'BIP'));
+                      v_err, SQLCODE, NVL(v_trace,'BIP'));
               v_fail := v_fail + 1;
           END;
         END LOOP;
@@ -568,11 +626,11 @@ BEGIN
            SET records_read     = NVL(records_read,0)     + v_ok + v_fail,
                records_upserted = NVL(records_upserted,0) + v_ok,
                records_failed   = NVL(records_failed,0)   + v_fail,
-               job_status  = CASE WHEN NVL(:final,'N') = 'Y'
+               job_status  = CASE WHEN v_final = 'Y'
                                   THEN CASE WHEN NVL(records_failed,0) + v_fail > 0
                                             THEN 'Partial' ELSE 'Success' END
                                   ELSE 'Running' END,
-               finished_on = CASE WHEN NVL(:final,'N') = 'Y' THEN SYSTIMESTAMP END,
+               finished_on = CASE WHEN v_final = 'Y' THEN SYSTIMESTAMP END,
                message     = 'TASKS upserted ' || (NVL(records_upserted,0) + v_ok)
          WHERE job_run_id = v_job;
 
@@ -600,22 +658,39 @@ BEGIN
     p_mimes_allowed => 'application/json',
     p_source => q'~
       DECLARE
-        v_job  NUMBER := :jobRunId;
+        -- :body_text is ORDS's implicit CLOB of the whole payload. The
+        -- scalars are read out of it with JSON_TABLE rather than bound by name
+        -- because a payload carrying a JSON ARRAY cannot be bound field by
+        -- field at all - ORDS has no SQL type for the array and the whole
+        -- request fails with ORA-17004 before any of this runs.
+        v_body  CLOB := :body_text;
+        v_job   NUMBER;
+        v_actor VARCHAR2(100);
+        v_final VARCHAR2(1);
+        v_trace VARCHAR2(64);
         v_ok   NUMBER := 0;
         v_fail NUMBER := 0;
         v_pid  NUMBER;
         v_n    NUMBER;
         v_err  VARCHAR2(2000);
       BEGIN
+        SELECT job_run_id, NVL(actor,'BIP_LOADER'), NVL(fin,'N'), trace
+          INTO v_job, v_actor, v_final, v_trace
+          FROM JSON_TABLE(v_body, '$'
+                 COLUMNS (job_run_id NUMBER        PATH '$.jobRunId',
+                          actor      VARCHAR2(100) PATH '$.actor',
+                          fin        VARCHAR2(1)   PATH '$.final',
+                          trace      VARCHAR2(64)  PATH '$.traceId'));
+
         IF v_job IS NULL THEN
           INSERT INTO oc_time_sync_job (job_name, job_type, scope_key,
                                         job_status, triggered_by, trace_id)
           VALUES ('Master Sync - ALLOCATIONS', 'MasterSync', 'ALLOCATION',
-                  'Running', NVL(:actor,'BIP_LOADER'), NVL(:traceId, SYS_GUID()))
+                  'Running', v_actor, NVL(v_trace, SYS_GUID()))
           RETURNING job_run_id INTO v_job;
         END IF;
 
-        FOR r IN (SELECT * FROM JSON_TABLE(TO_CLOB(:rows), '$[*]'
+        FOR r IN (SELECT * FROM JSON_TABLE(v_body, '$.rows[*]'
                     COLUMNS (
                       project_number   VARCHAR2(60)  PATH '$.PROJECT_NUMBER',
                       employee_id      VARCHAR2(50)  PATH '$.EMPLOYEE_ID',
@@ -659,7 +734,7 @@ BEGIN
                       a.source_system    = 'FUSION',
                       a.source_method    = 'BIP',
                       a.sync_job_run_id  = v_job,
-                      a.updated_by       = NVL(:actor,'BIP_LOADER')
+                      a.updated_by       = v_actor
                   -- BILLING_STATUS and APPROVING_MANAGER_ID stay: the first is
                   -- this module's own commercial classification, the second is
                   -- resolved from the project manager, not the assignment.
@@ -673,7 +748,7 @@ BEGIN
                           r.po_line_number, r.price_type,
                           NVL(TO_DATE(r.start_date,'YYYY-MM-DD'), TRUNC(SYSDATE)),
                           TO_DATE(r.end_date,'YYYY-MM-DD'), SYSTIMESTAMP,
-                          'FUSION', 'BIP', v_job, NVL(:actor,'BIP_LOADER'));
+                          'FUSION', 'BIP', v_job, v_actor);
             v_ok := v_ok + 1;
           EXCEPTION
             WHEN NO_DATA_FOUND THEN
@@ -684,7 +759,7 @@ BEGIN
                       r.project_number || '/' || r.employee_id, r.employee_id,
                       'No project ' || r.project_number ||
                       ' in the cache - load PROJECTS before ALLOCATIONS.',
-                      100, NVL(:traceId,'BIP'));
+                      100, NVL(v_trace,'BIP'));
               v_fail := v_fail + 1;
             WHEN OTHERS THEN
               v_err := SUBSTR(SQLERRM, 1, 2000);
@@ -693,7 +768,7 @@ BEGIN
                                                failure_code, trace_id)
               VALUES (v_job, 'ALLOCATION',
                       r.project_number || '/' || r.employee_id, r.employee_id,
-                      v_err, SQLCODE, NVL(:traceId,'BIP'));
+                      v_err, SQLCODE, NVL(v_trace,'BIP'));
               v_fail := v_fail + 1;
           END;
         END LOOP;
@@ -702,11 +777,11 @@ BEGIN
            SET records_read     = NVL(records_read,0)     + v_ok + v_fail,
                records_upserted = NVL(records_upserted,0) + v_ok,
                records_failed   = NVL(records_failed,0)   + v_fail,
-               job_status  = CASE WHEN NVL(:final,'N') = 'Y'
+               job_status  = CASE WHEN v_final = 'Y'
                                   THEN CASE WHEN NVL(records_failed,0) + v_fail > 0
                                             THEN 'Partial' ELSE 'Success' END
                                   ELSE 'Running' END,
-               finished_on = CASE WHEN NVL(:final,'N') = 'Y' THEN SYSTIMESTAMP END,
+               finished_on = CASE WHEN v_final = 'Y' THEN SYSTIMESTAMP END,
                message     = 'ALLOCATIONS upserted ' ||
                              (NVL(records_upserted,0) + v_ok)
          WHERE job_run_id = v_job;
@@ -735,20 +810,37 @@ BEGIN
     p_mimes_allowed => 'application/json',
     p_source => q'~
       DECLARE
-        v_job  NUMBER := :jobRunId;
+        -- :body_text is ORDS's implicit CLOB of the whole payload. The
+        -- scalars are read out of it with JSON_TABLE rather than bound by name
+        -- because a payload carrying a JSON ARRAY cannot be bound field by
+        -- field at all - ORDS has no SQL type for the array and the whole
+        -- request fails with ORA-17004 before any of this runs.
+        v_body  CLOB := :body_text;
+        v_job   NUMBER;
+        v_actor VARCHAR2(100);
+        v_final VARCHAR2(1);
+        v_trace VARCHAR2(64);
         v_ok   NUMBER := 0;
         v_fail NUMBER := 0;
         v_err  VARCHAR2(2000);
       BEGIN
+        SELECT job_run_id, NVL(actor,'BIP_LOADER'), NVL(fin,'N'), trace
+          INTO v_job, v_actor, v_final, v_trace
+          FROM JSON_TABLE(v_body, '$'
+                 COLUMNS (job_run_id NUMBER        PATH '$.jobRunId',
+                          actor      VARCHAR2(100) PATH '$.actor',
+                          fin        VARCHAR2(1)   PATH '$.final',
+                          trace      VARCHAR2(64)  PATH '$.traceId'));
+
         IF v_job IS NULL THEN
           INSERT INTO oc_time_sync_job (job_name, job_type, scope_key,
                                         job_status, triggered_by, trace_id)
           VALUES ('Master Sync - ABSENCES', 'MasterSync', 'ABSENCE',
-                  'Running', NVL(:actor,'BIP_LOADER'), NVL(:traceId, SYS_GUID()))
+                  'Running', v_actor, NVL(v_trace, SYS_GUID()))
           RETURNING job_run_id INTO v_job;
         END IF;
 
-        FOR r IN (SELECT * FROM JSON_TABLE(TO_CLOB(:rows), '$[*]'
+        FOR r IN (SELECT * FROM JSON_TABLE(v_body, '$.rows[*]'
                     COLUMNS (
                       employee_id     VARCHAR2(50)  PATH '$.EMPLOYEE_ID',
                       absence_date    VARCHAR2(10)  PATH '$.ABSENCE_DATE',
@@ -770,7 +862,7 @@ BEGIN
                       ab.source_system    = 'FUSION',
                       ab.source_method    = 'BIP',
                       ab.sync_job_run_id  = v_job,
-                      ab.updated_by       = NVL(:actor,'BIP_LOADER')
+                      ab.updated_by       = v_actor
              WHEN NOT MATCHED THEN
                   INSERT (employee_id, absence_date, absence_type, absence_hours,
                           approval_status, fusion_synced_on, source_system,
@@ -778,7 +870,7 @@ BEGIN
                   VALUES (r.employee_id, TO_DATE(r.absence_date,'YYYY-MM-DD'),
                           r.absence_type, NVL(r.absence_hours,0),
                           NVL(r.approval_status,'Approved'), SYSTIMESTAMP,
-                          'FUSION', 'BIP', v_job, NVL(:actor,'BIP_LOADER'));
+                          'FUSION', 'BIP', v_job, v_actor);
             v_ok := v_ok + 1;
           EXCEPTION WHEN OTHERS THEN
             v_err := SUBSTR(SQLERRM, 1, 2000);
@@ -787,7 +879,7 @@ BEGIN
                                              failure_code, trace_id)
             VALUES (v_job, 'ABSENCE',
                     r.employee_id || '/' || r.absence_date, r.employee_id,
-                    v_err, SQLCODE, NVL(:traceId,'BIP'));
+                    v_err, SQLCODE, NVL(v_trace,'BIP'));
             v_fail := v_fail + 1;
           END;
         END LOOP;
@@ -796,11 +888,11 @@ BEGIN
            SET records_read     = NVL(records_read,0)     + v_ok + v_fail,
                records_upserted = NVL(records_upserted,0) + v_ok,
                records_failed   = NVL(records_failed,0)   + v_fail,
-               job_status  = CASE WHEN NVL(:final,'N') = 'Y'
+               job_status  = CASE WHEN v_final = 'Y'
                                   THEN CASE WHEN NVL(records_failed,0) + v_fail > 0
                                             THEN 'Partial' ELSE 'Success' END
                                   ELSE 'Running' END,
-               finished_on = CASE WHEN NVL(:final,'N') = 'Y' THEN SYSTIMESTAMP END,
+               finished_on = CASE WHEN v_final = 'Y' THEN SYSTIMESTAMP END,
                message     = 'ABSENCES upserted ' ||
                              (NVL(records_upserted,0) + v_ok)
          WHERE job_run_id = v_job;

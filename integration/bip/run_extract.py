@@ -36,6 +36,33 @@ from extracts import ALL_EXTRACTS, BY_NAME, VERIFIED
 CATALOG_FOLDER = "/Custom/O2C_TIME"
 
 
+def _load_dotenv() -> None:
+    """
+    Read integration/bip/.env into the environment, if it exists.
+
+    Exists so the credentials stop being retyped — or pasted into chat, which
+    has happened more than once and is how a password ends up somewhere it
+    cannot be rotated from. The file is git-ignored; see .env.example.
+
+    Deliberately does NOT overwrite a variable that is already set, so an
+    explicit `$env:FUSION_PASSWORD = ...` for a one-off run still wins over the
+    file, and a CI runner's injected secrets are never clobbered by a stray
+    checked-out .env.
+    """
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+    if not os.path.exists(path):
+        return
+    with io.open(path, encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, val = line.partition("=")
+            key, val = key.strip(), val.strip().strip('"').strip("'")
+            if key and key not in os.environ:
+                os.environ[key] = val
+
+
 def model_path(name: str) -> str:
     return "%s/O2C_%s.xdm" % (CATALOG_FOLDER, name)
 
@@ -283,6 +310,7 @@ def _selected(value: str) -> List[Dict]:
 
 
 def main(argv=None) -> int:
+    _load_dotenv()
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     g = ap.add_mutually_exclusive_group(required=True)
