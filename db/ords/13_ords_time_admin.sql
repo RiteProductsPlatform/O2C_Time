@@ -279,7 +279,14 @@ BEGIN
         v_trace VARCHAR2(64);
         v_ok   NUMBER := 0;
         v_fail NUMBER := 0;
-        v_err  VARCHAR2(2000);
+        -- 1000, matching OC_TIME_SYNC_FAILED.FAILURE_REASON. Capturing 2000
+        -- would raise ORA-12899 while trying to record a failure — losing the
+        -- diagnostic at the exact moment it is needed.
+        v_err  VARCHAR2(1000);
+        -- SQLCODE is PL/SQL-only and cannot appear inside a SQL statement
+        -- (ORA-00984 "column not allowed here"). Captured into a local, the
+        -- same way SQLERRM already is directly below.
+        v_code NUMBER;
       BEGIN
         SELECT job_run_id, NVL(actor,'BIP_LOADER'), NVL(fin,'N'), trace
           INTO v_job, v_actor, v_final, v_trace
@@ -353,12 +360,13 @@ BEGIN
                           'FUSION', 'BIP', v_job, v_actor);
             v_ok := v_ok + 1;
           EXCEPTION WHEN OTHERS THEN
-            v_err := SUBSTR(SQLERRM, 1, 2000);
+            v_err  := SUBSTR(SQLERRM, 1, 1000);
+            v_code := SQLCODE;
             INSERT INTO oc_time_sync_failed (job_run_id, entity_type, entity_key,
                                              employee_id, failure_reason,
                                              failure_code, trace_id)
             VALUES (v_job, 'WORKER', r.employee_id, r.employee_id,
-                    v_err, SQLCODE, NVL(v_trace,'BIP'));
+                    v_err, v_code, NVL(v_trace,'BIP'));
             v_fail := v_fail + 1;
           END;
         END LOOP;
@@ -414,7 +422,14 @@ BEGIN
         v_trace VARCHAR2(64);
         v_ok   NUMBER := 0;
         v_fail NUMBER := 0;
-        v_err  VARCHAR2(2000);
+        -- 1000, matching OC_TIME_SYNC_FAILED.FAILURE_REASON. Capturing 2000
+        -- would raise ORA-12899 while trying to record a failure — losing the
+        -- diagnostic at the exact moment it is needed.
+        v_err  VARCHAR2(1000);
+        -- SQLCODE is PL/SQL-only and cannot appear inside a SQL statement
+        -- (ORA-00984 "column not allowed here"). Captured into a local, the
+        -- same way SQLERRM already is directly below.
+        v_code NUMBER;
       BEGIN
         SELECT job_run_id, NVL(actor,'BIP_LOADER'), NVL(fin,'N'), trace
           INTO v_job, v_actor, v_final, v_trace
@@ -480,10 +495,11 @@ BEGIN
                           'FUSION', 'BIP', v_job, v_actor);
             v_ok := v_ok + 1;
           EXCEPTION WHEN OTHERS THEN
-            v_err := SUBSTR(SQLERRM, 1, 2000);
+            v_err  := SUBSTR(SQLERRM, 1, 1000);
+            v_code := SQLCODE;
             INSERT INTO oc_time_sync_failed (job_run_id, entity_type, entity_key,
                                              failure_reason, failure_code, trace_id)
-            VALUES (v_job, 'PROJECT', r.project_number, v_err, SQLCODE,
+            VALUES (v_job, 'PROJECT', r.project_number, v_err, v_code,
                     NVL(v_trace,'BIP'));
             v_fail := v_fail + 1;
           END;
@@ -540,7 +556,14 @@ BEGIN
         v_ok   NUMBER := 0;
         v_fail NUMBER := 0;
         v_pid  NUMBER;
-        v_err  VARCHAR2(2000);
+        -- 1000, matching OC_TIME_SYNC_FAILED.FAILURE_REASON. Capturing 2000
+        -- would raise ORA-12899 while trying to record a failure — losing the
+        -- diagnostic at the exact moment it is needed.
+        v_err  VARCHAR2(1000);
+        -- SQLCODE is PL/SQL-only and cannot appear inside a SQL statement
+        -- (ORA-00984 "column not allowed here"). Captured into a local, the
+        -- same way SQLERRM already is directly below.
+        v_code NUMBER;
       BEGIN
         SELECT job_run_id, NVL(actor,'BIP_LOADER'), NVL(fin,'N'), trace
           INTO v_job, v_actor, v_final, v_trace
@@ -613,11 +636,12 @@ BEGIN
                       100, NVL(v_trace,'BIP'));
               v_fail := v_fail + 1;
             WHEN OTHERS THEN
-              v_err := SUBSTR(SQLERRM, 1, 2000);
+              v_err  := SUBSTR(SQLERRM, 1, 1000);
+            v_code := SQLCODE;
               INSERT INTO oc_time_sync_failed (job_run_id, entity_type, entity_key,
                                                failure_reason, failure_code, trace_id)
               VALUES (v_job, 'TASK', r.project_number || '/' || r.task_code,
-                      v_err, SQLCODE, NVL(v_trace,'BIP'));
+                      v_err, v_code, NVL(v_trace,'BIP'));
               v_fail := v_fail + 1;
           END;
         END LOOP;
@@ -672,7 +696,14 @@ BEGIN
         v_fail NUMBER := 0;
         v_pid  NUMBER;
         v_n    NUMBER;
-        v_err  VARCHAR2(2000);
+        -- 1000, matching OC_TIME_SYNC_FAILED.FAILURE_REASON. Capturing 2000
+        -- would raise ORA-12899 while trying to record a failure — losing the
+        -- diagnostic at the exact moment it is needed.
+        v_err  VARCHAR2(1000);
+        -- SQLCODE is PL/SQL-only and cannot appear inside a SQL statement
+        -- (ORA-00984 "column not allowed here"). Captured into a local, the
+        -- same way SQLERRM already is directly below.
+        v_code NUMBER;
       BEGIN
         SELECT job_run_id, NVL(actor,'BIP_LOADER'), NVL(fin,'N'), trace
           INTO v_job, v_actor, v_final, v_trace
@@ -762,13 +793,14 @@ BEGIN
                       100, NVL(v_trace,'BIP'));
               v_fail := v_fail + 1;
             WHEN OTHERS THEN
-              v_err := SUBSTR(SQLERRM, 1, 2000);
+              v_err  := SUBSTR(SQLERRM, 1, 1000);
+            v_code := SQLCODE;
               INSERT INTO oc_time_sync_failed (job_run_id, entity_type, entity_key,
                                                employee_id, failure_reason,
                                                failure_code, trace_id)
               VALUES (v_job, 'ALLOCATION',
                       r.project_number || '/' || r.employee_id, r.employee_id,
-                      v_err, SQLCODE, NVL(v_trace,'BIP'));
+                      v_err, v_code, NVL(v_trace,'BIP'));
               v_fail := v_fail + 1;
           END;
         END LOOP;
@@ -822,7 +854,14 @@ BEGIN
         v_trace VARCHAR2(64);
         v_ok   NUMBER := 0;
         v_fail NUMBER := 0;
-        v_err  VARCHAR2(2000);
+        -- 1000, matching OC_TIME_SYNC_FAILED.FAILURE_REASON. Capturing 2000
+        -- would raise ORA-12899 while trying to record a failure — losing the
+        -- diagnostic at the exact moment it is needed.
+        v_err  VARCHAR2(1000);
+        -- SQLCODE is PL/SQL-only and cannot appear inside a SQL statement
+        -- (ORA-00984 "column not allowed here"). Captured into a local, the
+        -- same way SQLERRM already is directly below.
+        v_code NUMBER;
       BEGIN
         SELECT job_run_id, NVL(actor,'BIP_LOADER'), NVL(fin,'N'), trace
           INTO v_job, v_actor, v_final, v_trace
@@ -873,13 +912,14 @@ BEGIN
                           'FUSION', 'BIP', v_job, v_actor);
             v_ok := v_ok + 1;
           EXCEPTION WHEN OTHERS THEN
-            v_err := SUBSTR(SQLERRM, 1, 2000);
+            v_err  := SUBSTR(SQLERRM, 1, 1000);
+            v_code := SQLCODE;
             INSERT INTO oc_time_sync_failed (job_run_id, entity_type, entity_key,
                                              employee_id, failure_reason,
                                              failure_code, trace_id)
             VALUES (v_job, 'ABSENCE',
                     r.employee_id || '/' || r.absence_date, r.employee_id,
-                    v_err, SQLCODE, NVL(v_trace,'BIP'));
+                    v_err, v_code, NVL(v_trace,'BIP'));
             v_fail := v_fail + 1;
           END;
         END LOOP;
