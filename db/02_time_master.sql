@@ -23,7 +23,7 @@ SET DEFINE OFF
 SET SERVEROUTPUT ON
 
 PROMPT ============================================================
-PROMPT [1/6] OC_TIME_WORKER — HCM worker / assignment cache
+PROMPT [1/9] OC_TIME_WORKER — HCM worker / assignment cache
 PROMPT ============================================================
 
 BEGIN
@@ -74,7 +74,7 @@ EXCEPTION WHEN OTHERS THEN IF SQLCODE = -955 THEN NULL; ELSE RAISE; END IF; END;
 /
 
 PROMPT ============================================================
-PROMPT [2/6] OC_TIME_PROJECT — PPM project cache
+PROMPT [2/9] OC_TIME_PROJECT — PPM project cache
 PROMPT ============================================================
 
 -- PROJECT_TYPE (Data_Dictionaries project_type):
@@ -130,7 +130,7 @@ EXCEPTION WHEN OTHERS THEN IF SQLCODE = -955 THEN NULL; ELSE RAISE; END IF; END;
 /
 
 PROMPT ============================================================
-PROMPT [3/6] OC_TIME_TASK — WBS tasks + common non-billable tasks
+PROMPT [3/9] OC_TIME_TASK — WBS tasks + common non-billable tasks
 PROMPT ============================================================
 
 -- RULE-010: a charged task must be in the project's WBS OR be a common task.
@@ -198,7 +198,7 @@ EXCEPTION WHEN OTHERS THEN IF SQLCODE = -955 THEN NULL; ELSE RAISE; END IF; END;
 /
 
 PROMPT ============================================================
-PROMPT [4/6] OC_TIME_ALLOCATION — PPM resource assignment cache
+PROMPT [4/9] OC_TIME_ALLOCATION — PPM resource assignment cache
 PROMPT ============================================================
 
 -- INT-003. Drives (a) which projects appear in the employee's grid (FLD-006),
@@ -257,7 +257,7 @@ EXCEPTION WHEN OTHERS THEN IF SQLCODE = -955 THEN NULL; ELSE RAISE; END IF; END;
 /
 
 PROMPT ============================================================
-PROMPT [5/6] OC_TIME_ABSENCE — HCM absence cache
+PROMPT [5/9] OC_TIME_ABSENCE — HCM absence cache
 PROMPT ============================================================
 
 -- INT-006. Leave is HR-sourced and NOT selectable by the employee (RULE-008):
@@ -303,7 +303,7 @@ EXCEPTION WHEN OTHERS THEN IF SQLCODE = -955 THEN NULL; ELSE RAISE; END IF; END;
 /
 
 PROMPT ============================================================
-PROMPT [6/6] Master-data audit triggers
+PROMPT [6/9] Master-data audit triggers
 PROMPT ============================================================
 
 CREATE OR REPLACE TRIGGER trg_oc_tw_audit
@@ -358,7 +358,7 @@ END;
 /
 
 PROMPT ============================================================
-PROMPT [7/7] Master caches — sync provenance columns
+PROMPT [7/9] Master caches — sync provenance columns
 PROMPT ============================================================
 
 -- Which transport last wrote each cached row, and on which run.
@@ -434,7 +434,7 @@ EXCEPTION WHEN OTHERS THEN IF SQLCODE = -955 THEN NULL; ELSE RAISE; END IF; END;
 /
 
 PROMPT ============================================================
-PROMPT [8/8] OC_TIME_PROJECT — main O2C application project id
+PROMPT [8/9] OC_TIME_PROJECT — main O2C application project id
 PROMPT ============================================================
 
 -- MAIN_PROJECT_ID is OC_PROJECT.PROJECT_ID in the main O2C application.
@@ -472,6 +472,100 @@ BEGIN EXECUTE IMMEDIATE
   'CREATE INDEX ix_oc_tprj_main ON oc_time_project(main_project_id)';
 EXCEPTION WHEN OTHERS THEN IF SQLCODE = -955 THEN NULL; ELSE RAISE; END IF; END;
 /
+
+PROMPT ============================================================
+PROMPT [9/9] POET — expenditure type and organization (INT-007)
+PROMPT ============================================================
+
+-- An OTL time card is keyed on POET: Project / Organization / Expenditure type
+-- / Task. This module had P and T and neither O nor E, so INT-007 could not be
+-- built at all. These are the missing two.
+--
+-- WHERE EACH ONE LIVES, and why
+--
+-- EXPENDITURE_TYPE on OC_TIME_TASK. It classifies the work ("Professional
+-- Labor", "Travel"), and in Fusion PPM it is a property of the WBS task, which
+-- is also the grain the employee charges against. Putting it anywhere else
+-- would mean deriving it, and a derivation that is wrong sends cost to the
+-- wrong account.
+--
+-- EXPENDITURE_ORG on OC_TIME_WORKER, with an optional override on
+-- OC_TIME_ALLOCATION. This is the organization that INCURS the cost, which is
+-- normally the person's own — one value per person, not per line. But a person
+-- lent to another delivery unit can have their cost booked there instead, so
+-- the allocation carries a nullable override.
+--
+-- Resolution is NVL(allocation, worker), the same override shape
+-- V_OC_TIME_SIGNIN already uses for the role. One rule, applied the same way
+-- twice, rather than two different ideas of what an override means.
+--
+-- NOTE. LEGAL_EMPLOYER already on OC_TIME_WORKER is NOT this. That is the legal
+-- entity that employs the person; the expenditure organization is the costing
+-- unit the work is booked to. They are frequently different and Fusion treats
+-- them as different things.
+--
+-- Both are left NULL. Nothing populates them yet — that needs either a BIP
+-- extract change or a Fusion REST read, and until then V_OC_TIME_POET_READINESS
+-- reports exactly what is missing rather than the push failing row by row.
+DECLARE
+  v_n PLS_INTEGER := 0;
+
+  PROCEDURE add_col(p_table IN VARCHAR2, p_col IN VARCHAR2, p_type IN VARCHAR2) IS
+  BEGIN
+    EXECUTE IMMEDIATE 'ALTER TABLE ' || p_table || ' ADD ' || p_col || ' ' || p_type;
+    v_n := v_n + 1;
+  EXCEPTION WHEN OTHERS THEN
+    -- ORA-01430: already there. The whole point of a re-runnable script.
+    IF SQLCODE = -1430 THEN NULL; ELSE RAISE; END IF;
+  END;
+BEGIN
+  add_col('oc_time_task',       'expenditure_type', 'VARCHAR2(80 CHAR)');
+  add_col('oc_time_worker',     'expenditure_org',  'VARCHAR2(240 CHAR)');
+  add_col('oc_time_allocation', 'expenditure_org',  'VARCHAR2(240 CHAR)');
+
+  DBMS_OUTPUT.PUT_LINE('POET columns added: ' || v_n || ' (0 = already present)');
+END;
+/
+
+-- What is stopping the OTL push, per project.
+--
+-- Built as a view rather than left to fail at push time because the answer is
+-- an administrator's to act on, not a developer's to read out of a log: a task
+-- with no expenditure type needs someone to set one in Fusion, and they need to
+-- know which tasks before they start.
+--
+-- Deliberately counts only what would ACTUALLY be pushed. A non-chargeable task
+-- nobody books to does not block anything, and neither does leave — absences
+-- reach OTL from Absence Management already, so INT-007 filters IS_LEAVE = 'Y'
+-- and re-sending them would double-count.
+CREATE OR REPLACE VIEW v_oc_time_poet_readiness AS
+SELECT p.project_id,
+       p.project_number,
+       p.project_name,
+       p.status                                            AS project_status,
+       COUNT(DISTINCT t.task_id)                           AS tasks_chargeable,
+       COUNT(DISTINCT CASE WHEN t.expenditure_type IS NULL
+                           THEN t.task_id END)             AS tasks_no_exp_type,
+       COUNT(DISTINCT a.employee_id)                       AS workers_allocated,
+       COUNT(DISTINCT CASE WHEN NVL(a.expenditure_org, w.expenditure_org) IS NULL
+                           THEN a.employee_id END)         AS workers_no_exp_org,
+       CASE
+         WHEN COUNT(DISTINCT CASE WHEN t.expenditure_type IS NULL
+                                  THEN t.task_id END) > 0
+           OR COUNT(DISTINCT CASE WHEN NVL(a.expenditure_org, w.expenditure_org) IS NULL
+                                  THEN a.employee_id END) > 0
+         THEN 'Blocked'
+         ELSE 'Ready'
+       END                                                 AS otl_readiness
+  FROM oc_time_project    p
+  LEFT JOIN oc_time_task  t ON t.project_id  = p.project_id
+                           AND t.status      = 'Active'
+                           AND t.chargeable_flag = 'Y'
+  LEFT JOIN oc_time_allocation a ON a.project_id = p.project_id
+                                AND a.status     = 'Active'
+  LEFT JOIN oc_time_worker w ON w.employee_id = a.employee_id
+ WHERE p.status = 'Active'
+ GROUP BY p.project_id, p.project_number, p.project_name, p.status;
 
 PROMPT
 PROMPT ============================================================

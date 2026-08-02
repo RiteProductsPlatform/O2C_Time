@@ -81,6 +81,69 @@
       </oj-bind-if>
     </div>
 
+    <!-- ══════════════════ OTL readiness (INT-007) ══════════════
+         An OTL time card is keyed on POET — Project / Organization /
+         Expenditure type / Task. The module has P and T; O and E were added
+         01-Aug-2026 and nothing populates them yet.
+
+         Shown as a list rather than left to fail at push time because each gap
+         is fixed by setting a value in Fusion, and whoever does that needs to
+         know which projects and how many before they start. -->
+    <div class="oj-sm-padding-4x rw-metric">
+      <div class="oj-flex oj-sm-justify-content-space-between oj-sm-align-items-start oj-sm-flex-wrap oj-sm-gap-3x">
+        <div>
+          <h2 class="oj-typography-heading-xs oj-sm-margin-0">OTL push readiness</h2>
+          <p class="oj-typography-body-sm rw-metric-label oj-sm-margin-1x-top oj-sm-margin-0-bottom">
+            A project can only be pushed to Oracle Time &amp; Labor once every
+            chargeable task has an expenditure type and every allocated worker
+            an expenditure organization.
+          </p>
+        </div>
+        <oj-button chroming="borderless" disabled="[[ $variables.busy ]]"
+                   on-oj-action="[[ $listeners.loadPoet ]]">
+          <span slot="startIcon" class="oj-ux-ico-refresh"></span>
+          <span>Check readiness</span>
+        </oj-button>
+      </div>
+
+      <oj-bind-if test="[[ $variables.poet.length === 0 && !$variables.busy ]]">
+        <div class="oj-typography-body-sm rw-metric-label oj-sm-margin-3x-top" role="status">
+          Not checked yet, or no active project has any allocation.
+        </div>
+      </oj-bind-if>
+
+      <oj-bind-if test="[[ $variables.poet.length > 0 ]]">
+        <div class="oj-sm-padding-3x oj-sm-margin-3x-top rw-notice rw-notice-warning"
+             role="status">
+          <oj-bind-text value="[[ $page.functions.poetSummary($variables.poet) ]]"></oj-bind-text>
+        </div>
+
+        <div class="rw-grid-scroll oj-sm-margin-3x-top">
+          <oj-table aria-label="OTL push readiness by project"
+                    data="[[ $variables.poetADP ]]"
+                    layout="fixed"
+                    horizontal-grid-visible="enabled"
+                    selection-mode='{"row": "none", "column": "none"}'
+                    columns='[
+                      {"headerText":"Project","field":"projectNumber","width":120},
+                      {"headerText":"Name","field":"projectName","weight":3,"minWidth":200},
+                      {"headerText":"Chargeable tasks","field":"tasksChargeable","width":140},
+                      {"headerText":"No expenditure type","field":"tasksNoExpType","width":170},
+                      {"headerText":"Workers allocated","field":"workersAllocated","width":150},
+                      {"headerText":"No expenditure org","field":"workersNoExpOrg","width":165},
+                      {"headerText":"OTL","field":"otlReadiness","template":"readyCell","width":110}
+                    ]'>
+            <template slot="readyCell" data-oj-as="row">
+              <span :class="[[ $application.functions.outcomeClass(
+                                 $page.functions.readinessOutcome(row.data.otlReadiness)) ]]">
+                <oj-bind-text value="[[ row.data.otlReadiness ]]"></oj-bind-text>
+              </span>
+            </template>
+          </oj-table>
+        </div>
+      </oj-bind-if>
+    </div>
+
     <div class="oj-sm-padding-4x rw-metric">
       <h2 class="oj-typography-heading-xs oj-sm-margin-0 oj-sm-margin-3x-bottom">
         Catalogue

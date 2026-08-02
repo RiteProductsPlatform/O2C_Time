@@ -31,6 +31,7 @@
 --   GET  calendar/:layer/:scopeKey/:from/:to     calendar days for a layer
 --   POST calendar/sync/:layer                    upsert a layer from Fusion
 --   GET  sync/status                             job cards
+--   GET  poet/readiness                          what blocks the OTL push
 --   GET  sync/failed                             failed-record queue
 --   POST sync/retry/:failedId                    retry one failed record
 --   POST jobs/populate/:periodId                 run the monthly population job
@@ -388,6 +389,28 @@ BEGIN
         HTP.P('{"error":"' || REPLACE(SQLERRM,'"','\"') || '"}');
       END;
     ]');
+  COMMIT;
+END;
+/
+
+-- ── GET poet/readiness  (INT-007 prerequisite) ───────────────
+-- What is stopping the OTL push, per project. Read-only: fixing a gap means
+-- setting an expenditure type or organization in Fusion, not here.
+BEGIN
+  ORDS.DEFINE_TEMPLATE(p_module_name => 'oc.time.admin', p_pattern => 'poet/readiness');
+  ORDS.DEFINE_HANDLER(
+    p_module_name => 'oc.time.admin', p_pattern => 'poet/readiness',
+    p_method => 'GET',
+    p_source_type => ORDS.source_type_collection_feed,
+    p_source => q'~
+      SELECT project_id, project_number, project_name, project_status,
+             tasks_chargeable, tasks_no_exp_type,
+             workers_allocated, workers_no_exp_org,
+             otl_readiness
+        FROM v_oc_time_poet_readiness
+       ORDER BY CASE otl_readiness WHEN 'Blocked' THEN 0 ELSE 1 END,
+                project_number
+    ~');
   COMMIT;
 END;
 /

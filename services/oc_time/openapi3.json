@@ -845,6 +845,17 @@
         ]
       }
     },
+    "/oc/time/admin/poet/readiness": {
+      "get": {
+        "operationId": "getPoetReadiness",
+        "summary": "INT-007 prerequisite. Per project: how many chargeable tasks have no expenditure type and how many allocated workers have no expenditure organization, and whether the OTL push is therefore Blocked or Ready.",
+        "responses": {
+          "200": {
+            "description": "Readiness per project"
+          }
+        }
+      }
+    },
     "/oc/time/admin/push/ack/{confirmId}": {
       "post": {
         "operationId": "ackPush",

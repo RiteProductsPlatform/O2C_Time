@@ -22,6 +22,47 @@ define([], () => {
     }
 
     /**
+     * One sentence over the readiness rows: how many projects are blocked and
+     * by what. The table gives the detail; this says whether it is worth
+     * reading, which is the question someone opening the page actually has.
+     */
+    poetSummary(rows) {
+      const list = rows || [];
+      const blocked = list.filter((r) => r.otlReadiness === 'Blocked');
+
+      if (!blocked.length) {
+        return 'Every active project has a full POET. Nothing here blocks the '
+             + 'OTL push.';
+      }
+
+      const tasks = blocked.reduce((n, r) => n + (r.tasksNoExpType || 0), 0);
+      const staff = blocked.reduce((n, r) => n + (r.workersNoExpOrg || 0), 0);
+
+      const parts = [];
+      if (tasks) {
+        parts.push(tasks + (tasks === 1 ? ' chargeable task has' : ' chargeable tasks have')
+                 + ' no expenditure type');
+      }
+      if (staff) {
+        parts.push(staff + (staff === 1 ? ' allocated worker has' : ' allocated workers have')
+                 + ' no expenditure organization');
+      }
+
+      return blocked.length + ' of ' + list.length + ' projects cannot be pushed '
+           + 'to OTL: ' + parts.join(', and ')
+           + '. Both are set in Fusion, not here.';
+    }
+
+    /**
+     * Map readiness onto the vocabulary outcomeClass() already understands, so
+     * the badge matches every other status capsule in the module rather than
+     * introducing a third palette.
+     */
+    readinessOutcome(readiness) {
+      return readiness === 'Ready' ? 'Approved' : 'Held';
+    }
+
+    /**
      * Turn an HTTP status into the sentence that names who can fix it.
      *
      * Every one of these failures looks identical from the button, and each

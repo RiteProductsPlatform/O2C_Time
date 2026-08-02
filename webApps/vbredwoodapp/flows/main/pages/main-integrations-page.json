@@ -96,6 +96,20 @@
       "defaultValue": "",
       "input": "none",
       "description": "The diagnosis, built by probeDiagnosis() so each failure names who can fix it."
+    },
+    "poet": {
+      "type": "any[]",
+      "defaultValue": [],
+      "input": "none",
+      "description": "V_OC_TIME_POET_READINESS rows. Counts come from the view, not derived here, so the number shown is the one the push will act on."
+    },
+    "poetADP": {
+      "type": "vb/ArrayDataProvider2",
+      "defaultValue": {
+        "itemType": "poetRow",
+        "keyAttributes": "projectId",
+        "data": "{{ $page.variables.poet }}"
+      }
     }
   },
   "types": {
@@ -111,6 +125,16 @@
       "restResource": "string",
       "loadPattern": "string",
       "notes": "string"
+    },
+    "poetRow": {
+      "projectId": "number",
+      "projectNumber": "string",
+      "projectName": "string",
+      "tasksChargeable": "number",
+      "tasksNoExpType": "number",
+      "workersAllocated": "number",
+      "workersNoExpOrg": "number",
+      "otlReadiness": "string"
     }
   },
   "chains": {},
@@ -133,6 +157,13 @@
       "chains": [
         {
           "chain": "testFusionChain"
+        }
+      ]
+    },
+    "loadPoet": {
+      "chains": [
+        {
+          "chain": "loadPoetChain"
         }
       ]
     }
