@@ -31,7 +31,7 @@ from datetime import date
 from typing import Dict, List, Optional
 
 from bip_client import BipClient, BipError
-from extracts import ALL_EXTRACTS, BY_NAME
+from extracts import ALL_EXTRACTS, BY_NAME, VERIFIED
 
 CATALOG_FOLDER = "/Custom/O2C_TIME"
 
@@ -148,15 +148,34 @@ def cmd_run(args) -> int:
 
 
 def _selected(value: str) -> List[Dict]:
+    """
+    Resolve the --run / --validate / --deploy selector to extract definitions.
+
+    "ALL" means every VERIFIED extract, not every extract. An extract whose SQL
+    has not been confirmed against a pod can return zero rows while reporting
+    success (README note 2), so letting one into the monthly MasterSync by
+    default would quietly blank a column nobody had checked. Naming it
+    explicitly still runs it — that is how it gets verified in the first place.
+    """
     if not value or value.upper() == "ALL":
-        return ALL_EXTRACTS
+        skipped = [e["name"] for e in ALL_EXTRACTS if not e.get("verified", True)]
+        if skipped:
+            print("  (ALL excludes unverified: %s — name them explicitly to run)"
+                  % ", ".join(skipped))
+        return VERIFIED
+
     out = []
     for name in value.split(","):
         key = name.strip().upper()
         if key not in BY_NAME:
             raise SystemExit("unknown extract %r; known: %s"
                              % (key, ", ".join(BY_NAME)))
-        out.append(BY_NAME[key])
+        ex = BY_NAME[key]
+        if not ex.get("verified", True):
+            print("  ! %s is NOT verified against a pod. Zero rows means the "
+                  "object or a literal is wrong, not that there is no data."
+                  % ex["name"])
+        out.append(ex)
     return out
 
 

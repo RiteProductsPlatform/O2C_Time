@@ -31,7 +31,8 @@ WORKERS = {
     "key": ["EMPLOYEE_ID"],
     "columns": ["EMPLOYEE_ID", "EMPLOYEE_NAME", "EMAIL", "WORKER_TYPE",
                 "BASE_COUNTRY", "STD_HOURS_PER_DAY", "MANAGER_EMP_ID",
-                "LEGAL_EMPLOYER", "HIRE_DATE", "TERMINATION_DATE", "STATUS"],
+                "LEGAL_EMPLOYER", "EXPENDITURE_ORG",
+                "HIRE_DATE", "TERMINATION_DATE", "STATUS"],
     "sql": """
 SELECT papf.person_number                                AS employee_id,
        ppnf.display_name                                 AS employee_name,
@@ -46,6 +47,13 @@ SELECT papf.person_number                                AS employee_id,
             ELSE paam.normal_hours END                   AS std_hours_per_day,
        mgr.person_number                                 AS manager_emp_id,
        org.name                                          AS legal_employer,
+       -- POET's O, resource-wise: the organization that INCURS the cost.
+       -- Deliberately paam.organization_id, NOT legal_entity_id above. The legal
+       -- employer is who employs the person; the expenditure organization is the
+       -- costing unit the work books to. Fusion treats them as different and on
+       -- most pods they are — reading one for the other sends cost to the wrong
+       -- place while looking entirely plausible.
+       expo.name                                         AS expenditure_org,
        TO_CHAR(pos.date_start,'YYYY-MM-DD')              AS hire_date,
        TO_CHAR(pos.actual_termination_date,'YYYY-MM-DD') AS termination_date,
        CASE WHEN pos.actual_termination_date IS NULL
@@ -73,6 +81,11 @@ SELECT papf.person_number                                AS employee_id,
   LEFT JOIN hr_all_organization_units_f_vl org
     ON org.organization_id = paam.legal_entity_id
    AND {ED} BETWEEN org.effective_start_date AND org.effective_end_date
+  -- Same table, different key: the assignment's own organization rather than
+  -- its legal entity. _F_VL because the base _F has no NAME (note 7 below).
+  LEFT JOIN hr_all_organization_units_f_vl expo
+    ON expo.organization_id = paam.organization_id
+   AND {ED} BETWEEN expo.effective_start_date AND expo.effective_end_date
   -- RULE-015 depends on this: a manager's own time is approved by THIS person.
   LEFT JOIN per_assignment_supervisors_f sup
     ON sup.assignment_id = paam.assignment_id
@@ -408,6 +421,98 @@ SELECT 'SHIFT'                                     AS layer,
 }
 
 
+# ══════════════════════════════════════════════════════════════
+# POET — expenditure type (INT-007 prerequisite)
+#
+# ⚠ NOT YET VERIFIED AGAINST A POD. Everything else in this file was confirmed
+# by running it; these two were not, and are written from the standard Fusion
+# PPM model rather than from a live result. They are here so they can be checked
+# rather than reasoned about:
+#
+#     python run_extract.py --validate --only EXP_TYPES,TASK_EXP_TYPES
+#
+# --validate compiles the SQL and reports row counts without writing anything,
+# so a wrong object name comes back as an error and a wrong literal comes back
+# as zero rows. Both are the failure modes note 6 in the README warns about.
+#
+# The expenditure ORGANIZATION half of POET is already handled — it comes from
+# the WORKERS extract above and needs nothing here.
+# ══════════════════════════════════════════════════════════════
+
+EXP_TYPES = {
+    "name": "EXP_TYPES",
+    "target": "(reference — no cache table yet)",
+    "integration": "INT-002",
+    "key": ["EXPENDITURE_TYPE_ID"],
+    "columns": ["EXPENDITURE_TYPE_ID", "EXPENDITURE_TYPE_NAME",
+                "EXPENDITURE_CATEGORY", "UNIT_OF_MEASURE",
+                "START_DATE", "END_DATE"],
+    "verified": False,
+    "sql": """
+-- The master list. Small — tens of rows, not thousands — and worth having on
+-- its own because it answers "what may an expenditure type be?" before any
+-- question about which task carries which.
+--
+-- _TL for the name, following note 7: on this family the base table carries the
+-- ids and the translated table the display name.
+SELECT etb.expenditure_type_id                      AS expenditure_type_id,
+       ettl.expenditure_type_name                   AS expenditure_type_name,
+       etb.expenditure_category                     AS expenditure_category,
+       etb.unit_of_measure                          AS unit_of_measure,
+       TO_CHAR(etb.start_date_active,'YYYY-MM-DD')  AS start_date,
+       TO_CHAR(etb.end_date_active,'YYYY-MM-DD')    AS end_date
+  FROM pjf_exp_types_b etb
+  JOIN pjf_exp_types_tl ettl
+    ON ettl.expenditure_type_id = etb.expenditure_type_id
+   AND ettl.language = USERENV('LANG')
+ WHERE NVL(etb.end_date_active, {ED}) >= {ED}
+""".replace("{ED}", ED),
+}
+
+
+TASK_EXP_TYPES = {
+    "name": "TASK_EXP_TYPES",
+    "target": "OC_TIME_TASK.EXPENDITURE_TYPE",
+    "integration": "INT-002",
+    "key": ["TASK_ID"],
+    "columns": ["TASK_ID", "PROJECT_ID", "PROJECT_NUMBER",
+                "EXPENDITURE_TYPE_NAME", "CONTROL_LEVEL"],
+    "verified": False,
+    "sql": """
+-- Which expenditure type a task may be charged with.
+--
+-- In Fusion this is not a column on the task. It is expressed as TRANSACTION
+-- CONTROLS, which can sit at project level or task level, so a task inherits
+-- its project's control when it has none of its own. CONTROL_LEVEL is returned
+-- so the loader can tell the two apart rather than silently preferring one.
+--
+-- If a pod turns out not to use transaction controls at all this returns zero
+-- rows — which is an answer, not a failure: it means the implementation uses a
+-- single labour expenditure type and OC_TIME_TASK.EXPENDITURE_TYPE should be
+-- set from configuration instead of per task.
+SELECT tc.task_id                                   AS task_id,
+       tc.project_id                                AS project_id,
+       p.segment1                                   AS project_number,
+       ettl.expenditure_type_name                   AS expenditure_type_name,
+       CASE WHEN tc.task_id IS NULL THEN 'PROJECT' ELSE 'TASK' END
+                                                    AS control_level
+  FROM pjf_txn_controls tc
+  JOIN pjf_projects_all_b p
+    ON p.project_id = tc.project_id
+  JOIN pjf_exp_types_tl ettl
+    ON ettl.expenditure_type_id = tc.expenditure_type_id
+   AND ettl.language = USERENV('LANG')
+ WHERE tc.expenditure_type_id IS NOT NULL
+   AND NVL(tc.chargeable_flag,'Y') = 'Y'
+""".replace("{ED}", ED),
+}
+
+
 ALL_EXTRACTS = [WORKERS, PROJECTS, TASKS, ALLOCATIONS, ABSENCES,
-                CALENDAR, SHIFTS, WORK_PATTERNS, WORK_SCHEDULES, WORKER_SHIFTS]
+                CALENDAR, SHIFTS, WORK_PATTERNS, WORK_SCHEDULES, WORKER_SHIFTS,
+                EXP_TYPES, TASK_EXP_TYPES]
 BY_NAME = {e["name"]: e for e in ALL_EXTRACTS}
+
+# The ones proven against a pod. --run ALL uses this, so an unverified extract
+# cannot quietly join the monthly MasterSync and write a column nobody checked.
+VERIFIED = [e for e in ALL_EXTRACTS if e.get("verified", True)]

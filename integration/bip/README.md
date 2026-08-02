@@ -6,9 +6,16 @@ confirmed by running it, not inferred.
 
 ```
 bip_client.py    SOAP client for the BIP v2 services
-extracts.py      the seven extract definitions (SQL + column contract)
+extracts.py      the extract definitions (SQL + column contract)
 run_extract.py   CLI: check / validate / deploy / run
 ```
+
+**Verified vs not.** Ten extracts have been run against a pod; two — `EXP_TYPES`
+and `TASK_EXP_TYPES`, both added for POET — have not. `--run ALL` and
+`--validate` deliberately **exclude** the unverified ones, because an extract
+whose object name or literal is wrong returns zero rows while reporting success
+(note 2), and that would quietly blank a column nobody had checked. Name them
+explicitly to run them; that is how they get verified.
 
 ## Use
 
@@ -39,6 +46,10 @@ production service account.
 | `ABSENCES` | INT-006 | `OC_TIME_ABSENCE` | `ANC_PER_ABS_ENTRIES`, `ANC_PER_ABS_ENTRY_DTLS`, `ANC_ABSENCE_TYPES_VL` |
 | `CALENDAR` | INT-005 | `OC_TIME_CALENDAR` | `PER_CALENDAR_EVENTS` |
 | `SHIFTS` | INT-004 | `OC_TIME_CALENDAR` (SHIFT layer) | `HTS_SHIFTS_VL` |
+| `EXP_TYPES` ⚠ | INT-002 | reference only | `PJF_EXP_TYPES_B/_TL` |
+| `TASK_EXP_TYPES` ⚠ | INT-002 | `OC_TIME_TASK.EXPENDITURE_TYPE` | `PJF_TXN_CONTROLS`, `PJF_EXP_TYPES_TL` |
+
+⚠ = written from the standard Fusion model, **not** yet confirmed by running it.
 
 The SELECT alias list **is** the CSV header **is** the upsert column list, so the
 three cannot drift.
@@ -99,6 +110,36 @@ So `PJR` is collapsed in an inline aggregate *before* the join, and the parties
 side is collapsed by the outer `GROUP BY` into one span (earliest start, latest
 end). `BILLABLE_PERCENT` is **SUM**med, not MAXed — one person can hold two
 concurrent assignments on a project and RULE-001 cares about the combined load.
+
+## POET, and what is still open
+
+An OTL time card needs Project / Organization / Expenditure type / Task.
+
+**Organization — done.** `WORKERS` now returns `EXPENDITURE_ORG` from
+`PER_ALL_ASSIGNMENTS_M.ORGANIZATION_ID` through `HR_ALL_ORGANIZATION_UNITS_F_VL`
+— the same table already joined for `LEGAL_EMPLOYER`, on a different key. The
+two are **not** interchangeable: the legal employer is who employs the person,
+the expenditure organization is the costing unit the work books to. Reading one
+for the other sends cost to the wrong place while looking entirely plausible.
+
+**Expenditure type — open.** In Fusion this is not a column on the task; it is
+expressed as transaction controls that can sit at project or task level. Verify
+before relying on either extract:
+
+```sh
+python run_extract.py --validate EXP_TYPES,TASK_EXP_TYPES
+```
+
+Three outcomes, and each means something different:
+
+| Result | Meaning |
+|---|---|
+| rows returned | good — wire the loader to set `OC_TIME_TASK.EXPENDITURE_TYPE` |
+| `ORA-00942` | wrong object name; the model differs on this pod |
+| **0 rows, no error** | this pod does not use transaction controls. Not a failure — it means one labour expenditure type is used throughout and the value belongs in configuration, not per task |
+
+The third is the likeliest on a demo pod and is why the count matters more than
+the absence of an error.
 
 ## Scheduling
 
