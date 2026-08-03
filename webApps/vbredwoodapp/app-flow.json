@@ -474,8 +474,7 @@
   },
   "events": {
     "sessionEstablished": {
-      "payloadType": {},
-      "description": "Fired once a session exists, by whichever path created it — the login form, or the shell restoring a stored token. The shell answers by loading the context every page depends on (the period list, the manager switcher). An event rather than a direct call because the login page lives in the 'main' flow and cannot reach the shell page's chains."
+      "description": "Fired once a session exists, by whichever path created it - the login form, or the shell restoring a stored token. The shell answers by loading the context every page depends on (the period list, the manager switcher). An event rather than a direct call because the login page lives in the 'main' flow and cannot reach the shell page's chains. NO payloadType: an empty map is rejected by VB at startup, and this event genuinely carries nothing."
     },
     "spShowToast": {
       "payloadType": {

@@ -117,11 +117,11 @@
       "defaultValue": "",
       "input": "none"
     },
-    "//confirm": "State for the remove-confirmation dialog. window.confirm cannot be used — SES blocks browser globals in chains (knowledge/14 §7).",
     "confirmDocId": {
       "type": "number",
       "defaultValue": null,
-      "input": "none"
+      "input": "none",
+      "description": "State for the remove-confirmation dialog. window.confirm cannot be used — SES blocks browser globals in chains (knowledge/14 §7)."
     },
     "confirmMessage": {
       "type": "string",

@@ -21,7 +21,11 @@ import re
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-SPEC = os.path.join(ROOT, 'services', 'oc_time', 'openapi3.json')
+# The service definitions live under the WEB APP, not the visual-application
+# root: VB resolves app-flow.json's "./services/..." relative to the web app,
+# and a root-level copy 404s at runtime. catalog.json stays at the root.
+SPEC = os.path.join(ROOT, 'webApps', 'vbredwoodapp', 'services',
+                    'oc_time', 'openapi3.json')
 OUT = os.path.join(HERE, 'O2C_Time.postman_collection.json')
 
 DEFAULT_BASE_URL = 'https://ords-sit.rite.digital/ords/o2c_time'
