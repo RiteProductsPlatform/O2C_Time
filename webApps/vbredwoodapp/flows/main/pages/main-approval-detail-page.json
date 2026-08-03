@@ -135,6 +135,12 @@
       "defaultValue": "",
       "input": "none",
       "description": "Body text of the ACT-019 confirmation, built by the chain so the count and the employee name are named in the sentence rather than left to a generic \"Are you sure?\"."
+    },
+    "weeklyCutoff": {
+      "type": "string",
+      "defaultValue": "",
+      "input": "none",
+      "description": "FLD-003 — the weekly cut-off, shown beside the WEEKS list. The delivery cut-off belongs at month level (PAGE-003); this is the one that governs a week."
     }
   },
   "types": {

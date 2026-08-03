@@ -28,10 +28,20 @@
                             item-text="label">
           </oj-select-single>
 
-          <oj-input-text label-hint="Project"
-                         value="{{ $variables.projectFilter }}"
-                         placeholder="Filter by name or number">
-          </oj-input-text>
+          <!-- FLD-028. A picker, not a free-text box: the set of projects is
+               known — they are the ones this manager owns for the month, and
+               the prototype offers exactly that list with an "All projects"
+               entry. Typing a name that matches nothing looked like an empty
+               team rather than a typo. -->
+          <oj-select-single label-hint="Project"
+                            data="[[ $variables.projectOptions ]]"
+                            value="{{ $variables.projectPick }}"
+                            item-text="label"
+                            placeholder="All projects">
+            <template slot="noData">
+              <span class="rw-metric-label">No projects this month</span>
+            </template>
+          </oj-select-single>
 
           <!-- ACT-011 / FLD-026. A split employee reports into more than one
                manager, so a manager can act as another to review that team.
@@ -74,52 +84,29 @@
       </div>
     </div>
 
-    <!-- ══════════════════ All cut-offs panel (FLD-036) ══════════════════ -->
+    <!-- ══════════════════ Delivery cut-off (FLD-036) ══════════════════ -->
+    <!-- Only the delivery cut-off at month level: it is the one this page acts
+         against — the date by which the manager must approve. The weekly
+         cut-off belongs beside a WEEK, so it is shown on the drill-down where
+         weeks are listed, not here. Finance, book closure, MEC, client and
+         payroll drive downstream processes the manager cannot influence from
+         this screen, so they were noise. -->
     <oj-bind-if test="[[ $variables.showCutoffs && $variables.cutoffs ]]">
       <div class="oj-sm-padding-4x rw-metric">
         <h2 class="oj-typography-heading-xs oj-sm-margin-0 oj-sm-margin-3x-bottom">
-          Cut-offs for <oj-bind-text value="[[ $variables.cutoffs.period_name ]]"></oj-bind-text>
+          Cut-off for <oj-bind-text value="[[ $variables.cutoffs.period_name ]]"></oj-bind-text>
         </h2>
-        <oj-form-layout max-columns="4" direction="row" label-edge="top">
-          <oj-label-value>
-            <span slot="label" class="oj-label-nowrap">Weekly (timesheet)</span>
-            <span slot="value" class="oj-typography-body-md"><oj-bind-text value="[[ $variables.cutoffs.weekly_cutoff_display || '—' ]]"></oj-bind-text></span>
-          </oj-label-value>
-          <oj-label-value>
-            <span slot="label" class="oj-label-nowrap">Delivery</span>
-            <span slot="value" class="oj-typography-body-md"><oj-bind-text value="[[ $variables.cutoffs.delivery_cutoff || '—' ]]"></oj-bind-text></span>
-          </oj-label-value>
-          <oj-label-value>
-            <span slot="label" class="oj-label-nowrap">Finance</span>
-            <span slot="value" class="oj-typography-body-md"><oj-bind-text value="[[ $variables.cutoffs.finance_cutoff || '—' ]]"></oj-bind-text></span>
-          </oj-label-value>
-          <oj-label-value>
-            <span slot="label" class="oj-label-nowrap">Book closure</span>
-            <span slot="value" class="oj-typography-body-md"><oj-bind-text value="[[ $variables.cutoffs.book_closure || '—' ]]"></oj-bind-text></span>
-          </oj-label-value>
-          <oj-label-value>
-            <span slot="label" class="oj-label-nowrap">MEC close</span>
-            <span slot="value" class="oj-typography-body-md"><oj-bind-text value="[[ $variables.cutoffs.mec_close || '—' ]]"></oj-bind-text></span>
-          </oj-label-value>
-          <oj-label-value>
-            <span slot="label" class="oj-label-nowrap">Payroll</span>
-            <span slot="value" class="oj-typography-body-md"><oj-bind-text value="[[ $variables.cutoffs.payroll_cutoff || '—' ]]"></oj-bind-text></span>
-          </oj-label-value>
-          <oj-label-value>
-            <span slot="label" class="oj-label-nowrap">Client</span>
-            <span slot="value" class="oj-typography-body-md"><oj-bind-text value="[[ $variables.cutoffs.client_cutoff || '—' ]]"></oj-bind-text></span>
-          </oj-label-value>
-          <oj-label-value>
-            <span slot="label" class="oj-label-nowrap">Adjustment window</span>
-            <span slot="value" class="oj-typography-body-md">
-              <oj-bind-text value="[[ $variables.cutoffs.adjustment_months ]]"></oj-bind-text> months
-            </span>
-          </oj-label-value>
-        </oj-form-layout>
-        <p class="oj-typography-body-xs rw-metric-label oj-sm-margin-2x-top">
-          Only the Weekly and Delivery cut-offs affect timesheet status. The rest
-          drive downstream finance and payroll.
-        </p>
+        <oj-label-value>
+          <span slot="label" class="oj-label-nowrap">Delivery cut-off</span>
+          <span slot="value" class="oj-typography-body-md">
+            <oj-bind-text value="[[ $variables.cutoffs.delivery_cutoff || '—' ]]"></oj-bind-text>
+          </span>
+        </oj-label-value>
+        <div class="oj-typography-body-sm rw-metric-label oj-sm-margin-3x-top">
+          Approve every week of the month before this date. Missing it marks the
+          month Defaulted against the manager — it does not hold the employee's
+          salary.
+        </div>
       </div>
     </oj-bind-if>
 

@@ -45,16 +45,16 @@ define([
           type: 'warning',
           displayMode: 'transient',
         });
-        await Actions.callChain(context, {
-          chain: 'shell/navigateToPageChain',
-          params: { page: 'main-team-approvals' },
+        $application.variables.activeNav = 'main-team-approvals';
+        await Actions.navigateToPage(context, {
+          page: 'main-team-approvals', history: 'push',
         });
         return;
       }
 
-      await Actions.callChain(context, {
-        chain: 'shell/navigateToPageChain',
-        params: { page: 'main-approval-detail' },
+      $application.variables.activeNav = 'main-approval-detail';
+      await Actions.navigateToPage(context, {
+        page: 'main-approval-detail', history: 'push',
       });
     }
   }

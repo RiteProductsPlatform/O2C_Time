@@ -12,18 +12,6 @@
         ]
       }
     },
-    "projectFilter": {
-      "type": "string",
-      "defaultValue": "",
-      "description": "FLD-028 client-side filter over the projects table. Re-filters on every keystroke from the cached rows, so it costs no REST round-trip.",
-      "onValueChanged": {
-        "chains": [
-          {
-            "chain": "filterProjectsChain"
-          }
-        ]
-      }
-    },
     "projectsRaw": {
       "type": "any[]",
       "defaultValue": [],
@@ -97,6 +85,32 @@
       "defaultValue": "",
       "input": "none",
       "description": "Body text for the confirmation dialog. window.confirm cannot be used - SES blocks browser globals in chains (knowledge/14 §7)."
+    },
+    "projectPick": {
+      "type": "number",
+      "defaultValue": null,
+      "description": "FLD-028 — the project chosen in the filter, or null for all. Filters the cached rows, so it costs no REST round-trip.",
+      "onValueChanged": {
+        "chains": [
+          {
+            "chain": "filterProjectsChain"
+          }
+        ]
+      }
+    },
+    "projectOptionsArray": {
+      "type": "any[]",
+      "defaultValue": [],
+      "input": "none",
+      "description": "The manager’s projects for the month, as LOV rows. Rebuilt by loadProjectsChain whenever the month or the acting manager changes."
+    },
+    "projectOptions": {
+      "type": "vb/ArrayDataProvider2",
+      "defaultValue": {
+        "itemType": "lovNumOptionType",
+        "keyAttributes": "value",
+        "data": "{{ $page.variables.projectOptionsArray }}"
+      }
     }
   },
   "types": {
@@ -145,6 +159,10 @@
       "isNewProjectManager": "string",
       "oldMgrApprovedBy": "string",
       "newMgrApprovedBy": "string"
+    },
+    "lovNumOptionType": {
+      "value": "number",
+      "label": "string"
     }
   },
   "chains": {},

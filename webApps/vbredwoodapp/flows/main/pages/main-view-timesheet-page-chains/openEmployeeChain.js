@@ -25,9 +25,9 @@ define([
       // The approval detail page picks its own week; clear any previous one.
       $application.variables.selectedWeekId       = null;
 
-      await Actions.callChain(context, {
-        chain: 'shell/navigateToPageChain',
-        params: { page: 'main-approval-detail' },
+      $application.variables.activeNav = 'main-approval-detail';
+      await Actions.navigateToPage(context, {
+        page: 'main-approval-detail', history: 'push',
       });
     }
   }

@@ -22,14 +22,14 @@ define([
     async run(context) {
       const { $page } = context;
 
-      const all    = $page.variables.projectsRaw || [];
-      const filter = ($page.variables.projectFilter || '').trim().toLowerCase();
+      const all  = $page.variables.projectsRaw || [];
+      const pick = $page.variables.projectPick;
 
-      $page.variables.projects = !filter
+      // null means "All projects" — the placeholder on the select, and what a
+      // cleared LOV reports.
+      $page.variables.projects = (pick === null || pick === undefined || pick === '')
         ? all.slice()
-        : all.filter((p) =>
-            (p.projectName || '').toLowerCase().indexOf(filter) !== -1 ||
-            (p.projectNumber || '').toLowerCase().indexOf(filter) !== -1);
+        : all.filter((p) => p.projectId === pick);
     }
   }
 

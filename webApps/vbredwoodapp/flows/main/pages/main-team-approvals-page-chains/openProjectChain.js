@@ -37,9 +37,9 @@ define([
       $application.variables.selectedEmployeeName = '';
       $application.variables.selectedWeekId       = null;
 
-      await Actions.callChain(context, {
-        chain: 'shell/navigateToPageChain',
-        params: { page: 'main-view-timesheet' },
+      $application.variables.activeNav = 'main-view-timesheet';
+      await Actions.navigateToPage(context, {
+        page: 'main-view-timesheet', history: 'push',
       });
     }
   }

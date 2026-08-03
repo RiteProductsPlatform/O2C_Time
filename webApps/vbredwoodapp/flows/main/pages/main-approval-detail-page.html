@@ -55,7 +55,16 @@
     <oj-bind-if test="[[ $variables.view === 'weekly' ]]">
       <div class="oj-sm-padding-4x rw-metric">
         <div class="oj-flex oj-sm-justify-content-space-between oj-sm-align-items-center oj-sm-flex-wrap oj-sm-gap-2x oj-sm-margin-3x-bottom">
-          <h2 class="oj-typography-heading-xs oj-sm-margin-0">Weeks</h2>
+          <h2 class="oj-typography-heading-xs oj-sm-margin-0">
+            Weeks
+            <!-- FLD-003. The weekly cut-off governs a WEEK, so it belongs here
+                 rather than in the month-level cut-off panel on PAGE-003. -->
+            <oj-bind-if test="[[ $variables.weeklyCutoff ]]">
+              <span class="rw-metric-label oj-sm-margin-2x-start">
+                weekly cut-off <oj-bind-text value="[[ $variables.weeklyCutoff ]]"></oj-bind-text>
+              </span>
+            </oj-bind-if>
+          </h2>
           <div class="oj-flex oj-sm-align-items-center oj-sm-gap-2x oj-sm-flex-wrap">
             <span class="oj-typography-body-sm rw-metric-label">
               <oj-bind-text value="[[ $variables.selectedWeekKeys.length ]]"></oj-bind-text> selected

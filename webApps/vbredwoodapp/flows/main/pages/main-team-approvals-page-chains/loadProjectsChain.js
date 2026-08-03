@@ -77,6 +77,22 @@ define([
               pendingAdjustments: p.pending_adjustments || 0,
             }));
 
+          // The filter LOV is exactly this set — the manager's projects for the
+          // month — so it is rebuilt here rather than fetched separately.
+          $page.variables.projectOptionsArray =
+            $page.variables.projectsRaw.map((p) => ({
+              value: p.projectId,
+              label: p.projectNumber ? (p.projectNumber + ' · ' + p.projectName)
+                                     : p.projectName,
+            }));
+
+          // A project that is no longer in the list must not keep filtering it.
+          const pick = $page.variables.projectPick;
+          if (pick !== null && pick !== undefined &&
+              !$page.variables.projectsRaw.some((p) => p.projectId === pick)) {
+            $page.variables.projectPick = null;
+          }
+
           await Actions.callChain(context, { chain: 'filterProjectsChain' });
         } else {
           await Actions.fireNotificationEvent(context, {

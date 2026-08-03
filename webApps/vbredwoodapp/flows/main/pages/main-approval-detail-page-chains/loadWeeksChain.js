@@ -27,6 +27,21 @@ define([
       $page.variables.busy = true;
       $page.variables.selectedWeekKeys = [];
 
+      // FLD-003. The weekly cut-off is what governs a week, so it is fetched
+      // here and shown beside the list. Informational — a failure must not stop
+      // the weeks loading, which is the point of the page.
+      try {
+        const cut = await Actions.callRest(context, {
+          endpoint: 'oc_time/getCutoffs',
+          uriParams: { periodId: periodId, _t: Date.now() },
+        });
+        if (cut.ok && cut.body && cut.body.items && cut.body.items.length) {
+          $page.variables.weeklyCutoff = cut.body.items[0].weekly_cutoff_display || '';
+        }
+      } catch (e) {
+        $page.variables.weeklyCutoff = '';
+      }
+
       try {
         const resp = await Actions.callRest(context, {
           endpoint: 'oc_time/getMgrWeeks',
