@@ -6,35 +6,52 @@
    vocabulary (status capsules, flag chips, grid states) that all 11 pages
    share and which would be duplicated logic (S4) if copied per page. */
 
-/* ── Weekly grid: the day cells ──────────────────────────────────────────
-   An editable oj-input-number is an <input> plus two spinner buttons. In an
-   88px column the buttons took the whole width and the number was pushed out
-   of sight — the cell looked EMPTY while holding 8, and the only way to see
-   the value was to force the field read-only (read-only mode drops the
-   spinners and renders plain text). That is what made this look like a broken
-   value binding for several rounds; the binding was always correct.
+/* ── The weekly grid ─────────────────────────────────────────────────────
+   One table for Shift, the entry lines, Entered and Standard / day, so all
+   four stay column-aligned. They used to be two separate blocks and could not
+   be kept in step. Flex rows, not <table>: <oj-bind-for-each> is invalid
+   inside <tr> and the parser lifts it out of the table.
 
-   Columns are 118px now, and the field is told to fill the cell rather than
-   size itself from the theme's default form-control width. */
-#tsGrid oj-input-number {
-  width: 100%;
-  max-width: 100%;
-  min-width: 0;
-}
+   The column widths live here and nowhere else — every row uses the same four
+   class names, which is what guarantees the alignment. */
+.rw-ts       { min-width: max-content; font-size: 13px; }
+.rw-ts-row   { display: flex; align-items: stretch;
+               border-bottom: 1px solid var(--rw-border-2); }
+.rw-ts-row:last-child { border-bottom: none; }
 
-/* Keep the number itself readable and centred over the day column, so the
-   grid still reads as a column of figures rather than a row of form fields. */
-#tsGrid oj-input-number::part(input),
-#tsGrid oj-input-number input {
-  text-align: center;
-  min-width: 0;
-}
+.rw-ts-proj  { flex: 0 0 13rem; padding: 8px; overflow: hidden;
+               text-overflow: ellipsis; white-space: nowrap; }
+.rw-ts-task  { flex: 0 0 11rem; padding: 8px; }
+.rw-ts-tot   { flex: 0 0 5.5rem; padding: 8px; text-align: center; }
+.rw-ts-act   { flex: 0 0 3.5rem; padding: 4px; text-align: center; }
+.rw-ts .rw-grid-day { flex: 1 1 0; min-width: 8.5rem; padding: 6px 8px;
+                      text-align: center; }
 
-/* The stepper buttons are optional affordance — hours are typed far more often
-   than stepped, and RULE-005's quarter-hour step is re-checked on the server
-   and again in applyCellEdit. Shrinking them buys the digits their space back
-   without removing the control. */
-#tsGrid oj-input-number .oj-inputnumber-button,
-#tsGrid oj-input-number .oj-text-field-end {
-  flex: 0 0 auto;
-}
+.rw-ts-head  { background: #f5f4f0; border-bottom: 1px solid var(--rw-border); }
+.rw-ts-head > * { font-size: 11px; font-weight: 600; color: var(--rw-slate);
+                  text-transform: uppercase; letter-spacing: 0.5px;
+                  white-space: nowrap; }
+.rw-ts-sub   { display: block; text-transform: none; letter-spacing: 0;
+               font-weight: 400; }
+
+/* Shift / Entered / Standard — system rows, visibly not data. */
+.rw-ts-sys      { background: #fafafa; color: #5a5a5a; }
+.rw-ts-syslabel { font-weight: 600; }
+.rw-ts-note     { color: var(--rw-slate); font-size: 11.5px; }
+.rw-ts-strong   { font-weight: 700; }
+.rw-ts-empty    { padding: 12px 8px; color: var(--rw-slate); }
+
+/* ── The hours editor ────────────────────────────────────────────────────
+   A text box with its own arrows, as in the prototype. oj-input-number was
+   tried and does not fit: it renders an input plus two spinner buttons, and
+   in a day-width column the buttons took everything and the number was pushed
+   out of sight — the cell looked empty while holding 8. */
+.rw-hr      { display: inline-flex; align-items: center; gap: 4px; }
+.rw-hr-box  { width: 4.5rem; }
+.rw-hr-box::part(input) { text-align: right; font-variant-numeric: tabular-nums; }
+.rw-hr-arr  { display: inline-flex; flex-direction: column; gap: 1px; }
+
+/* Deliberately small: stepping is a convenience next to typing, and the
+   arrows must not crowd the value the way the spinner did. */
+.rw-hr-step { --oj-button-sm-height: 14px; min-height: 14px; height: 14px; }
+.rw-hr-step::part(button) { min-height: 14px; height: 14px; padding: 0 2px; }

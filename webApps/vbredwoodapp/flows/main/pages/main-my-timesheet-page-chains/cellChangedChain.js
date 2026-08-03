@@ -12,13 +12,15 @@ define([
    *
    * This exists because the binding used to be an inline function literal:
    *
-   *   on-value-changed="[[ function(e){ $page.functions.cellChanged(...) } ]]"
+   *   on-value-changed="[[ function(e){ ...inline handler... } ]]"
    *
    * which S1 forbids and which was not being wired up at all — the input took
    * no value and no keystroke reached the page, and the Remove button rendered
    * but did nothing for the same reason. A declared listener per day passes the
    * day index as a literal rather than deriving it from $current.columnIndex,
-   * so a column reorder cannot silently write Monday's hours into Tuesday.
+   * The day index now arrives as day.index from the nested oj-bind-for-each
+ * over dayHeaders, so a week clipped to the month end simply has fewer
+ * columns and no cell can be off by one.
    *
    * @param {Object} context
    * @param {{row:Object, dayIndex:number, value:*, updatedFrom:string}} params

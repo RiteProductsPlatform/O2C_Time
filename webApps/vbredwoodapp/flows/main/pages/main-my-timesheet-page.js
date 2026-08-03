@@ -29,6 +29,20 @@ define([], () => {
     }
 
     /**
+     * Hours on a line for one day column.
+     *
+     * The day columns are generated from dayHeaders, so the cell only knows its
+     * index — and `row['d' + i]` is arithmetic inside a binding, which S1 bars.
+     * Returned blank rather than 0 when there is nothing there, so an untouched
+     * cell reads as empty instead of as a deliberate zero.
+     */
+    hoursAt(row, dayIndex) {
+      if (!row) { return ''; }
+      const v = Number(row['d' + dayIndex]);
+      return (!v || isNaN(v)) ? '' : String(v);
+    }
+
+    /**
      * Running total for a grid line (FLD-010).
      * Computed rather than stored so the total cannot disagree with the cells.
      */

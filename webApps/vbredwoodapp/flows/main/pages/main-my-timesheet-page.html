@@ -160,85 +160,30 @@
       </div>
     </oj-bind-if>
 
-    <!-- ══════════════════ Day / shift row ══════════════════ -->
-    <!-- ACT-006 / FLD-008 shift and FLD-011 standard hours per day. Rendered,
-         never edited: RULE-011 sources the shift from HCM, so "Set Day Shift"
-         is a display action here and the row is deliberately read-only. -->
-    <div class="oj-sm-padding-4x rw-metric">
-      <h2 class="oj-typography-heading-xs oj-sm-margin-0 oj-sm-margin-3x-bottom">
-        Week <oj-bind-text value="[[ $variables.weekRange ]]"></oj-bind-text>
-      </h2>
+    <!-- ══════════════════ The weekly grid ══════════════════ -->
+    <!-- ONE table, matching doc/O2C_Timesheet_Module.html. The prototype puts
+         Shift in a sys-row at the top of the tbody and Standard / day in the
+         tfoot, inside the same table as the hours — not in a separate strip
+         above it, which is what this used to be and which could never stay
+         column-aligned with the grid.
 
-      <!-- Flex rows, NOT a <table>. <oj-bind-for-each> is a custom element and
-           is not valid inside <tr>/<thead>/<tbody>, so the HTML parser
-           foster-parents it out of the table entirely: the day cells rendered
-           as one long line above the grid while Shift/Standard/Entered
-           collapsed into a single cell. ARIA roles keep it a table to a screen
-           reader. Do not "tidy" this back into <table> markup. -->
-      <div class="rw-grid-scroll">
-        <div class="rw-shift-grid" role="table"
-             aria-label="Shift and standard hours per day">
+         Flex rows rather than <table>, because <oj-bind-for-each> is a custom
+         element and is invalid inside <tr> — the parser lifts it out of the
+         table. ARIA roles keep it a table to a screen reader.
 
-          <div class="rw-shift-line rw-shift-head" role="row">
-            <span class="rw-shift-label" role="columnheader">Day</span>
-            <oj-bind-for-each data="[[ $variables.dayHeaders ]]">
-              <template>
-                <span role="columnheader"
-                      :class="[[ $page.functions.dayHeaderClass($current.data) ]]"
-                      :title="[[ $application.functions.fmtDate($current.data.entryDate) ]]">
-                  <oj-bind-text value="[[ $current.data.dayName ]]"></oj-bind-text>
-                  <span class="rw-shift-sub oj-typography-body-xs">
-                    <oj-bind-text value="[[ $application.functions.fmtDayShort($current.data.entryDate) ]]"></oj-bind-text>
-                  </span>
-                </span>
-              </template>
-            </oj-bind-for-each>
-          </div>
+         Day columns come from dayHeaders, so a week clipped to the month end
+         shows exactly its own days: week 5 here is Mon 27 - Fri 31 and has no
+         Sat/Sun at all. The old oj-table hard-coded seven columns and drew two
+         phantom weekend cells belonging to the next month.
 
-          <div class="rw-shift-line rw-shift-row" role="row">
-            <span class="rw-shift-label" role="rowheader">Shift</span>
-            <oj-bind-for-each data="[[ $variables.dayHeaders ]]">
-              <template>
-                <span class="rw-grid-day" role="cell">
-                  <oj-bind-text value="[[ $current.data.shiftCode || '—' ]]"></oj-bind-text>
-                </span>
-              </template>
-            </oj-bind-for-each>
-          </div>
-
-          <div class="rw-shift-line rw-shift-row" role="row">
-            <span class="rw-shift-label" role="rowheader">Standard / day</span>
-            <oj-bind-for-each data="[[ $variables.dayHeaders ]]">
-              <template>
-                <span class="rw-grid-day" role="cell">
-                  <oj-bind-text value="[[ $application.functions.fmtHours($current.data.standardHours) ]]"></oj-bind-text>
-                </span>
-              </template>
-            </oj-bind-for-each>
-          </div>
-
-          <div class="rw-shift-line rw-grid-total" role="row">
-            <span class="rw-shift-label" role="rowheader">Entered</span>
-            <oj-bind-for-each data="[[ $variables.dayHeaders ]]">
-              <template>
-                <!-- RULE-003 is a cross-line rule, so the breach is reported on
-                     the column total: no single cell is individually at fault. -->
-                <span role="cell"
-                      :class="[[ $page.functions.dayTotalClass($current.data) ]]">
-                  <oj-bind-text value="[[ $application.functions.fmtHours($current.data.dayTotal) ]]"></oj-bind-text>
-                </span>
-              </template>
-            </oj-bind-for-each>
-          </div>
-
-        </div>
-      </div>
-    </div>
-
-    <!-- ══════════════════ Editable grid ══════════════════ -->
+         Deliberately NOT shown to the employee: billable type, bill rate and
+         billing loss (FLD-012 and the Personas sheet — the prototype comment
+         is explicit that "billable TYPE is hidden from the employee"). -->
     <div class="oj-sm-padding-4x rw-metric">
       <div class="oj-flex oj-sm-justify-content-space-between oj-sm-align-items-center oj-sm-margin-3x-bottom">
-        <h2 class="oj-typography-heading-xs oj-sm-margin-0">Hours</h2>
+        <h2 class="oj-typography-heading-xs oj-sm-margin-0">
+          Week <oj-bind-text value="[[ $variables.weekRange ]]"></oj-bind-text>
+        </h2>
         <oj-bind-if test="[[ $variables.editable ]]">
           <oj-button chroming="outlined" on-oj-action="[[ $listeners.openAddLine ]]">
             <span slot="startIcon" class="oj-ux-ico-plus"></span>
@@ -247,155 +192,168 @@
         </oj-bind-if>
       </div>
 
-      <!-- ACT-005. Hours are entered in 15-minute blocks (RULE-005): step 0.25,
-           min 0, max 24. The stepper enforces the increment client-side and the
-           server re-checks it, so a pasted value cannot get through. -->
       <div class="rw-grid-scroll">
-        <oj-table id="tsGrid"
-                  aria-label="Weekly hours by project and task"
-                  data="[[ $variables.gridADP ]]"
-                  layout="fixed"
-                  horizontal-grid-visible="enabled"
-                  vertical-grid-visible="enabled"
-                  selection-mode='{"row": "none", "column": "none"}'
-                  columns='[
-                    {"headerText":"Project","field":"projectName","template":"projCell","weight":3,"minWidth":170},
-                    {"headerText":"Task (WBS)","field":"taskName","template":"taskCell","weight":3,"minWidth":160},
-                    {"headerText":"Mon","field":"d0","template":"d0Cell","width":118},
-                    {"headerText":"Tue","field":"d1","template":"d1Cell","width":118},
-                    {"headerText":"Wed","field":"d2","template":"d2Cell","width":118},
-                    {"headerText":"Thu","field":"d3","template":"d3Cell","width":118},
-                    {"headerText":"Fri","field":"d4","template":"d4Cell","width":118},
-                    {"headerText":"Sat","field":"d5","template":"d5Cell","width":118},
-                    {"headerText":"Sun","field":"d6","template":"d6Cell","width":118},
-                    {"headerText":"Total","field":"lineTotal","template":"totalCell","width":78},
-                    {"headerText":"","field":"rowKey","template":"actionCell","width":56,"sortable":"disabled"}
-                  ]'>
+        <div class="rw-ts" role="table" aria-label="Weekly hours by project and task">
 
-          <template slot="projCell" data-oj-as="cell">
-            <span>
-              <oj-bind-text value="[[ cell.row.projectName ]]"></oj-bind-text>
-              <oj-bind-if test="[[ cell.row.projectType === 'Organization' ]]">
-                <span class="rw-flag rw-flag-advance">Non-billable</span>
-              </oj-bind-if>
-            </span>
-          </template>
-
-          <template slot="taskCell" data-oj-as="cell">
-            <span>
-              <oj-bind-text value="[[ cell.row.taskName ]]"></oj-bind-text>
-              <!-- The unbilled reason IS the task for common non-billable tasks
-                   (RULE-002), so showing it separately would just repeat the
-                   name. It is surfaced only when it differs. -->
-              <oj-bind-if test="[[ cell.row.unbilledReason
-                                && cell.row.unbilledReason !== cell.row.taskName ]]">
-                <span class="rw-flag rw-flag-advance">
-                  <oj-bind-text value="[[ cell.row.unbilledReason ]]"></oj-bind-text>
+          <!-- Header -->
+          <div class="rw-ts-row rw-ts-head" role="row">
+            <span class="rw-ts-proj" role="columnheader">Project</span>
+            <span class="rw-ts-task" role="columnheader">Task (WBS)</span>
+            <oj-bind-for-each data="[[ $variables.dayHeaders ]]">
+              <template data-oj-as="day">
+                <span role="columnheader"
+                      :class="[[ $page.functions.dayHeaderClass(day.data) ]]"
+                      :title="[[ $application.functions.fmtDate(day.data.entryDate) ]]">
+                  <oj-bind-text value="[[ day.data.dayName ]]"></oj-bind-text>
+                  <span class="rw-ts-sub">
+                    <oj-bind-text value="[[ $application.functions.fmtDayShort(day.data.entryDate) ]]"></oj-bind-text>
+                  </span>
                 </span>
-              </oj-bind-if>
-              <oj-bind-if test="[[ cell.row.isLeave === 'Y' ]]">
-                <span class="rw-flag rw-flag-advance" title="Sourced from HCM Absence. Leave is never entered here (RULE-008).">From HR</span>
-              </oj-bind-if>
+              </template>
+            </oj-bind-for-each>
+            <span class="rw-ts-tot" role="columnheader">Total</span>
+            <span class="rw-ts-act" role="columnheader"></span>
+          </div>
+
+          <!-- Shift: one per employee per day, read-only from HCM (RULE-011) -->
+          <div class="rw-ts-row rw-ts-sys" role="row">
+            <span class="rw-ts-proj rw-ts-syslabel" role="rowheader">Shift</span>
+            <span class="rw-ts-task rw-ts-note">per day · from HCM, read-only</span>
+            <oj-bind-for-each data="[[ $variables.dayHeaders ]]">
+              <template data-oj-as="day">
+                <span class="rw-grid-day" role="cell">
+                  <oj-bind-text value="[[ day.data.shiftCode || '—' ]]"></oj-bind-text>
+                </span>
+              </template>
+            </oj-bind-for-each>
+            <span class="rw-ts-tot" role="cell">—</span>
+            <span class="rw-ts-act" role="cell"></span>
+          </div>
+
+          <!-- Entry lines -->
+          <oj-bind-if test="[[ $variables.gridRows.length === 0 ]]">
+            <div class="rw-ts-row" role="row">
+              <span class="rw-ts-empty" role="cell">No hours yet for this week.</span>
+            </div>
+          </oj-bind-if>
+
+          <oj-bind-for-each data="[[ $variables.gridRows ]]">
+            <template data-oj-as="line">
+              <div class="rw-ts-row" role="row">
+
+                <span class="rw-ts-proj" role="cell" :title="[[ line.data.projectName ]]">
+                  <oj-bind-text value="[[ line.data.projectName ]]"></oj-bind-text>
+                </span>
+
+                <span class="rw-ts-task" role="cell">
+                  <oj-bind-text value="[[ line.data.taskName ]]"></oj-bind-text>
+                  <!-- The unbilled reason IS the task for the common non-billable
+                       tasks (RULE-002), so it is only worth showing separately
+                       when it says something different. -->
+                  <oj-bind-if test="[[ line.data.unbilledReason
+                                    && line.data.unbilledReason !== line.data.taskName ]]">
+                    <span class="rw-flag rw-flag-advance">
+                      <oj-bind-text value="[[ line.data.unbilledReason ]]"></oj-bind-text>
+                    </span>
+                  </oj-bind-if>
+                  <oj-bind-if test="[[ line.data.isLeave === 'Y' ]]">
+                    <span class="rw-flag rw-flag-advance"
+                          title="Sourced from HCM Absence. Leave is never entered here (RULE-008).">From HR</span>
+                  </oj-bind-if>
+                </span>
+
+                <!-- ACT-005 / RULE-005: quarter-hour blocks. A text box with its
+                     own up/down arrows, exactly as the prototype does it.
+                     oj-input-number renders an input plus two spinner buttons
+                     that do not fit a day column — the number was pushed out of
+                     sight and the cell looked empty while holding 8. -->
+                <oj-bind-for-each data="[[ $variables.dayHeaders ]]">
+                  <template data-oj-as="day">
+                    <span class="rw-grid-day" role="cell">
+                      <span class="rw-hr">
+                        <oj-input-text class="rw-hr-box"
+                          aria-label="Hours"
+                          value="[[ $page.functions.hoursAt(line.data, day.index) ]]"
+                          readonly="[[ !$variables.editable ]]"
+                          on-value-changed="[[ $listeners.cellChanged ]]">
+                        </oj-input-text>
+                        <oj-bind-if test="[[ $variables.editable ]]">
+                          <span class="rw-hr-arr">
+                            <oj-button class="rw-hr-step" display="icons" chroming="borderless"
+                                       aria-label="Add 15 minutes" title="+15 min"
+                                       on-oj-action="[[ $listeners.stepUp ]]">
+                              <span slot="startIcon" class="oj-ux-ico-chevron-up"></span>
+                              <span>Up</span>
+                            </oj-button>
+                            <oj-button class="rw-hr-step" display="icons" chroming="borderless"
+                                       aria-label="Subtract 15 minutes" title="-15 min"
+                                       on-oj-action="[[ $listeners.stepDown ]]">
+                              <span slot="startIcon" class="oj-ux-ico-chevron-down"></span>
+                              <span>Down</span>
+                            </oj-button>
+                          </span>
+                        </oj-bind-if>
+                      </span>
+                    </span>
+                  </template>
+                </oj-bind-for-each>
+
+                <span class="rw-ts-tot rw-ts-strong" role="cell">
+                  <oj-bind-text value="[[ $application.functions.fmtHours($page.functions.lineTotal(line.data)) ]]"></oj-bind-text>
+                </span>
+
+                <span class="rw-ts-act" role="cell">
+                  <!-- ACT-004. An HR-sourced leave line is not the employee's to
+                       remove — it came from Absence (RULE-008). -->
+                  <oj-bind-if test="[[ $variables.editable && line.data.isLeave !== 'Y' ]]">
+                    <oj-button chroming="borderless" display="icons"
+                               :aria-label="[[ $page.functions.removeLineLabel(line.data.taskName) ]]"
+                               on-oj-action="[[ $listeners.removeLine ]]">
+                      <span slot="startIcon" class="oj-ux-ico-trash"></span>
+                      <span>Remove</span>
+                    </oj-button>
+                  </oj-bind-if>
+                </span>
+
+              </div>
+            </template>
+          </oj-bind-for-each>
+
+          <!-- Entered per day. RULE-003 is a cross-line rule, so a breach is
+               reported on the column total: no single cell is at fault. -->
+          <div class="rw-ts-row rw-ts-sys rw-grid-total" role="row">
+            <span class="rw-ts-proj rw-ts-syslabel" role="rowheader">Entered</span>
+            <span class="rw-ts-task"></span>
+            <oj-bind-for-each data="[[ $variables.dayHeaders ]]">
+              <template data-oj-as="day">
+                <span role="cell" :class="[[ $page.functions.dayTotalClass(day.data) ]]">
+                  <oj-bind-text value="[[ $application.functions.fmtHours(day.data.dayTotal) ]]"></oj-bind-text>
+                </span>
+              </template>
+            </oj-bind-for-each>
+            <span class="rw-ts-tot rw-ts-strong" role="cell">
+              <oj-bind-text value="[[ $application.functions.fmtHours($variables.totalHours) ]]"></oj-bind-text>
             </span>
-          </template>
+            <span class="rw-ts-act" role="cell"></span>
+          </div>
 
-          <template slot="d0Cell" data-oj-as="cell">
-            <oj-input-number aria-label="Monday hours" value="[[ cell.row.d0 ]]"
-                             min="0" max="24" step="0.25"
-                             readonly="[[ !$variables.editable ]]"
-                             on-value-changed="[[ $listeners.cellChangedMon ]]">
-            </oj-input-number>
-          </template>
-          <template slot="d1Cell" data-oj-as="cell">
-            <oj-input-number aria-label="Tuesday hours" value="[[ cell.row.d1 ]]"
-                             min="0" max="24" step="0.25"
-                             readonly="[[ !$variables.editable ]]"
-                             on-value-changed="[[ $listeners.cellChangedTue ]]">
-            </oj-input-number>
-          </template>
-          <template slot="d2Cell" data-oj-as="cell">
-            <oj-input-number aria-label="Wednesday hours" value="[[ cell.row.d2 ]]"
-                             min="0" max="24" step="0.25"
-                             readonly="[[ !$variables.editable ]]"
-                             on-value-changed="[[ $listeners.cellChangedWed ]]">
-            </oj-input-number>
-          </template>
-          <template slot="d3Cell" data-oj-as="cell">
-            <oj-input-number aria-label="Thursday hours" value="[[ cell.row.d3 ]]"
-                             min="0" max="24" step="0.25"
-                             readonly="[[ !$variables.editable ]]"
-                             on-value-changed="[[ $listeners.cellChangedThu ]]">
-            </oj-input-number>
-          </template>
-          <template slot="d4Cell" data-oj-as="cell">
-            <oj-input-number aria-label="Friday hours" value="[[ cell.row.d4 ]]"
-                             min="0" max="24" step="0.25"
-                             readonly="[[ !$variables.editable ]]"
-                             on-value-changed="[[ $listeners.cellChangedFri ]]">
-            </oj-input-number>
-          </template>
-          <!-- RULE-012: Saturday and Sunday are editable and default to 0. -->
-          <template slot="d5Cell" data-oj-as="cell">
-            <oj-input-number aria-label="Saturday hours" value="[[ cell.row.d5 ]]"
-                             min="0" max="24" step="0.25"
-                             readonly="[[ !$variables.editable ]]"
-                             on-value-changed="[[ $listeners.cellChangedSat ]]">
-            </oj-input-number>
-          </template>
-          <template slot="d6Cell" data-oj-as="cell">
-            <oj-input-number aria-label="Sunday hours" value="[[ cell.row.d6 ]]"
-                             min="0" max="24" step="0.25"
-                             readonly="[[ !$variables.editable ]]"
-                             on-value-changed="[[ $listeners.cellChangedSun ]]">
-            </oj-input-number>
-          </template>
-
-          <template slot="totalCell" data-oj-as="cell">
-            <span class="oj-typography-semi-bold">
-              <oj-bind-text value="[[ $application.functions.fmtHours($page.functions.lineTotal(cell.row)) ]]"></oj-bind-text>
+          <!-- Standard / day (FLD-011) -->
+          <div class="rw-ts-row rw-ts-sys" role="row">
+            <span class="rw-ts-proj rw-ts-syslabel" role="rowheader">Standard / day</span>
+            <span class="rw-ts-task"></span>
+            <oj-bind-for-each data="[[ $variables.dayHeaders ]]">
+              <template data-oj-as="day">
+                <span class="rw-grid-day" role="cell">
+                  <oj-bind-text value="[[ $application.functions.fmtHours(day.data.standardHours) ]]"></oj-bind-text>
+                </span>
+              </template>
+            </oj-bind-for-each>
+            <span class="rw-ts-tot" role="cell">
+              <oj-bind-text value="[[ $application.functions.fmtHours($variables.standardHours) ]]"></oj-bind-text>
             </span>
-          </template>
+            <span class="rw-ts-act" role="cell"></span>
+          </div>
 
-          <template slot="actionCell" data-oj-as="cell">
-            <!-- ACT-004 remove line. An HR-sourced leave row is not the
-                 employee's to remove — it came from Absence (RULE-008). -->
-            <oj-bind-if test="[[ $variables.editable && cell.row.isLeave !== 'Y' ]]">
-              <oj-button chroming="borderless" display="icons"
-                         :aria-label="[[ $page.functions.removeLineLabel(cell.row.taskName) ]]"
-                         on-oj-action="[[ $listeners.removeLine ]]">
-                <span slot="startIcon" class="oj-ux-ico-trash"></span>
-                <span>Remove</span>
-              </oj-button>
-            </oj-bind-if>
-          </template>
-        </oj-table>
-      </div>
-
-      <!-- Week totals. Billing Loss is automatic (RULE-009). -->
-      <div class="oj-flex oj-sm-flex-wrap oj-sm-gap-6x oj-sm-margin-4x-top">
-        <div class="oj-flex-item">
-          <div class="rw-metric-value"><oj-bind-text value="[[ $application.functions.fmtHours($variables.billableHours) ]]"></oj-bind-text></div>
-          <div class="rw-metric-label">Billable</div>
-        </div>
-        <div class="oj-flex-item">
-          <div class="rw-metric-value"><oj-bind-text value="[[ $application.functions.fmtHours($variables.nonBillableHours) ]]"></oj-bind-text></div>
-          <div class="rw-metric-label">Non-billable</div>
-        </div>
-        <div class="oj-flex-item">
-          <div class="rw-metric-value"><oj-bind-text value="[[ $application.functions.fmtHours($variables.leaveHours) ]]"></oj-bind-text></div>
-          <div class="rw-metric-label">Leave</div>
-        </div>
-        <div class="oj-flex-item">
-          <div class="rw-metric-value"><oj-bind-text value="[[ $application.functions.fmtHours($variables.billingLossHours) ]]"></oj-bind-text></div>
-          <div class="rw-metric-label">Billing loss (automatic)</div>
-        </div>
-        <div class="oj-flex-item">
-          <div class="rw-metric-value"><oj-bind-text value="[[ $application.functions.fmtHours($variables.totalHours) ]]"></oj-bind-text></div>
-          <div class="rw-metric-label">Total</div>
-        </div>
-        <div class="oj-flex-item">
-          <div class="rw-metric-value"><oj-bind-text value="[[ $application.functions.fmtHours($variables.standardHours) ]]"></oj-bind-text></div>
-          <div class="rw-metric-label">Standard</div>
         </div>
       </div>
     </div>
