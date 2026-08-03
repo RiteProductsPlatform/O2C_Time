@@ -60,9 +60,12 @@ define([], () => {
       const raw  = Number(event.detail.value) || 0;
       const snapped = Math.max(0, Math.min(24, Math.round(raw * 4) / 4));
 
-      if (snapped !== raw) {
-        row['d' + dayIndex] = snapped;
-      }
+      // Always write it back. The cell used to be bound two-way, so JET did
+      // this and the assignment was only needed when the value was snapped —
+      // but an oj-table cell context is a plain object, not an observable, so
+      // writeback never worked and the input rendered blank. It reads one-way
+      // now, which makes this handler the only thing that updates the row.
+      row['d' + dayIndex] = snapped;
 
       const dates = page.dayHeaders || [];
       const day   = dates[dayIndex];
@@ -85,6 +88,14 @@ define([], () => {
 
       page.dirtyCells = pending;
       page.hasUnsaved = true;
+
+      // Mutating a row object in place does not tell the ADP anything, so the
+      // line Total column would keep showing the pre-edit figure. gridADP is
+      // live-bound to gridRows at page scope, so replacing the array reference
+      // re-renders the table. Safe here because oj-input-number commits on
+      // blur/Enter rather than per keystroke, and the guard above ignores the
+      // programmatic value-changed that the re-render fires back.
+      page.gridRows = (page.gridRows || []).slice();
 
       this.recomputeTotals();
     }
