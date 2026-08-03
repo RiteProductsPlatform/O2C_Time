@@ -1,32 +1,10 @@
-/* PAGE-005 Approval Detail — page-specific styles.
+/* main-approval-detail-page.css — page styles.
 
-   S2: no style="" attributes anywhere; every visual rule lives in a CSS
-   file. Classes are prefixed `apdt-` to avoid clashing with the shared
-   design system in resources/css/o2ctime.css, which holds the cross-page
-   vocabulary (status capsules, flag chips, grid states) that all 11 pages
-   share and which would be duplicated logic (S4) if copied per page. */
+   EMPTY ON PURPOSE. A page-level .css in this app is NOT loaded: app-flow.json
+   imports only resources/css/redwood-overrides.css (plus the icon font) and
+   nothing references the per-page files. Rules written here silently do
+   nothing — this page's classes were live in the markup and unstyled until
+   they were moved.
 
-/* The row tick is a single-option checkboxset; its default form margins would
-   misalign it inside a table cell. */
-.apdt-row-pick {
-  margin: 0;
-}
-
-/* ── ACT-018 CSV download link ───────────────────────────────
-   An anchor, not an oj-button: SES blocks browser globals in page modules, so
-   the browser has to be the one fetching the file. Styled to sit level with the
-   buttons beside it, the same approach the client-documents page takes. */
-.ad-export-link {
-  align-items: center;
-  color: var(--oj-core-text-color-primary, inherit);
-  display: inline-flex;
-  font-size: 0.875rem;
-  gap: 0.25rem;
-  min-height: 2rem;
-  padding: 0.25rem 0.5rem;
-  text-decoration: none;
-}
-
-.ad-export-link:hover {
-  text-decoration: underline;
-}
+   Put new rules in the <style> block of pages/shell-page.html, or add this
+   file to app-flow.json's imports.css first. */

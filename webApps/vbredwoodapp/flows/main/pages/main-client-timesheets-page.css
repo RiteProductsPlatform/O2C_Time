@@ -1,27 +1,10 @@
-/* PAGE-002 Client Timesheets — page-specific styles.
+/* main-client-timesheets-page.css — page styles.
 
-   S2: no style="" attributes anywhere; every visual rule lives in a CSS
-   file. Classes are prefixed `ctim-` to avoid clashing with the shared
-   design system in resources/css/o2ctime.css, which holds the cross-page
-   vocabulary (status capsules, flag chips, grid states) that all 11 pages
-   share and which would be duplicated logic (S4) if copied per page. */
+   EMPTY ON PURPOSE. A page-level .css in this app is NOT loaded: app-flow.json
+   imports only resources/css/redwood-overrides.css (plus the icon font) and
+   nothing references the per-page files. Rules written here silently do
+   nothing — this page's classes were live in the markup and unstyled until
+   they were moved.
 
-/* Download is an anchor, not a button, because the browser streams the file and
-   SES bars window.open from a page module. It is styled to sit level with the
-   adjacent icon button. */
-.ctim-download-link {
-  align-items: center;
-  color: var(--oj-core-text-color-primary, inherit);
-  display: inline-flex;
-  gap: 0.25rem;
-  padding: 0.25rem 0.5rem;
-  text-decoration: none;
-}
-
-.ctim-download-link:hover {
-  text-decoration: underline;
-}
-
-.ctim-muted {
-  color: var(--oj-core-text-color-secondary, #5a5a5a);
-}
+   Put new rules in the <style> block of pages/shell-page.html, or add this
+   file to app-flow.json's imports.css first. */
