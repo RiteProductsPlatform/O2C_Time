@@ -119,10 +119,25 @@
     </oj-bind-if>
 
     <!-- ══════════════════ Read-only notices ══════════════════ -->
+    <!-- Every period stays VISIBLE; only editing is gated. A closed month is
+         history the employee is entitled to look at, and the design
+         (doc/O2C_Timesheet_Module.html) lists every month in the picker with a
+         status chip rather than hiding the ones that cannot be typed into.
+         Without a notice, a read-only grid just looks broken. -->
     <oj-bind-if test="[[ $variables.periodState === 'Future' ]]">
       <div class="oj-sm-padding-3x rw-notice" role="status">
         This month has not started yet. Values are shown for reference but cannot
         be filled in.
+      </div>
+    </oj-bind-if>
+
+    <!-- Closed, but the backdating window (RULE-019) may still be open. Saying
+         so turns a dead end into the next step: the retro adjustment is exactly
+         the route for correcting a closed month. -->
+    <oj-bind-if test="[[ $variables.periodState === 'Closed' ]]">
+      <div class="oj-sm-padding-3x rw-notice" role="status">
+        <oj-bind-text value="[[ $page.functions.closedPeriodMessage(
+                                  $application.variables.adjustmentAllowed) ]]"></oj-bind-text>
       </div>
     </oj-bind-if>
 

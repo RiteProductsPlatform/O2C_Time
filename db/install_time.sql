@@ -208,6 +208,53 @@ PROMPT >>> 14 ORDS oc.time.admin      (admin + accrual pull)
 PROMPT >>> 15 ORDS oc.time.auth       (login, logout, session, set-password)
 @@ords/14_ords_time_auth.sql
 
+-- ── Recompile anything the DDL invalidated ───────────────────
+--
+-- Adding a column to a table marks every dependent view INVALID. Oracle
+-- recompiles them lazily on first use, so they are usually harmless — but
+-- "usually" is the problem: a genuine error and a not-yet-touched object look
+-- identical in USER_OBJECTS, so nobody can tell which they are looking at.
+--
+-- Compiling them here forces the distinction. Anything still INVALID after this
+-- is really broken, and the verification block below will show it.
+DECLARE
+  v_n    PLS_INTEGER := 0;
+  v_left PLS_INTEGER := 0;
+BEGIN
+  -- Views first, then everything else: a package body that reads an invalid
+  -- view cannot compile until the view is sound.
+  FOR o IN (SELECT object_type, object_name
+              FROM user_objects
+             WHERE status <> 'VALID'
+               AND object_type IN ('VIEW','TRIGGER','PROCEDURE','FUNCTION',
+                                   'PACKAGE','PACKAGE BODY')
+             ORDER BY CASE object_type WHEN 'VIEW' THEN 1
+                                       WHEN 'TRIGGER' THEN 2
+                                       WHEN 'PACKAGE' THEN 3
+                                       ELSE 4 END)
+  LOOP
+    BEGIN
+      EXECUTE IMMEDIATE 'ALTER ' ||
+        CASE o.object_type WHEN 'PACKAGE BODY' THEN 'PACKAGE' ELSE o.object_type END
+        || ' ' || o.object_name || ' COMPILE' ||
+        CASE WHEN o.object_type = 'PACKAGE BODY' THEN ' BODY' ELSE '' END;
+      v_n := v_n + 1;
+    EXCEPTION WHEN OTHERS THEN
+      -- ORA-24344 is "compiled with errors", which is the answer we wanted.
+      NULL;
+    END;
+  END LOOP;
+
+  SELECT COUNT(*) INTO v_left FROM user_objects WHERE status <> 'VALID';
+  DBMS_OUTPUT.PUT_LINE('recompiled ' || v_n || ' object(s); ' || v_left ||
+                       ' still invalid.');
+  IF v_left > 0 THEN
+    DBMS_OUTPUT.PUT_LINE('  Those are real errors - see the list below, then '
+                         || 'SELECT * FROM user_errors.');
+  END IF;
+END;
+/
+
 -- ── Post-install verification ────────────────────────────────
 PROMPT
 PROMPT ##############################################################

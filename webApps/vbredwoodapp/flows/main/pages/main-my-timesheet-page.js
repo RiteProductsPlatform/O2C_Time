@@ -11,6 +11,24 @@ define([], () => {
   class PageModule {
 
     /**
+     * What a closed month means for this employee.
+     *
+     * Two different answers, because the difference is actionable: inside the
+     * backdating window (RULE-019) a mistake can still be corrected through a
+     * retro adjustment, and outside it there is genuinely nothing to be done.
+     * Telling someone only "this is read-only" leaves them to find that out by
+     * hunting.
+     */
+    closedPeriodMessage(adjustmentAllowed) {
+      const base = 'This month is closed, so the hours below cannot be edited. ';
+      return adjustmentAllowed === 'Y'
+        ? base + 'It is still inside the adjustment window — use Enter New & '
+               + 'Cancel Old to correct a day, and your manager will approve it.'
+        : base + 'The adjustment window has passed too, so any correction now '
+               + 'has to go through your manager.';
+    }
+
+    /**
      * Running total for a grid line (FLD-010).
      * Computed rather than stored so the total cannot disagree with the cells.
      */
