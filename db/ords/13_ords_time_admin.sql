@@ -453,7 +453,6 @@ BEGIN
                       project_name       VARCHAR2(240) PATH '$.PROJECT_NAME',
                       fusion_project_id  VARCHAR2(50)  PATH '$.PROJECT_ID',
                       customer_name      VARCHAR2(240) PATH '$.CUSTOMER_NAME',
-                      project_type       VARCHAR2(20)  PATH '$.PROJECT_TYPE',
                       project_manager_id VARCHAR2(50)  PATH '$.PROJECT_MANAGER_ID',
                       time_entry_enabled VARCHAR2(1)   PATH '$.TIME_ENTRY_ENABLED',
                       start_date         VARCHAR2(10)  PATH '$.START_DATE',
@@ -486,8 +485,21 @@ BEGIN
                           time_entry_enabled, project_start_date, project_end_date,
                           status, fusion_synced_on, source_system, source_method,
                           sync_job_run_id, created_by)
+                  -- PROJECT_TYPE is NOT synced. Fusion's project type is an
+                  -- implementation label ('UK Billable no Burden', 'PRGUK
+                  -- Funded with Burden', 'Max_Project Type' - 26 distinct
+                  -- values on this pod). Ours is a two-value domain where
+                  -- 'Organization' specifically means the PRJ-ORG project
+                  -- implicitly assigned to every employee (FLD-006). They are
+                  -- different concepts, and mapping one onto the other violated
+                  -- CHK_OC_TPRJ_TYPE on 26 projects.
+                  --
+                  -- Every synced project is 'Billable'. 'Organization' is set
+                  -- locally for PRJ-ORG, and the sync must not overwrite it -
+                  -- which the MATCHED branch already honours by never touching
+                  -- the column.
                   VALUES (r.project_number, r.project_name, r.fusion_project_id,
-                          r.customer_name, NVL(r.project_type,'Billable'),
+                          r.customer_name, 'Billable',
                           r.project_manager_id, NVL(r.time_entry_enabled,'N'),
                           TO_DATE(r.start_date,'YYYY-MM-DD'),
                           TO_DATE(r.end_date,'YYYY-MM-DD'),

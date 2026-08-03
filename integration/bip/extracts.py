@@ -40,11 +40,30 @@ SELECT papf.person_number                                AS employee_id,
        CASE WHEN paam.system_person_type = 'CWK' THEN 'Contractor'
             ELSE 'Employee' END                          AS worker_type,
        loc.country                                       AS base_country,
-       -- NORMAL_HOURS is per FREQUENCY, so a weekly figure has to be reduced to
-       -- a daily one before it can drive FLD-011 / CFG-013.
-       CASE WHEN paam.frequency = 'W' AND paam.normal_hours > 0
-            THEN ROUND(paam.normal_hours / 5, 2)
-            ELSE paam.normal_hours END                   AS std_hours_per_day,
+       -- NORMAL_HOURS is per FREQUENCY and has to be reduced to a DAILY figure
+       -- before it can drive FLD-011 / CFG-013.
+       --
+       -- Every frequency on the pod is handled, not just weekly. An earlier
+       -- version divided 'W' by 5 and passed everything else through raw, which
+       -- sent monthly workers through at 186 — nine of them failed the load
+       -- with ORA-01438 against STD_HOURS_PER_DAY's NUMBER(4,2).
+       --
+       -- Observed 02-Aug-2026: W 4,606 (0-53) · null 1,339 · D 34 (8-9) ·
+       -- M 9 (186). No 'Y' rows, but it is handled because one hire would
+       -- otherwise reintroduce exactly the same failure.
+       --
+       -- LEAST(...,24) because CHK_OC_TW_STD constrains 0-24 and a bad source
+       -- value should land as a clamped number rather than reject the worker
+       -- outright — the person still needs to exist to record time.
+       LEAST(
+         CASE
+           WHEN NVL(paam.normal_hours,0) <= 0 THEN 8          -- no data: corporate default
+           WHEN paam.frequency = 'D' THEN paam.normal_hours
+           WHEN paam.frequency = 'W' THEN ROUND(paam.normal_hours / 5, 2)
+           WHEN paam.frequency = 'M' THEN ROUND(paam.normal_hours / 21.67, 2)
+           WHEN paam.frequency = 'Y' THEN ROUND(paam.normal_hours / 260, 2)
+           ELSE 8                                             -- unknown frequency
+         END, 24)                                    AS std_hours_per_day,
        mgr.person_number                                 AS manager_emp_id,
        org.name                                          AS legal_employer,
        -- POET's O, resource-wise: the organization that INCURS the cost.
