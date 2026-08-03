@@ -496,6 +496,107 @@
           "chain": "loadGridChain"
         }
       ]
+    },
+    "cellChangedMon": {
+      "chains": [
+        {
+          "chain": "cellChangedChain",
+          "parameters": {
+            "row": "{{ $current.row }}",
+            "dayIndex": 0,
+            "value": "{{ $event.detail.value }}",
+            "updatedFrom": "{{ $event.detail.updatedFrom }}"
+          }
+        }
+      ]
+    },
+    "cellChangedTue": {
+      "chains": [
+        {
+          "chain": "cellChangedChain",
+          "parameters": {
+            "row": "{{ $current.row }}",
+            "dayIndex": 1,
+            "value": "{{ $event.detail.value }}",
+            "updatedFrom": "{{ $event.detail.updatedFrom }}"
+          }
+        }
+      ]
+    },
+    "cellChangedWed": {
+      "chains": [
+        {
+          "chain": "cellChangedChain",
+          "parameters": {
+            "row": "{{ $current.row }}",
+            "dayIndex": 2,
+            "value": "{{ $event.detail.value }}",
+            "updatedFrom": "{{ $event.detail.updatedFrom }}"
+          }
+        }
+      ]
+    },
+    "cellChangedThu": {
+      "chains": [
+        {
+          "chain": "cellChangedChain",
+          "parameters": {
+            "row": "{{ $current.row }}",
+            "dayIndex": 3,
+            "value": "{{ $event.detail.value }}",
+            "updatedFrom": "{{ $event.detail.updatedFrom }}"
+          }
+        }
+      ]
+    },
+    "cellChangedFri": {
+      "chains": [
+        {
+          "chain": "cellChangedChain",
+          "parameters": {
+            "row": "{{ $current.row }}",
+            "dayIndex": 4,
+            "value": "{{ $event.detail.value }}",
+            "updatedFrom": "{{ $event.detail.updatedFrom }}"
+          }
+        }
+      ]
+    },
+    "cellChangedSat": {
+      "chains": [
+        {
+          "chain": "cellChangedChain",
+          "parameters": {
+            "row": "{{ $current.row }}",
+            "dayIndex": 5,
+            "value": "{{ $event.detail.value }}",
+            "updatedFrom": "{{ $event.detail.updatedFrom }}"
+          }
+        }
+      ]
+    },
+    "cellChangedSun": {
+      "chains": [
+        {
+          "chain": "cellChangedChain",
+          "parameters": {
+            "row": "{{ $current.row }}",
+            "dayIndex": 6,
+            "value": "{{ $event.detail.value }}",
+            "updatedFrom": "{{ $event.detail.updatedFrom }}"
+          }
+        }
+      ]
+    },
+    "removeLine": {
+      "chains": [
+        {
+          "chain": "removeLineChain",
+          "parameters": {
+            "row": "{{ $current.row }}"
+          }
+        }
+      ]
     }
   },
   "imports": {

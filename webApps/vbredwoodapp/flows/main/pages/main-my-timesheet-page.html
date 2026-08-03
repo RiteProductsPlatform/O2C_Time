@@ -303,35 +303,35 @@
             <oj-input-number aria-label="Monday hours" value="[[ cell.row.d0 ]]"
                              min="0" max="24" step="0.25"
                              readonly="[[ !$variables.editable || cell.row.readOnly ]]"
-                             on-value-changed="[[ function(e){ $page.functions.cellChanged(cell.row, 0, e); } ]]">
+                             on-value-changed="[[ $listeners.cellChangedMon ]]">
             </oj-input-number>
           </template>
           <template slot="d1Cell" data-oj-as="cell">
             <oj-input-number aria-label="Tuesday hours" value="[[ cell.row.d1 ]]"
                              min="0" max="24" step="0.25"
                              readonly="[[ !$variables.editable || cell.row.readOnly ]]"
-                             on-value-changed="[[ function(e){ $page.functions.cellChanged(cell.row, 1, e); } ]]">
+                             on-value-changed="[[ $listeners.cellChangedTue ]]">
             </oj-input-number>
           </template>
           <template slot="d2Cell" data-oj-as="cell">
             <oj-input-number aria-label="Wednesday hours" value="[[ cell.row.d2 ]]"
                              min="0" max="24" step="0.25"
                              readonly="[[ !$variables.editable || cell.row.readOnly ]]"
-                             on-value-changed="[[ function(e){ $page.functions.cellChanged(cell.row, 2, e); } ]]">
+                             on-value-changed="[[ $listeners.cellChangedWed ]]">
             </oj-input-number>
           </template>
           <template slot="d3Cell" data-oj-as="cell">
             <oj-input-number aria-label="Thursday hours" value="[[ cell.row.d3 ]]"
                              min="0" max="24" step="0.25"
                              readonly="[[ !$variables.editable || cell.row.readOnly ]]"
-                             on-value-changed="[[ function(e){ $page.functions.cellChanged(cell.row, 3, e); } ]]">
+                             on-value-changed="[[ $listeners.cellChangedThu ]]">
             </oj-input-number>
           </template>
           <template slot="d4Cell" data-oj-as="cell">
             <oj-input-number aria-label="Friday hours" value="[[ cell.row.d4 ]]"
                              min="0" max="24" step="0.25"
                              readonly="[[ !$variables.editable || cell.row.readOnly ]]"
-                             on-value-changed="[[ function(e){ $page.functions.cellChanged(cell.row, 4, e); } ]]">
+                             on-value-changed="[[ $listeners.cellChangedFri ]]">
             </oj-input-number>
           </template>
           <!-- RULE-012: Saturday and Sunday are editable and default to 0. -->
@@ -339,14 +339,14 @@
             <oj-input-number aria-label="Saturday hours" value="[[ cell.row.d5 ]]"
                              min="0" max="24" step="0.25"
                              readonly="[[ !$variables.editable || cell.row.readOnly ]]"
-                             on-value-changed="[[ function(e){ $page.functions.cellChanged(cell.row, 5, e); } ]]">
+                             on-value-changed="[[ $listeners.cellChangedSat ]]">
             </oj-input-number>
           </template>
           <template slot="d6Cell" data-oj-as="cell">
             <oj-input-number aria-label="Sunday hours" value="[[ cell.row.d6 ]]"
                              min="0" max="24" step="0.25"
                              readonly="[[ !$variables.editable || cell.row.readOnly ]]"
-                             on-value-changed="[[ function(e){ $page.functions.cellChanged(cell.row, 6, e); } ]]">
+                             on-value-changed="[[ $listeners.cellChangedSun ]]">
             </oj-input-number>
           </template>
 
@@ -362,7 +362,7 @@
             <oj-bind-if test="[[ $variables.editable && cell.row.isLeave !== 'Y' ]]">
               <oj-button chroming="borderless" display="icons"
                          :aria-label="[[ $page.functions.removeLineLabel(cell.row.taskName) ]]"
-                         on-oj-action="[[ function(){ $page.functions.removeRow(cell.row); } ]]">
+                         on-oj-action="[[ $listeners.removeLine ]]">
                 <span slot="startIcon" class="oj-ux-ico-trash"></span>
                 <span>Remove</span>
               </oj-button>

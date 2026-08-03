@@ -50,14 +50,17 @@ define([], () => {
      * pasted or typed value can still be off-grid, so it is snapped here too.
      * The server re-validates regardless — this is for immediate feedback, not
      * for trust.
+     *
+     * Takes the raw value rather than the DOM event: the caller is now
+     * cellChangedChain, a declared listener, because the inline
+     * `function(e){ ... }` this used to be bound to was never wired up (S1).
+     * The chain has already discarded anything that is not a real user edit.
      */
-    cellChanged(row, dayIndex, event) {
-      if (!event || !event.detail || event.detail.updatedFrom !== 'internal') {
-        return;   // programmatic load, not a user edit
-      }
+    applyCellEdit(row, dayIndex, value) {
+      if (!row) { return; }
 
       const page = this.$page.variables;
-      const raw  = Number(event.detail.value) || 0;
+      const raw  = Number(value) || 0;
       const snapped = Math.max(0, Math.min(24, Math.round(raw * 4) / 4));
 
       // Always write it back. The cell used to be bound two-way, so JET did
