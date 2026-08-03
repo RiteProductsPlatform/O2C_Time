@@ -126,14 +126,22 @@ define([], () => {
     recomputeTotals(page) {
       if (!page) { return; }
       const rows = page.gridRows || [];
-      const days = (page.dayHeaders || []).slice();
 
       let billable = 0, nonBillable = 0, leave = 0;
 
-      days.forEach((d, i) => {
+      // A NEW object per day, not slice() + mutate.
+      //
+      // slice() copies the array but keeps the same item references, and
+      // oj-bind-for-each reuses the DOM it already rendered for a reference it
+      // has seen before — so `d.dayTotal = x` on a plain object updated the
+      // data and never the screen. The Entered row went on showing the figures
+      // the server sent for a line that had since been removed, while the
+      // week total beside it was right, because that is a scalar page variable
+      // and those do re-render. Same trap as mutating a gridRows row in place.
+      const days = (page.dayHeaders || []).map((d, i) => {
         let dayTotal = 0;
         rows.forEach((r) => { dayTotal += Number(r['d' + i]) || 0; });
-        d.dayTotal = Math.round(dayTotal * 100) / 100;
+        return Object.assign({}, d, { dayTotal: Math.round(dayTotal * 100) / 100 });
       });
 
       rows.forEach((r) => {

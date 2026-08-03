@@ -217,8 +217,14 @@
 
           <!-- Shift: one per employee per day, read-only from HCM (RULE-011) -->
           <div class="rw-ts-row rw-ts-sys" role="row">
-            <span class="rw-ts-proj rw-ts-syslabel" role="rowheader">Shift</span>
-            <span class="rw-ts-task rw-ts-note">per day · from HCM, read-only</span>
+            <!-- The prototype makes this one label across Project+Task
+                 (colspan=2). Split across the two columns it read as though
+                 "from HCM, read-only" were the task on a line. -->
+            <span class="rw-ts-proj rw-ts-syslabel" role="rowheader">
+              Shift
+              <span class="rw-ts-note">per day · from HCM, read-only</span>
+            </span>
+            <span class="rw-ts-task"></span>
             <oj-bind-for-each data="[[ $variables.dayHeaders ]]">
               <template data-oj-as="day">
                 <span class="rw-grid-day" role="cell">
