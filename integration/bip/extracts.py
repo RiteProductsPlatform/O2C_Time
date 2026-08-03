@@ -23,6 +23,42 @@ so without it you get every historical version of every row.
 # date one rather than an implicit-conversion accident.
 ED = "TO_DATE(:P_EFFECTIVE_DATE,'YYYY-MM-DD')"
 
+# Which projects the module cares about at all.
+#
+# Decided 03-Aug-2026, and it is a scope rule rather than a technical filter:
+#
+#   * time tracked  - PJS_TRACK_TIME = 'Y' on an internal party. A project
+#     nobody tracks time against does not belong in a timesheet picker. 48 of
+#     424 on this pod.
+#   * has a manager - a project party in the 'Project Manager' role. RULE-015
+#     routes every approval to that person, so a project without one has no
+#     approver and its weeks could be submitted and never actioned. 187 of 424.
+#
+# Applied to PROJECTS, TASKS *and* ALLOCATIONS, not just PROJECTS. Filtering
+# only the parent would leave ~10,000 task rows and ~1,500 allocation rows
+# pointing at projects that were never loaded — each one failing its FK lookup
+# and landing in OC_TIME_SYNC_FAILED. The queue is for problems worth reading,
+# and burying it under thousands of by-design rejections would make it useless.
+#
+# {A} is the alias of the table carrying PROJECT_ID in the query it is used in.
+IN_SCOPE = """
+   EXISTS (SELECT 1 FROM pjf_project_parties tp
+            WHERE tp.project_id = {A}.project_id
+              AND tp.project_party_type = 'IN'
+              AND tp.pjs_track_time = 'Y')
+   AND EXISTS (SELECT 1
+                 FROM pjf_project_parties mp
+                 JOIN pjt_project_roles_vl mr
+                   ON mr.project_role_id = mp.project_role_id
+                 JOIN per_all_people_f mpp
+                   ON mpp.person_id = mp.resource_source_id
+                  AND {ED} BETWEEN mpp.effective_start_date
+                               AND mpp.effective_end_date
+                WHERE mp.project_id = {A}.project_id
+                  AND mp.project_party_type = 'IN'
+                  AND mr.name = 'Project Manager')
+""".replace("{ED}", ED)
+
 
 WORKERS = {
     "name": "WORKERS",
@@ -193,7 +229,8 @@ SELECT p.project_id                            AS project_id,
   LEFT JOIN hz_parties cust
     ON cust.party_id = cpp.resource_source_id
  WHERE NVL(p.completion_date, {ED}) >= ADD_MONTHS({ED}, -12)
-""".replace("{ED}", ED),
+   AND {IN_SCOPE}
+""".replace("{IN_SCOPE}", IN_SCOPE.replace("{A}", "p")).replace("{ED}", ED),
 }
 
 
@@ -237,7 +274,8 @@ SELECT e.proj_element_id                        AS task_id,
     ON p.project_id = e.project_id
  WHERE e.object_type = 'PJF_TASKS'   -- plural; 'PJF_TASK' matches nothing
    AND NVL(e.completion_date, {ED}) >= ADD_MONTHS({ED}, -12)
-""".replace("{ED}", ED),
+   AND {IN_SCOPE}
+""".replace("{IN_SCOPE}", IN_SCOPE.replace("{A}", "e")).replace("{ED}", ED),
 }
 
 
@@ -288,8 +326,9 @@ SELECT pp.project_id                                   AS project_id,
    AND asg.resource_id = pp.resource_id
  WHERE pp.project_party_type = 'IN'   -- internal team member ('CO' = customer)
    AND NVL(pp.end_date_active, {ED}) >= ADD_MONTHS({ED}, -12)
+   AND {IN_SCOPE}
  GROUP BY pp.project_id, prj.segment1, papf.person_number
-""".replace("{ED}", ED),
+""".replace("{IN_SCOPE}", IN_SCOPE.replace("{A}", "pp")).replace("{ED}", ED),
 }
 
 

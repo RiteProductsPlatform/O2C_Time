@@ -393,6 +393,11 @@ BEGIN
        WHERE al.employee_id = :employeeId
          AND al.status      = 'Active'
          AND p.status       = 'Active'
+         -- Only projects somebody tracks time against (Reuse Assessment 2.4).
+         -- The Organization project below is exempt: it is created locally, not
+         -- synced, so nothing would ever set its flag, and FLD-006 requires it
+         -- to appear for every employee.
+         AND p.time_entry_enabled = 'Y'
       UNION ALL
       SELECT p.project_id, p.project_number, p.project_name, p.customer_name,
              p.project_type, p.revenue_model, p.leave_loss_flag,

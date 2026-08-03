@@ -530,6 +530,28 @@ BEGIN
                              (NVL(records_upserted,0) + v_ok)
          WHERE job_run_id = v_job;
 
+        -- Close out projects this run did not see.
+        --
+        -- Without this the filter accumulates instead of converging: a project
+        -- that WAS in scope last month and is not this month keeps its stale
+        -- 'Y' forever, because a MERGE only touches rows it matches. That
+        -- happened for real - an earlier derivation admitted 327 projects, and
+        -- re-running with the corrected one would have left every one of them
+        -- enabled.
+        --
+        -- Deliberately narrow. Only Fusion-sourced rows, so the locally created
+        -- Organization project and the seeded test projects are untouched; and
+        -- only on the final chunk, so a load that fails halfway cannot disable
+        -- projects it simply had not reached yet.
+        IF v_final = 'Y' THEN
+          UPDATE oc_time_project
+             SET time_entry_enabled = 'N',
+                 updated_by         = v_actor
+           WHERE source_system      = 'FUSION'
+             AND time_entry_enabled = 'Y'
+             AND NVL(sync_job_run_id, -1) <> v_job;
+        END IF;
+
         COMMIT; :status_code := 200;
         HTP.P('{"jobRunId":' || v_job || ',"upserted":' || v_ok ||
               ',"failed":' || v_fail || '}');

@@ -335,6 +335,13 @@ PROMPT ============================================================
 -- UNION the common non-billable tasks, which appear in EVERY project and in the
 -- Organization (Non-Billable) project. Leave and Billing Loss are excluded by
 -- SELECTABLE_FLAG so the employee can never pick them (RULE-008 / RULE-009).
+--
+-- TIME_ENTRY_ENABLED is the other gate, and it is the one that keeps this list
+-- usable at all (CrewRite CR-B-BR08 / Reuse Assessment 2.4). Status alone is
+-- every active project in the enterprise: 424 on the reference pod against the
+-- 46 anyone actually tracks time against. The Organization project is exempt —
+-- PRJ-ORG is created locally, not synced, so nothing would ever set its flag,
+-- and FLD-006 requires it to appear for every employee.
 CREATE OR REPLACE VIEW v_oc_ts_task_lov AS
 -- Project-specific WBS tasks
 SELECT t.task_id,
@@ -354,6 +361,7 @@ SELECT t.task_id,
    AND t.status          = 'Active'
    AND t.selectable_flag = 'Y'
    AND t.chargeable_flag = 'Y'
+   AND (p.time_entry_enabled = 'Y' OR p.project_type = 'Organization')
 UNION ALL
 -- Common non-billable tasks, replicated across every active project
 SELECT t.task_id,
@@ -372,7 +380,8 @@ SELECT t.task_id,
  WHERE t.task_type       = 'COMMON'
    AND t.status          = 'Active'
    AND t.selectable_flag = 'Y'
-   AND p.status          = 'Active';
+   AND p.status          = 'Active'
+   AND (p.time_entry_enabled = 'Y' OR p.project_type = 'Organization');
 
 PROMPT ============================================================
 PROMPT [9/9] V_OC_TS_AUDIT_TRAIL — change history (REP-007)
