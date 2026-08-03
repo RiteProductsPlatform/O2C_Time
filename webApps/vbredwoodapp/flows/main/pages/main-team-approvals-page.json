@@ -182,7 +182,7 @@
         {
           "chain": "approveAdjustmentChain",
           "parameters": {
-            "adjustmentId": "{{ $event.adjustmentId }}"
+            "adjustmentId": "{{ $current.row.adjustmentId }}"
           }
         }
       ]
@@ -192,8 +192,8 @@
         {
           "chain": "openProjectChain",
           "parameters": {
-            "projectId": "{{ $event.projectId }}",
-            "projectName": "{{ $event.projectName }}"
+            "projectId": "{{ $current.row.projectId }}",
+            "projectName": "{{ $current.row.projectName }}"
           }
         }
       ]
@@ -209,6 +209,16 @@
       "chains": [
         {
           "chain": "cancelAdvanceApproveChain"
+        }
+      ]
+    },
+    "switchManager": {
+      "chains": [
+        {
+          "chain": "switchManagerChain",
+          "parameters": {
+            "managerId": "{{ $event.detail.value }}"
+          }
         }
       ]
     }

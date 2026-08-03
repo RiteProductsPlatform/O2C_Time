@@ -1,4 +1,4 @@
-/* O2C Timesheet Module — manager identity switch (ACT-011) */
+/* PAGE-003 Team Approvals — manager identity switch (ACT-011) */
 
 define([
   'vb/action/actionChain',
@@ -49,11 +49,11 @@ define([
         displayMode: 'transient',
       });
 
-      // Land back on the approvals page so the new team is loaded.
-      await Actions.callChain(context, {
-        chain: 'navigateToPageChain',
-        params: { page: 'main-team-approvals' },
-      });
+      // Reload this page's projects for the new team. It used to navigate to
+      // main-team-approvals, which is where the switcher used to live (the
+      // shell banner); it now sits on this page, so navigating would be a
+      // no-op that discards the filter.
+      await Actions.callChain(context, { chain: 'loadProjectsChain' });
     }
   }
 

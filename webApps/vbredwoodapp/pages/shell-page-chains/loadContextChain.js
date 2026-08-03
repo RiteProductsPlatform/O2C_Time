@@ -104,10 +104,19 @@ define([
           },
         });
         if (resp.ok && resp.body && resp.body.items) {
-          $page.variables.managerOptionsArray = resp.body.items.map((m) => ({
+          // Application scope, not shell-page scope: the switcher itself lives
+          // on PAGE-003 now (the prototype puts it there, not in the banner),
+          // but sign-in is what knows which managers this user may act as.
+          const opts = resp.body.items.map((m) => ({
             value: m.employee_id,
             label: m.employee_name,
           }));
+          $application.variables.managerOptionsArray = opts;
+          $application.variables.managerOptions = {
+            itemType: 'lovOptionType',
+            keyAttributes: 'value',
+            data: opts,
+          };
         }
       } catch (e) {
         // The switcher is a convenience: without it the manager still reviews

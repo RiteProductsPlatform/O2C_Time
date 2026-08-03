@@ -14,20 +14,6 @@
       "input": "none",
       "description": "Set only when the shell could not establish the signed-in identity — a dead session, an unreachable service. Page-level errors go to messagesBannerADP instead."
     },
-    "managerOptionsArray": {
-      "type": "any[]",
-      "defaultValue": [],
-      "input": "none"
-    },
-    "managerOptions": {
-      "type": "vb/ArrayDataProvider2",
-      "defaultValue": {
-        "itemType": "managerOptType",
-        "keyAttributes": "value",
-        "data": "{{ $page.variables.managerOptionsArray }}"
-      },
-      "description": "Live-bound to the array above. Safe at PAGE scope — the two initialise together; the same pattern at APPLICATION scope leaves the ADP half-built and blanks every select that binds it."
-    },
     "messageToast": {
       "type": "string"
     },
@@ -96,16 +82,6 @@
       "chains": [
         {
           "chain": "toggleSidebarChain"
-        }
-      ]
-    },
-    "switchManager": {
-      "chains": [
-        {
-          "chain": "switchManagerChain",
-          "parameters": {
-            "managerId": "{{ $event.detail.value }}"
-          }
         }
       ]
     },

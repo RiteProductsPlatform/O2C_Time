@@ -441,6 +441,20 @@
         "keyAttributes": "value",
         "data": []
       }
+    },
+    "managerOptionsArray": {
+      "type": "any[]",
+      "defaultValue": [],
+      "description": "ACT-011 — the managers this user may act as. Application scope because the switcher lives on PAGE-003 while the sign-in that loads it happens in the shell."
+    },
+    "managerOptions": {
+      "type": "vb/ArrayDataProvider2",
+      "defaultValue": {
+        "itemType": "lovOptionType",
+        "keyAttributes": "value",
+        "data": []
+      },
+      "description": "Assigned explicitly by loadContextChain, never live-bound: at application scope a live binding is evaluated during variable setup and leaves the ADP half-built."
     }
   },
   "userConfig": {

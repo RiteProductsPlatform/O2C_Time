@@ -475,24 +475,9 @@
         -->
         <div class="rw-topbar-context">
 
-          <!-- ACT-011: a split employee reports into more than one manager, so
-               a manager can switch identity to review each team in turn. -->
-          <oj-bind-if test="[[ $page.functions.canSwitchManager(
-                                 $application.variables.currentRole,
-                                 $variables.managerOptionsArray) ]]">
-            <oj-select-single id="shellManagerSelect"
-              data="[[ $variables.managerOptions ]]"
-              value="{{ $application.variables.actingManagerId }}"
-              item-text="label"
-              label-hint="Reviewing team of"
-              label-edge="none"
-              placeholder="Acting as"
-              on-value-changed="[[$listeners.switchManager]]">
-              <template slot="noData">
-                <span class="text-muted">No other teams</span>
-              </template>
-            </oj-select-single>
-          </oj-bind-if>
+          <!-- No manager switcher here either. ACT-011 lives on PAGE-003,
+               where the prototype puts it (the "emp-switch" row above the
+               Month / Year filters), next to the team it changes. -->
         </div>
 
         <div class="rw-user-badge">

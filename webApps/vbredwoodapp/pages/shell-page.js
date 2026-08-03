@@ -20,7 +20,8 @@ define(['resources/js/navModel'], (navModel) => {
 
   // Manager only — the admin menu (PER-004) has no team pages, so there is
   // nothing for an acting-manager switch to change.
-  const MANAGER_ROLES = ['ROLE_TIME_MANAGER'];
+  // (MANAGER_ROLES was only used by canSwitchManager, which moved with the
+  //  switcher to PAGE-003.)
 
   class PageModule {
 
@@ -57,16 +58,6 @@ define(['resources/js/navModel'], (navModel) => {
       return navModel.groupsFor(role).length === 0;
     }
 
-    /**
-     * ACT-011. Offered only to a manager or admin who genuinely has more than
-     * one team to review; a manager with a single team gains nothing from a
-     * selector whose only option is themselves.
-     */
-    canSwitchManager(role, managerOptions) {
-      return MANAGER_ROLES.indexOf(role) !== -1
-        && Array.isArray(managerOptions)
-        && managerOptions.length > 1;
-    }
 
     /** Active state for a sidebar item. */
     navItemClass(page, activeNav) {
