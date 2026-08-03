@@ -32,7 +32,7 @@ define([
       // only a real user edit is 'internal'.
       if (updatedFrom !== 'internal' || !row) { return; }
 
-      $page.functions.applyCellEdit(row, dayIndex, value);
+      $page.functions.applyCellEdit($page.variables, row, dayIndex, value);
     }
   }
 

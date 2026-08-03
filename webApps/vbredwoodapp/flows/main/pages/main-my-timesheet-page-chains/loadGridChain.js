@@ -181,7 +181,7 @@ define([
         }
 
         // Align the in-memory totals with what was just loaded.
-        $page.functions.recomputeTotals();
+        $page.functions.recomputeTotals($page.variables);
 
       } catch (e) {
         // JET aborts in-flight requests on re-render; that is not a failure.

@@ -6,6 +6,35 @@
    vocabulary (status capsules, flag chips, grid states) that all 11 pages
    share and which would be duplicated logic (S4) if copied per page. */
 
-/* No page-specific rules yet — this page is built entirely from Redwood
-   layout classes and the shared design system. The file exists because S2
-   requires a <page-name>.css alongside every page. */
+/* ── Weekly grid: the day cells ──────────────────────────────────────────
+   An editable oj-input-number is an <input> plus two spinner buttons. In an
+   88px column the buttons took the whole width and the number was pushed out
+   of sight — the cell looked EMPTY while holding 8, and the only way to see
+   the value was to force the field read-only (read-only mode drops the
+   spinners and renders plain text). That is what made this look like a broken
+   value binding for several rounds; the binding was always correct.
+
+   Columns are 118px now, and the field is told to fill the cell rather than
+   size itself from the theme's default form-control width. */
+#tsGrid oj-input-number {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+/* Keep the number itself readable and centred over the day column, so the
+   grid still reads as a column of figures rather than a row of form fields. */
+#tsGrid oj-input-number::part(input),
+#tsGrid oj-input-number input {
+  text-align: center;
+  min-width: 0;
+}
+
+/* The stepper buttons are optional affordance — hours are typed far more often
+   than stepped, and RULE-005's quarter-hour step is re-checked on the server
+   and again in applyCellEdit. Shrinking them buys the digits their space back
+   without removing the control. */
+#tsGrid oj-input-number .oj-inputnumber-button,
+#tsGrid oj-input-number .oj-text-field-end {
+  flex: 0 0 auto;
+}

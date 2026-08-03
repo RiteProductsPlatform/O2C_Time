@@ -56,10 +56,9 @@ define([], () => {
      * `function(e){ ... }` this used to be bound to was never wired up (S1).
      * The chain has already discarded anything that is not a real user edit.
      */
-    applyCellEdit(row, dayIndex, value) {
-      if (!row) { return; }
+    applyCellEdit(page, row, dayIndex, value) {
+      if (!page || !row) { return; }
 
-      const page = this.$page.variables;
       const raw  = Number(value) || 0;
       const snapped = Math.max(0, Math.min(24, Math.round(raw * 4) / 4));
 
@@ -100,7 +99,7 @@ define([], () => {
       // programmatic value-changed that the re-render fires back.
       page.gridRows = (page.gridRows || []).slice();
 
-      this.recomputeTotals();
+      this.recomputeTotals(page);
     }
 
     /**
@@ -110,8 +109,8 @@ define([], () => {
      *
      * Billing loss follows RULE-009: max(0, standard - billable - leave).
      */
-    recomputeTotals() {
-      const page = this.$page.variables;
+    recomputeTotals(page) {
+      if (!page) { return; }
       const rows = page.gridRows || [];
       const days = (page.dayHeaders || []).slice();
 
@@ -151,8 +150,8 @@ define([], () => {
      * "these hours are no longer charged here" means. The row is also dropped
      * from view immediately so the grid matches what will be saved.
      */
-    removeRow(row) {
-      const page = this.$page.variables;
+    removeRow(page, row) {
+      if (!page || !row) { return; }
       const days = page.dayHeaders || [];
 
       const queued = (page.dirtyCells || []).filter(
@@ -175,7 +174,7 @@ define([], () => {
       page.gridRows   = (page.gridRows || []).filter((r) => r.rowKey !== row.rowKey);
       page.hasUnsaved = true;
 
-      this.recomputeTotals();
+      this.recomputeTotals(page);
     }
 
     /**

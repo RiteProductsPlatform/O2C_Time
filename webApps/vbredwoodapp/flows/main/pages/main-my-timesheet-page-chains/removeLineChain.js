@@ -27,7 +27,7 @@ define([
 
       if (!row) { return; }
 
-      $page.functions.removeRow(row);
+      $page.functions.removeRow($page.variables, row);
     }
   }
 
