@@ -48,6 +48,7 @@ define([
           projectName:      r.project_name,
           tasksChargeable:  r.tasks_chargeable || 0,
           tasksNoExpType:   r.tasks_no_exp_type || 0,
+          tasksUnresolvable: r.tasks_unresolvable || 0,
           workersAllocated: r.workers_allocated || 0,
           workersNoExpOrg:  r.workers_no_exp_org || 0,
           otlReadiness:     r.otl_readiness,

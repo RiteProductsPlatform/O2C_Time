@@ -134,7 +134,8 @@
       "tasksNoExpType": "number",
       "workersAllocated": "number",
       "workersNoExpOrg": "number",
-      "otlReadiness": "string"
+      "otlReadiness": "string",
+      "tasksUnresolvable": "number"
     }
   },
   "chains": {},

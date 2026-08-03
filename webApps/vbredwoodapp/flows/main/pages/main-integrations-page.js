@@ -35,7 +35,11 @@ define([], () => {
              + 'OTL push.';
       }
 
-      const tasks = blocked.reduce((n, r) => n + (r.tasksNoExpType || 0), 0);
+      // The unresolvable count, not the raw null count. A task with no
+      // expenditure type of its own is covered by the configured default and
+      // does not block anything — saying otherwise would send someone hunting
+      // for a problem the configuration already answers.
+      const tasks = blocked.reduce((n, r) => n + (r.tasksUnresolvable || 0), 0);
       const staff = blocked.reduce((n, r) => n + (r.workersNoExpOrg || 0), 0);
 
       const parts = [];

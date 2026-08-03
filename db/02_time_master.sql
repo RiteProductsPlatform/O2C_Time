@@ -615,18 +615,40 @@ PROMPT ============================================================
 -- tracks time against, so nothing about them was ever going to be pushed. A
 -- readiness list is only useful if every row on it is worth acting on.
 CREATE OR REPLACE VIEW v_oc_time_poet_readiness AS
+WITH cfg AS (
+  -- The configured fallback. Verified 02-Aug-2026 that this pod has no
+  -- transaction controls, so expenditure type is NOT a per-task attribute here
+  -- and OC_TIME_TASK.EXPENDITURE_TYPE is null for every row. Counting that as
+  -- 'Blocked' made the panel report 49 of 50 projects blocked by a column that
+  -- is never going to be populated — which is precisely the noise a readiness
+  -- list exists to avoid.
+  --
+  -- A task is only really blocked when NEITHER the task NOR the config supplies
+  -- one. The OTL push must resolve it the same way, NVL(task, config), or the
+  -- panel and the push will disagree about what is ready.
+  SELECT MAX(config_value) AS default_exp_type
+    FROM oc_time_config
+   WHERE config_name = 'defaultExpenditureType'
+)
 SELECT p.project_id,
        p.project_number,
        p.project_name,
        p.status                                            AS project_status,
        COUNT(DISTINCT t.task_id)                           AS tasks_chargeable,
+       -- Reported so the gap stays visible even when config covers it: an
+       -- administrator who wants per-task coding needs to see how much is
+       -- riding on the default.
        COUNT(DISTINCT CASE WHEN t.expenditure_type IS NULL
                            THEN t.task_id END)             AS tasks_no_exp_type,
+       COUNT(DISTINCT CASE WHEN NVL(t.expenditure_type,
+                                    (SELECT default_exp_type FROM cfg)) IS NULL
+                           THEN t.task_id END)             AS tasks_unresolvable,
        COUNT(DISTINCT a.employee_id)                       AS workers_allocated,
        COUNT(DISTINCT CASE WHEN NVL(a.expenditure_org, w.expenditure_org) IS NULL
                            THEN a.employee_id END)         AS workers_no_exp_org,
        CASE
-         WHEN COUNT(DISTINCT CASE WHEN t.expenditure_type IS NULL
+         WHEN COUNT(DISTINCT CASE WHEN NVL(t.expenditure_type,
+                                           (SELECT default_exp_type FROM cfg)) IS NULL
                                   THEN t.task_id END) > 0
            OR COUNT(DISTINCT CASE WHEN NVL(a.expenditure_org, w.expenditure_org) IS NULL
                                   THEN a.employee_id END) > 0

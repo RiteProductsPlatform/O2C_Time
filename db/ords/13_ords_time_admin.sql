@@ -1171,7 +1171,7 @@ BEGIN
     p_source_type => ORDS.source_type_collection_feed,
     p_source => q'~
       SELECT project_id, project_number, project_name, project_status,
-             tasks_chargeable, tasks_no_exp_type,
+             tasks_chargeable, tasks_no_exp_type, tasks_unresolvable,
              workers_allocated, workers_no_exp_org,
              otl_readiness
         FROM v_oc_time_poet_readiness
