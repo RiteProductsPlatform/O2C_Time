@@ -324,17 +324,31 @@ BEGIN
             USING (SELECT r.employee_id AS eid FROM dual) s
                ON (w.employee_id = s.eid)
              WHEN MATCHED THEN UPDATE
-                  SET w.employee_name     = r.employee_name,
-                      w.email             = LOWER(r.email),
-                      w.worker_type       = NVL(r.worker_type,'Employee'),
-                      w.base_country      = r.base_country,
-                      w.std_hours_per_day = NVL(r.std_hours_per_day, 8),
-                      w.manager_emp_id    = r.manager_emp_id,
-                      w.legal_employer    = r.legal_employer,
-                      w.expenditure_org   = r.expenditure_org,
-                      w.hire_date         = TO_DATE(r.hire_date,'YYYY-MM-DD'),
+                  -- NVL(incoming, existing) on every nullable field: a null from
+                  -- the source means "no value here", not "delete what you have".
+                  --
+                  -- Learned the hard way. The first real load blanked EMAIL and
+                  -- MANAGER_EMP_ID for every seeded worker, because those people
+                  -- exist in Fusion with no work email and no line manager set.
+                  -- RULE-015 routes approval through MANAGER_EMP_ID, so one sync
+                  -- silently left every timesheet with nobody to approve it.
+                  --
+                  -- The same reasoning already protected APP_ROLE; it simply was
+                  -- not carried to the other columns.
+                  SET w.employee_name     = NVL(r.employee_name, w.employee_name),
+                      w.email             = NVL(LOWER(r.email), w.email),
+                      w.worker_type       = NVL(r.worker_type, w.worker_type),
+                      w.base_country      = NVL(r.base_country, w.base_country),
+                      w.std_hours_per_day = NVL(r.std_hours_per_day, w.std_hours_per_day),
+                      w.manager_emp_id    = NVL(r.manager_emp_id, w.manager_emp_id),
+                      w.legal_employer    = NVL(r.legal_employer, w.legal_employer),
+                      w.expenditure_org   = NVL(r.expenditure_org, w.expenditure_org),
+                      w.hire_date         = NVL(TO_DATE(r.hire_date,'YYYY-MM-DD'), w.hire_date),
+                      -- TERMINATION_DATE is the exception and is NOT NVL'd: a
+                      -- null here genuinely means "not terminated", so keeping
+                      -- an old date would leave a rehired worker terminated.
                       w.termination_date  = TO_DATE(r.termination_date,'YYYY-MM-DD'),
-                      w.status            = NVL(r.status,'Active'),
+                      w.status            = NVL(r.status, w.status),
                       w.fusion_synced_on  = SYSTIMESTAMP,
                       w.source_system     = 'FUSION',
                       w.source_method     = 'BIP',
@@ -464,14 +478,22 @@ BEGIN
             USING (SELECT r.project_number AS pn FROM dual) s
                ON (p.project_number = s.pn)
              WHEN MATCHED THEN UPDATE
-                  SET p.project_name       = r.project_name,
-                      p.fusion_project_id  = r.fusion_project_id,
-                      p.customer_name      = r.customer_name,
-                      p.project_manager_id = r.project_manager_id,
+                  -- NVL(incoming, existing) as in sync/worker above.
+                  -- PROJECT_MANAGER_ID especially: RULE-015 has nothing to route
+                  -- to without it, and 237 of 424 projects on this pod carry no
+                  -- manager party at all.
+                  --
+                  -- TIME_ENTRY_ENABLED is deliberately NOT NVL'd. It has to be
+                  -- able to go back to 'N' when a project stops tracking time,
+                  -- and the close-out below depends on that.
+                  SET p.project_name       = NVL(r.project_name, p.project_name),
+                      p.fusion_project_id  = NVL(r.fusion_project_id, p.fusion_project_id),
+                      p.customer_name      = NVL(r.customer_name, p.customer_name),
+                      p.project_manager_id = NVL(r.project_manager_id, p.project_manager_id),
                       p.time_entry_enabled = NVL(r.time_entry_enabled,'N'),
-                      p.project_start_date = TO_DATE(r.start_date,'YYYY-MM-DD'),
+                      p.project_start_date = NVL(TO_DATE(r.start_date,'YYYY-MM-DD'), p.project_start_date),
                       p.project_end_date   = TO_DATE(r.end_date,'YYYY-MM-DD'),
-                      p.status             = NVL(r.status,'Active'),
+                      p.status             = NVL(r.status, p.status),
                       p.fusion_synced_on   = SYSTIMESTAMP,
                       p.source_system      = 'FUSION',
                       p.source_method      = 'BIP',
@@ -633,8 +655,8 @@ BEGIN
             USING (SELECT v_pid AS pid, UPPER(r.task_code) AS tc FROM dual) s
                ON (t.project_id = s.pid AND UPPER(t.task_code) = s.tc)
              WHEN MATCHED THEN UPDATE
-                  SET t.task_name        = r.task_name,
-                      t.fusion_task_id   = r.fusion_task_id,
+                  SET t.task_name        = NVL(r.task_name, t.task_name),
+                      t.fusion_task_id   = NVL(r.fusion_task_id, t.fusion_task_id),
                       t.chargeable_flag  = NVL(r.chargeable_flag,'Y'),
                       t.billable_type    = CASE WHEN NVL(r.billable_flag,'Y') = 'Y'
                                                 THEN 'Billable' ELSE 'Non-billable' END,
@@ -789,11 +811,11 @@ BEGIN
                ON (a.project_id = s.pid AND a.employee_id = s.eid)
              WHEN MATCHED THEN UPDATE
                   SET a.alloc_pct        = NVL(r.alloc_pct, a.alloc_pct),
-                      a.client_role      = r.client_role,
-                      a.expenditure_org  = r.expenditure_org,
-                      a.po_number        = r.po_number,
-                      a.po_line_number   = r.po_line_number,
-                      a.price_type       = r.price_type,
+                      a.client_role      = NVL(r.client_role, a.client_role),
+                      a.expenditure_org  = NVL(r.expenditure_org, a.expenditure_org),
+                      a.po_number        = NVL(r.po_number, a.po_number),
+                      a.po_line_number   = NVL(r.po_line_number, a.po_line_number),
+                      a.price_type       = NVL(r.price_type, a.price_type),
                       a.end_date         = TO_DATE(r.end_date,'YYYY-MM-DD'),
                       a.fusion_synced_on = SYSTIMESTAMP,
                       a.source_system    = 'FUSION',
