@@ -1,0 +1,74 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Fusion HCM (connection probe)",
+    "version": "1.0.0",
+    "description": "Deliberately small. This exists to prove the VB server-side proxy reaches the Fusion pod and authenticates — not to be the module's data path. Master data still arrives through integration/bip into the OC_TIME_* cache, which is what OC_TIME_PKG can enforce rules over. Add operations here only for a lookup the cache genuinely cannot answer."
+  },
+  "servers": [
+    {
+      "url": "vb-catalog://backends/fa/hcm",
+      "description": "Resolved by VB from services/catalog.json. The browser never sees the pod url or any credential."
+    }
+  ],
+  "paths": {
+    "/workers": {
+      "get": {
+        "operationId": "probeWorkers",
+        "summary": "Connection probe. Asks HCM for a single worker and nothing else — the cheapest call that still proves auth, routing and payload shape all work.",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "default": 1 },
+            "description": "Kept at 1. This is a reachability check, not a data pull — integration/bip fetches all 5976 workers, and doing that here would be both slow and pointless."
+          },
+          {
+            "name": "onlyData",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "boolean", "default": true },
+            "description": "Drops Fusion's HATEOAS links block, which is far larger than the record itself."
+          },
+          {
+            "name": "fields",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "default": "PersonNumber,PersonId" },
+            "description": "PersonNumber is what OC_TIME_WORKER.EMPLOYEE_ID holds, so seeing one confirms the two systems agree on the key. INT-001 notes the PersonNumber -> PersonId hop."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Reachable and authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "PersonNumber": { "type": "string" },
+                          "PersonId": { "type": "number" }
+                        }
+                      }
+                    },
+                    "count": { "type": "integer" },
+                    "hasMore": { "type": "boolean" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "description": "The proxy reached Fusion but the credentials were refused" },
+          "403": { "description": "Authenticated, but the service account lacks the HCM data role" },
+          "404": { "description": "Wrong resource path or REST version for this pod" }
+        }
+      }
+    }
+  }
+}

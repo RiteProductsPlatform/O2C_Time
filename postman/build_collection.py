@@ -230,21 +230,43 @@ def report_drift(spec):
 
 def check_twins():
     """
-    service.json is what VB loads; openapi3.json is what every check reads.
+    Four copies of the same spec have to stay byte-identical.
 
-    Nothing kept them in step, so service.json fell 16 operations behind — the
-    running app could not call login, logout, set-password, any sync endpoint or
-    the CSV export. It never showed up because session.js does its own fetch
-    instead of callRest, so sign-in kept working.
+    Two axes of duplication, both learned the hard way:
+
+    * service.json vs openapi3.json — app-flow.json names service.json, so that
+      is what the running app loads, while every check here reads openapi3.json.
+      Nothing kept them in step and service.json fell 16 operations behind:
+      login, logout, set-password, every sync endpoint and the CSV export were
+      uncallable. Hidden because session.js does its own fetch, so sign-in
+      still worked.
+
+    * root vs webApps/vbredwoodapp — the design-time preview requests the spec
+      web-app-relative and 404s if it is only at the root, but MOVING it under
+      the web app broke every callRest. So both locations are populated. A copy
+      is only safe while it is a copy; this is what makes sure it stays one.
     """
-    a = io.open(SPEC, encoding='utf-8').read()
-    b = io.open(SPEC_TWIN, encoding='utf-8').read()
-    if a == b:
-        print('service.json and openapi3.json are identical.')
+    copies = [SPEC, SPEC_TWIN] + [
+        os.path.join(ROOT, 'webApps', 'vbredwoodapp', 'services', 'oc_time', n)
+        for n in ('openapi3.json', 'service.json')
+    ]
+    texts = {}
+    for p in copies:
+        if not os.path.exists(p):
+            print('\nWARNING: missing spec copy %s' % os.path.relpath(p, ROOT))
+            return
+        texts[p] = io.open(p, encoding='utf-8').read()
+
+    distinct = set(texts.values())
+    if len(distinct) == 1:
+        print('all %d spec copies are identical.' % len(copies))
         return
-    print('\nWARNING: service.json has drifted from openapi3.json. VB loads '
-          'service.json, so anything missing there is uncallable from the app. '
-          'Copy openapi3.json over it.')
+
+    print('\nWARNING: the spec copies have drifted. VB loads service.json, so '
+          'anything missing there is uncallable from the app. Make all of these '
+          'identical:')
+    for p in copies:
+        print('   %s  (%d bytes)' % (os.path.relpath(p, ROOT), len(texts[p])))
 
 
 def check_comment_keys():
