@@ -64,8 +64,8 @@ define([
         if ($application.functions.isAbortError(e)) { return; }
 
         await Actions.fireNotificationEvent(context, {
-          summary: 'Documents unavailable',
-          message: 'The document service is unreachable.',
+          summary: $application.functions.chainSummary(e, 'Documents unavailable'),
+          message: $application.functions.chainError(e, 'The document service is unreachable.'),
           severity: 'error',
           type: 'error',
           displayMode: 'transient',

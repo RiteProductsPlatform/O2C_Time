@@ -77,8 +77,8 @@ define([
         if ($application.functions.isAbortError(e)) { return; }
 
         await Actions.fireNotificationEvent(context, {
-          summary: 'Days unavailable',
-          message: 'The calendar service is unreachable.',
+          summary: $application.functions.chainSummary(e, 'Days unavailable'),
+          message: $application.functions.chainError(e, 'The calendar service is unreachable.'),
           severity: 'error',
           type: 'error',
           displayMode: 'transient',

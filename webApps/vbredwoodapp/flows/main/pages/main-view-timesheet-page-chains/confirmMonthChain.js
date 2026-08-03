@@ -99,8 +99,8 @@ define([
         if ($application.functions.isAbortError(e)) { return; }
 
         await Actions.fireNotificationEvent(context, {
-          summary: 'Confirmation failed',
-          message: 'The service is unreachable. Nothing was sent to accrual.',
+          summary: $application.functions.chainSummary(e, 'Confirmation failed'),
+          message: $application.functions.chainError(e, 'The service is unreachable. Nothing was sent to accrual.'),
           severity: 'error',
           type: 'error',
           displayMode: 'transient',

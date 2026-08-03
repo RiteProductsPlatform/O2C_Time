@@ -95,8 +95,8 @@ define([
         if ($application.functions.isAbortError(e)) { return; }
 
         await Actions.fireNotificationEvent(context, {
-          summary: 'Save failed',
-          message: 'The service is unreachable. Your changes are still on screen — please retry.',
+          summary: $application.functions.chainSummary(e, 'Save failed'),
+          message: $application.functions.chainError(e, 'The service is unreachable. Your changes are still on screen — please retry.'),
           severity: 'error',
           type: 'error',
           displayMode: 'transient',

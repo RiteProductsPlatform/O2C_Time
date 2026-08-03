@@ -58,8 +58,8 @@ define([
         if ($application.functions.isAbortError(e)) { return; }
 
         await Actions.fireNotificationEvent(context, {
-          summary: 'Tasks unavailable',
-          message: 'Could not load tasks for the new project — the service is unreachable.',
+          summary: $application.functions.chainSummary(e, 'Tasks unavailable'),
+          message: $application.functions.chainError(e, 'Could not load tasks for the new project — the service is unreachable.'),
           severity: 'error',
           type: 'error',
           displayMode: 'transient',

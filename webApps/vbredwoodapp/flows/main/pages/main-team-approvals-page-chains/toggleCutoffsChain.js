@@ -45,8 +45,8 @@ define([
         if ($application.functions.isAbortError(e)) { return; }
 
         await Actions.fireNotificationEvent(context, {
-          summary: 'Cut-offs unavailable',
-          message: 'Could not load the cut-off dates.',
+          summary: $application.functions.chainSummary(e, 'Cut-offs unavailable'),
+          message: $application.functions.chainError(e, 'Could not load the cut-off dates.'),
           severity: 'error',
           type: 'error',
           displayMode: 'transient',

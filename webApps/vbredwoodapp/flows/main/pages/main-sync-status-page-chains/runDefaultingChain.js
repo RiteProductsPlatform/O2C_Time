@@ -71,8 +71,8 @@ define([
         if ($application.functions.isAbortError(e)) { return; }
 
         await Actions.fireNotificationEvent(context, {
-          summary: 'Defaulting failed',
-          message: 'The job could not be started — the service is unreachable.',
+          summary: $application.functions.chainSummary(e, 'Defaulting failed'),
+          message: $application.functions.chainError(e, 'The job could not be started — the service is unreachable.'),
           severity: 'error',
           type: 'error',
           displayMode: 'transient',

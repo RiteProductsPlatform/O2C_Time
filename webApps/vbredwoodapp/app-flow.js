@@ -297,6 +297,46 @@ define(['oj-sp/spectra-shell/config/config'], function () {
     }
 
     /**
+     * Message for an exception thrown out of callRest.
+     *
+     * A thrown callRest is not always a dead back end. When VB cannot resolve
+     * the operation against the service definition it throws "unable to find
+     * endpoint ..." — the server was never contacted at all. Reporting that as
+     * "the timesheet service is unavailable" sent a whole debugging session
+     * after ORDS while ORDS was answering every request in under a second; the
+     * real fault was the spec not loading in the browser.
+     *
+     * Callers pass their own wording as the fallback, so a genuine outage still
+     * reads the way it always did.
+     */
+    chainError(e, fallback) {
+      const msg = (e && typeof e.message === 'string') ? e.message : '';
+
+      if (msg.indexOf('unable to find endpoint') !== -1 ||
+          msg.indexOf('Unable to find endpoint') !== -1) {
+        return 'The app could not resolve this REST operation, so no request ' +
+               'was sent. The service definition failed to load — check the ' +
+               'browser console for a service load error. This is a front-end ' +
+               'configuration problem, not a back-end outage.';
+      }
+
+      return fallback || 'Something went wrong. Please try again shortly.';
+    }
+
+    /**
+     * Heading to go with chainError(). Kept separate so the summary never
+     * contradicts the body — "Service unavailable" above a message explaining
+     * that no request was sent is worse than no heading at all.
+     */
+    chainSummary(e, fallback) {
+      const msg = (e && typeof e.message === 'string') ? e.message : '';
+      if (msg.toLowerCase().indexOf('unable to find endpoint') !== -1) {
+        return 'App configuration problem';
+      }
+      return fallback || 'Something went wrong';
+    }
+
+    /**
      * Correlation id for a write, so one user action can be followed across
      * VBCS -> ORDS -> OIC (OBS-001..008, NFR-011).
      *

@@ -58,8 +58,8 @@ define([
         if ($application.functions.isAbortError(e)) { return; }
 
         await Actions.fireNotificationEvent(context, {
-          summary: 'Daily process failed',
-          message: 'The job could not be started — the service is unreachable.',
+          summary: $application.functions.chainSummary(e, 'Daily process failed'),
+          message: $application.functions.chainError(e, 'The job could not be started — the service is unreachable.'),
           severity: 'error',
           type: 'error',
           displayMode: 'transient',

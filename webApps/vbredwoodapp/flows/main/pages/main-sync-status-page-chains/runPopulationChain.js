@@ -64,8 +64,8 @@ define([
         if ($application.functions.isAbortError(e)) { return; }
 
         await Actions.fireNotificationEvent(context, {
-          summary: 'Population failed',
-          message: 'The job could not be started — the service is unreachable.',
+          summary: $application.functions.chainSummary(e, 'Population failed'),
+          message: $application.functions.chainError(e, 'The job could not be started — the service is unreachable.'),
           severity: 'error',
           type: 'error',
           displayMode: 'transient',

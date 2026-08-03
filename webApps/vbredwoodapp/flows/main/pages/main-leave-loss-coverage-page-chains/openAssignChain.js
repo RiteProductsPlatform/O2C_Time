@@ -65,8 +65,8 @@ define([
         if ($application.functions.isAbortError(e)) { return; }
 
         await Actions.fireNotificationEvent(context, {
-          summary: 'Eligible colleagues unavailable',
-          message: 'Could not load the eligible colleagues — the service is unreachable.',
+          summary: $application.functions.chainSummary(e, 'Eligible colleagues unavailable'),
+          message: $application.functions.chainError(e, 'Could not load the eligible colleagues — the service is unreachable.'),
           severity: 'error',
           type: 'error',
           displayMode: 'transient',

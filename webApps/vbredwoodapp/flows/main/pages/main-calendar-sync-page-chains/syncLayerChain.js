@@ -69,8 +69,8 @@ define([
         if ($application.functions.isAbortError(e)) { return; }
 
         await Actions.fireNotificationEvent(context, {
-          summary: 'Sync failed',
-          message: 'The calendar service is unreachable. Please retry.',
+          summary: $application.functions.chainSummary(e, 'Sync failed'),
+          message: $application.functions.chainError(e, 'The calendar service is unreachable. Please retry.'),
           severity: 'error',
           type: 'error',
           displayMode: 'transient',

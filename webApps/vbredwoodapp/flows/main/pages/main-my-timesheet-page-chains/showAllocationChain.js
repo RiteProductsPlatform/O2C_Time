@@ -76,8 +76,8 @@ define([
         if ($application.functions.isAbortError(e)) { return; }
 
         await Actions.fireNotificationEvent(context, {
-          summary: 'Allocation unavailable',
-          message: 'Could not load your allocation — the service is unreachable.',
+          summary: $application.functions.chainSummary(e, 'Allocation unavailable'),
+          message: $application.functions.chainError(e, 'Could not load your allocation — the service is unreachable.'),
           severity: 'error',
           type: 'error',
           displayMode: 'transient',

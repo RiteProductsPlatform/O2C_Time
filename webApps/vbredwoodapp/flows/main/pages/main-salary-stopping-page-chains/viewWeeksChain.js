@@ -68,8 +68,8 @@ define([
         if ($application.functions.isAbortError(e)) { return; }
 
         await Actions.fireNotificationEvent(context, {
-          summary: 'Weeks unavailable',
-          message: 'Could not load the weeks — the service is unreachable.',
+          summary: $application.functions.chainSummary(e, 'Weeks unavailable'),
+          message: $application.functions.chainError(e, 'Could not load the weeks — the service is unreachable.'),
           severity: 'error',
           type: 'error',
           displayMode: 'transient',

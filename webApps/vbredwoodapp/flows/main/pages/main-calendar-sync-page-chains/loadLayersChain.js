@@ -82,8 +82,8 @@ define([
         if ($application.functions.isAbortError(e)) { return; }
 
         await Actions.fireNotificationEvent(context, {
-          summary: 'Layers unavailable',
-          message: 'The calendar service is unreachable.',
+          summary: $application.functions.chainSummary(e, 'Layers unavailable'),
+          message: $application.functions.chainError(e, 'The calendar service is unreachable.'),
           severity: 'error',
           type: 'error',
           displayMode: 'transient',

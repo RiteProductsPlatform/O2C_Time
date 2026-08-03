@@ -138,8 +138,8 @@ define([
         if ($application.functions.isAbortError(e)) { return; }
 
         await Actions.fireNotificationEvent(context, {
-          summary: 'Apply failed',
-          message: 'The service is unreachable. Please retry.',
+          summary: $application.functions.chainSummary(e, 'Apply failed'),
+          message: $application.functions.chainError(e, 'The service is unreachable. Please retry.'),
           severity: 'error',
           type: 'error',
           displayMode: 'transient',

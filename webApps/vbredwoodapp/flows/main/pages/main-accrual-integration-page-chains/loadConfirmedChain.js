@@ -111,8 +111,8 @@ define([
         if ($application.functions.isAbortError(e)) { return; }
 
         await Actions.fireNotificationEvent(context, {
-          summary: 'Service unavailable',
-          message: 'The accrual service is unreachable. Please try again shortly.',
+          summary: $application.functions.chainSummary(e, 'Service unavailable'),
+          message: $application.functions.chainError(e, 'The accrual service is unreachable. Please try again shortly.'),
           severity: 'error',
           type: 'error',
           displayMode: 'transient',
