@@ -302,35 +302,35 @@
           <template slot="d0Cell" data-oj-as="cell">
             <oj-input-number aria-label="Monday hours" value="[[ cell.row.d0 ]]"
                              min="0" max="24" step="0.25"
-                             readonly="[[ !$variables.editable || cell.row.readOnly ]]"
+                             readonly="[[ !$variables.editable ]]"
                              on-value-changed="[[ $listeners.cellChangedMon ]]">
             </oj-input-number>
           </template>
           <template slot="d1Cell" data-oj-as="cell">
             <oj-input-number aria-label="Tuesday hours" value="[[ cell.row.d1 ]]"
                              min="0" max="24" step="0.25"
-                             readonly="[[ !$variables.editable || cell.row.readOnly ]]"
+                             readonly="[[ !$variables.editable ]]"
                              on-value-changed="[[ $listeners.cellChangedTue ]]">
             </oj-input-number>
           </template>
           <template slot="d2Cell" data-oj-as="cell">
             <oj-input-number aria-label="Wednesday hours" value="[[ cell.row.d2 ]]"
                              min="0" max="24" step="0.25"
-                             readonly="[[ !$variables.editable || cell.row.readOnly ]]"
+                             readonly="[[ !$variables.editable ]]"
                              on-value-changed="[[ $listeners.cellChangedWed ]]">
             </oj-input-number>
           </template>
           <template slot="d3Cell" data-oj-as="cell">
             <oj-input-number aria-label="Thursday hours" value="[[ cell.row.d3 ]]"
                              min="0" max="24" step="0.25"
-                             readonly="[[ !$variables.editable || cell.row.readOnly ]]"
+                             readonly="[[ !$variables.editable ]]"
                              on-value-changed="[[ $listeners.cellChangedThu ]]">
             </oj-input-number>
           </template>
           <template slot="d4Cell" data-oj-as="cell">
             <oj-input-number aria-label="Friday hours" value="[[ cell.row.d4 ]]"
                              min="0" max="24" step="0.25"
-                             readonly="[[ !$variables.editable || cell.row.readOnly ]]"
+                             readonly="[[ !$variables.editable ]]"
                              on-value-changed="[[ $listeners.cellChangedFri ]]">
             </oj-input-number>
           </template>
@@ -338,14 +338,14 @@
           <template slot="d5Cell" data-oj-as="cell">
             <oj-input-number aria-label="Saturday hours" value="[[ cell.row.d5 ]]"
                              min="0" max="24" step="0.25"
-                             readonly="[[ !$variables.editable || cell.row.readOnly ]]"
+                             readonly="[[ !$variables.editable ]]"
                              on-value-changed="[[ $listeners.cellChangedSat ]]">
             </oj-input-number>
           </template>
           <template slot="d6Cell" data-oj-as="cell">
             <oj-input-number aria-label="Sunday hours" value="[[ cell.row.d6 ]]"
                              min="0" max="24" step="0.25"
-                             readonly="[[ !$variables.editable || cell.row.readOnly ]]"
+                             readonly="[[ !$variables.editable ]]"
                              on-value-changed="[[ $listeners.cellChangedSun ]]">
             </oj-input-number>
           </template>
