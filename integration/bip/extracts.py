@@ -42,21 +42,32 @@ ED = "TO_DATE(:P_EFFECTIVE_DATE,'YYYY-MM-DD')"
 #
 # {A} is the alias of the table carrying PROJECT_ID in the query it is used in.
 IN_SCOPE = """
-   EXISTS (SELECT 1 FROM pjf_project_parties tp
-            WHERE tp.project_id = {A}.project_id
-              AND tp.project_party_type = 'IN'
-              AND tp.pjs_track_time = 'Y')
-   AND EXISTS (SELECT 1
-                 FROM pjf_project_parties mp
-                 JOIN pjt_project_roles_vl mr
-                   ON mr.project_role_id = mp.project_role_id
-                 JOIN per_all_people_f mpp
-                   ON mpp.person_id = mp.resource_source_id
-                  AND {ED} BETWEEN mpp.effective_start_date
-                               AND mpp.effective_end_date
-                WHERE mp.project_id = {A}.project_id
-                  AND mp.project_party_type = 'IN'
-                  AND mr.name = 'Project Manager')
+   EXISTS (SELECT 1
+             FROM pjf_projects_all_b sp
+            WHERE sp.project_id = {A}.project_id
+              -- Recency lives HERE, not in each extract's own WHERE. The three
+              -- used to test different dates for the same idea — the project's
+              -- completion date in PROJECTS, the task's in TASKS, the party's
+              -- end date in ALLOCATIONS — so a project completed 18 months ago
+              -- was dropped from PROJECTS while its still-open tasks sailed
+              -- through, and 89 rows failed their FK lookup. One test, one
+              -- answer, for all three.
+              AND NVL(sp.completion_date, {ED}) >= ADD_MONTHS({ED}, -12)
+              AND EXISTS (SELECT 1 FROM pjf_project_parties tp
+                           WHERE tp.project_id = sp.project_id
+                             AND tp.project_party_type = 'IN'
+                             AND tp.pjs_track_time = 'Y')
+              AND EXISTS (SELECT 1
+                            FROM pjf_project_parties mp
+                            JOIN pjt_project_roles_vl mr
+                              ON mr.project_role_id = mp.project_role_id
+                            JOIN per_all_people_f mpp
+                              ON mpp.person_id = mp.resource_source_id
+                             AND {ED} BETWEEN mpp.effective_start_date
+                                          AND mpp.effective_end_date
+                           WHERE mp.project_id = sp.project_id
+                             AND mp.project_party_type = 'IN'
+                             AND mr.name = 'Project Manager'))
 """.replace("{ED}", ED)
 
 
@@ -228,8 +239,7 @@ SELECT p.project_id                            AS project_id,
     ON cpp.project_id = p.project_id AND cpp.project_party_type = 'CO'
   LEFT JOIN hz_parties cust
     ON cust.party_id = cpp.resource_source_id
- WHERE NVL(p.completion_date, {ED}) >= ADD_MONTHS({ED}, -12)
-   AND {IN_SCOPE}
+ WHERE {IN_SCOPE}
 """.replace("{IN_SCOPE}", IN_SCOPE.replace("{A}", "p")).replace("{ED}", ED),
 }
 
@@ -273,7 +283,6 @@ SELECT e.proj_element_id                        AS task_id,
   JOIN pjf_projects_all_b p
     ON p.project_id = e.project_id
  WHERE e.object_type = 'PJF_TASKS'   -- plural; 'PJF_TASK' matches nothing
-   AND NVL(e.completion_date, {ED}) >= ADD_MONTHS({ED}, -12)
    AND {IN_SCOPE}
 """.replace("{IN_SCOPE}", IN_SCOPE.replace("{A}", "e")).replace("{ED}", ED),
 }
@@ -325,7 +334,6 @@ SELECT pp.project_id                                   AS project_id,
     ON asg.project_id = pp.project_id
    AND asg.resource_id = pp.resource_id
  WHERE pp.project_party_type = 'IN'   -- internal team member ('CO' = customer)
-   AND NVL(pp.end_date_active, {ED}) >= ADD_MONTHS({ED}, -12)
    AND {IN_SCOPE}
  GROUP BY pp.project_id, prj.segment1, papf.person_number
 """.replace("{IN_SCOPE}", IN_SCOPE.replace("{A}", "pp")).replace("{ED}", ED),

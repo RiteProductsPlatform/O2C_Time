@@ -609,6 +609,11 @@ PROMPT ============================================================
 -- nobody books to does not block anything, and neither does leave — absences
 -- reach OTL from Absence Management already, so INT-007 filters IS_LEAVE = 'Y'
 -- and re-sending them would double-count.
+--
+-- And only projects in scope for time entry. Without that gate this reported on
+-- 428 projects of which 350 were 'Blocked' — every one of them a project nobody
+-- tracks time against, so nothing about them was ever going to be pushed. A
+-- readiness list is only useful if every row on it is worth acting on.
 CREATE OR REPLACE VIEW v_oc_time_poet_readiness AS
 SELECT p.project_id,
        p.project_number,
@@ -636,6 +641,7 @@ SELECT p.project_id,
                                 AND a.status     = 'Active'
   LEFT JOIN oc_time_worker w ON w.employee_id = a.employee_id
  WHERE p.status = 'Active'
+   AND (p.time_entry_enabled = 'Y' OR p.project_type = 'Organization')
  GROUP BY p.project_id, p.project_number, p.project_name, p.status;
 
 PROMPT

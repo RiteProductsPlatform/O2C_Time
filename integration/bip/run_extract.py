@@ -109,15 +109,40 @@ def cmd_deploy(args) -> int:
 
 
 def _run_one(c: BipClient, ex: Dict, eff: str, chunked: bool) -> List[Dict[str, str]]:
-    """Run a deployed model; fall back to an ad-hoc deploy if it is absent."""
+    """
+    Push the current SQL, then run it.
+
+    THE MODEL IS ALWAYS REDEPLOYED, and that is the whole point of this
+    function. It used to run whatever was already in the catalog and only
+    deploy when nothing was there, which meant an edit to extracts.py silently
+    had no effect on --run or --load: the pod kept executing the SQL from
+    whenever it was last deployed.
+
+    That is not theoretical. Scoping the sync to 46 projects validated at 46 and
+    then loaded 424, because --validate compiles the SQL fresh while --run
+    reused a model deployed before the change. Nothing errored; the numbers were
+    just wrong, which is the same silent-staleness family as README note 2.
+
+    An account with only run rights cannot deploy. That is a legitimate
+    production split, so the upload failing is not fatal — but it does mean the
+    SQL on the pod is somebody else's, so say so rather than let it pass.
+    """
     path = model_path(ex["name"])
     params = {"P_EFFECTIVE_DATE": eff} if ":P_EFFECTIVE_DATE" in ex["sql"] else None
 
-    if not c.object_exists(path):
-        # Substitute the bind inline — an ad-hoc model has no parameter defined.
-        sql = ex["sql"].replace(":P_EFFECTIVE_DATE", "'%s'" % eff)
-        c.upload_data_model(path, c.build_data_model(sql, ex["columns"]))
-        params = None
+    try:
+        xdm = c.build_data_model(
+            ex["sql"], ex["columns"],
+            description="O2C Time %s (%s -> %s)"
+                        % (ex["name"], ex["integration"], ex["target"]),
+            defaults={"P_EFFECTIVE_DATE": eff})
+        c.upload_data_model(path, xdm)
+    except BipError as exc:
+        if not c.object_exists(path):
+            raise
+        print("  ! %s: could not redeploy (%s). Running the model already in "
+              "the catalog — its SQL may not match extracts.py."
+              % (ex["name"], str(exc)[:80]))
 
     raw = c.run_data_model(path, params=params, chunked=chunked)
     return c.rows(raw)
