@@ -267,13 +267,13 @@
                      oj-input-number renders an input plus two spinner buttons
                      that do not fit a day column — the number was pushed out of
                      sight and the cell looked empty while holding 8. -->
-                <oj-bind-for-each data="[[ $variables.dayHeaders ]]">
-                  <template data-oj-as="day">
+                <oj-bind-for-each data="[[ line.data.cells ]]">
+                  <template data-oj-as="cell">
                     <span class="rw-grid-day" role="cell">
                       <span class="rw-hr">
                         <oj-input-text class="rw-hr-box"
                           aria-label="Hours"
-                          value="[[ $page.functions.hoursAt(line.data, day.index) ]]"
+                          value="[[ $page.functions.hoursAt(line.data, cell.data.dayIndex) ]]"
                           readonly="[[ !$variables.editable ]]"
                           on-value-changed="[[ $listeners.cellChanged ]]">
                         </oj-input-text>

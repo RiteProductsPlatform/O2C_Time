@@ -348,7 +348,8 @@
       "d6": "number",
       "lineTotal": "number",
       "lineStatus": "string",
-      "readOnly": "boolean"
+      "readOnly": "boolean",
+      "cells": "any[]"
     },
     "projectOptType": {
       "value": "number",
@@ -502,7 +503,7 @@
         {
           "chain": "removeLineChain",
           "parameters": {
-            "row": "{{ line.data }}"
+            "row": "{{ $current.data }}"
           }
         }
       ]
@@ -512,8 +513,7 @@
         {
           "chain": "cellChangedChain",
           "parameters": {
-            "row": "{{ line.data }}",
-            "dayIndex": "{{ day.index }}",
+            "cell": "{{ $current.data }}",
             "value": "{{ $event.detail.value }}",
             "updatedFrom": "{{ $event.detail.updatedFrom }}"
           }
@@ -525,8 +525,7 @@
         {
           "chain": "stepHoursChain",
           "parameters": {
-            "row": "{{ line.data }}",
-            "dayIndex": "{{ day.index }}",
+            "cell": "{{ $current.data }}",
             "delta": 0.25
           }
         }
@@ -537,8 +536,7 @@
         {
           "chain": "stepHoursChain",
           "parameters": {
-            "row": "{{ line.data }}",
-            "dayIndex": "{{ day.index }}",
+            "cell": "{{ $current.data }}",
             "delta": -0.25
           }
         }

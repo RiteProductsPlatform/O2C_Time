@@ -89,6 +89,15 @@ define([
 
       for (let i = 0; i < 7; i++) { row['d' + i] = 0; }
 
+      // Same per-cell identity the loaded rows carry — without it the new
+      // line renders no day cells at all, and its arrows would have nothing
+      // to act on. See loadGridChain for why the cell has to know its row.
+      row.cells = ($page.variables.dayHeaders || []).map((h, i) => ({
+        rowKey: row.rowKey,
+        dayIndex: i,
+        entryDate: h.entryDate,
+      }));
+
       rows.push(row);
 
       // Assigning gridRows is enough — gridADP is live-bound to it.

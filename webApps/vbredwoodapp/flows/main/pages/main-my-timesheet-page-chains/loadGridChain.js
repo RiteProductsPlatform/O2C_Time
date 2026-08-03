@@ -133,6 +133,21 @@ define([
             // clipped) week; the rest stay 0 and are not rendered as inputs.
             row['d' + i] = dateAt(i) === null ? 0 : (r[pivot[i]] || 0);
           }
+
+          // One object per day cell, carrying the cell's own identity.
+          //
+          // The grid is a for-each over the days nested inside a for-each over
+          // the lines, and an eventListener's parameters cannot see a
+          // data-oj-as alias — those are local to the template, which is why
+          // `{{ line.data }}` arrived undefined and the arrows did nothing
+          // while the values rendered perfectly. `$current` IS bound, to the
+          // innermost item, so the cell has to know which line it belongs to.
+          row.cells = headers.map((h, i) => ({
+            rowKey: row.rowKey,
+            dayIndex: i,
+            entryDate: h.entryDate,
+          }));
+
           return row;
         });
 

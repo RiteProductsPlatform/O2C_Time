@@ -20,18 +20,22 @@ define([
    * this is convenience rather than the control.
    *
    * @param {Object} context
-   * @param {{row:Object, dayIndex:number, delta:number}} params
+   * @param {{cell:{rowKey:string,dayIndex:number}, delta:number}} params
    */
   class stepHoursChain extends ActionChain {
 
-    async run(context, { row, dayIndex, delta } = {}) {
+    async run(context, { cell, delta } = {}) {
       const { $page } = context;
 
-      if (!row || dayIndex === undefined || dayIndex === null) { return; }
+      if (!cell) { return; }
 
-      const current = Number(row['d' + dayIndex]) || 0;
+      const row = ($page.variables.gridRows || [])
+        .find((r) => r.rowKey === cell.rowKey);
+      if (!row) { return; }
 
-      $page.functions.applyCellEdit($page.variables, row, dayIndex,
+      const current = Number(row['d' + cell.dayIndex]) || 0;
+
+      $page.functions.applyCellEdit($page.variables, row, cell.dayIndex,
                                     current + (Number(delta) || 0));
     }
   }
