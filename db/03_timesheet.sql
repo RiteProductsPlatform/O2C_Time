@@ -391,26 +391,41 @@ AFTER STATEMENT IS
 BEGIN
   v_id := g_ids.FIRST;
   WHILE v_id IS NOT NULL LOOP
+    -- Two statements, not one, and that is required rather than tidy.
+    --
+    -- These used to be a single UPDATE whose select list held five aggregates
+    -- AND a correlated scalar subquery for STANDARD_HOURS. Oracle rejects that
+    -- with ORA-00937 "not a single-group group function": with no GROUP BY,
+    -- every item has to be an aggregate, and the subquery is not one.
+    --
+    -- It failed at runtime rather than on compile, so populate_month returned
+    -- ORA-00937 the first time it was ever asked to build a real month, having
+    -- looked healthy in every install up to then.
     UPDATE oc_ts_week w
        SET (w.billable_hours, w.non_billable_hours, w.leave_hours,
-            w.standard_hours, w.has_reversal_flag, w.has_adjustment_flag) =
+            w.has_reversal_flag, w.has_adjustment_flag) =
            (SELECT NVL(SUM(CASE WHEN e.billable_type = 'Billable'
                                  AND e.is_leave = 'N' THEN e.hours END), 0),
                    NVL(SUM(CASE WHEN e.billable_type = 'Non-billable'
                                  AND e.is_leave = 'N' THEN e.hours END), 0),
                    NVL(SUM(CASE WHEN e.is_leave = 'Y'  THEN e.hours END), 0),
-                   -- Standard hours for the week: one value per day, not per
-                   -- line, so take the max per date then sum across dates.
-                   NVL((SELECT SUM(d.std_day)
-                          FROM (SELECT e2.entry_date,
-                                       MAX(e2.standard_hours) AS std_day
-                                  FROM oc_ts_entry e2
-                                 WHERE e2.ts_week_id = w.ts_week_id
-                                 GROUP BY e2.entry_date) d), 0),
                    NVL(MAX(CASE WHEN e.entry_type = 'Reversal'   THEN 'Y' END), 'N'),
                    NVL(MAX(CASE WHEN e.entry_type = 'Adjustment' THEN 'Y' END), 'N')
               FROM oc_ts_entry e
              WHERE e.ts_week_id = w.ts_week_id)
+     WHERE w.ts_week_id = v_id;
+
+    -- Standard hours for the week: ONE value per day, not per line. A day with
+    -- three project lines still has one standard day, so take the max per date
+    -- and then sum across dates — summing the lines directly would treble it.
+    UPDATE oc_ts_week w
+       SET w.standard_hours =
+             NVL((SELECT SUM(d.std_day)
+                    FROM (SELECT e2.entry_date,
+                                 MAX(e2.standard_hours) AS std_day
+                            FROM oc_ts_entry e2
+                           WHERE e2.ts_week_id = w.ts_week_id
+                           GROUP BY e2.entry_date) d), 0)
      WHERE w.ts_week_id = v_id;
 
     -- RULE-009: billing loss is automatic and non-editable.
