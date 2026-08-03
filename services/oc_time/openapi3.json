@@ -12,9 +12,6 @@
     }
   ],
   "paths": {
-    "//---------- oc.time : EMPLOYEE (PER-001, PER-002) ----------": {},
-    "//---------- oc.time.admin : ADMIN + ACCRUAL PULL (PER-004) ----------": {},
-    "//---------- oc.time.approval : MANAGER (PER-003) ----------": {},
     "/oc/time/adjustments": {
       "post": {
         "operationId": "applyAdjustment",
@@ -3627,7 +3624,6 @@
   },
   "components": {
     "schemas": {
-      "//": "ORDS collection feeds all share this envelope. Row shapes are declared per page in the page JSON 'types', which is the pattern this codebase already uses, so the rows stay loosely typed here.",
       "Collection": {
         "type": "object",
         "properties": {

@@ -21,11 +21,16 @@ import re
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-# The service definitions live under the WEB APP, not the visual-application
-# root: VB resolves app-flow.json's "./services/..." relative to the web app,
-# and a root-level copy 404s at runtime. catalog.json stays at the root.
-SPEC = os.path.join(ROOT, 'webApps', 'vbredwoodapp', 'services',
-                    'oc_time', 'openapi3.json')
+# Service definitions live at the VISUAL-APPLICATION root, alongside
+# catalog.json — app-flow.json's "./services/..." resolves from there, not from
+# the web app. (Moving them under webApps/ was tried and 404s; the O2C main
+# application has no services folder under its web app at all.)
+SPEC = os.path.join(ROOT, 'services', 'oc_time', 'openapi3.json')
+# app-flow.json names service.json, so that is the file the running app loads.
+# It had silently drifted to a 16-operation-old subset — missing the whole auth
+# module — while every check here read openapi3.json and reported "clean".
+# The two must stay byte-identical; check_twins() enforces it.
+SPEC_TWIN = os.path.join(ROOT, 'services', 'oc_time', 'service.json')
 OUT = os.path.join(HERE, 'O2C_Time.postman_collection.json')
 
 DEFAULT_BASE_URL = 'https://ords-sit.rite.digital/ords/o2c_time'
@@ -223,6 +228,48 @@ def report_drift(spec):
         print('spec matches db/ords exactly (%d handlers).' % len(deployed))
 
 
+def check_twins():
+    """
+    service.json is what VB loads; openapi3.json is what every check reads.
+
+    Nothing kept them in step, so service.json fell 16 operations behind — the
+    running app could not call login, logout, set-password, any sync endpoint or
+    the CSV export. It never showed up because session.js does its own fetch
+    instead of callRest, so sign-in kept working.
+    """
+    a = io.open(SPEC, encoding='utf-8').read()
+    b = io.open(SPEC_TWIN, encoding='utf-8').read()
+    if a == b:
+        print('service.json and openapi3.json are identical.')
+        return
+    print('\nWARNING: service.json has drifted from openapi3.json. VB loads '
+          'service.json, so anything missing there is uncallable from the app. '
+          'Copy openapi3.json over it.')
+
+
+def check_comment_keys():
+    """
+    A '//section heading' key is a declaration to VB, not a comment.
+
+    It has now bitten three times: page `variables` (blanked the page), OpenAPI
+    `paths`, and `components.schemas`. Cheap to assert, so assert it.
+    """
+    problems = 0
+    for path in (SPEC, SPEC_TWIN):
+        doc = json.load(io.open(path, encoding='utf-8'))
+        sections = [('paths', doc.get('paths') or {}),
+                    ('components.schemas',
+                     (doc.get('components') or {}).get('schemas') or {})]
+        for label, node in sections:
+            bad = [k for k in node if k.startswith('//')]
+            if bad:
+                problems += len(bad)
+                print('\nWARNING: %s %s has comment keys: %s'
+                      % (os.path.basename(path), label, bad))
+    if not problems:
+        print('no comment keys in paths or schemas.')
+
+
 def main():
     spec = load_spec()
     schemas = spec.get('components', {}).get('schemas', {})
@@ -277,6 +324,8 @@ def main():
         print('   %-34s %d' % (name, len(items)))
 
     report_drift(spec)
+    check_twins()
+    check_comment_keys()
 
 
 if __name__ == '__main__':
