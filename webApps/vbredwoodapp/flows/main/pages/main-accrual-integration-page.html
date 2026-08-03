@@ -99,67 +99,67 @@
                       {"headerText":"","field":"confirmId","template":"actionCell","width":110,"sortable":"disabled"}
                     ]'>
 
-            <template slot="projCell" data-oj-as="row">
+            <template slot="projCell" data-oj-as="cell">
               <span>
-                <oj-bind-text value="[[ row.data.projectName ]]"></oj-bind-text>
+                <oj-bind-text value="[[ cell.row.projectName ]]"></oj-bind-text>
                 <div class="oj-typography-body-xs rw-metric-label">
-                  <oj-bind-text value="[[ row.data.customerName ]]"></oj-bind-text>
-                  <oj-bind-if test="[[ row.data.revenueModel ]]">
-                    · <oj-bind-text value="[[ row.data.revenueModel ]]"></oj-bind-text>
+                  <oj-bind-text value="[[ cell.row.customerName ]]"></oj-bind-text>
+                  <oj-bind-if test="[[ cell.row.revenueModel ]]">
+                    · <oj-bind-text value="[[ cell.row.revenueModel ]]"></oj-bind-text>
                   </oj-bind-if>
                 </div>
               </span>
             </template>
 
-            <template slot="billCell" data-oj-as="row">
-              <span><oj-bind-text value="[[ $application.functions.fmtHours(row.data.billableHours) ]]"></oj-bind-text></span>
+            <template slot="billCell" data-oj-as="cell">
+              <span><oj-bind-text value="[[ $application.functions.fmtHours(cell.row.billableHours) ]]"></oj-bind-text></span>
             </template>
-            <template slot="nonBillCell" data-oj-as="row">
-              <span><oj-bind-text value="[[ $application.functions.fmtHours(row.data.nonBillableHours) ]]"></oj-bind-text></span>
+            <template slot="nonBillCell" data-oj-as="cell">
+              <span><oj-bind-text value="[[ $application.functions.fmtHours(cell.row.nonBillableHours) ]]"></oj-bind-text></span>
             </template>
-            <template slot="leaveCell" data-oj-as="row">
-              <span><oj-bind-text value="[[ $application.functions.fmtHours(row.data.leaveHours) ]]"></oj-bind-text></span>
+            <template slot="leaveCell" data-oj-as="cell">
+              <span><oj-bind-text value="[[ $application.functions.fmtHours(cell.row.leaveHours) ]]"></oj-bind-text></span>
             </template>
 
-            <template slot="confCell" data-oj-as="row">
+            <template slot="confCell" data-oj-as="cell">
               <span>
-                <oj-bind-text value="[[ row.data.confirmedOn ]]"></oj-bind-text>
+                <oj-bind-text value="[[ cell.row.confirmedOn ]]"></oj-bind-text>
                 <div class="oj-typography-body-xs rw-metric-label">
-                  <oj-bind-text value="[[ row.data.confirmedBy ]]"></oj-bind-text>
+                  <oj-bind-text value="[[ cell.row.confirmedBy ]]"></oj-bind-text>
                 </div>
-                <oj-bind-if test="[[ row.data.confirmType === 'Advance closure' ]]">
+                <oj-bind-if test="[[ cell.row.confirmType === 'Advance closure' ]]">
                   <span class="rw-flag rw-flag-advance">Advance closure</span>
                 </oj-bind-if>
               </span>
             </template>
 
-            <template slot="otlCell" data-oj-as="row">
-              <span :class="[[ $page.functions.handoffClass(row.data.otlStatus) ]]"
-                    :title="[[ row.data.otlMessage || 'OTL push (INT-007) is an OIC flow; until it is built confirmations record Pending.' ]]">
-                <oj-bind-text value="[[ row.data.otlStatus ]]"></oj-bind-text>
+            <template slot="otlCell" data-oj-as="cell">
+              <span :class="[[ $page.functions.handoffClass(cell.row.otlStatus) ]]"
+                    :title="[[ cell.row.otlMessage || 'OTL push (INT-007) is an OIC flow; until it is built confirmations record Pending.' ]]">
+                <oj-bind-text value="[[ cell.row.otlStatus ]]"></oj-bind-text>
               </span>
             </template>
 
-            <template slot="accrualCell" data-oj-as="row">
+            <template slot="accrualCell" data-oj-as="cell">
               <span>
-                <span :class="[[ $page.functions.handoffClass(row.data.accrualStatus) ]]"
-                      :title="[[ row.data.accrualMessage ]]">
-                  <oj-bind-text value="[[ row.data.accrualStatus ]]"></oj-bind-text>
+                <span :class="[[ $page.functions.handoffClass(cell.row.accrualStatus) ]]"
+                      :title="[[ cell.row.accrualMessage ]]">
+                  <oj-bind-text value="[[ cell.row.accrualStatus ]]"></oj-bind-text>
                 </span>
                 <div class="oj-typography-body-xs rw-metric-label">
-                  <oj-bind-text value="[[ row.data.rowsPulled ]]"></oj-bind-text> pulled /
-                  <oj-bind-text value="[[ row.data.rowsPending ]]"></oj-bind-text> pending
+                  <oj-bind-text value="[[ cell.row.rowsPulled ]]"></oj-bind-text> pulled /
+                  <oj-bind-text value="[[ cell.row.rowsPending ]]"></oj-bind-text> pending
                 </div>
               </span>
             </template>
 
-            <template slot="actionCell" data-oj-as="row">
+            <template slot="actionCell" data-oj-as="cell">
               <oj-button chroming="outlined"
-                         :aria-label="[[ $page.functions.extractLabel(row.data.projectName) ]]"
+                         :aria-label="[[ $page.functions.extractLabel(cell.row.projectName) ]]"
                          on-oj-action="[[ function(){
                             $page.listeners.openExtract({
-                              confirmId: row.data.confirmId,
-                              label: row.data.projectName }); } ]]">
+                              confirmId: cell.row.confirmId,
+                              label: cell.row.projectName }); } ]]">
                 <span>Extract</span>
               </oj-button>
             </template>
@@ -238,43 +238,43 @@
                         {"headerText":"Collected","field":"processedFlag","template":"pCell","width":120}
                       ]'>
 
-              <template slot="eCell" data-oj-as="row">
+              <template slot="eCell" data-oj-as="cell">
                 <span>
-                  <oj-bind-text value="[[ row.data.employeeName ]]"></oj-bind-text>
+                  <oj-bind-text value="[[ cell.row.employeeName ]]"></oj-bind-text>
                   <div class="oj-typography-body-xs rw-metric-label">
-                    <oj-bind-text value="[[ row.data.employeeId ]]"></oj-bind-text>
+                    <oj-bind-text value="[[ cell.row.employeeId ]]"></oj-bind-text>
                   </div>
                 </span>
               </template>
-              <template slot="taskCell" data-oj-as="row">
+              <template slot="taskCell" data-oj-as="cell">
                 <span>
-                  <oj-bind-text value="[[ row.data.wbsTask ]]"></oj-bind-text>
+                  <oj-bind-text value="[[ cell.row.wbsTask ]]"></oj-bind-text>
                   <div class="oj-typography-body-xs rw-metric-label">
-                    <oj-bind-text value="[[ row.data.wbsTaskName ]]"></oj-bind-text>
+                    <oj-bind-text value="[[ cell.row.wbsTaskName ]]"></oj-bind-text>
                   </div>
                 </span>
               </template>
-              <template slot="dateCell" data-oj-as="row">
-                <span><oj-bind-text value="[[ $application.functions.fmtDate(row.data.workDate) ]]"></oj-bind-text></span>
+              <template slot="dateCell" data-oj-as="cell">
+                <span><oj-bind-text value="[[ $application.functions.fmtDate(cell.row.workDate) ]]"></oj-bind-text></span>
               </template>
-              <template slot="bCell" data-oj-as="row">
-                <span><oj-bind-text value="[[ $application.functions.fmtHours(row.data.billed) ]]"></oj-bind-text></span>
+              <template slot="bCell" data-oj-as="cell">
+                <span><oj-bind-text value="[[ $application.functions.fmtHours(cell.row.billed) ]]"></oj-bind-text></span>
               </template>
-              <template slot="uCell" data-oj-as="row">
-                <span><oj-bind-text value="[[ $application.functions.fmtHours(row.data.unbilled) ]]"></oj-bind-text></span>
+              <template slot="uCell" data-oj-as="cell">
+                <span><oj-bind-text value="[[ $application.functions.fmtHours(cell.row.unbilled) ]]"></oj-bind-text></span>
               </template>
-              <template slot="lCell" data-oj-as="row">
-                <span><oj-bind-text value="[[ $application.functions.fmtHours(row.data.leaveHours) ]]"></oj-bind-text></span>
+              <template slot="lCell" data-oj-as="cell">
+                <span><oj-bind-text value="[[ $application.functions.fmtHours(cell.row.leaveHours) ]]"></oj-bind-text></span>
               </template>
-              <template slot="typeCell" data-oj-as="row">
-                <span :class="[[ $page.functions.entryTypeClass(row.data.entryType) ]]">
-                  <oj-bind-text value="[[ row.data.entryType ]]"></oj-bind-text>
+              <template slot="typeCell" data-oj-as="cell">
+                <span :class="[[ $page.functions.entryTypeClass(cell.row.entryType) ]]">
+                  <oj-bind-text value="[[ cell.row.entryType ]]"></oj-bind-text>
                 </span>
               </template>
-              <template slot="pCell" data-oj-as="row">
-                <span :class="[[ $application.functions.yesNo(row.data.processedFlag, 'rw-status rw-status-approved', 'rw-status rw-status-notsubmitted') ]]"
-                      :title="[[ $page.functions.batchTitle(row.data.batchId) ]]">
-                  <oj-bind-text value="[[ $application.functions.yesNo(row.data.processedFlag, 'Collected', 'Waiting') ]]"></oj-bind-text>
+              <template slot="pCell" data-oj-as="cell">
+                <span :class="[[ $application.functions.yesNo(cell.row.processedFlag, 'rw-status rw-status-approved', 'rw-status rw-status-notsubmitted') ]]"
+                      :title="[[ $page.functions.batchTitle(cell.row.batchId) ]]">
+                  <oj-bind-text value="[[ $application.functions.yesNo(cell.row.processedFlag, 'Collected', 'Waiting') ]]"></oj-bind-text>
                 </span>
               </template>
             </oj-table>
@@ -310,11 +310,11 @@
                       {"headerText":"Billed hrs","field":"coveredBilledHours","template":"aHoursCell","width":110},
                       {"headerText":"Approved","field":"approvedOn","width":160}
                     ]'>
-            <template slot="aDateCell" data-oj-as="row">
-              <span><oj-bind-text value="[[ $application.functions.fmtDate(row.data.absenceDate) ]]"></oj-bind-text></span>
+            <template slot="aDateCell" data-oj-as="cell">
+              <span><oj-bind-text value="[[ $application.functions.fmtDate(cell.row.absenceDate) ]]"></oj-bind-text></span>
             </template>
-            <template slot="aHoursCell" data-oj-as="row">
-              <span><oj-bind-text value="[[ $application.functions.fmtHours(row.data.coveredBilledHours) ]]"></oj-bind-text></span>
+            <template slot="aHoursCell" data-oj-as="cell">
+              <span><oj-bind-text value="[[ $application.functions.fmtHours(cell.row.coveredBilledHours) ]]"></oj-bind-text></span>
             </template>
           </oj-table>
         </div>

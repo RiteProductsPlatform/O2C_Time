@@ -30,6 +30,7 @@ define([
       $page.variables.weeksLabel = label || '';
       $page.variables.weekRows   = [];
       $page.variables.showWeeks  = true;
+      $page.functions.setDialog('weeksDlg', true);
 
       try {
         const resp = await Actions.callRest(context, {

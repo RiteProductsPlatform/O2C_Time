@@ -108,6 +108,7 @@ define([
 
         if (resp.ok) {
           $page.variables.showAdjustment = false;
+          $page.functions.setDialog('adjDlg', false);
 
           await Actions.fireNotificationEvent(context, {
             summary: 'Change applied',

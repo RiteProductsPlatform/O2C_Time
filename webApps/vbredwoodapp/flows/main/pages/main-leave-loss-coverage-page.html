@@ -112,62 +112,62 @@
                       {"headerText":"","field":"llcId","template":"actionCell","width":170,"sortable":"disabled"}
                     ]'>
 
-            <template slot="dateCell" data-oj-as="row">
+            <template slot="dateCell" data-oj-as="cell">
               <span>
-                <oj-bind-text value="[[ $application.functions.fmtDate(row.data.absenceDate) ]]"></oj-bind-text>
+                <oj-bind-text value="[[ $application.functions.fmtDate(cell.row.absenceDate) ]]"></oj-bind-text>
                 <div class="oj-typography-body-xs rw-metric-label">
-                  <oj-bind-text value="[[ row.data.absenceDay ]]"></oj-bind-text>
+                  <oj-bind-text value="[[ cell.row.absenceDay ]]"></oj-bind-text>
                 </div>
               </span>
             </template>
 
-            <template slot="hoursCell" data-oj-as="row">
-              <span><oj-bind-text value="[[ $application.functions.fmtHours(row.data.absenceHours) ]]"></oj-bind-text></span>
+            <template slot="hoursCell" data-oj-as="cell">
+              <span><oj-bind-text value="[[ $application.functions.fmtHours(cell.row.absenceHours) ]]"></oj-bind-text></span>
             </template>
 
-            <template slot="coverCell" data-oj-as="row">
+            <template slot="coverCell" data-oj-as="cell">
               <span>
-                <oj-bind-if test="[[ row.data.coverEmployeeName ]]">
-                  <oj-bind-text value="[[ row.data.coverEmployeeName ]]"></oj-bind-text>
+                <oj-bind-if test="[[ cell.row.coverEmployeeName ]]">
+                  <oj-bind-text value="[[ cell.row.coverEmployeeName ]]"></oj-bind-text>
                 </oj-bind-if>
-                <oj-bind-if test="[[ !row.data.coverEmployeeName ]]">
+                <oj-bind-if test="[[ !cell.row.coverEmployeeName ]]">
                   <span class="rw-metric-label">No cover assigned</span>
                 </oj-bind-if>
               </span>
             </template>
 
-            <template slot="statusCell" data-oj-as="row">
+            <template slot="statusCell" data-oj-as="cell">
               <span>
-                <span :class="[[ $application.functions.outcomeClass(row.data.llcStatus) ]]">
-                  <oj-bind-text value="[[ row.data.llcStatus ]]"></oj-bind-text>
+                <span :class="[[ $application.functions.outcomeClass(cell.row.llcStatus) ]]">
+                  <oj-bind-text value="[[ cell.row.llcStatus ]]"></oj-bind-text>
                 </span>
-                <oj-bind-if test="[[ row.data.billedFlag === 'Y' ]]">
+                <oj-bind-if test="[[ cell.row.billedFlag === 'Y' ]]">
                   <span class="rw-flag rw-flag-adjustment" title="On the invoice annexure (REP-002).">Billed</span>
                 </oj-bind-if>
               </span>
             </template>
 
-            <template slot="actionCell" data-oj-as="row">
+            <template slot="actionCell" data-oj-as="cell">
               <div class="oj-flex oj-sm-gap-1x">
                 <!-- Approved coverage is settled: reassigning it would change
                      hours already on an invoice annexure. -->
-                <oj-bind-if test="[[ row.data.llcStatus !== 'Approved' ]]">
+                <oj-bind-if test="[[ cell.row.llcStatus !== 'Approved' ]]">
                   <oj-button chroming="borderless" disabled="[[ $variables.busy ]]"
-                             :aria-label="[[ $page.functions.assignLabel(row.data.absentEmployeeName) ]]"
+                             :aria-label="[[ $page.functions.assignLabel(cell.row.absentEmployeeName) ]]"
                              on-oj-action="[[ function(){
                                 $page.listeners.openAssign({
-                                  llcId: row.data.llcId,
-                                  absenceDate: row.data.absenceDate,
-                                  label: $page.functions.absenceLabel(row.data) }); } ]]">
-                    <span><oj-bind-text value="[[ $application.functions.ifSet(row.data.coverEmployeeId, 'Reassign', 'Assign') ]]"></oj-bind-text></span>
+                                  llcId: cell.row.llcId,
+                                  absenceDate: cell.row.absenceDate,
+                                  label: $page.functions.absenceLabel(cell.row) }); } ]]">
+                    <span><oj-bind-text value="[[ $application.functions.ifSet(cell.row.coverEmployeeId, 'Reassign', 'Assign') ]]"></oj-bind-text></span>
                   </oj-button>
                 </oj-bind-if>
 
-                <oj-bind-if test="[[ row.data.llcStatus === 'Assigned' ]]">
+                <oj-bind-if test="[[ cell.row.llcStatus === 'Assigned' ]]">
                   <oj-button chroming="outlined" disabled="[[ $variables.busy ]]"
-                             :aria-label="[[ $page.functions.approveLabel(row.data.absentEmployeeName) ]]"
+                             :aria-label="[[ $page.functions.approveLabel(cell.row.absentEmployeeName) ]]"
                              on-oj-action="[[ function(){
-                                $page.listeners.approveOne({ llcId: row.data.llcId }); } ]]">
+                                $page.listeners.approveOne({ llcId: cell.row.llcId }); } ]]">
                     <span>Approve</span>
                   </oj-button>
                 </oj-bind-if>
@@ -189,8 +189,7 @@
 
   <!-- ══════════════════ Assign dialog (ACT-022) ══════════════════ -->
   <oj-dialog id="assignDlg" dialog-title="Assign a covering colleague"
-             cancel-behavior="icon"
-             opened="{{ $variables.showAssign }}">
+             cancel-behavior="icon">
     <div slot="body">
       <p class="oj-typography-body-sm rw-metric-label">
         <oj-bind-text value="[[ $variables.assignLabel ]]"></oj-bind-text>

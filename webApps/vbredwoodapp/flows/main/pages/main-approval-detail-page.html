@@ -124,64 +124,64 @@
                         {"headerText":"","field":"tsWeekId","template":"actionCell","width":100,"sortable":"disabled"}
                       ]'>
 
-              <template slot="pickCell" data-oj-as="row">
+              <template slot="pickCell" data-oj-as="cell">
                 <!-- A settled week has nothing to decide, so it cannot be ticked.
                      oj-checkboxset rather than a raw HTML checkbox: Redwood standards
                      forbid raw HTML form controls. -->
                 <oj-checkboxset class="apdt-row-pick"
-                                :aria-label="[[ $page.functions.weekPickLabel(row.data.weekIndex) ]]"
-                                :disabled="[[ $page.functions.isSettled(row.data.weekStatus) ]]"
-                                :value="[[ $page.functions.weekPickValue(row.data.tsWeekId) ]]"
-                                on-value-changed="[[ function(e){ $page.functions.toggleWeekPick(row.data.tsWeekId, e); } ]]">
+                                :aria-label="[[ $page.functions.weekPickLabel(cell.row.weekIndex) ]]"
+                                :disabled="[[ $page.functions.isSettled(cell.row.weekStatus) ]]"
+                                :value="[[ $page.functions.weekPickValue(cell.row.tsWeekId) ]]"
+                                on-value-changed="[[ function(e){ $page.functions.toggleWeekPick(cell.row.tsWeekId, e); } ]]">
                   <oj-option value="on"></oj-option>
                 </oj-checkboxset>
               </template>
 
-              <template slot="weekCell" data-oj-as="row">
+              <template slot="weekCell" data-oj-as="cell">
                 <span>
-                  Week <oj-bind-text value="[[ row.data.weekIndex ]]"></oj-bind-text>
+                  Week <oj-bind-text value="[[ cell.row.weekIndex ]]"></oj-bind-text>
                   <div class="oj-typography-body-xs rw-metric-label">
-                    <oj-bind-text value="[[ row.data.weekRange ]]"></oj-bind-text>
+                    <oj-bind-text value="[[ cell.row.weekRange ]]"></oj-bind-text>
                   </div>
                 </span>
               </template>
 
-              <template slot="billCell" data-oj-as="row">
-                <span><oj-bind-text value="[[ $application.functions.fmtHours(row.data.billableHours) ]]"></oj-bind-text></span>
+              <template slot="billCell" data-oj-as="cell">
+                <span><oj-bind-text value="[[ $application.functions.fmtHours(cell.row.billableHours) ]]"></oj-bind-text></span>
               </template>
-              <template slot="nonBillCell" data-oj-as="row">
-                <span><oj-bind-text value="[[ $application.functions.fmtHours(row.data.nonBillableHours) ]]"></oj-bind-text></span>
+              <template slot="nonBillCell" data-oj-as="cell">
+                <span><oj-bind-text value="[[ $application.functions.fmtHours(cell.row.nonBillableHours) ]]"></oj-bind-text></span>
               </template>
-              <template slot="leaveCell" data-oj-as="row">
-                <span><oj-bind-text value="[[ $application.functions.fmtHours(row.data.leaveHours) ]]"></oj-bind-text></span>
+              <template slot="leaveCell" data-oj-as="cell">
+                <span><oj-bind-text value="[[ $application.functions.fmtHours(cell.row.leaveHours) ]]"></oj-bind-text></span>
               </template>
-              <template slot="lossCell" data-oj-as="row">
-                <span><oj-bind-text value="[[ $application.functions.fmtHours(row.data.billingLossHours) ]]"></oj-bind-text></span>
+              <template slot="lossCell" data-oj-as="cell">
+                <span><oj-bind-text value="[[ $application.functions.fmtHours(cell.row.billingLossHours) ]]"></oj-bind-text></span>
               </template>
-              <template slot="totalCell" data-oj-as="row">
-                <span class="oj-typography-semi-bold"><oj-bind-text value="[[ $application.functions.fmtHours(row.data.totalHours) ]]"></oj-bind-text></span>
+              <template slot="totalCell" data-oj-as="cell">
+                <span class="oj-typography-semi-bold"><oj-bind-text value="[[ $application.functions.fmtHours(cell.row.totalHours) ]]"></oj-bind-text></span>
               </template>
 
-              <template slot="daysCell" data-oj-as="row">
+              <template slot="daysCell" data-oj-as="cell">
                 <span>
-                  <oj-bind-text value="[[ row.data.daysApproved ]]"></oj-bind-text> /
-                  <oj-bind-text value="[[ row.data.daysTotal ]]"></oj-bind-text> appr.
-                  <oj-bind-if test="[[ row.data.daysRejected > 0 ]]">
+                  <oj-bind-text value="[[ cell.row.daysApproved ]]"></oj-bind-text> /
+                  <oj-bind-text value="[[ cell.row.daysTotal ]]"></oj-bind-text> appr.
+                  <oj-bind-if test="[[ cell.row.daysRejected > 0 ]]">
                     <span class="rw-flag rw-flag-reversal">
-                      <oj-bind-text value="[[ row.data.daysRejected ]]"></oj-bind-text> rej.
+                      <oj-bind-text value="[[ cell.row.daysRejected ]]"></oj-bind-text> rej.
                     </span>
                   </oj-bind-if>
                 </span>
               </template>
 
-              <template slot="statusCell" data-oj-as="row">
+              <template slot="statusCell" data-oj-as="cell">
                 <span>
-                  <span :class="[[ $application.functions.statusClass(row.data.weekStatus) ]]">
-                    <oj-bind-text value="[[ row.data.weekStatus ]]"></oj-bind-text>
+                  <span :class="[[ $application.functions.statusClass(cell.row.weekStatus) ]]">
+                    <oj-bind-text value="[[ cell.row.weekStatus ]]"></oj-bind-text>
                   </span>
                   <!-- The 6 flags, derived from the raw row so this page and the
                        employee's own page always say the same thing. -->
-                  <oj-bind-for-each data="[[ $application.functions.weekFlags(row.data) ]]">
+                  <oj-bind-for-each data="[[ $application.functions.weekFlags(cell.row) ]]">
                     <template>
                       <span :class="[[ $current.data.cls ]]" :title="[[ $current.data.title ]]">
                         <oj-bind-text value="[[ $current.data.label ]]"></oj-bind-text>
@@ -191,13 +191,13 @@
                 </span>
               </template>
 
-              <template slot="actionCell" data-oj-as="row">
+              <template slot="actionCell" data-oj-as="cell">
                 <oj-button chroming="outlined"
-                           :aria-label="[[ $page.functions.openWeekLabel(row.data.weekIndex) ]]"
+                           :aria-label="[[ $page.functions.openWeekLabel(cell.row.weekIndex) ]]"
                            on-oj-action="[[ function(){
                               $page.listeners.openWeek({
-                                tsWeekId: row.data.tsWeekId,
-                                label: $page.functions.weekLabelFor(row.data) }); } ]]">
+                                tsWeekId: cell.row.tsWeekId,
+                                label: $page.functions.weekLabelFor(cell.row) }); } ]]">
                   <span>Open</span>
                 </oj-button>
               </template>
@@ -310,84 +310,84 @@
                         {"headerText":"","field":"tsEntryId","template":"actionCell","width":110,"sortable":"disabled"}
                       ]'>
 
-              <template slot="pickCell" data-oj-as="row">
+              <template slot="pickCell" data-oj-as="cell">
                 <!-- Ticking any line ticks the whole DATE — approval is by day. -->
                 <oj-checkboxset class="apdt-row-pick"
-                                :aria-label="[[ $page.functions.datePickLabel(row.data.entryDate) ]]"
-                                :value="[[ $page.functions.datePickValue(row.data.entryDate) ]]"
-                                on-value-changed="[[ function(e){ $page.functions.toggleDatePick(row.data.entryDate, e); } ]]">
+                                :aria-label="[[ $page.functions.datePickLabel(cell.row.entryDate) ]]"
+                                :value="[[ $page.functions.datePickValue(cell.row.entryDate) ]]"
+                                on-value-changed="[[ function(e){ $page.functions.toggleDatePick(cell.row.entryDate, e); } ]]">
                   <oj-option value="on"></oj-option>
                 </oj-checkboxset>
               </template>
 
-              <template slot="dateCell" data-oj-as="row">
+              <template slot="dateCell" data-oj-as="cell">
                 <span>
-                  <oj-bind-text value="[[ $application.functions.fmtDate(row.data.entryDate) ]]"></oj-bind-text>
+                  <oj-bind-text value="[[ $application.functions.fmtDate(cell.row.entryDate) ]]"></oj-bind-text>
                   <div class="oj-typography-body-xs rw-metric-label">
-                    <oj-bind-text value="[[ row.data.dayName ]]"></oj-bind-text>
+                    <oj-bind-text value="[[ cell.row.dayName ]]"></oj-bind-text>
                   </div>
                 </span>
               </template>
 
-              <template slot="taskCell" data-oj-as="row">
+              <template slot="taskCell" data-oj-as="cell">
                 <span>
-                  <oj-bind-text value="[[ row.data.taskName ]]"></oj-bind-text>
-                  <oj-bind-if test="[[ row.data.isLeave === 'Y' ]]">
+                  <oj-bind-text value="[[ cell.row.taskName ]]"></oj-bind-text>
+                  <oj-bind-if test="[[ cell.row.isLeave === 'Y' ]]">
                     <span class="rw-flag rw-flag-advance"
-                          :title="[[ $page.functions.leaveTitle(row.data.absenceType) ]]">Leave</span>
+                          :title="[[ $page.functions.leaveTitle(cell.row.absenceType) ]]">Leave</span>
                   </oj-bind-if>
-                  <oj-bind-if test="[[ row.data.entryType === 'Reversal' ]]">
+                  <oj-bind-if test="[[ cell.row.entryType === 'Reversal' ]]">
                     <span class="rw-flag rw-flag-reversal">Reversal</span>
                   </oj-bind-if>
-                  <oj-bind-if test="[[ row.data.entryType === 'Adjustment' ]]">
+                  <oj-bind-if test="[[ cell.row.entryType === 'Adjustment' ]]">
                     <span class="rw-flag rw-flag-adjustment">Adjustment</span>
                   </oj-bind-if>
-                  <oj-bind-if test="[[ row.data.entryType === 'Default' ]]">
+                  <oj-bind-if test="[[ cell.row.entryType === 'Default' ]]">
                     <span class="rw-flag rw-flag-defaulted">Default hours</span>
                   </oj-bind-if>
                 </span>
               </template>
 
-              <template slot="hoursCell" data-oj-as="row">
+              <template slot="hoursCell" data-oj-as="cell">
                 <span class="oj-typography-semi-bold">
-                  <oj-bind-text value="[[ $application.functions.fmtHours(row.data.hours) ]]"></oj-bind-text>
+                  <oj-bind-text value="[[ $application.functions.fmtHours(cell.row.hours) ]]"></oj-bind-text>
                 </span>
               </template>
 
               <!-- FLD-012 Billable Type is manager-only; it is deliberately not
                    on the employee's own page. -->
-              <template slot="typeCell" data-oj-as="row">
+              <template slot="typeCell" data-oj-as="cell">
                 <span>
-                  <oj-bind-text value="[[ row.data.billableType ]]"></oj-bind-text>
-                  <oj-bind-if test="[[ row.data.billableType === 'Non-billable'
-                                    && row.data.unbilledReason
-                                    && row.data.unbilledReason !== '—' ]]">
+                  <oj-bind-text value="[[ cell.row.billableType ]]"></oj-bind-text>
+                  <oj-bind-if test="[[ cell.row.billableType === 'Non-billable'
+                                    && cell.row.unbilledReason
+                                    && cell.row.unbilledReason !== '—' ]]">
                     <div class="oj-typography-body-xs rw-metric-label">
-                      <oj-bind-text value="[[ row.data.unbilledReason ]]"></oj-bind-text>
+                      <oj-bind-text value="[[ cell.row.unbilledReason ]]"></oj-bind-text>
                     </div>
                   </oj-bind-if>
                 </span>
               </template>
 
-              <template slot="dayStatusCell" data-oj-as="row">
-                <span :class="[[ $application.functions.statusClass(row.data.dayStatus) ]]"
-                      :title="[[ $page.functions.rejectTitle(row.data) ]]">
-                  <oj-bind-text value="[[ row.data.dayStatus ]]"></oj-bind-text>
+              <template slot="dayStatusCell" data-oj-as="cell">
+                <span :class="[[ $application.functions.statusClass(cell.row.dayStatus) ]]"
+                      :title="[[ $page.functions.rejectTitle(cell.row) ]]">
+                  <oj-bind-text value="[[ cell.row.dayStatus ]]"></oj-bind-text>
                 </span>
               </template>
 
-              <template slot="actionCell" data-oj-as="row">
+              <template slot="actionCell" data-oj-as="cell">
                 <!-- Leave comes from HCM and is not the manager's to retype
                      (RULE-008); everything else can be corrected. -->
-                <oj-bind-if test="[[ row.data.isLeave !== 'Y' ]]">
+                <oj-bind-if test="[[ cell.row.isLeave !== 'Y' ]]">
                   <oj-button chroming="borderless"
                              disabled="[[ $variables.busy ]]"
-                             :aria-label="[[ $page.functions.correctLabel(row.data.taskName) ]]"
+                             :aria-label="[[ $page.functions.correctLabel(cell.row.taskName) ]]"
                              on-oj-action="[[ function(){
                                 $page.listeners.openOverride({
-                                  tsEntryId: row.data.tsEntryId,
-                                  label: $page.functions.overrideLabelFor(row.data),
-                                  hours: row.data.hours }); } ]]">
+                                  tsEntryId: cell.row.tsEntryId,
+                                  label: $page.functions.overrideLabelFor(cell.row),
+                                  hours: cell.row.hours }); } ]]">
                     <span>Correct</span>
                   </oj-button>
                 </oj-bind-if>
@@ -428,29 +428,29 @@
                         {"headerText":"By","field":"changedBy","weight":2},
                         {"headerText":"When","field":"changedOn","width":160}
                       ]'>
-              <template slot="aDateCell" data-oj-as="row">
-                <span><oj-bind-text value="[[ $application.functions.fmtDate(row.data.entryDate) ]]"></oj-bind-text></span>
+              <template slot="aDateCell" data-oj-as="cell">
+                <span><oj-bind-text value="[[ $application.functions.fmtDate(cell.row.entryDate) ]]"></oj-bind-text></span>
               </template>
-              <template slot="fromCell" data-oj-as="row">
+              <template slot="fromCell" data-oj-as="cell">
                 <span>
-                  <oj-bind-text value="[[ row.data.oldProjectName ]]"></oj-bind-text>
-                  <oj-bind-if test="[[ row.data.oldTaskCode ]]">
-                    / <oj-bind-text value="[[ row.data.oldTaskCode ]]"></oj-bind-text>
+                  <oj-bind-text value="[[ cell.row.oldProjectName ]]"></oj-bind-text>
+                  <oj-bind-if test="[[ cell.row.oldTaskCode ]]">
+                    / <oj-bind-text value="[[ cell.row.oldTaskCode ]]"></oj-bind-text>
                   </oj-bind-if>
-                  (<oj-bind-text value="[[ $application.functions.fmtHours(row.data.oldHours) ]]"></oj-bind-text>)
+                  (<oj-bind-text value="[[ $application.functions.fmtHours(cell.row.oldHours) ]]"></oj-bind-text>)
                 </span>
               </template>
-              <template slot="toCell" data-oj-as="row">
+              <template slot="toCell" data-oj-as="cell">
                 <span>
-                  <oj-bind-text value="[[ row.data.newProjectName ]]"></oj-bind-text>
-                  <oj-bind-if test="[[ row.data.newTaskCode ]]">
-                    / <oj-bind-text value="[[ row.data.newTaskCode ]]"></oj-bind-text>
+                  <oj-bind-text value="[[ cell.row.newProjectName ]]"></oj-bind-text>
+                  <oj-bind-if test="[[ cell.row.newTaskCode ]]">
+                    / <oj-bind-text value="[[ cell.row.newTaskCode ]]"></oj-bind-text>
                   </oj-bind-if>
-                  (<oj-bind-text value="[[ $application.functions.fmtHours(row.data.newHours) ]]"></oj-bind-text>)
+                  (<oj-bind-text value="[[ $application.functions.fmtHours(cell.row.newHours) ]]"></oj-bind-text>)
                 </span>
               </template>
-              <template slot="deltaCell" data-oj-as="row">
-                <span><oj-bind-text value="[[ $application.functions.fmtHours(row.data.deltaHours) ]]"></oj-bind-text></span>
+              <template slot="deltaCell" data-oj-as="cell">
+                <span><oj-bind-text value="[[ $application.functions.fmtHours(cell.row.deltaHours) ]]"></oj-bind-text></span>
               </template>
             </oj-table>
           </div>
@@ -468,8 +468,7 @@
   </div>
 
   <!-- ══════════════════ Reject dialog (RULE-013) ══════════════════ -->
-  <oj-dialog id="rejectDlg" dialog-title="Reject" cancel-behavior="icon"
-             opened="{{ $variables.showReject }}">
+  <oj-dialog id="rejectDlg" dialog-title="Reject" cancel-behavior="icon">
     <div slot="body">
       <p class="oj-typography-body-sm rw-metric-label">
         <oj-bind-text value="[[ $page.functions.rejectScopeNote($variables.rejectScope) ]]"></oj-bind-text>
@@ -500,8 +499,7 @@
   </oj-dialog>
 
   <!-- ══════════════════ Override dialog (ACT-016) ══════════════════ -->
-  <oj-dialog id="overrideDlg" dialog-title="Correct hours" cancel-behavior="icon"
-             opened="{{ $variables.showOverride }}">
+  <oj-dialog id="overrideDlg" dialog-title="Correct hours" cancel-behavior="icon">
     <div slot="body">
       <p class="oj-typography-body-sm rw-metric-label">
         <oj-bind-text value="[[ $variables.overrideLabel ]]"></oj-bind-text>

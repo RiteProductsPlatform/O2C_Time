@@ -41,6 +41,7 @@ define([
 
         if (resp.ok) {
           $page.variables.showAssign = false;
+          $page.functions.setDialog('assignDlg', false);
           await Actions.fireNotificationEvent(context, {
             summary: 'Cover assigned',
             message: 'Approve it to make the hours billed.',

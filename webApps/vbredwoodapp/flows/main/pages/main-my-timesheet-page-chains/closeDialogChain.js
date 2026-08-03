@@ -24,9 +24,12 @@ define([
     async run(context, { which }) {
       const { $page } = context;
 
-      if (which === 'allocation')      { $page.variables.showAllocation = false; }
-      else if (which === 'addLine')    { $page.variables.showAddLine    = false; }
-      else if (which === 'adjustment') { $page.variables.showAdjustment = false; }
+      if (which === 'allocation')      { $page.variables.showAllocation = false;
+ $page.functions.setDialog('allocDlg', false); }
+      else if (which === 'addLine')    { $page.variables.showAddLine    = false;
+ $page.functions.setDialog('addLineDlg', false); }
+      else if (which === 'adjustment') { $page.variables.showAdjustment = false;
+ $page.functions.setDialog('adjDlg', false); }
     }
   }
 

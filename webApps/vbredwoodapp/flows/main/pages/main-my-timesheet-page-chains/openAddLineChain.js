@@ -20,6 +20,7 @@ define([
       $page.variables.newLineTaskId    = null;
       $page.variables.taskOptionsArray = [];
       $page.variables.showAddLine      = true;
+      $page.functions.setDialog('addLineDlg', true);
     }
   }
 

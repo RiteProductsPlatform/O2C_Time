@@ -39,6 +39,7 @@ define([
 
         if (resp.ok) {
           $page.variables.showRelease = false;
+          $page.functions.setDialog('releaseDlg', false);
           await Actions.fireNotificationEvent(context, {
             summary: 'Hold released',
             message: 'Salary will be paid in the next cycle.',

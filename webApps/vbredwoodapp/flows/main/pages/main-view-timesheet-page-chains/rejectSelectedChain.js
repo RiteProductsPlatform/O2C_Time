@@ -63,6 +63,7 @@ define([
           const n = (resp.body && resp.body.rejected) || selected.length;
 
           $page.variables.showReject    = false;
+          $page.functions.setDialog('rejectDlg', false);
           $page.variables.rejectReason  = '';
           $page.variables.rejectRemarks = '';
 

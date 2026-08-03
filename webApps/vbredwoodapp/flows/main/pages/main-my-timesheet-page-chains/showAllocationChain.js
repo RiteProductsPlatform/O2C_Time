@@ -23,6 +23,7 @@ define([
       const { $page, $application } = context;
 
       $page.variables.showAllocation = true;
+      $page.functions.setDialog('allocDlg', true);
 
       try {
         const resp = await Actions.callRest(context, {

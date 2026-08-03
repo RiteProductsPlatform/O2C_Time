@@ -18,8 +18,10 @@ define([
 
       if (which === 'weeks') {
         $page.variables.showWeeks = false;
+        $page.functions.setDialog('weeksDlg', false);
       } else if (which === 'release') {
         $page.variables.showRelease    = false;
+        $page.functions.setDialog('releaseDlg', false);
         $page.variables.releaseRemarks = '';
       }
     }

@@ -18,6 +18,7 @@ define([
       const { $page } = context;
 
       $page.variables.showReject    = false;
+      $page.functions.setDialog('rejectDlg', false);
       $page.variables.rejectReason  = '';
       $page.variables.rejectRemarks = '';
     }

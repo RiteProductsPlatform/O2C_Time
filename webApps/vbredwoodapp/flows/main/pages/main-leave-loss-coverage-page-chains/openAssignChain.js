@@ -33,6 +33,7 @@ define([
       $page.variables.assignCoverId     = '';
       $page.variables.coverOptionsArray = [];
       $page.variables.showAssign        = true;
+      $page.functions.setDialog('assignDlg', true);
 
       try {
         const resp = await Actions.callRest(context, {

@@ -33,6 +33,7 @@ define([
       $page.variables.inspectTo    = lastS;
       $page.variables.days         = [];
       $page.variables.showInspect  = true;
+      $page.functions.setDialog('inspectDlg', true);
     }
   }
 

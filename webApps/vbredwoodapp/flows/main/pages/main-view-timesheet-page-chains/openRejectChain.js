@@ -35,6 +35,7 @@ define([
       $page.variables.rejectReason  = '';
       $page.variables.rejectRemarks = '';
       $page.variables.showReject    = true;
+      $page.functions.setDialog('rejectDlg', true);
     }
   }
 

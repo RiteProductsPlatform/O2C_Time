@@ -13,6 +13,7 @@ define([
       const { $page } = context;
 
       $page.variables.showInspect = false;
+      $page.functions.setDialog('inspectDlg', false);
       $page.variables.days        = [];
     }
   }

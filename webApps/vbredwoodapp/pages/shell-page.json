@@ -99,16 +99,6 @@
         }
       ]
     },
-    "periodChanged": {
-      "chains": [
-        {
-          "chain": "periodChangedChain",
-          "parameters": {
-            "periodId": "{{ $event.detail.value }}"
-          }
-        }
-      ]
-    },
     "switchManager": {
       "chains": [
         {

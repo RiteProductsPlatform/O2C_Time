@@ -104,24 +104,24 @@
                       {"headerText":"Message","field":"message","weight":3,"minWidth":220}
                     ]'>
 
-            <template slot="jobCell" data-oj-as="row">
+            <template slot="jobCell" data-oj-as="cell">
               <span>
-                <oj-bind-text value="[[ row.data.jobName ]]"></oj-bind-text>
+                <oj-bind-text value="[[ cell.row.jobName ]]"></oj-bind-text>
                 <div class="oj-typography-body-xs rw-metric-label">
-                  <oj-bind-text value="[[ row.data.periodName || row.data.actionDate || row.data.jobType ]]"></oj-bind-text>
+                  <oj-bind-text value="[[ cell.row.periodName || cell.row.actionDate || cell.row.jobType ]]"></oj-bind-text>
                 </div>
               </span>
             </template>
 
-            <template slot="statusCell" data-oj-as="row">
-              <span :class="[[ $page.functions.jobStatusClass(row.data.jobStatus) ]]">
-                <oj-bind-text value="[[ row.data.jobStatus ]]"></oj-bind-text>
+            <template slot="statusCell" data-oj-as="cell">
+              <span :class="[[ $page.functions.jobStatusClass(cell.row.jobStatus) ]]">
+                <oj-bind-text value="[[ cell.row.jobStatus ]]"></oj-bind-text>
               </span>
             </template>
 
-            <template slot="failedCell" data-oj-as="row">
-              <span :class="[[ $page.functions.failedClass(row.data.recordsFailed) ]]">
-                <oj-bind-text value="[[ row.data.recordsFailed ]]"></oj-bind-text>
+            <template slot="failedCell" data-oj-as="cell">
+              <span :class="[[ $page.functions.failedClass(cell.row.recordsFailed) ]]">
+                <oj-bind-text value="[[ cell.row.recordsFailed ]]"></oj-bind-text>
               </span>
             </template>
           </oj-table>
@@ -164,27 +164,27 @@
                       {"headerText":"","field":"failedId","template":"actionCell","width":100,"sortable":"disabled"}
                     ]'>
 
-            <template slot="entityCell" data-oj-as="row">
+            <template slot="entityCell" data-oj-as="cell">
               <span>
-                <oj-bind-text value="[[ row.data.entityType ]]"></oj-bind-text>
+                <oj-bind-text value="[[ cell.row.entityType ]]"></oj-bind-text>
                 <div class="oj-typography-body-xs rw-metric-label">
-                  <oj-bind-text value="[[ row.data.entityKey ]]"></oj-bind-text>
+                  <oj-bind-text value="[[ cell.row.entityKey ]]"></oj-bind-text>
                 </div>
               </span>
             </template>
 
-            <template slot="stateCell" data-oj-as="row">
-              <span :class="[[ $application.functions.yesNo(row.data.resolvedFlag, 'rw-status rw-status-approved', 'rw-status rw-status-rejected') ]]">
-                <oj-bind-text value="[[ $application.functions.yesNo(row.data.resolvedFlag, 'Resolved', 'Open') ]]"></oj-bind-text>
+            <template slot="stateCell" data-oj-as="cell">
+              <span :class="[[ $application.functions.yesNo(cell.row.resolvedFlag, 'rw-status rw-status-approved', 'rw-status rw-status-rejected') ]]">
+                <oj-bind-text value="[[ $application.functions.yesNo(cell.row.resolvedFlag, 'Resolved', 'Open') ]]"></oj-bind-text>
               </span>
             </template>
 
-            <template slot="actionCell" data-oj-as="row">
-              <oj-bind-if test="[[ row.data.resolvedFlag !== 'Y' ]]">
+            <template slot="actionCell" data-oj-as="cell">
+              <oj-bind-if test="[[ cell.row.resolvedFlag !== 'Y' ]]">
                 <oj-button chroming="outlined" disabled="[[ $variables.busy ]]"
-                           :aria-label="[[ $page.functions.retryLabel(row.data.entityKey) ]]"
+                           :aria-label="[[ $page.functions.retryLabel(cell.row.entityKey) ]]"
                            on-oj-action="[[ function(){
-                              $page.listeners.retryRecord({ failedId: row.data.failedId }); } ]]">
+                              $page.listeners.retryRecord({ failedId: cell.row.failedId }); } ]]">
                   <span>Retry</span>
                 </oj-button>
               </oj-bind-if>

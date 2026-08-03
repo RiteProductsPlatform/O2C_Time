@@ -97,77 +97,77 @@
                       {"headerText":"","field":"holdId","template":"actionCell","width":230,"sortable":"disabled"}
                     ]'>
 
-            <template slot="empCell" data-oj-as="row">
+            <template slot="empCell" data-oj-as="cell">
               <span>
-                <oj-bind-text value="[[ row.data.employeeName ]]"></oj-bind-text>
+                <oj-bind-text value="[[ cell.row.employeeName ]]"></oj-bind-text>
                 <div class="oj-typography-body-xs rw-metric-label">
-                  <oj-bind-text value="[[ row.data.employeeId ]]"></oj-bind-text>
-                  <oj-bind-if test="[[ row.data.workerType === 'Contractor' ]]">
+                  <oj-bind-text value="[[ cell.row.employeeId ]]"></oj-bind-text>
+                  <oj-bind-if test="[[ cell.row.workerType === 'Contractor' ]]">
                     · Contractor
                   </oj-bind-if>
                 </div>
               </span>
             </template>
 
-            <template slot="weeksCell" data-oj-as="row">
+            <template slot="weeksCell" data-oj-as="cell">
               <span>
-                <oj-bind-text value="[[ row.data.weeksDefaulted ]]"></oj-bind-text> defaulted
-                of <oj-bind-text value="[[ row.data.weeksTotal ]]"></oj-bind-text>
+                <oj-bind-text value="[[ cell.row.weeksDefaulted ]]"></oj-bind-text> defaulted
+                of <oj-bind-text value="[[ cell.row.weeksTotal ]]"></oj-bind-text>
                 <div class="oj-typography-body-xs rw-metric-label">
-                  <oj-bind-text value="[[ row.data.weeksSubmitted ]]"></oj-bind-text> submitted
+                  <oj-bind-text value="[[ cell.row.weeksSubmitted ]]"></oj-bind-text> submitted
                 </div>
               </span>
             </template>
 
-            <template slot="appliedCell" data-oj-as="row">
-              <span><oj-bind-text value="[[ $application.functions.fmtHours(row.data.appliedHours) ]]"></oj-bind-text></span>
+            <template slot="appliedCell" data-oj-as="cell">
+              <span><oj-bind-text value="[[ $application.functions.fmtHours(cell.row.appliedHours) ]]"></oj-bind-text></span>
             </template>
-            <template slot="defaultCell" data-oj-as="row">
-              <span><oj-bind-text value="[[ $application.functions.fmtHours(row.data.defaultHours) ]]"></oj-bind-text></span>
+            <template slot="defaultCell" data-oj-as="cell">
+              <span><oj-bind-text value="[[ $application.functions.fmtHours(cell.row.defaultHours) ]]"></oj-bind-text></span>
             </template>
 
-            <template slot="statusCell" data-oj-as="row">
-              <span :class="[[ $application.functions.outcomeClass(row.data.salaryStatus) ]]">
-                <oj-bind-text value="[[ row.data.salaryStatus ]]"></oj-bind-text>
+            <template slot="statusCell" data-oj-as="cell">
+              <span :class="[[ $application.functions.outcomeClass(cell.row.salaryStatus) ]]">
+                <oj-bind-text value="[[ cell.row.salaryStatus ]]"></oj-bind-text>
               </span>
             </template>
 
-            <template slot="windowCell" data-oj-as="row">
+            <template slot="windowCell" data-oj-as="cell">
               <span>
-                <oj-bind-text value="[[ $application.functions.fmtDate(row.data.windowExpiresOn) ]]"></oj-bind-text>
-                <oj-bind-if test="[[ row.data.windowExpired === 'Y' && row.data.salaryStatus === 'Held' ]]">
+                <oj-bind-text value="[[ $application.functions.fmtDate(cell.row.windowExpiresOn) ]]"></oj-bind-text>
+                <oj-bind-if test="[[ cell.row.windowExpired === 'Y' && cell.row.salaryStatus === 'Held' ]]">
                   <span class="rw-flag rw-flag-reversal">Expired</span>
                 </oj-bind-if>
               </span>
             </template>
 
-            <template slot="actionCell" data-oj-as="row">
+            <template slot="actionCell" data-oj-as="cell">
               <div class="oj-flex oj-sm-gap-1x oj-sm-flex-wrap">
                 <oj-button chroming="borderless"
-                           :aria-label="[[ $page.functions.weeksLabel(row.data.employeeName) ]]"
+                           :aria-label="[[ $page.functions.weeksLabel(cell.row.employeeName) ]]"
                            on-oj-action="[[ function(){
                               $page.listeners.viewWeeks({
-                                employeeId: row.data.employeeId,
-                                label: row.data.employeeName }); } ]]">
+                                employeeId: cell.row.employeeId,
+                                label: cell.row.employeeName }); } ]]">
                   <span>Weeks</span>
                 </oj-button>
 
-                <oj-bind-if test="[[ row.data.salaryStatus === 'Held' ]]">
+                <oj-bind-if test="[[ cell.row.salaryStatus === 'Held' ]]">
                   <oj-button chroming="borderless"
-                             :aria-label="[[ $page.functions.correctLabel(row.data.employeeName) ]]"
+                             :aria-label="[[ $page.functions.correctLabel(cell.row.employeeName) ]]"
                              on-oj-action="[[ function(){
                                 $page.listeners.editDefaulted({
-                                  employeeId: row.data.employeeId,
-                                  employeeName: row.data.employeeName }); } ]]">
+                                  employeeId: cell.row.employeeId,
+                                  employeeName: cell.row.employeeName }); } ]]">
                     <span>Correct</span>
                   </oj-button>
                   <oj-button chroming="outlined" disabled="[[ $variables.busy ]]"
-                             :aria-label="[[ $page.functions.releaseLabel(row.data.employeeName) ]]"
+                             :aria-label="[[ $page.functions.releaseLabel(cell.row.employeeName) ]]"
                              on-oj-action="[[ function(){
                                 $page.listeners.openRelease({
-                                  holdId: row.data.holdId,
-                                  label: row.data.employeeName,
-                                  weeksDefaulted: row.data.weeksDefaulted }); } ]]">
+                                  holdId: cell.row.holdId,
+                                  label: cell.row.employeeName,
+                                  weeksDefaulted: cell.row.weeksDefaulted }); } ]]">
                     <span>Release</span>
                   </oj-button>
                 </oj-bind-if>
@@ -188,8 +188,7 @@
   </div>
 
   <!-- ══════════════════ Weeks breakdown (#3) ══════════════════ -->
-  <oj-dialog id="weeksDlg" dialog-title="Weeks breakdown" cancel-behavior="icon"
-             opened="{{ $variables.showWeeks }}">
+  <oj-dialog id="weeksDlg" dialog-title="Weeks breakdown" cancel-behavior="icon">
     <div slot="body">
       <p class="oj-typography-body-sm rw-metric-label">
         <oj-bind-text value="[[ $variables.weeksLabel ]]"></oj-bind-text> —
@@ -210,32 +209,32 @@
                     {"headerText":"Default","field":"defaultHours","template":"wDefaultCell","width":95},
                     {"headerText":"Total","field":"totalHours","template":"wTotalCell","width":95}
                   ]'>
-          <template slot="wCell" data-oj-as="row">
+          <template slot="wCell" data-oj-as="cell">
             <span>
-              Week <oj-bind-text value="[[ row.data.weekIndex ]]"></oj-bind-text>
+              Week <oj-bind-text value="[[ cell.row.weekIndex ]]"></oj-bind-text>
               <div class="oj-typography-body-xs rw-metric-label">
-                <oj-bind-text value="[[ row.data.weekRange ]]"></oj-bind-text>
+                <oj-bind-text value="[[ cell.row.weekRange ]]"></oj-bind-text>
               </div>
             </span>
           </template>
-          <template slot="wStatusCell" data-oj-as="row">
+          <template slot="wStatusCell" data-oj-as="cell">
             <span>
-              <span :class="[[ $application.functions.statusClass(row.data.weekStatus) ]]">
-                <oj-bind-text value="[[ row.data.weekStatus ]]"></oj-bind-text>
+              <span :class="[[ $application.functions.statusClass(cell.row.weekStatus) ]]">
+                <oj-bind-text value="[[ cell.row.weekStatus ]]"></oj-bind-text>
               </span>
-              <oj-bind-if test="[[ row.data.lockedFlag === 'Y' ]]">
+              <oj-bind-if test="[[ cell.row.lockedFlag === 'Y' ]]">
                 <span class="rw-flag rw-flag-defaulted" title="Locked to the employee — only a manager can edit it.">Locked</span>
               </oj-bind-if>
             </span>
           </template>
-          <template slot="wAppliedCell" data-oj-as="row">
-            <span><oj-bind-text value="[[ $application.functions.fmtHours(row.data.appliedHours) ]]"></oj-bind-text></span>
+          <template slot="wAppliedCell" data-oj-as="cell">
+            <span><oj-bind-text value="[[ $application.functions.fmtHours(cell.row.appliedHours) ]]"></oj-bind-text></span>
           </template>
-          <template slot="wDefaultCell" data-oj-as="row">
-            <span><oj-bind-text value="[[ $application.functions.fmtHours(row.data.defaultHours) ]]"></oj-bind-text></span>
+          <template slot="wDefaultCell" data-oj-as="cell">
+            <span><oj-bind-text value="[[ $application.functions.fmtHours(cell.row.defaultHours) ]]"></oj-bind-text></span>
           </template>
-          <template slot="wTotalCell" data-oj-as="row">
-            <span><oj-bind-text value="[[ $application.functions.fmtHours(row.data.totalHours) ]]"></oj-bind-text></span>
+          <template slot="wTotalCell" data-oj-as="cell">
+            <span><oj-bind-text value="[[ $application.functions.fmtHours(cell.row.totalHours) ]]"></oj-bind-text></span>
           </template>
         </oj-table>
       </div>
@@ -249,8 +248,7 @@
 
   <!-- ══════════════════ Release dialog (ACT-026) ══════════════════ -->
   <oj-dialog id="releaseDlg" dialog-title="Release the salary hold"
-             cancel-behavior="icon"
-             opened="{{ $variables.showRelease }}">
+             cancel-behavior="icon">
     <div slot="body">
       <p class="oj-typography-body-sm rw-metric-label">
         <oj-bind-text value="[[ $variables.releaseLabel ]]"></oj-bind-text>

@@ -25,10 +25,12 @@ define([
 
       if (which === 'reject') {
         $page.variables.showReject    = false;
+        $page.functions.setDialog('rejectDlg', false);
         $page.variables.rejectReason  = '';
         $page.variables.rejectRemarks = '';
       } else if (which === 'override') {
         $page.variables.showOverride   = false;
+        $page.functions.setDialog('overrideDlg', false);
         $page.variables.overrideReason = '';
       }
     }

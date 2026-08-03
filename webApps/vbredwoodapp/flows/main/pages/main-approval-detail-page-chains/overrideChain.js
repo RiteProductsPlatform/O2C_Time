@@ -82,6 +82,7 @@ define([
 
         if (resp.ok) {
           $page.variables.showOverride  = false;
+          $page.functions.setDialog('overrideDlg', false);
           $page.variables.overrideReason = '';
           $page.variables.overrideCount = ($page.variables.overrideCount || 0) + 1;
 

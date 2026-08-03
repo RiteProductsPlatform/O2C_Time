@@ -134,38 +134,38 @@
                       {"headerText":"","field":"docId","template":"actionCell","width":120,"sortable":"disabled"}
                     ]'>
 
-            <template slot="nameCell" data-oj-as="row">
+            <template slot="nameCell" data-oj-as="cell">
               <span>
                 <span class="oj-ux-ico-file" aria-hidden="true"></span>&nbsp;
-                <oj-bind-text value="[[ row.data.docName ]]"></oj-bind-text>
+                <oj-bind-text value="[[ cell.row.docName ]]"></oj-bind-text>
               </span>
             </template>
 
-            <template slot="coverCell" data-oj-as="row">
+            <template slot="coverCell" data-oj-as="cell">
               <span>
-                <oj-bind-text value="[[ row.data.displayMode ]]"></oj-bind-text>
-                <oj-bind-if test="[[ row.data.weekIndex ]]">
+                <oj-bind-text value="[[ cell.row.displayMode ]]"></oj-bind-text>
+                <oj-bind-if test="[[ cell.row.weekIndex ]]">
                   <span class="rw-flag rw-flag-advance">Week
-                    <oj-bind-text value="[[ row.data.weekIndex ]]"></oj-bind-text>
+                    <oj-bind-text value="[[ cell.row.weekIndex ]]"></oj-bind-text>
                   </span>
                 </oj-bind-if>
               </span>
             </template>
 
-            <template slot="actionCell" data-oj-as="row">
+            <template slot="actionCell" data-oj-as="cell">
               <div class="oj-flex oj-sm-align-items-center oj-sm-gap-1x">
                 <!-- A plain anchor, not window.open: SES blocks browser globals
                      in page modules, and the browser streams the file itself. -->
                 <a class="ctim-download-link"
-                   :href="[[ $page.functions.downloadUrl(row.data.docId) ]]"
-                   :aria-label="[[ $page.functions.downloadLabel(row.data.docName) ]]"
+                   :href="[[ $page.functions.downloadUrl(cell.row.docId) ]]"
+                   :aria-label="[[ $page.functions.downloadLabel(cell.row.docName) ]]"
                    target="_blank" rel="noopener">
                   <span class="oj-ux-ico-download" aria-hidden="true"></span>
                   <span>Download</span>
                 </a>
                 <oj-button chroming="borderless" display="icons"
-                           :aria-label="[[ $page.functions.removeLabel(row.data.docName) ]]"
-                           on-oj-action="[[ function(){ $page.functions.askRemoveDoc(row.data.docId); } ]]">
+                           :aria-label="[[ $page.functions.removeLabel(cell.row.docName) ]]"
+                           on-oj-action="[[ function(){ $page.functions.askRemoveDoc(cell.row.docId); } ]]">
                   <span slot="startIcon" class="oj-ux-ico-trash"></span>
                   <span>Remove</span>
                 </oj-button>

@@ -53,62 +53,62 @@
                     {"headerText":"","field":"layer","template":"actionCell","width":190,"sortable":"disabled"}
                   ]'>
 
-          <template slot="layerCell" data-oj-as="row">
+          <template slot="layerCell" data-oj-as="cell">
             <span>
-              <oj-bind-text value="[[ row.data.layerLabel ]]"></oj-bind-text>
+              <oj-bind-text value="[[ cell.row.layerLabel ]]"></oj-bind-text>
               <div class="oj-typography-body-xs rw-metric-label">
-                <oj-bind-text value="[[ row.data.sourceDescription ]]"></oj-bind-text>
+                <oj-bind-text value="[[ cell.row.sourceDescription ]]"></oj-bind-text>
               </div>
             </span>
           </template>
 
-          <template slot="daysCell" data-oj-as="row">
+          <template slot="daysCell" data-oj-as="cell">
             <span>
-              <oj-bind-text value="[[ row.data.dayCount ]]"></oj-bind-text>
-              <oj-bind-if test="[[ row.data.nonWorkingDays > 0 ]]">
+              <oj-bind-text value="[[ cell.row.dayCount ]]"></oj-bind-text>
+              <oj-bind-if test="[[ cell.row.nonWorkingDays > 0 ]]">
                 <div class="oj-typography-body-xs rw-metric-label">
-                  <oj-bind-text value="[[ row.data.nonWorkingDays ]]"></oj-bind-text> non-working
+                  <oj-bind-text value="[[ cell.row.nonWorkingDays ]]"></oj-bind-text> non-working
                 </div>
               </oj-bind-if>
             </span>
           </template>
 
-          <template slot="rangeCell" data-oj-as="row">
+          <template slot="rangeCell" data-oj-as="cell">
             <span>
-              <oj-bind-text value="[[ row.data.fromDate ]]"></oj-bind-text>
+              <oj-bind-text value="[[ cell.row.fromDate ]]"></oj-bind-text>
               &rarr;
-              <oj-bind-text value="[[ row.data.toDate ]]"></oj-bind-text>
+              <oj-bind-text value="[[ cell.row.toDate ]]"></oj-bind-text>
             </span>
           </template>
 
-          <template slot="syncedCell" data-oj-as="row">
+          <template slot="syncedCell" data-oj-as="cell">
             <span>
-              <oj-bind-if test="[[ row.data.lastSyncedOn ]]">
-                <oj-bind-text value="[[ row.data.lastSyncedOn ]]"></oj-bind-text>
+              <oj-bind-if test="[[ cell.row.lastSyncedOn ]]">
+                <oj-bind-text value="[[ cell.row.lastSyncedOn ]]"></oj-bind-text>
               </oj-bind-if>
-              <oj-bind-if test="[[ !row.data.lastSyncedOn ]]">
+              <oj-bind-if test="[[ !cell.row.lastSyncedOn ]]">
                 <span class="rw-flag rw-flag-defaulted">Never synced</span>
               </oj-bind-if>
             </span>
           </template>
 
-          <template slot="actionCell" data-oj-as="row">
+          <template slot="actionCell" data-oj-as="cell">
             <div class="oj-flex oj-sm-gap-1x">
               <oj-button chroming="borderless"
-                         disabled="[[ row.data.dayCount === 0 ]]"
-                         :aria-label="[[ $page.functions.inspectLabel(row.data.layerLabel) ]]"
+                         disabled="[[ cell.row.dayCount === 0 ]]"
+                         :aria-label="[[ $page.functions.inspectLabel(cell.row.layerLabel) ]]"
                          on-oj-action="[[ function(){
                             $page.listeners.openInspect({
-                              layer: row.data.layer,
-                              scopeHint: row.data.scopeHint }); } ]]">
+                              layer: cell.row.layer,
+                              scopeHint: cell.row.scopeHint }); } ]]">
                 <span>Inspect</span>
               </oj-button>
               <!-- ACT-030. RA-005 closed calendar *authoring*, not syncing; the
                    Pages sheet lists sync-buttons as a required component. -->
               <oj-button chroming="outlined" disabled="[[ $variables.busy ]]"
-                         :aria-label="[[ $page.functions.syncLabel(row.data.layerLabel) ]]"
+                         :aria-label="[[ $page.functions.syncLabel(cell.row.layerLabel) ]]"
                          on-oj-action="[[ function(){
-                            $page.listeners.syncLayer({ layer: row.data.layer }); } ]]">
+                            $page.listeners.syncLayer({ layer: cell.row.layer }); } ]]">
                 <span>Sync</span>
               </oj-button>
             </div>
@@ -127,8 +127,7 @@
   </div>
 
   <!-- ══════════════════ Day inspector ══════════════════ -->
-  <oj-dialog id="inspectDlg" dialog-title="Calendar days" cancel-behavior="icon"
-             opened="{{ $variables.showInspect }}">
+  <oj-dialog id="inspectDlg" dialog-title="Calendar days" cancel-behavior="icon">
     <div slot="body">
       <p class="oj-typography-body-sm rw-metric-label">
         Layer <strong><oj-bind-text value="[[ $variables.inspectLayer ]]"></oj-bind-text></strong>.
@@ -167,21 +166,21 @@
                       {"headerText":"Shift","field":"shiftCode","width":100},
                       {"headerText":"Source","field":"sourceSystem","width":120}
                     ]'>
-            <template slot="dCell" data-oj-as="row">
+            <template slot="dCell" data-oj-as="cell">
               <span>
-                <oj-bind-text value="[[ $application.functions.fmtDate(row.data.calDate) ]]"></oj-bind-text>
+                <oj-bind-text value="[[ $application.functions.fmtDate(cell.row.calDate) ]]"></oj-bind-text>
                 <div class="oj-typography-body-xs rw-metric-label">
-                  <oj-bind-text value="[[ row.data.dayName ]]"></oj-bind-text>
+                  <oj-bind-text value="[[ cell.row.dayName ]]"></oj-bind-text>
                 </div>
               </span>
             </template>
-            <template slot="workCell" data-oj-as="row">
-              <span :class="[[ $application.functions.yesNo(row.data.isWorkingDay, 'rw-flag rw-flag-adjustment', 'rw-flag rw-flag-defaulted') ]]">
-                <oj-bind-text value="[[ $application.functions.yesNo(row.data.isWorkingDay, 'Working', 'Non-working') ]]"></oj-bind-text>
+            <template slot="workCell" data-oj-as="cell">
+              <span :class="[[ $application.functions.yesNo(cell.row.isWorkingDay, 'rw-flag rw-flag-adjustment', 'rw-flag rw-flag-defaulted') ]]">
+                <oj-bind-text value="[[ $application.functions.yesNo(cell.row.isWorkingDay, 'Working', 'Non-working') ]]"></oj-bind-text>
               </span>
             </template>
-            <template slot="hoursCell" data-oj-as="row">
-              <span><oj-bind-text value="[[ $application.functions.fmtHours(row.data.stdHours) ]]"></oj-bind-text></span>
+            <template slot="hoursCell" data-oj-as="cell">
+              <span><oj-bind-text value="[[ $application.functions.fmtHours(cell.row.stdHours) ]]"></oj-bind-text></span>
             </template>
           </oj-table>
         </div>

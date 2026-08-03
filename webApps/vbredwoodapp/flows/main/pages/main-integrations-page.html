@@ -133,10 +133,10 @@
                       {"headerText":"No expenditure org","field":"workersNoExpOrg","width":165},
                       {"headerText":"OTL","field":"otlReadiness","template":"readyCell","width":110}
                     ]'>
-            <template slot="readyCell" data-oj-as="row">
+            <template slot="readyCell" data-oj-as="cell">
               <span :class="[[ $application.functions.outcomeClass(
-                                 $page.functions.readinessOutcome(row.data.otlReadiness)) ]]">
-                <oj-bind-text value="[[ row.data.otlReadiness ]]"></oj-bind-text>
+                                 $page.functions.readinessOutcome(cell.row.otlReadiness)) ]]">
+                <oj-bind-text value="[[ cell.row.otlReadiness ]]"></oj-bind-text>
               </span>
             </template>
           </oj-table>

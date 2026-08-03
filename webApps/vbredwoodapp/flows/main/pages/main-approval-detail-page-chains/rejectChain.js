@@ -61,6 +61,7 @@ define([
           if (resp.ok) {
             const n = (resp.body && resp.body.rejectedDates) || 0;
             $page.variables.showReject    = false;
+            $page.functions.setDialog('rejectDlg', false);
             $page.variables.selectedDates = [];
 
             await Actions.fireNotificationEvent(context, {
@@ -114,6 +115,7 @@ define([
 
         if (done) {
           $page.variables.showReject = false;
+          $page.functions.setDialog('rejectDlg', false);
           await Actions.fireNotificationEvent(context, {
             summary: failed ? 'Partly rejected' : 'Rejected',
             message: done + (done === 1 ? ' week' : ' weeks') + ' rejected' +

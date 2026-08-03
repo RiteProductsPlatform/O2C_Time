@@ -25,6 +25,7 @@ define([
       $page.variables.overrideHours   = Number(hours) || 0;
       $page.variables.overrideReason  = '';
       $page.variables.showOverride    = true;
+      $page.functions.setDialog('overrideDlg', true);
     }
   }
 

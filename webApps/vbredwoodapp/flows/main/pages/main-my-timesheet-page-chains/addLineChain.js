@@ -53,6 +53,7 @@ define([
           displayMode: 'transient',
         });
         $page.variables.showAddLine = false;
+        $page.functions.setDialog('addLineDlg', false);
         return;
       }
 
@@ -94,6 +95,7 @@ define([
       $page.variables.gridRows = rows;
 
       $page.variables.showAddLine      = false;
+      $page.functions.setDialog('addLineDlg', false);
       $page.variables.newLineProjectId = null;
       $page.variables.newLineTaskId    = null;
 

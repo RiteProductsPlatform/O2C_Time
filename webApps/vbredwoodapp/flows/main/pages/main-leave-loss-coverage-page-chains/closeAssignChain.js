@@ -13,6 +13,7 @@ define([
       const { $page } = context;
 
       $page.variables.showAssign    = false;
+      $page.functions.setDialog('assignDlg', false);
       $page.variables.assignCoverId = '';
     }
   }

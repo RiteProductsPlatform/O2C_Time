@@ -62,6 +62,7 @@ define([
       }
 
       $page.variables.showAdjustment = true;
+      $page.functions.setDialog('adjDlg', true);
     }
   }
 

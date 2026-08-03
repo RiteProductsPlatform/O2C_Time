@@ -29,6 +29,7 @@ define([
       // Still-defaulted weeks block the release (ACT-026 precondition).
       $page.variables.releaseBlocked = (Number(weeksDefaulted) || 0) > 0;
       $page.variables.showRelease    = true;
+      $page.functions.setDialog('releaseDlg', true);
     }
   }
 
