@@ -21,16 +21,24 @@ import re
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-# Service definitions live at the VISUAL-APPLICATION root, alongside
-# catalog.json — app-flow.json's "./services/..." resolves from there, not from
-# the web app. (Moving them under webApps/ was tried and 404s; the O2C main
-# application has no services folder under its web app at all.)
-SPEC = os.path.join(ROOT, 'services', 'oc_time', 'openapi3.json')
+# Service definitions live under the WEB APP. app-flow.json's
+# "./services/oc_time/service.json" is resolved relative to the web app, and the
+# design-time preview requests it literally as
+#   .../preview;cacheTimeout=600/webApps/vbredwoodapp;appname=...;/services/oc_time/service.json
+# so no copy at the visual-application root can ever satisfy it. catalog.json is
+# the exception and stays at the root, where it is fetched successfully.
+# (The O2C main application keeps its services at the root and works, which is
+# what argued for moving them back; that was reasoning by analogy against a
+# literal URL, and the URL wins. Note the 600s preview cache — a placement
+# change can look like it failed for ten minutes.)
+SPEC = os.path.join(ROOT, 'webApps', 'vbredwoodapp', 'services',
+                    'oc_time', 'openapi3.json')
 # app-flow.json names service.json, so that is the file the running app loads.
 # It had silently drifted to a 16-operation-old subset — missing the whole auth
 # module — while every check here read openapi3.json and reported "clean".
 # The two must stay byte-identical; check_twins() enforces it.
-SPEC_TWIN = os.path.join(ROOT, 'services', 'oc_time', 'service.json')
+SPEC_TWIN = os.path.join(ROOT, 'webApps', 'vbredwoodapp', 'services',
+                         'oc_time', 'service.json')
 OUT = os.path.join(HERE, 'O2C_Time.postman_collection.json')
 
 DEFAULT_BASE_URL = 'https://ords-sit.rite.digital/ords/o2c_time'
