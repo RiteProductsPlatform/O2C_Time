@@ -241,15 +241,11 @@ def check_twins():
       uncallable. Hidden because session.js does its own fetch, so sign-in
       still worked.
 
-    * root vs webApps/vbredwoodapp — the design-time preview requests the spec
-      web-app-relative and 404s if it is only at the root, but MOVING it under
-      the web app broke every callRest. So both locations are populated. A copy
-      is only safe while it is a copy; this is what makes sure it stays one.
+    (There is no root-vs-webApp copy any more. The preview's 404 for the
+    web-app-relative URL is not about file placement: the file was put at
+    exactly that path, byte-identical, and the URL still 404'd.)
     """
-    copies = [SPEC, SPEC_TWIN] + [
-        os.path.join(ROOT, 'webApps', 'vbredwoodapp', 'services', 'oc_time', n)
-        for n in ('openapi3.json', 'service.json')
-    ]
+    copies = [SPEC, SPEC_TWIN]
     texts = {}
     for p in copies:
         if not os.path.exists(p):
@@ -259,7 +255,7 @@ def check_twins():
 
     distinct = set(texts.values())
     if len(distinct) == 1:
-        print('all %d spec copies are identical.' % len(copies))
+        print('service.json and openapi3.json are identical.')
         return
 
     print('\nWARNING: the spec copies have drifted. VB loads service.json, so '
