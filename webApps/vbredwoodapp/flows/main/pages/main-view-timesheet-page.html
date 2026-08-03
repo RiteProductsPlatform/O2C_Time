@@ -101,12 +101,12 @@
           <!-- BRD: "approve all or some employees". Select all skips anyone already
                approved, so an approve-all never re-sends settled rows. -->
           <oj-button chroming="borderless"
-                     on-oj-action="[[ function(){ $page.functions.selectAllEmployees(); } ]]">
+                     on-oj-action="[[ $listeners.selectAllPending ]]">
             <span>Select all pending</span>
           </oj-button>
           <oj-button chroming="borderless"
                      disabled="[[ $variables.selectedKeys.length === 0 ]]"
-                     on-oj-action="[[ function(){ $page.functions.clearSelection(); } ]]">
+                     on-oj-action="[[ $listeners.clearSelection ]]">
             <span>Clear</span>
           </oj-button>
           <oj-button chroming="outlined"
@@ -160,8 +160,8 @@
                    HTML form controls. One unlabelled option acts as the row tick. -->
               <oj-checkboxset class="vtim-row-pick"
                               :aria-label="[[ $page.functions.pickLabel(cell.row.employeeName) ]]"
-                              :value="[[ $page.functions.pickValue(cell.row.employeeId) ]]"
-                              on-value-changed="[[ function(e){ $page.functions.togglePick(cell.row.employeeId, e); } ]]">
+                              :value="[[ $page.functions.pickValue($variables.selectedKeys, cell.row.employeeId) ]]"
+                              on-value-changed="[[ $listeners.togglePick ]]">
                 <oj-option value="on"></oj-option>
               </oj-checkboxset>
             </template>
@@ -216,10 +216,7 @@
             <template slot="actionCell" data-oj-as="cell">
               <oj-button chroming="outlined"
                          :aria-label="[[ $page.functions.openEmployeeLabel(cell.row.employeeName) ]]"
-                         on-oj-action="[[ function(){
-                            $page.listeners.openEmployee({
-                              employeeId: cell.row.employeeId,
-                              employeeName: cell.row.employeeName }); } ]]">
+                         on-oj-action="[[ $listeners.openEmployee ]]">
                 <span>Open</span>
               </oj-button>
             </template>

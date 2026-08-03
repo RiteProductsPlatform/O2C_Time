@@ -179,8 +179,8 @@
         {
           "chain": "openEmployeeChain",
           "parameters": {
-            "employeeId": "{{ $event.employeeId }}",
-            "employeeName": "{{ $event.employeeName }}"
+            "employeeId": "{{ $current.row.employeeId }}",
+            "employeeName": "{{ $current.row.employeeName }}"
           }
         }
       ]
@@ -196,6 +196,31 @@
       "chains": [
         {
           "chain": "cancelConfirmMonthChain"
+        }
+      ]
+    },
+    "selectAllPending": {
+      "chains": [
+        {
+          "chain": "selectAllPendingChain"
+        }
+      ]
+    },
+    "clearSelection": {
+      "chains": [
+        {
+          "chain": "clearSelectionChain"
+        }
+      ]
+    },
+    "togglePick": {
+      "chains": [
+        {
+          "chain": "togglePickChain",
+          "parameters": {
+            "employeeId": "{{ $current.row.employeeId }}",
+            "picked": "{{ $event.detail.value }}"
+          }
         }
       ]
     }
