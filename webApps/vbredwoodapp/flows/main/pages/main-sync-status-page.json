@@ -167,6 +167,13 @@
           "chain": "runDeliveryDefaultingChain"
         }
       ]
+    },
+    "application:contextLoaded": {
+      "chains": [
+        {
+          "chain": "enterChain"
+        }
+      ]
     }
   },
   "imports": {

@@ -487,6 +487,9 @@
         "message": "string"
       },
       "description": "Fire this event with an acknowledgement message to indicate to user that an operation was successful. The shell page will render the message using oj-sp-messages-toast component."
+    },
+    "contextLoaded": {
+      "description": "Fired by loadContextChain once the period list is actually in place. Pages with a month LOV listen for it and re-enter, because \"the session exists\" and \"the periods are loaded\" are two different moments: awaiting fireEvent only waits for the DISPATCH, not for the listener chains, so login navigated to the landing page while loadContextChain was still running and the month selector came up empty until a browser refresh. NO payloadType — an empty map is rejected by VB at startup and this event carries nothing."
     }
   }
 }

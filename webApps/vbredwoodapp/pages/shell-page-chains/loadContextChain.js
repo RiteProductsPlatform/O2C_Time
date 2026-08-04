@@ -32,6 +32,13 @@ define([
       if ($application.variables.currentRole === 'ROLE_TIME_MANAGER') {
         await this.loadManagers(context, $page, $application);
       }
+
+      // Tell the pages the periods have actually arrived. sessionEstablished
+      // says a session exists, which is a different and earlier moment: login
+      // awaits fireEvent, but that only waits for the DISPATCH, so it navigated
+      // to the landing page while this chain was still running and the month
+      // selector came up empty until a browser refresh.
+      await Actions.fireEvent(context, { event: 'contextLoaded' });
     }
 
     async loadPeriods(context, $application) {

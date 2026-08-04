@@ -555,6 +555,13 @@
           "chain": "revokeWeekChain"
         }
       ]
+    },
+    "application:contextLoaded": {
+      "chains": [
+        {
+          "chain": "enterChain"
+        }
+      ]
     }
   },
   "imports": {

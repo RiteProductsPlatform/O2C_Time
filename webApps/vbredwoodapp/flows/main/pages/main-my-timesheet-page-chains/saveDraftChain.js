@@ -30,9 +30,14 @@ define([
       const cells = $page.variables.dirtyCells || [];
 
       if (!cells.length) {
+        // Accurate but easy to misread: after removing a line there is
+        // legitimately nothing to save, because Remove deletes the entries
+        // server-side straight away rather than queueing a change. Saying so
+        // outright stops it reading as "the delete did not work".
         await Actions.fireNotificationEvent(context, {
           summary: 'Nothing to save',
-          message: 'No hours have changed since the last save.',
+          message: 'Every change is already saved. Removing a line takes effect '
+                 + 'immediately, so it needs no save.',
           severity: 'info',
           type: 'info',
           displayMode: 'transient',

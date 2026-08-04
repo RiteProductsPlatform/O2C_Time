@@ -234,6 +234,13 @@
           "chain": "runAccrualJobChain"
         }
       ]
+    },
+    "application:contextLoaded": {
+      "chains": [
+        {
+          "chain": "enterChain"
+        }
+      ]
     }
   },
   "imports": {
