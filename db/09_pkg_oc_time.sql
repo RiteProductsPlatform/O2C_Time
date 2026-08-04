@@ -61,7 +61,15 @@ CREATE OR REPLACE PACKAGE oc_time_pkg AS
   e_no_open_period   EXCEPTION;  PRAGMA EXCEPTION_INIT(e_no_open_period,   -20017);
 
   -- ── Calendar & period helpers ──────────────────────────────
+  -- RULE-017 was relaxed on 04-Aug-2026: more than one period may be Open, so
+  -- "the open period" is no longer a single row. This picks deterministically —
+  -- the open period containing today, else the earliest open one.
   FUNCTION get_open_period_id RETURN NUMBER;
+
+  -- The period a given DATE falls in, open or not. Preferred over
+  -- get_open_period_id wherever the caller already knows the date it is acting
+  -- on, because that answer cannot be ambiguous.
+  FUNCTION get_period_for_date(p_date IN DATE) RETURN NUMBER;
 
   PROCEDURE resolve_day(
     p_employee_id  IN  VARCHAR2,
@@ -389,15 +397,41 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
   FUNCTION get_open_period_id RETURN NUMBER IS
     v_id NUMBER;
   BEGIN
-    SELECT period_id INTO v_id FROM oc_time_period WHERE status = 'Open';
+    -- RULE-017 relaxed 04-Aug-2026: UK_OC_TP_SINGLE_OPEN is gone and several
+    -- months may be Open at once, so this can no longer be a bare SELECT INTO —
+    -- that raised TOO_MANY_ROWS the moment a second month opened.
+    --
+    -- Deterministic by design, never "whichever row comes back first":
+    --   1. the open period that contains today  — the month work is happening in
+    --   2. failing that, the EARLIEST open one  — a backlog is worked oldest
+    --      first, and picking the newest would silently skip it
+    SELECT period_id INTO v_id FROM (
+      SELECT period_id
+        FROM oc_time_period
+       WHERE status = 'Open'
+       ORDER BY CASE WHEN TRUNC(SYSDATE) BETWEEN start_date AND end_date
+                     THEN 0 ELSE 1 END,
+                start_date)
+     WHERE ROWNUM = 1;
     RETURN v_id;
   EXCEPTION
     WHEN NO_DATA_FOUND THEN
       RAISE_APPLICATION_ERROR(-20017, 'No period is currently Open.');
-    WHEN TOO_MANY_ROWS THEN
-      -- Should be impossible: UK_OC_TP_SINGLE_OPEN enforces RULE-017.
-      RAISE_APPLICATION_ERROR(-20017, 'Only one period can be Open at a time.');
   END get_open_period_id;
+
+
+  FUNCTION get_period_for_date(p_date IN DATE) RETURN NUMBER IS
+    v_id NUMBER;
+  BEGIN
+    SELECT period_id INTO v_id
+      FROM oc_time_period
+     WHERE TRUNC(p_date) BETWEEN start_date AND end_date;
+    RETURN v_id;
+  EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+      RAISE_APPLICATION_ERROR(-20017,
+        'No period covers ' || TO_CHAR(p_date, 'DD-Mon-YYYY') || '.');
+  END get_period_for_date;
 
 
   -- Weeks are clipped to the month (see header note).
@@ -786,7 +820,10 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
     v_up     NUMBER := 0;
     v_failed NUMBER := 0;
   BEGIN
-    v_period := get_open_period_id;
+    -- The period the action date falls in, not "the open period". With several
+    -- months open at once the latter is a guess, and this job already knows the
+    -- exact date it is processing (RA-003).
+    v_period := get_period_for_date(p_action_date);
     v_job := start_job('Daily Action-date Process', 'DailyActionDate',
                        v_period, TRUNC(p_action_date), p_scope_key, p_actor);
 

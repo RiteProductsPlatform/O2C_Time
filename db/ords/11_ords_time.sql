@@ -82,8 +82,14 @@ BEGIN
              -- periods or before the first one is set up - the whole app becomes
              -- unreachable with a 555. NULL is a perfectly good answer; the shell
              -- already treats it as "no open period".
-             (SELECT p.period_id FROM oc_time_period p
-               WHERE p.status = 'Open' AND ROWNUM = 1) AS open_period_id
+             (SELECT period_id FROM (
+                 SELECT p.period_id
+                   FROM oc_time_period p
+                  WHERE p.status = 'Open'
+                  ORDER BY CASE WHEN TRUNC(SYSDATE)
+                                     BETWEEN p.start_date AND p.end_date
+                                THEN 0 ELSE 1 END, p.start_date)
+                WHERE ROWNUM = 1) AS open_period_id
         FROM oc_time_worker w
         LEFT JOIN oc_time_worker m ON m.employee_id = w.manager_emp_id
        WHERE UPPER(w.email) = UPPER(:employeeId)

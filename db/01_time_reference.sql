@@ -107,17 +107,27 @@ EXCEPTION WHEN OTHERS THEN
 END;
 /
 
--- RULE-017: only one period may be Open at a time.
--- Function-based unique index: 'OPEN' is indexed only for Open rows, so a
--- second Open row raises DUP_VAL_ON_INDEX. Closed rows index to NULL and are
--- not constrained.
-BEGIN
-  EXECUTE IMMEDIATE q'[
-    CREATE UNIQUE INDEX uk_oc_tp_single_open
-      ON oc_time_period (CASE WHEN status = 'Open' THEN 'OPEN' END)
-  ]';
-EXCEPTION WHEN OTHERS THEN IF SQLCODE = -955 THEN NULL; ELSE RAISE; END IF; END;
-/
+-- RULE-017 ("only one period may be Open at a time") was RELAXED on
+-- 04-Aug-2026, by decision: July and August are held open together.
+--
+-- UK_OC_TP_SINGLE_OPEN used to enforce it — a function-based unique index where
+-- 'OPEN' was indexed only for Open rows, so a second Open row raised
+-- DUP_VAL_ON_INDEX. It is NOT created any more, and db/13_open_periods.sql
+-- drops it where it already exists. Re-creating it here would silently undo the
+-- decision the next time this script runs, which is why it is commented out
+-- rather than deleted.
+--
+--   BEGIN
+--     EXECUTE IMMEDIATE q'[
+--       CREATE UNIQUE INDEX uk_oc_tp_single_open
+--         ON oc_time_period (CASE WHEN status = 'Open' THEN 'OPEN' END)
+--     ]';
+--   EXCEPTION WHEN OTHERS THEN IF SQLCODE = -955 THEN NULL; ELSE RAISE; END IF; END;
+--   /
+--
+-- With the rule gone, "the open period" is a choice: get_open_period_id takes
+-- the open month containing today, else the earliest open one, and
+-- get_period_for_date is preferred wherever the caller knows its date.
 
 BEGIN EXECUTE IMMEDIATE 'CREATE INDEX ix_oc_tp_ym ON oc_time_period(period_year, period_month)';
 EXCEPTION WHEN OTHERS THEN IF SQLCODE = -955 THEN NULL; ELSE RAISE; END IF; END;

@@ -247,8 +247,14 @@ SELECT s.token,
            AND al.status = 'Active')       AS total_alloc_pct,
        -- NOT oc_time_pkg.get_open_period_id: that raises when nothing is Open,
        -- and sign-in must never depend on a period existing.
-       (SELECT p.period_id FROM oc_time_period p
-         WHERE p.status = 'Open' AND ROWNUM = 1) AS open_period_id
+       (SELECT period_id FROM (
+         SELECT p.period_id
+           FROM oc_time_period p
+          WHERE p.status = 'Open'
+          ORDER BY CASE WHEN TRUNC(SYSDATE)
+             BETWEEN p.start_date AND p.end_date
+                THEN 0 ELSE 1 END, p.start_date)
+        WHERE ROWNUM = 1) AS open_period_id
   FROM oc_time_session s
   JOIN oc_time_user    u ON u.user_id = s.user_id
   LEFT JOIN oc_time_worker w ON w.employee_id = u.employee_id

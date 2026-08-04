@@ -414,7 +414,9 @@ DECLARE
 BEGIN
   SELECT COUNT(*) INTO v_open FROM oc_time_period WHERE status = 'Open';
 
-  -- Only claim 'Open' if nothing is open yet.
+  -- Only claim 'Open' if nothing is open yet. Kept after RULE-017 was relaxed
+  -- (04-Aug-2026): several months MAY now be open, but a seed run should not
+  -- decide that — opening a month is a deliberate act, see 13_open_periods.sql.
   seed_period(SYSDATE, CASE WHEN v_open = 0 THEN 'Open' ELSE 'Closed' END);
   seed_period(ADD_MONTHS(SYSDATE, 1),  'Closed');
   seed_period(ADD_MONTHS(SYSDATE, -1), 'Closed');
