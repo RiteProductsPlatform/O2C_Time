@@ -78,19 +78,63 @@ define([
 
         const dayRows = (shiftResp.ok && shiftResp.body && shiftResp.body.items) || [];
 
-        // Build the seven column headers. The shift row is the authority on
-        // which dates the week actually covers, because weeks are clipped to
-        // the month and so can be shorter than seven days.
-        const headers = dayRows.map((d) => ({
-          entryDate: d.entry_date,
-          dayName: d.day_name,
-          shiftCode: d.shift_code || '',
-          standardHours: d.standard_hours || 0,
-          dayTotal: d.day_total || 0,
-          // A day with zero standard hours is a weekend or holiday. It stays
-          // editable (RULE-012) but is shaded so the user can see why it is 0.
-          isWorking: (d.standard_hours || 0) > 0,
-        }));
+        // Columns come from the WEEK'S DATE RANGE, not from the shift row.
+        //
+        // V_OC_TS_DAY_SHIFT groups OC_TS_ENTRY, so it only has the days that
+        // already carry an entry — and population deliberately seeds no
+        // weekends (RULE-012 defaults Sat/Sun to 0). Driving the columns off it
+        // therefore hid Saturday and Sunday completely, and RULE-012 says they
+        // ARE editable: an employee who worked a weekend had nowhere to put it.
+        //
+        // week_start/week_end are already clipped to the month, so this still
+        // gives a short week at a month boundary — 31-Aug alone is one column,
+        // not seven. The shift row is merged in by date for the days it has.
+        const byDate = {};
+        dayRows.forEach((d) => { byDate[String(d.entry_date).substring(0, 10)] = d; });
+
+        const DOW = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+        const headers = [];
+
+        if (week && week.week_start && week.week_end) {
+          // Parsed as UTC parts, not new Date(string): a bare YYYY-MM-DD is
+          // parsed as UTC while a local-midnight Date can shift the day back
+          // one in a negative offset, which would relabel every column.
+          const parts = (iso) => String(iso).substring(0, 10).split('-').map(Number);
+          const [sy, sm, sd] = parts(week.week_start);
+          const [ey, em, ed] = parts(week.week_end);
+          const cur  = new Date(Date.UTC(sy, sm - 1, sd));
+          const last = new Date(Date.UTC(ey, em - 1, ed));
+
+          while (cur <= last) {
+            const iso = cur.toISOString().substring(0, 10);
+            const d   = byDate[iso] || {};
+            headers.push({
+              entryDate: iso,
+              dayName: d.day_name || DOW[cur.getUTCDay()],
+              shiftCode: d.shift_code || '',
+              standardHours: d.standard_hours || 0,
+              dayTotal: d.day_total || 0,
+              // Zero standard hours means a weekend or a holiday. Still
+              // editable (RULE-012); the tint only marks it as unusual.
+              isWorking: (d.standard_hours || 0) > 0,
+            });
+            cur.setUTCDate(cur.getUTCDate() + 1);
+          }
+        }
+
+        // Fall back to the shift row if the week is not in the cached list —
+        // fewer columns is survivable, none at all is not.
+        if (!headers.length) {
+          dayRows.forEach((d) => headers.push({
+            entryDate: String(d.entry_date).substring(0, 10),
+            dayName: d.day_name,
+            shiftCode: d.shift_code || '',
+            standardHours: d.standard_hours || 0,
+            dayTotal: d.day_total || 0,
+            isWorking: (d.standard_hours || 0) > 0,
+          }));
+        }
+
         $page.variables.dayHeaders = headers;
 
         // ── The grid itself ───────────────────────────────────
