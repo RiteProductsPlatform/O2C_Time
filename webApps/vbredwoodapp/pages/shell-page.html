@@ -279,6 +279,23 @@
   /* Day columns are sized in ch so they track the font rather than a fixed
      pixel width, and the table scrolls inside its own container. */
   .rw-grid-scroll { overflow-x:auto; width:100%; }
+
+  /* ── Why every table stopped short of its card ──
+     oj-table is a custom element, and an unknown element defaults to
+     display:inline, so it shrank to fit its content instead of filling the
+     card. JET works out the space available for the flexible columns from the
+     component's own width, and there was none to give: every table rendered at
+     the sum of its fixed widths and minWidths and left the rest of the row
+     blank, with the header text clipped in the narrow columns. Team Approvals
+     came out ~1245px inside an ~1750px card.
+
+     A block that fills the row, so "weight" has something to distribute. */
+  oj-table { display:block; width:100%; }
+  /* min-width, not width: fill the row when there is room, and still overflow
+     into .rw-grid-scroll when the columns genuinely need more than the card has
+     - forcing width:100% there would compress them instead of scrolling. */
+  .oj-table-container { width:100% !important; }
+  .oj-table-element   { min-width:100% !important; }
   .rw-grid-day    { min-width:7ch; text-align:center; }
 
   /* Non-working days stay enterable — RULE-012 makes Sat/Sun editable with a

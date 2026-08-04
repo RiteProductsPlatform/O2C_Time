@@ -83,9 +83,9 @@
                     scroll-policy-options='{"fetchSize": 25}'
                     columns='[
                       {"headerText":"Project","field":"projectName","template":"projCell","weight":3,"minWidth":210},
-                      {"headerText":"Employees","field":"employeeCount","width":110},
-                      {"headerText":"Billable","field":"billableHours","template":"billCell","width":95},
-                      {"headerText":"Non-bill","field":"nonBillableHours","template":"nonBillCell","width":95},
+                      {"headerText":"Employees","field":"employeeCount","width":115},
+                      {"headerText":"Billable","field":"billableHours","template":"billCell","width":110},
+                      {"headerText":"Non-bill","field":"nonBillableHours","template":"nonBillCell","width":110},
                       {"headerText":"Leave","field":"leaveHours","template":"leaveCell","width":85},
                       {"headerText":"Confirmed","field":"confirmedOn","template":"confCell","weight":2,"minWidth":170},
                       {"headerText":"OTL","field":"otlStatus","template":"otlCell","width":120},
@@ -222,7 +222,7 @@
                         {"headerText":"WBS task","field":"wbsTask","template":"taskCell","weight":2,"minWidth":160},
                         {"headerText":"Date","field":"workDate","template":"dateCell","width":130},
                         {"headerText":"Billed","field":"billed","template":"bCell","width":90},
-                        {"headerText":"Unbilled","field":"unbilled","template":"uCell","width":95},
+                        {"headerText":"Unbilled","field":"unbilled","template":"uCell","width":110},
                         {"headerText":"Leave","field":"leaveHours","template":"lCell","width":85},
                         {"headerText":"Type","field":"entryType","template":"typeCell","width":130},
                         {"headerText":"Flag","field":"flag","width":150},
@@ -297,7 +297,7 @@
                       {"headerText":"Date","field":"absenceDate","template":"aDateCell","width":130},
                       {"headerText":"Absence","field":"absenceType","width":130},
                       {"headerText":"Covered by","field":"coverEmployeeName","weight":2,"minWidth":170},
-                      {"headerText":"Billed hrs","field":"coveredBilledHours","template":"aHoursCell","width":110},
+                      {"headerText":"Billed hrs","field":"coveredBilledHours","template":"aHoursCell","width":125},
                       {"headerText":"Approved","field":"approvedOn","width":160}
                     ]'>
             <template slot="aDateCell" data-oj-as="cell">
