@@ -78,13 +78,23 @@
                        on-oj-action="[[ $listeners.clearWeekSelection ]]">
               <span><oj-bind-text value="[[$application.translations.appBundle.common_clear]]"></oj-bind-text></span>
             </oj-button>
+            <!-- Undo, and the two decision buttons off once the decision is
+                 taken - see canDecideWeeks. -->
+            <oj-button chroming="borderless"
+                       disabled="[[ $variables.busy ||
+                                    !$page.functions.canRevokeWeeks($variables.weeks, $variables.selectedWeekKeys) ]]"
+                       on-oj-action="[[ $listeners.revokeWeeks ]]">
+              <span><oj-bind-text value="[[$application.translations.appBundle.approval_detail_undo_decision]]"></oj-bind-text></span>
+            </oj-button>
             <oj-button chroming="outlined"
-                       disabled="[[ $variables.busy || $variables.selectedWeekKeys.length === 0 ]]"
+                       disabled="[[ $variables.busy ||
+                                    !$page.functions.canDecideWeeks($variables.weeks, $variables.selectedWeekKeys) ]]"
                        on-oj-action="[[ $listeners.openRejectWeek ]]">
               <span><oj-bind-text value="[[$application.translations.appBundle.common_reject_selected]]"></oj-bind-text></span>
             </oj-button>
             <oj-button chroming="callToAction"
-                       disabled="[[ $variables.busy || $variables.selectedWeekKeys.length === 0 ]]"
+                       disabled="[[ $variables.busy ||
+                                    !$page.functions.canDecideWeeks($variables.weeks, $variables.selectedWeekKeys) ]]"
                        on-oj-action="[[ $listeners.approveWeeks ]]">
               <span><oj-bind-text value="[[$application.translations.appBundle.common_approve_selected]]"></oj-bind-text></span>
             </oj-button>
@@ -258,13 +268,28 @@
                        on-oj-action="[[ $listeners.clearDateSelection ]]">
               <span><oj-bind-text value="[[$application.translations.appBundle.common_clear]]"></oj-bind-text></span>
             </oj-button>
+            <!-- Undo a decision taken by mistake. Approve and Reject only ever
+                 write their own status, so without this the two buttons that
+                 produce a mis-click cannot correct it. Enabled only when
+                 something in the selection actually has a decision on it. -->
+            <oj-button chroming="borderless"
+                       disabled="[[ $variables.busy ||
+                                    !$page.functions.canRevoke($variables.days, $variables.selectedDates) ]]"
+                       on-oj-action="[[ $listeners.revokeDates ]]">
+              <span><oj-bind-text value="[[$application.translations.appBundle.approval_detail_undo_decision]]"></oj-bind-text></span>
+            </oj-button>
+            <!-- Disabled once every selected date already carries this decision.
+                 Selection count alone left both live after a rejection, so the
+                 screen said nothing had been decided when it had. -->
             <oj-button chroming="outlined"
-                       disabled="[[ $variables.busy || $variables.selectedDates.length === 0 ]]"
+                       disabled="[[ $variables.busy ||
+                                    !$page.functions.canDecide($variables.days, $variables.selectedDates) ]]"
                        on-oj-action="[[ $listeners.openRejectDates ]]">
               <span><oj-bind-text value="[[$application.translations.appBundle.approval_detail_reject_dates]]"></oj-bind-text></span>
             </oj-button>
             <oj-button chroming="callToAction"
-                       disabled="[[ $variables.busy || $variables.selectedDates.length === 0 ]]"
+                       disabled="[[ $variables.busy ||
+                                    !$page.functions.canDecide($variables.days, $variables.selectedDates) ]]"
                        on-oj-action="[[ $listeners.approveDates ]]">
               <span><oj-bind-text value="[[$application.translations.appBundle.approval_detail_approve_dates]]"></oj-bind-text></span>
             </oj-button>
@@ -420,7 +445,7 @@
                       selection-mode='{"row": "none", "column": "none"}'
                       columns='[
                         {"headerText":"Date","field":"entryDate","template":"aDateCell","width":130},
-                        {"headerText":"Change","field":"changeType","width":140},
+                        {"headerText":"Event","field":"changeType","template":"aKindCell","width":180},
                         {"headerText":"From","field":"oldProjectName","template":"fromCell","weight":2},
                         {"headerText":"To","field":"newProjectName","template":"toCell","weight":2},
                         {"headerText":"Delta","field":"deltaHours","template":"deltaCell","width":90},
@@ -429,9 +454,23 @@
                         {"headerText":"When","field":"changedOn","width":160}
                       ]'>
               <template slot="aDateCell" data-oj-as="cell">
-                <span><oj-bind-text value="[[ $application.functions.fmtDate(cell.row.entryDate) ]]"></oj-bind-text></span>
+                <!-- A week- or month-level decision has no date, and rendering
+                     an empty one as a blank cell reads as missing data. -->
+                <span><oj-bind-text value="[[ $page.functions.activityDate(cell.row) ]]"></oj-bind-text></span>
+              </template>
+              <template slot="aKindCell" data-oj-as="cell">
+                <span>
+                  <span :class="[[ $page.functions.activityClass(cell.row) ]]">
+                    <oj-bind-text value="[[ cell.row.changeType ]]"></oj-bind-text>
+                  </span>
+                </span>
               </template>
               <template slot="fromCell" data-oj-as="cell">
+                <!-- A decision changed no value, so there is no from and no to.
+                     Without this guard fmtHours(null) printed "(0.00)" and the
+                     row looked like an edit that zeroed the day. -->
+                <oj-bind-if test="[[ cell.row.kind === 'Decision' ]]"><span>&#8212;</span></oj-bind-if>
+                <oj-bind-if test="[[ cell.row.kind !== 'Decision' ]]">
                 <span>
                   <oj-bind-text value="[[ cell.row.oldProjectName ]]"></oj-bind-text>
                   <oj-bind-if test="[[ cell.row.oldTaskCode ]]">
@@ -439,8 +478,11 @@
                   </oj-bind-if>
                   (<oj-bind-text value="[[ $application.functions.fmtHours(cell.row.oldHours) ]]"></oj-bind-text>)
                 </span>
+                </oj-bind-if>
               </template>
               <template slot="toCell" data-oj-as="cell">
+                <oj-bind-if test="[[ cell.row.kind === 'Decision' ]]"><span>&#8212;</span></oj-bind-if>
+                <oj-bind-if test="[[ cell.row.kind !== 'Decision' ]]">
                 <span>
                   <oj-bind-text value="[[ cell.row.newProjectName ]]"></oj-bind-text>
                   <oj-bind-if test="[[ cell.row.newTaskCode ]]">
@@ -448,9 +490,13 @@
                   </oj-bind-if>
                   (<oj-bind-text value="[[ $application.functions.fmtHours(cell.row.newHours) ]]"></oj-bind-text>)
                 </span>
+                </oj-bind-if>
               </template>
               <template slot="deltaCell" data-oj-as="cell">
-                <span><oj-bind-text value="[[ $application.functions.fmtHours(cell.row.deltaHours) ]]"></oj-bind-text></span>
+                <oj-bind-if test="[[ cell.row.kind === 'Decision' ]]"><span>&#8212;</span></oj-bind-if>
+                <oj-bind-if test="[[ cell.row.kind !== 'Decision' ]]">
+                  <span><oj-bind-text value="[[ $application.functions.fmtHours(cell.row.deltaHours) ]]"></oj-bind-text></span>
+                </oj-bind-if>
               </template>
             </oj-table>
           </div>

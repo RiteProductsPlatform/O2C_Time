@@ -415,6 +415,83 @@ SELECT a.audit_id,
   LEFT JOIN oc_time_task    ot ON ot.task_id    = a.old_task_id
   LEFT JOIN oc_time_task    nt ON nt.task_id    = a.new_task_id;
 
+PROMPT ============================================================
+PROMPT [10/10] V_OC_TS_WEEK_ACTIVITY - change history AND decisions
+PROMPT ============================================================
+
+-- Everything that has happened to a week, in one list (REP-007 / NFR-010).
+--
+-- WHY THIS EXISTS
+--
+-- OC_TS_AUDIT records only what CHK_OC_TSAU_TYPE allows - Override, Adjustment,
+-- Reversal, ManagerEdit, Import, DefaultCorrection - which is to say, changes to
+-- the VALUES. A manager approving or rejecting changes no value, so it writes to
+-- OC_TS_APPROVAL and nothing at all to OC_TS_AUDIT. The Change history panel
+-- read the audit table alone, so a week whose seven days had just been rejected
+-- reported "Nothing has been changed on this week": true to the letter, and
+-- useless as evidence for the decision it sits underneath.
+--
+-- Both halves are needed and neither belongs inside the other: a decision has no
+-- old and new hours, and a correction has no reject reason. They are unioned
+-- here with a KIND column so the screen can render each properly, and
+-- ACTIVITY_ID is prefixed because the two source keys are independent identity
+-- columns that would otherwise collide.
+CREATE OR REPLACE VIEW v_oc_ts_week_activity AS
+SELECT 'A' || a.audit_id                          AS activity_id,
+       a.ts_week_id,
+       'Change'                                   AS kind,
+       'DAY'                                      AS scope,
+       a.employee_id,
+       w.employee_name,
+       TO_CHAR(a.entry_date,'YYYY-MM-DD')         AS entry_date,
+       a.change_type,
+       op.project_name                            AS old_project_name,
+       ot.task_code                               AS old_task_code,
+       a.old_hours,
+       np.project_name                            AS new_project_name,
+       nt.task_code                               AS new_task_code,
+       a.new_hours,
+       (NVL(a.new_hours,0) - NVL(a.old_hours,0))  AS delta_hours,
+       a.change_reason,
+       a.changed_by,
+       TO_CHAR(a.changed_on,'YYYY-MM-DD HH24:MI:SS') AS changed_on
+  FROM oc_ts_audit    a
+  JOIN oc_time_worker w  ON w.employee_id = a.employee_id
+  LEFT JOIN oc_time_project op ON op.project_id = a.old_project_id
+  LEFT JOIN oc_time_project np ON np.project_id = a.new_project_id
+  LEFT JOIN oc_time_task    ot ON ot.task_id    = a.old_task_id
+  LEFT JOIN oc_time_task    nt ON nt.task_id    = a.new_task_id
+UNION ALL
+SELECT 'D' || v.approval_id                       AS activity_id,
+       v.ts_week_id,
+       'Decision'                                 AS kind,
+       v.granularity                              AS scope,
+       v.employee_id,
+       w.employee_name,
+       TO_CHAR(v.entry_date,'YYYY-MM-DD')         AS entry_date,
+       v.action                                   AS change_type,
+       CAST(NULL AS VARCHAR2(240 CHAR))           AS old_project_name,
+       CAST(NULL AS VARCHAR2(60 CHAR))            AS old_task_code,
+       CAST(NULL AS NUMBER)                       AS old_hours,
+       CAST(NULL AS VARCHAR2(240 CHAR))           AS new_project_name,
+       CAST(NULL AS VARCHAR2(60 CHAR))            AS new_task_code,
+       CAST(NULL AS NUMBER)                       AS new_hours,
+       CAST(NULL AS NUMBER)                       AS delta_hours,
+       -- FLD-057 and FLD-058 read as one sentence; separately they are a bare
+       -- code and a comment with nothing to attach it to.
+       LTRIM(v.reject_reason || CASE WHEN v.reject_reason IS NOT NULL
+                                      AND v.remarks IS NOT NULL
+                                     THEN ' - ' END || v.remarks)
+                                                  AS change_reason,
+       -- The person, not the id. NVL because a job actor (SCHEDULER) is not a
+       -- worker and must still be named rather than vanishing.
+       NVL(act.employee_name, v.actor_emp_id)     AS changed_by,
+       TO_CHAR(v.action_on,'YYYY-MM-DD HH24:MI:SS') AS changed_on
+  FROM oc_ts_approval v
+  JOIN oc_time_worker w   ON w.employee_id  = v.employee_id
+  LEFT JOIN oc_time_worker act ON act.employee_id = v.actor_emp_id
+ WHERE v.ts_week_id IS NOT NULL;
+
 PROMPT
 PROMPT ============================================================
 PROMPT time/08_views complete.

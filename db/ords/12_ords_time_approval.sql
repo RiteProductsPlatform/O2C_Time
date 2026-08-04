@@ -23,6 +23,8 @@
 --   POST reject/week/:id                         reject one week / dates
 --   POST approve/day/:id                         approve one date
 --   POST reject/day/:id                          reject one date
+--   POST revoke/day/:id                          undo a day decision
+--   POST revoke/week/:id                         undo every decision on a week
 --   POST override/:tsEntryId                     override an hour cell
 --   POST override/:tsWeekId/finish               close the overridden week
 --   POST approve/allweeks                        approve every pending week
@@ -497,6 +499,95 @@ BEGIN
         ROLLBACK;
         :status_code := CASE WHEN SQLCODE BETWEEN -20025 AND -20001 THEN 400 ELSE 500 END;
         HTP.P('{"approvedDates":0,"error":"' ||
+              REPLACE(REPLACE(SQLERRM,'ORA-'||LTRIM(TO_CHAR(ABS(SQLCODE)))||': ',''),'"','\"')
+              || '"}');
+      END;
+    ~');
+  COMMIT;
+END;
+/
+
+-- ── POST revoke/week/:id  (undo every decision on a week) ───
+BEGIN
+  ORDS.DEFINE_TEMPLATE(p_module_name => 'oc.time.approval', p_pattern => 'revoke/week/:id');
+  ORDS.DEFINE_HANDLER(
+    p_module_name => 'oc.time.approval', p_pattern => 'revoke/week/:id',
+    p_method => 'POST',
+    p_source_type => ORDS.source_type_plsql,
+    p_mimes_allowed => 'application/json',
+    p_source => q'~
+      DECLARE
+        v_body   CLOB := :body_text;
+        v_aeid   VARCHAR2(50);
+        v_actor  VARCHAR2(100);
+        v_trace  VARCHAR2(64);
+        v_status VARCHAR2(30);
+      BEGIN
+        SELECT aeid, NVL(act,'VBCS_USER'), tr
+          INTO v_aeid, v_actor, v_trace
+          FROM JSON_TABLE(v_body, '$'
+                 COLUMNS (aeid VARCHAR2(50)  PATH '$.actorEmpId',
+                          act  VARCHAR2(100) PATH '$.actor',
+                          tr   VARCHAR2(64)  PATH '$.traceId'));
+
+        oc_time_pkg.revoke_week_decision(:id, v_aeid, v_actor, v_trace);
+
+        SELECT week_status INTO v_status FROM oc_ts_week WHERE ts_week_id = :id;
+        COMMIT; :status_code := 200;
+        HTP.P('{"revoked":true,"weekStatus":"' || v_status || '"}');
+      EXCEPTION WHEN OTHERS THEN
+        ROLLBACK;
+        :status_code := CASE WHEN SQLCODE BETWEEN -20025 AND -20001 THEN 400 ELSE 500 END;
+        HTP.P('{"revoked":false,"error":"' ||
+              REPLACE(REPLACE(SQLERRM,'ORA-'||LTRIM(TO_CHAR(ABS(SQLCODE)))||': ',''),'"','\"')
+              || '"}');
+      END;
+    ~');
+  COMMIT;
+END;
+/
+
+-- ── POST revoke/day/:id  (undo a day decision) ────────────
+-- Same array-of-dates shape as approve/day and reject/day, because it undoes
+-- exactly what those two do and the screen selects dates the same way.
+BEGIN
+  ORDS.DEFINE_TEMPLATE(p_module_name => 'oc.time.approval', p_pattern => 'revoke/day/:id');
+  ORDS.DEFINE_HANDLER(
+    p_module_name => 'oc.time.approval', p_pattern => 'revoke/day/:id',
+    p_method => 'POST',
+    p_source_type => ORDS.source_type_plsql,
+    p_mimes_allowed => 'application/json',
+    p_source => q'~
+      DECLARE
+        -- :body_text, not named binds - a JSON array cannot be bound by name.
+        v_body   CLOB := :body_text;
+        v_aeid   VARCHAR2(50);
+        v_actor  VARCHAR2(100);
+        v_trace  VARCHAR2(64);
+        v_done   NUMBER := 0;
+        v_status VARCHAR2(30);
+      BEGIN
+        SELECT aeid, NVL(act,'VBCS_USER'), tr
+          INTO v_aeid, v_actor, v_trace
+          FROM JSON_TABLE(v_body, '$'
+                 COLUMNS (aeid VARCHAR2(50)  PATH '$.actorEmpId',
+                          act  VARCHAR2(100) PATH '$.actor',
+                          tr   VARCHAR2(64)  PATH '$.traceId'));
+
+        -- 30 not 10: toApiDate() appends T00:00:00Z; SUBSTR below trims it.
+        FOR d IN (SELECT dt FROM JSON_TABLE(v_body, '$.dates[*]'
+                                COLUMNS (dt VARCHAR2(30) PATH '$'))) LOOP
+          oc_time_pkg.revoke_decision(:id, TO_DATE(SUBSTR(d.dt,1,10),'YYYY-MM-DD'),
+                                      v_aeid, v_actor, v_trace);
+          v_done := v_done + 1;
+        END LOOP;
+        SELECT week_status INTO v_status FROM oc_ts_week WHERE ts_week_id = :id;
+        COMMIT; :status_code := 200;
+        HTP.P('{"revokedDates":' || v_done || ',"weekStatus":"' || v_status || '"}');
+      EXCEPTION WHEN OTHERS THEN
+        ROLLBACK;
+        :status_code := CASE WHEN SQLCODE BETWEEN -20025 AND -20001 THEN 400 ELSE 500 END;
+        HTP.P('{"revokedDates":0,"error":"' ||
               REPLACE(REPLACE(SQLERRM,'ORA-'||LTRIM(TO_CHAR(ABS(SQLCODE)))||': ',''),'"','\"')
               || '"}');
       END;
@@ -1024,16 +1115,20 @@ BEGIN
     p_method => 'GET',
     p_source_type => ORDS.source_type_collection_feed,
     p_source => q'[
-      SELECT a.audit_id, a.employee_id, a.employee_name, a.entry_date,
+      -- v_oc_ts_week_activity, not v_oc_ts_audit_trail: the audit table records
+      -- only changes to VALUES, so approvals and rejections - which change no
+      -- value and write to OC_TS_APPROVAL - were invisible here, and a week that
+      -- had just been rejected reported that nothing had happened to it.
+      -- The view carries ts_week_id, so the EXISTS this used to need is gone.
+      SELECT a.activity_id AS audit_id, a.kind, a.scope,
+             a.employee_id, a.employee_name, a.entry_date,
              a.change_type,
              a.old_project_name, a.old_task_code, a.old_hours,
              a.new_project_name, a.new_task_code, a.new_hours, a.delta_hours,
              a.change_reason, a.changed_by, a.changed_on
-        FROM v_oc_ts_audit_trail a
-       WHERE EXISTS (SELECT 1 FROM oc_ts_audit x
-                      WHERE x.audit_id   = a.audit_id
-                        AND x.ts_week_id = :tsWeekId)
-       ORDER BY a.changed_on DESC
+        FROM v_oc_ts_week_activity a
+       WHERE a.ts_week_id = :tsWeekId
+       ORDER BY a.changed_on DESC, a.activity_id DESC
     ]');
   COMMIT;
 END;

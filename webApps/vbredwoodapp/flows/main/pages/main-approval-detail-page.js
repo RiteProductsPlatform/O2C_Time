@@ -76,6 +76,32 @@ define([], () => {
       if (page) { page.selectedWeekKeys = []; }
     }
 
+    /**
+     * The same gate as canApprove/canReject, one level up.
+     *
+     * A week that is Approved, Overridden and approved, Closed or Rejected has
+     * had its decision taken; approving or rejecting it again is either a no-op
+     * or a second decision on top of the first, and neither is what the manager
+     * means. Undoing it is what they mean, so that is the button that lights up.
+     */
+    _selectedWeeks(weeks, keys) {
+      const picked = keys || [];
+      return (weeks || []).filter((w) => picked.indexOf(w.tsWeekId) >= 0);
+    }
+
+    canDecideWeeks(weeks, keys) {
+      return this._selectedWeeks(weeks, keys)
+                 .some((w) => SETTLED.indexOf(w.weekStatus) === -1
+                           && w.weekStatus !== 'Rejected');
+    }
+
+    canRevokeWeeks(weeks, keys) {
+      return this._selectedWeeks(weeks, keys)
+                 .some((w) => w.weekStatus === 'Approved'
+                           || w.weekStatus === 'Overridden and approved'
+                           || w.weekStatus === 'Rejected');
+    }
+
     /** Selects every distinct date currently in the daily grid. */
     selectAllDates(page) {
       if (!page) { return; }
@@ -132,6 +158,81 @@ define([], () => {
 
     datePickLabel(entryDate) {
       return 'Select ' + entryDate;
+    }
+
+    /**
+     * What the selected dates are actually in, so a button that cannot do
+     * anything is disabled rather than left to fail at the server.
+     *
+     * Selection-count alone was the only gate before, so after rejecting seven
+     * days both Approve dates and Reject dates stayed live on those same seven
+     * — Reject would re-reject days already rejected, and nothing on the screen
+     * said the decision had been taken. The rules apply per selection, not per
+     * week: a mixed selection is normal, and anything that has work to do for
+     * at least one of the selected days stays enabled.
+     */
+    _selected(days, selectedDates) {
+      const picked = selectedDates || [];
+      return (days || []).filter((d) => picked.indexOf(d.entryDate) >= 0);
+    }
+
+    /**
+     * Something in the selection has no decision on it yet.
+     *
+     * One test for both buttons, on purpose. Approving a day that is already
+     * rejected is a second decision layered on the first rather than a
+     * correction of it - the rejection stays in OC_TS_APPROVAL either way, and
+     * the employee has already been told to fix the day. Undo it first; that is
+     * what the Undo button is for.
+     */
+    canDecide(days, selectedDates) {
+      return this._selected(days, selectedDates)
+                 .some((d) => d.dayStatus !== 'Approved' && d.dayStatus !== 'Rejected');
+    }
+
+    /** Something in the selection has a decision on it to undo. */
+    canRevoke(days, selectedDates) {
+      return this._selected(days, selectedDates)
+                 .some((d) => d.dayStatus === 'Approved' || d.dayStatus === 'Rejected');
+    }
+
+    /**
+     * Date column for the activity list.
+     *
+     * A DAY event names its day; a WEEK or MONTH decision has no entry_date at
+     * all, and an empty cell there reads as data that failed to load rather than
+     * as an event that is simply not about one day.
+     */
+    activityDate(row) {
+      if (!row) { return ''; }
+      if (row.entryDate) { return this.fmtDateSafe(row.entryDate); }
+      return row.scope === 'MONTH' ? 'Whole month' : 'Whole week';
+    }
+
+    /** fmtDate lives on the application module; this keeps the guard local. */
+    fmtDateSafe(d) {
+      if (!d) { return ''; }
+      const parts = String(d).substring(0, 10).split('-');
+      if (parts.length !== 3) { return String(d); }
+      const months = ['Jan','Feb','Mar','Apr','May','Jun',
+                      'Jul','Aug','Sep','Oct','Nov','Dec'];
+      const m = Number(parts[1]);
+      return parts[2] + '-' + (months[m - 1] || parts[1]) + '-' + parts[0];
+    }
+
+    /**
+     * Chip class for an activity row, so a rejection is not the same colour as
+     * an import. Reuses the status palette already defined in shell-page.html
+     * rather than a second set of names for the same six colours.
+     */
+    activityClass(row) {
+      const t = (row && row.changeType) || '';
+      if (t === 'Reject')  { return 'rw-status rw-status-rejected'; }
+      if (t === 'Approve' || t === 'AdvanceApprove' || t === 'Confirm') {
+        return 'rw-status rw-status-approved';
+      }
+      if (t === 'Submit' || t === 'Resubmit') { return 'rw-status rw-status-submitted'; }
+      return 'rw-status rw-status-notsubmitted';
     }
 
     toggleDatePick(page, entryDate, picked) {

@@ -224,6 +224,7 @@
     "description": "Reject dates"
   },
   "approval_detail_approve_dates": "Approve dates",
+  "approval_detail_undo_decision": "Undo decision",
   "@approval_detail_approve_dates": {
     "description": "Approve dates"
   },
@@ -259,11 +260,11 @@
   "@approval_detail_change_history": {
     "description": "Change history"
   },
-  "approval_detail_every_manager_correction_and_retro_adjustmen": "Every manager correction and retro adjustment on this week, with the\n          employee's original value retained.",
+  "approval_detail_every_manager_correction_and_retro_adjustmen": "Every submission, approval, rejection and correction on this week, with the employee’s original value retained.",
   "@approval_detail_every_manager_correction_and_retro_adjustmen": {
     "description": "Every manager correction and retro adjustment on this week, with the\n          employee's original value retained."
   },
-  "approval_detail_nothing_has_been_changed_on_this_week": "Nothing has been changed on this week.",
+  "approval_detail_nothing_has_been_changed_on_this_week": "Nothing has happened on this week yet.",
   "@approval_detail_nothing_has_been_changed_on_this_week": {
     "description": "Nothing has been changed on this week."
   },

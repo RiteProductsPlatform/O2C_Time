@@ -185,6 +185,26 @@ CREATE OR REPLACE PACKAGE oc_time_pkg AS
     p_actor        IN VARCHAR2 DEFAULT 'VBCS_USER',
     p_trace_id     IN VARCHAR2 DEFAULT NULL);
 
+  -- Undo a day-level Approve or Reject the manager took by mistake.
+  --
+  -- The counterpart to revoke_week, and deliberately a DIFFERENT actor: an
+  -- employee may pull back their own submission, but only the manager can undo
+  -- their own decision, so this one takes p_actor_emp_id and goes through
+  -- assert_not_self like every other approval action.
+  PROCEDURE revoke_decision(
+    p_ts_week_id   IN NUMBER,
+    p_entry_date   IN DATE,
+    p_actor_emp_id IN VARCHAR2,
+    p_actor        IN VARCHAR2 DEFAULT 'VBCS_USER',
+    p_trace_id     IN VARCHAR2 DEFAULT NULL);
+
+  -- The same undo for every decided day in a week, for the week-level buttons.
+  PROCEDURE revoke_week_decision(
+    p_ts_week_id   IN NUMBER,
+    p_actor_emp_id IN VARCHAR2,
+    p_actor        IN VARCHAR2 DEFAULT 'VBCS_USER',
+    p_trace_id     IN VARCHAR2 DEFAULT NULL);
+
   PROCEDURE override_approve(
     p_ts_entry_id  IN NUMBER,
     p_new_hours    IN NUMBER,
@@ -1437,6 +1457,167 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
     log_event(p_ts_week_id, v_emp, NULL, v_period, 'DAY', TRUNC(p_entry_date),
               'Reject', p_reason, p_remarks, p_actor_emp_id, p_trace_id);
   END reject_day;
+
+
+  -- Undo an Approve or a Reject on one day.
+  --
+  -- Without this a mis-click is unrecoverable from the screen: approve_day only
+  -- ever writes 'Approved' and reject_day only 'Rejected', and neither will move
+  -- a day back to Pending, so the buttons that produced the mistake cannot
+  -- correct it.
+  --
+  -- The week status is RECOMPUTED from the days rather than assumed. reject_day
+  -- sets the week to 'Rejected' on the first rejected day, so undoing that one
+  -- day has to ask what the remaining days now say - otherwise a week with every
+  -- rejection revoked would still read Rejected to the employee and be sent back
+  -- for nothing.
+  PROCEDURE revoke_decision(
+    p_ts_week_id   IN NUMBER,
+    p_entry_date   IN DATE,
+    p_actor_emp_id IN VARCHAR2,
+    p_actor        IN VARCHAR2 DEFAULT 'VBCS_USER',
+    p_trace_id     IN VARCHAR2 DEFAULT NULL)
+  IS
+    v_emp      oc_ts_week.employee_id%TYPE;
+    v_period   oc_ts_week.period_id%TYPE;
+    v_wstatus  oc_ts_week.week_status%TYPE;
+    v_over     oc_ts_week.overridden_flag%TYPE;
+    v_pstatus  oc_time_period.status%TYPE;
+    v_decided  NUMBER;
+    v_rejected NUMBER;
+    v_pending  NUMBER;
+    v_reason   oc_ts_entry.reject_reason%TYPE;
+    v_remarks  oc_ts_entry.reject_remarks%TYPE;
+  BEGIN
+    SELECT w.employee_id, w.period_id, w.week_status, w.overridden_flag, p.status
+      INTO v_emp, v_period, v_wstatus, v_over, v_pstatus
+      FROM oc_ts_week     w
+      JOIN oc_time_period p ON p.period_id = w.period_id
+     WHERE w.ts_week_id = p_ts_week_id;
+
+    assert_not_self(v_emp, p_actor_emp_id);
+
+    -- A confirmed month has already been handed to accrual (RULE-020), so the
+    -- hours behind it are committed elsewhere. Correcting one now is a retro
+    -- adjustment (RULE-019), not an undo.
+    IF v_wstatus = 'Closed' THEN
+      RAISE_APPLICATION_ERROR(-20023,
+        'This week is closed and has gone to accrual. Raise a backdated '
+        || 'adjustment instead.');
+    END IF;
+
+    IF v_pstatus <> 'Open' THEN
+      RAISE_APPLICATION_ERROR(-20024,
+        'The period is not open, so this decision cannot be undone. Raise a '
+        || 'backdated adjustment instead.');
+    END IF;
+
+    -- Nothing to undo is an error, not a no-op: the button would otherwise
+    -- report success for a day it never touched.
+    SELECT COUNT(*) INTO v_decided
+      FROM oc_ts_entry
+     WHERE ts_week_id = p_ts_week_id
+       AND entry_date = TRUNC(p_entry_date)
+       AND day_status IN ('Approved','Rejected');
+
+    IF v_decided = 0 THEN
+      RAISE_APPLICATION_ERROR(-20025,
+        'There is no approval or rejection on '
+        || TO_CHAR(TRUNC(p_entry_date),'DD-Mon-YYYY') || ' to undo.');
+    END IF;
+
+    UPDATE oc_ts_entry
+       SET day_status     = 'Pending',
+           reject_reason  = NULL,
+           reject_remarks = NULL,
+           approved_by    = NULL,
+           approved_on    = NULL,
+           updated_by     = p_actor
+     WHERE ts_week_id = p_ts_week_id
+       AND entry_date = TRUNC(p_entry_date);
+
+    SELECT COUNT(CASE WHEN day_status = 'Rejected' THEN 1 END),
+           COUNT(CASE WHEN day_status <> 'Approved' THEN 1 END)
+      INTO v_rejected, v_pending
+      FROM oc_ts_entry
+     WHERE ts_week_id = p_ts_week_id;
+
+    IF v_rejected > 0 THEN
+      -- Still rejected somewhere. Carry the reason of a day that IS still
+      -- rejected, so the week does not keep quoting the one just undone.
+      SELECT MAX(reject_reason), MAX(reject_remarks)
+        INTO v_reason, v_remarks
+        FROM oc_ts_entry
+       WHERE ts_week_id = p_ts_week_id AND day_status = 'Rejected';
+
+      UPDATE oc_ts_week
+         SET week_status    = 'Rejected',
+             reject_reason  = v_reason,
+             reject_remarks = v_remarks,
+             approved_by    = NULL,
+             approved_on    = NULL,
+             updated_by     = p_actor
+       WHERE ts_week_id = p_ts_week_id;
+
+    ELSIF v_pending = 0 THEN
+      UPDATE oc_ts_week
+         SET week_status    = CASE WHEN v_over = 'Y'
+                                   THEN 'Overridden and approved' ELSE 'Approved' END,
+             reject_reason  = NULL,
+             reject_remarks = NULL,
+             updated_by     = p_actor
+       WHERE ts_week_id = p_ts_week_id;
+
+    ELSE
+      -- Back with the manager. 'Submitted' and not 'Not yet submitted': the
+      -- employee did submit, and undoing a manager decision must never quietly
+      -- put the week back in their drafts where they would have to send it
+      -- again.
+      UPDATE oc_ts_week
+         SET week_status    = 'Submitted',
+             reject_reason  = NULL,
+             reject_remarks = NULL,
+             approved_by    = NULL,
+             approved_on    = NULL,
+             updated_by     = p_actor
+       WHERE ts_week_id = p_ts_week_id;
+    END IF;
+
+    log_event(p_ts_week_id, v_emp, NULL, v_period, 'DAY', TRUNC(p_entry_date),
+              'Revoke', NULL, NULL, p_actor_emp_id, p_trace_id);
+  END revoke_decision;
+
+
+  -- Undo a whole week's worth of decisions.
+  --
+  -- Deliberately a loop over revoke_decision rather than one bulk UPDATE: every
+  -- guard (closed week, closed period, never your own timesheet) and the week
+  -- status recompute live in there, and a second implementation of the same
+  -- rules is how the two drift apart. One audit row per day is also the honest
+  -- record - the manager approved those days individually or in a batch, and
+  -- either way each one is being undone.
+  PROCEDURE revoke_week_decision(
+    p_ts_week_id   IN NUMBER,
+    p_actor_emp_id IN VARCHAR2,
+    p_actor        IN VARCHAR2 DEFAULT 'VBCS_USER',
+    p_trace_id     IN VARCHAR2 DEFAULT NULL)
+  IS
+    v_done NUMBER := 0;
+  BEGIN
+    FOR d IN (SELECT DISTINCT entry_date
+                FROM oc_ts_entry
+               WHERE ts_week_id = p_ts_week_id
+                 AND day_status IN ('Approved','Rejected')
+               ORDER BY entry_date) LOOP
+      revoke_decision(p_ts_week_id, d.entry_date, p_actor_emp_id, p_actor, p_trace_id);
+      v_done := v_done + 1;
+    END LOOP;
+
+    IF v_done = 0 THEN
+      RAISE_APPLICATION_ERROR(-20025,
+        'There is no approval or rejection on this week to undo.');
+    END IF;
+  END revoke_week_decision;
 
 
   -- PROC-004: the manager corrects the hours and approves in one step. The

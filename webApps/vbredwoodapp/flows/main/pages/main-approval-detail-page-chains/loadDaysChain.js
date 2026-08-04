@@ -82,6 +82,13 @@ define([
           $page.variables.auditRows =
             ((aud.ok && aud.body && aud.body.items) || []).map((a) => ({
               auditId: a.audit_id,
+              // 'Change' (a value was edited) or 'Decision' (approved,
+              // rejected, submitted). The two have disjoint columns - a
+              // decision has no old and new hours - so the row has to say
+              // which it is or the From/To cells render "(0.00)" for events
+              // that never touched an hour.
+              kind: a.kind,
+              scope: a.scope,
               entryDate: a.entry_date,
               changeType: a.change_type,
               oldProjectName: a.old_project_name,

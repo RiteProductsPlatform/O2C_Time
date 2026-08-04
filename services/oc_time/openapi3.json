@@ -2272,6 +2272,106 @@
         }
       }
     },
+    "/oc/time/approval/revoke/day/{id}": {
+      "post": {
+        "operationId": "revokeDays",
+        "summary": "Undo the approval or rejection on selected dates; the week status is recomputed from the days that remain",
+        "x-vb": {
+          "actionHint": "create"
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DayActionPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Revoked dates",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DayActionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Rule violated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DayActionResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/oc/time/approval/revoke/week/{id}": {
+      "post": {
+        "operationId": "revokeWeekDecision",
+        "summary": "Undo every approval and rejection on a week",
+        "x-vb": {
+          "actionHint": "create"
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DayActionPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DayActionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Rule violated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DayActionResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/oc/time/approval/reject/month": {
       "post": {
         "operationId": "rejectMonth",
