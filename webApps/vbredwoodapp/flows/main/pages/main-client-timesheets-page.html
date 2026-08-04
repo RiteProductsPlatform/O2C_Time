@@ -157,7 +157,7 @@
                 <!-- A plain anchor, not window.open: SES blocks browser globals
                      in page modules, and the browser streams the file itself. -->
                 <a class="ctim-download-link"
-                   :href="[[ $page.functions.downloadUrl(cell.row.docId) ]]"
+                   :href="[[ $page.functions.downloadUrl($application.variables.ordsBaseUrl, cell.row.docId) ]]"
                    :aria-label="[[ $page.functions.downloadLabel(cell.row.docName) ]]"
                    target="_blank" rel="noopener">
                   <span class="oj-ux-ico-download" aria-hidden="true"></span>

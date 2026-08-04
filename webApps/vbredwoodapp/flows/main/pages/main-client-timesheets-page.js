@@ -77,8 +77,8 @@ define([], () => {
      * browser globals in page modules — window.open throws
      * SES_UNCAUGHT_EXCEPTION (knowledge/14 §7).
      */
-    downloadUrl(docId) {
-      return this.$application.variables.ordsBaseUrl + '/oc/time/clientdocs/' + docId;
+    downloadUrl(ordsBaseUrl, docId) {
+      return (ordsBaseUrl || '') + '/oc/time/clientdocs/' + docId;
     }
 
     /** Accessible name for a document's download link. */

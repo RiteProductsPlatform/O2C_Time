@@ -38,9 +38,9 @@ define([], () => {
      * has to fetch this itself for the Save dialog to appear, and the handler
      * sets the filename in Content-Disposition.
      */
-    dayExportUrl(tsWeekId) {
+    dayExportUrl(ordsBaseUrl, tsWeekId) {
       if (!tsWeekId) { return ''; }
-      return this.$application.variables.ordsBaseUrl +
+      return (ordsBaseUrl || '') +
              '/oc/time/approval/days/' + tsWeekId + '/export';
     }
 

@@ -243,7 +243,7 @@
                  browser globals in page modules, and letting the browser
                  stream the file is what gives the Save dialog for free. -->
             <a class="ad-export-link"
-               :href="[[ $page.functions.dayExportUrl($variables.weekId) ]]"
+               :href="[[ $page.functions.dayExportUrl($application.variables.ordsBaseUrl, $variables.weekId) ]]"
                :aria-label="[[ $page.functions.dayExportLabel($variables.weekLabel) ]]"
                target="_blank" rel="noopener">
               <span class="oj-ux-ico-download" aria-hidden="true"></span>
