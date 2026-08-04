@@ -65,14 +65,17 @@ define([
       }
 
       session.apply($application, identity, token);
-      await Actions.callChain(context, { chain: 'loadContextChain' });
 
-      // A restored session has to announce itself exactly as a fresh login
-      // does. On a refresh the router mounts the page before this validation
-      // finishes, so the page's vbEnter finds no employeeId and loads nothing;
-      // it listens for this event and loads then. Only loginChain used to fire
-      // it, which is why a refresh left every page empty with a "worker record
-      // could not be resolved" toast while the banner showed the right name.
+      // A restored session announces itself exactly as a fresh login does. On a
+      // refresh the router mounts the page before this validation finishes, so
+      // the page's vbEnter finds no employeeId and loads nothing; it listens for
+      // this event and loads then. Only loginChain used to fire it, which is why
+      // a refresh left every page empty with a "worker record could not be
+      // resolved" toast while the banner showed the right name.
+      //
+      // loadContextChain is NOT called directly here: the shell already listens
+      // for this event and runs it. Doing both loaded the period list and the
+      // manager list twice on every refresh.
       await Actions.fireEvent(context, { event: 'sessionEstablished' });
 
       const landing = navModel.landingFor(identity.role);
