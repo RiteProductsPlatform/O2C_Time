@@ -17,8 +17,16 @@ define([
      * @param {Object} context
      * @param {{tsEntryId:number, label:string, hours:number}} params
      */
-    async run(context, { tsEntryId, label, hours }) {
+    async run(context, { row } = {}) {
       const { $page } = context;
+
+      // See openWeekChain: the row arrives whole and the label is derived here,
+      // because a listener parameter cannot invoke a page function.
+      if (!row) { return; }
+
+      const tsEntryId = row.tsEntryId;
+      const hours     = row.hours;
+      const label     = $page.functions.overrideLabelFor(row);
 
       $page.variables.overrideEntryId = tsEntryId;
       $page.variables.overrideLabel   = label || '';

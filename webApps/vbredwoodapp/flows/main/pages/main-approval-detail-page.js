@@ -49,56 +49,15 @@ define([], () => {
       return 'Download ' + (weekLabel || 'this week') + ' as CSV';
     }
 
-    /**
-     * Selects or clears a whole DATE in the daily view.
-     *
-     * A date has several task lines and the BRD approves at date level, not line
-     * level — approving three of a day's five lines is not a state the workflow
-     * models. So the checkbox on any line toggles the entire date, and
-     * selectedDates holds distinct date strings rather than row keys.
-     */
-    toggleDate(entryDate, event) {
-      const page = this.$page.variables;
-      const list = (page.selectedDates || []).slice();
-      const on   = event && event.target && event.target.checked;
-
-      const at = list.indexOf(entryDate);
-
-      if (on && at === -1) {
-        list.push(entryDate);
-      } else if (!on && at >= 0) {
-        list.splice(at, 1);
-      }
-
-      page.selectedDates = list;
-    }
 
     /** True when the date is ticked — drives the daily checkbox. */
-    isDateSelected(entryDate) {
-      return (this.$page.variables.selectedDates || []).indexOf(entryDate) >= 0;
+    isDateSelected(selectedDates, entryDate) {
+      return (selectedDates || []).indexOf(entryDate) >= 0;
     }
 
-    /**
-     * Toggles one week in the weekly selection.
-     *
-     * Same reasoning as the date selection: oj-table's selected-row-keys expects a
-     * JET KeySet, while the approve/reject calls iterate a plain array of week
-     * ids. Holding the selection as an array keeps one representation throughout.
-     */
-    toggleWeek(tsWeekId, event) {
-      const page = this.$page.variables;
-      const list = (page.selectedWeekKeys || []).slice();
-      const on   = event && event.target && event.target.checked;
-      const at   = list.indexOf(tsWeekId);
 
-      if (on && at === -1)     { list.push(tsWeekId); }
-      else if (!on && at >= 0) { list.splice(at, 1); }
-
-      page.selectedWeekKeys = list;
-    }
-
-    isWeekSelected(tsWeekId) {
-      return (this.$page.variables.selectedWeekKeys || []).indexOf(tsWeekId) >= 0;
+    isWeekSelected(selectedWeekKeys, tsWeekId) {
+      return (selectedWeekKeys || []).indexOf(tsWeekId) >= 0;
     }
 
     /**
@@ -108,18 +67,18 @@ define([], () => {
      * settled, and re-approving them would add noise to the approval log for no
      * change in state.
      */
-    selectPendingWeeks() {
-      const page = this.$page.variables;
+    selectPendingWeeks(page) {
+      if (!page) { return; }
       page.selectedWeekKeys = this.pendingWeeks(page.weeks).map((w) => w.tsWeekId);
     }
 
-    clearWeekSelection() {
-      this.$page.variables.selectedWeekKeys = [];
+    clearWeekSelection(page) {
+      if (page) { page.selectedWeekKeys = []; }
     }
 
     /** Selects every distinct date currently in the daily grid. */
-    selectAllDates() {
-      const page = this.$page.variables;
+    selectAllDates(page) {
+      if (!page) { return; }
       const dates = [];
       (page.days || []).forEach((d) => {
         if (dates.indexOf(d.entryDate) === -1) { dates.push(d.entryDate); }
@@ -127,8 +86,8 @@ define([], () => {
       page.selectedDates = dates;
     }
 
-    clearDateSelection() {
-      this.$page.variables.selectedDates = [];
+    clearDateSelection(page) {
+      if (page) { page.selectedDates = []; }
     }
 
     /**
@@ -147,44 +106,44 @@ define([], () => {
     // "unticked" is []. These helpers keep that translation out of the markup,
     // which S1 requires bindings to be free of.
 
-    weekPickValue(tsWeekId) {
-      return this.isWeekSelected(tsWeekId) ? ['on'] : [];
+    weekPickValue(selectedWeekKeys, tsWeekId) {
+      return this.isWeekSelected(selectedWeekKeys, tsWeekId) ? ['on'] : [];
     }
 
     weekPickLabel(weekIndex) {
       return 'Select week ' + weekIndex;
     }
 
-    toggleWeekPick(tsWeekId, event) {
-      const on = !!(event && event.detail && event.detail.value &&
-                    event.detail.value.length);
-      const list = (this.$page.variables.selectedWeekKeys || []).slice();
+    toggleWeekPick(page, tsWeekId, picked) {
+      if (!page) { return; }
+      const on   = !!(picked && picked.length);
+      const list = (page.selectedWeekKeys || []).slice();
       const at = list.indexOf(tsWeekId);
 
       if (on && at === -1)     { list.push(tsWeekId); }
       else if (!on && at >= 0) { list.splice(at, 1); }
 
-      this.$page.variables.selectedWeekKeys = list;
+      page.selectedWeekKeys = list;
     }
 
-    datePickValue(entryDate) {
-      return this.isDateSelected(entryDate) ? ['on'] : [];
+    datePickValue(selectedDates, entryDate) {
+      return this.isDateSelected(selectedDates, entryDate) ? ['on'] : [];
     }
 
     datePickLabel(entryDate) {
       return 'Select ' + entryDate;
     }
 
-    toggleDatePick(entryDate, event) {
-      const on = !!(event && event.detail && event.detail.value &&
-                    event.detail.value.length);
-      const list = (this.$page.variables.selectedDates || []).slice();
+    toggleDatePick(page, entryDate, picked) {
+      if (!page) { return; }
+      const on   = !!(picked && picked.length);
+      const list = (page.selectedDates || []).slice();
       const at = list.indexOf(entryDate);
 
       if (on && at === -1)     { list.push(entryDate); }
       else if (!on && at >= 0) { list.splice(at, 1); }
 
-      this.$page.variables.selectedDates = list;
+      page.selectedDates = list;
     }
 
     /**

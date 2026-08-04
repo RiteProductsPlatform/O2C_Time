@@ -160,7 +160,7 @@
                    HTML form controls. One unlabelled option acts as the row tick. -->
               <oj-checkboxset class="vtim-row-pick"
                               :aria-label="[[ $page.functions.pickLabel(cell.row.employeeName) ]]"
-                              :value="[[ $page.functions.pickValue($variables.selectedKeys, cell.row.employeeId) ]]"
+                              value="[[ $page.functions.pickValue($variables.selectedKeys, cell.row.employeeId) ]]"
                               on-value-changed="[[ $listeners.togglePick ]]">
                 <oj-option value="on"></oj-option>
               </oj-checkboxset>

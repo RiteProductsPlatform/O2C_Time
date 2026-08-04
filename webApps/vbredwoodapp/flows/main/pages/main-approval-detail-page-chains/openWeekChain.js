@@ -15,8 +15,16 @@ define([
      * @param {Object} context
      * @param {{tsWeekId:number, label:string}} params
      */
-    async run(context, { tsWeekId, label }) {
+    async run(context, { row } = {}) {
       const { $page, $application } = context;
+
+      // The row arrives whole, not pre-extracted fields: a listener parameter
+      // cannot call a page function, and the label used to be computed inside
+      // the inline handler that was never wired up.
+      if (!row) { return; }
+
+      const tsWeekId = row.tsWeekId;
+      const label    = $page.functions.weekLabelFor(row);
 
       if (!tsWeekId) { return; }
 

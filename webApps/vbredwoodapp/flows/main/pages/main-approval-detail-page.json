@@ -324,8 +324,7 @@
         {
           "chain": "openWeekChain",
           "parameters": {
-            "tsWeekId": "{{ $event.tsWeekId }}",
-            "label": "{{ $event.label }}"
+            "row": "{{ $current.row }}"
           }
         }
       ]
@@ -335,9 +334,7 @@
         {
           "chain": "openOverrideChain",
           "parameters": {
-            "tsEntryId": "{{ $event.tsEntryId }}",
-            "label": "{{ $event.label }}",
-            "hours": "{{ $event.hours }}"
+            "row": "{{ $current.row }}"
           }
         }
       ]
@@ -360,6 +357,56 @@
       "chains": [
         {
           "chain": "approveAllWeeksChain"
+        }
+      ]
+    },
+    "selectPendingWeeks": {
+      "chains": [
+        {
+          "chain": "selectPendingWeeksChain"
+        }
+      ]
+    },
+    "clearWeekSelection": {
+      "chains": [
+        {
+          "chain": "clearWeekSelectionChain"
+        }
+      ]
+    },
+    "selectAllDates": {
+      "chains": [
+        {
+          "chain": "selectAllDatesChain"
+        }
+      ]
+    },
+    "clearDateSelection": {
+      "chains": [
+        {
+          "chain": "clearDateSelectionChain"
+        }
+      ]
+    },
+    "toggleWeekPick": {
+      "chains": [
+        {
+          "chain": "toggleWeekPickChain",
+          "parameters": {
+            "tsWeekId": "{{ $current.row.tsWeekId }}",
+            "picked": "{{ $event.detail.value }}"
+          }
+        }
+      ]
+    },
+    "toggleDatePick": {
+      "chains": [
+        {
+          "chain": "toggleDatePickChain",
+          "parameters": {
+            "entryDate": "{{ $current.row.entryDate }}",
+            "picked": "{{ $event.detail.value }}"
+          }
         }
       ]
     }

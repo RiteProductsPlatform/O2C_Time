@@ -70,12 +70,12 @@
               <oj-bind-text value="[[ $variables.selectedWeekKeys.length ]]"></oj-bind-text> selected
             </span>
             <oj-button chroming="borderless"
-                       on-oj-action="[[ function(){ $page.functions.selectPendingWeeks(); } ]]">
+                       on-oj-action="[[ $listeners.selectPendingWeeks ]]">
               <span>Select all pending</span>
             </oj-button>
             <oj-button chroming="borderless"
                        disabled="[[ $variables.selectedWeekKeys.length === 0 ]]"
-                       on-oj-action="[[ function(){ $page.functions.clearWeekSelection(); } ]]">
+                       on-oj-action="[[ $listeners.clearWeekSelection ]]">
               <span>Clear</span>
             </oj-button>
             <oj-button chroming="outlined"
@@ -140,8 +140,8 @@
                 <oj-checkboxset class="apdt-row-pick"
                                 :aria-label="[[ $page.functions.weekPickLabel(cell.row.weekIndex) ]]"
                                 :disabled="[[ $page.functions.isSettled(cell.row.weekStatus) ]]"
-                                :value="[[ $page.functions.weekPickValue(cell.row.tsWeekId) ]]"
-                                on-value-changed="[[ function(e){ $page.functions.toggleWeekPick(cell.row.tsWeekId, e); } ]]">
+                                value="[[ $page.functions.weekPickValue($variables.selectedWeekKeys, cell.row.tsWeekId) ]]"
+                                on-value-changed="[[ $listeners.toggleWeekPick ]]">
                   <oj-option value="on"></oj-option>
                 </oj-checkboxset>
               </template>
@@ -203,10 +203,7 @@
               <template slot="actionCell" data-oj-as="cell">
                 <oj-button chroming="outlined"
                            :aria-label="[[ $page.functions.openWeekLabel(cell.row.weekIndex) ]]"
-                           on-oj-action="[[ function(){
-                              $page.listeners.openWeek({
-                                tsWeekId: cell.row.tsWeekId,
-                                label: $page.functions.weekLabelFor(cell.row) }); } ]]">
+                           on-oj-action="[[ $listeners.openWeek ]]">
                   <span>Open</span>
                 </oj-button>
               </template>
@@ -253,12 +250,12 @@
               <span>Download CSV</span>
             </a>
             <oj-button chroming="borderless"
-                       on-oj-action="[[ function(){ $page.functions.selectAllDates(); } ]]">
+                       on-oj-action="[[ $listeners.selectAllDates ]]">
               <span>Select all dates</span>
             </oj-button>
             <oj-button chroming="borderless"
                        disabled="[[ $variables.selectedDates.length === 0 ]]"
-                       on-oj-action="[[ function(){ $page.functions.clearDateSelection(); } ]]">
+                       on-oj-action="[[ $listeners.clearDateSelection ]]">
               <span>Clear</span>
             </oj-button>
             <oj-button chroming="outlined"
@@ -323,8 +320,8 @@
                 <!-- Ticking any line ticks the whole DATE — approval is by day. -->
                 <oj-checkboxset class="apdt-row-pick"
                                 :aria-label="[[ $page.functions.datePickLabel(cell.row.entryDate) ]]"
-                                :value="[[ $page.functions.datePickValue(cell.row.entryDate) ]]"
-                                on-value-changed="[[ function(e){ $page.functions.toggleDatePick(cell.row.entryDate, e); } ]]">
+                                value="[[ $page.functions.datePickValue($variables.selectedDates, cell.row.entryDate) ]]"
+                                on-value-changed="[[ $listeners.toggleDatePick ]]">
                   <oj-option value="on"></oj-option>
                 </oj-checkboxset>
               </template>
@@ -392,11 +389,7 @@
                   <oj-button chroming="borderless"
                              disabled="[[ $variables.busy ]]"
                              :aria-label="[[ $page.functions.correctLabel(cell.row.taskName) ]]"
-                             on-oj-action="[[ function(){
-                                $page.listeners.openOverride({
-                                  tsEntryId: cell.row.tsEntryId,
-                                  label: $page.functions.overrideLabelFor(cell.row),
-                                  hours: cell.row.hours }); } ]]">
+                             on-oj-action="[[ $listeners.openOverride ]]">
                     <span>Correct</span>
                   </oj-button>
                 </oj-bind-if>
