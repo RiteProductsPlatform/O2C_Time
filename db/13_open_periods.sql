@@ -71,7 +71,7 @@ PROMPT ============================================================
 PROMPT [3/4] Extend July's delivery cut-off so it is actually editable
 PROMPT ============================================================
 
--- Status alone is not enough. V_OC_TIME_CUTOFFS returns editable_flag = 'N'
+-- Status alone is not enough. V_OC_TS_MY_PERIODS returns editable_flag = 'N'
 -- once TRUNC(SYSDATE) > delivery_cutoff (RULE-007), and July's was 03-Aug-2026
 -- — yesterday. Opening July without this leaves it Open and still read-only,
 -- which looks exactly like the change not having worked.
@@ -118,12 +118,18 @@ PROMPT ============================================================
 PROMPT Verification — BOTH July and August must read Open and editable Y
 PROMPT ============================================================
 
+-- V_OC_TS_MY_PERIODS, not V_OC_TIME_CUTOFFS. Two different views over the same
+-- table and it is easy to reach for the wrong one: CUTOFFS (01_time_reference)
+-- carries every cut-off DATE, while MY_PERIODS (08_views) is the one that
+-- derives period_state, editable_flag and adjustment_allowed — the three
+-- columns that say whether a month can be typed into. It is also what
+-- getPeriods reads, so this shows exactly what the app will see.
 COLUMN period_name  FORMAT A10
 COLUMN status       FORMAT A7
 COLUMN period_state FORMAT A7
 SELECT period_name, status, period_state, editable_flag, adjustment_allowed,
        start_date, delivery_cutoff
-  FROM v_oc_time_cutoffs
+  FROM v_oc_ts_my_periods
  ORDER BY period_year, period_month;
 
 SELECT COUNT(*) AS open_periods FROM oc_time_period WHERE status = 'Open';

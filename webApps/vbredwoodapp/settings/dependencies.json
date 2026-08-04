@@ -3,6 +3,7 @@
     "oj-sp": {
       "version": "2604.1.0",
       "components": {
+        "general-overview-page": "2604.1.0",
         "messages-banner": "2604.1.0",
         "messages-toast": "2604.1.0"
       }
