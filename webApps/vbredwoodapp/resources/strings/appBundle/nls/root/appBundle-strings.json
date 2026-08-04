@@ -684,7 +684,7 @@
   "@my_timesheet_status": {
     "description": "Status"
   },
-  "my_timesheet_this_week_was_rejected": "This week was rejected —",
+  "my_timesheet_this_week_was_rejected": "⚠ This week was rejected — action needed.",
   "@my_timesheet_this_week_was_rejected": {
     "description": "This week was rejected —"
   },
@@ -692,7 +692,7 @@
   "@my_timesheet_rejected_dates": {
     "description": "Rejected dates:"
   },
-  "my_timesheet_correct_the_hours_below_and_submit_again_you": "Correct the hours below and submit again. You can resubmit until the\n          delivery cut-off\n          (",
+  "my_timesheet_correct_the_hours_below_and_submit_again_you": "Correct the entries below and re-submit before the delivery cut-off",
   "@my_timesheet_correct_the_hours_below_and_submit_again_you": {
     "description": "Correct the hours below and submit again. You can resubmit until the\n          delivery cut-off\n          ("
   },
@@ -1251,5 +1251,10 @@
   "view_timesheet_and_fills_the_accrual_interface_with_the_con": "and fills the accrual interface with the consolidated timesheet\n        (employee × project × task × day) plus any day-wise\n        Reversal (−)/Adjustment (+) rows. The accrual application\n        collects it from there. Approved time is also pushed to Oracle Time &\n        Labor, which feeds Project Costing and Payroll.",
   "@view_timesheet_and_fills_the_accrual_interface_with_the_con": {
     "description": "and fills the accrual interface with the consolidated timesheet\n        (employee × project × task × day) plus any day-w"
-  }
+  },
+  "my_timesheet_reject_reason_label": "Reason:",
+  "my_timesheet_reject_remarks_label": "Remarks:",
+  "my_timesheet_approval_workflow": "Approval workflow",
+  "my_timesheet_approval_workflow_sub": "Every submission, approval and rejection on this week.",
+  "my_timesheet_no_activity_yet": "Nothing has happened on this week yet."
 }

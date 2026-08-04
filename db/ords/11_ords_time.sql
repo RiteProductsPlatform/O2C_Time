@@ -24,6 +24,7 @@
 --   GET  cutoffs/:periodId                       cut-off display
 --   GET  lookups/:type                           any seeded dictionary
 --   GET  rejection/:tsWeekId                     reason + remarks + rejected dates
+--   GET  weeks/:tsWeekId/activity               submitted / rejected / approved trail
 --   POST adjustments                             apply a retro day-wise change
 --   GET  adjustments/:employeeId                 my adjustments & their status
 --   GET  clientdocs/:projectId/:periodId         client timesheet documents
@@ -506,6 +507,33 @@ BEGIN
        WHERE lookup_type = UPPER(:type)
          AND active_flag = 'Y'
        ORDER BY sort_order, lookup_code
+    ]');
+  COMMIT;
+END;
+/
+
+-- ── GET weeks/:tsWeekId/activity  (the prototype's workflow strip) ─
+-- The employee's own decision trail: submitted, rejected by whom and why,
+-- resubmitted, approved. The prototype puts this at the foot of My Timesheet
+-- and it was the one part of the rejected-week screen with nothing behind it -
+-- the banner said a manager had sent the week back but never which manager, and
+-- nothing at all recorded that the employee had already resubmitted once.
+--
+-- Same view as the manager's audit/:tsWeekId. Deliberately the same one: two
+-- histories of the same week that could disagree is worse than none.
+BEGIN
+  ORDS.DEFINE_TEMPLATE(p_module_name => 'oc.time', p_pattern => 'weeks/:tsWeekId/activity');
+  ORDS.DEFINE_HANDLER(
+    p_module_name => 'oc.time', p_pattern => 'weeks/:tsWeekId/activity',
+    p_method => 'GET',
+    p_source_type => ORDS.source_type_collection_feed,
+    p_source => q'[
+      SELECT a.activity_id, a.kind, a.scope, a.entry_date, a.change_type,
+             a.change_reason, a.changed_by, a.changed_on,
+             a.old_hours, a.new_hours, a.delta_hours
+        FROM v_oc_ts_week_activity a
+       WHERE a.ts_week_id = :tsWeekId
+       ORDER BY a.changed_on, a.activity_id
     ]');
   COMMIT;
 END;

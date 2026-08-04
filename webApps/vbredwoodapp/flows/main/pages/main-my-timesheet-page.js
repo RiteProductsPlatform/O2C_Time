@@ -232,6 +232,76 @@ define([], () => {
       return over ? 'rw-grid-day rw-grid-total-over' : 'rw-grid-day';
     }
 
+    /**
+     * The rejection reason, as a person would say it.
+     *
+     * CHK_OC_TSA_REASON stores 'Manager', 'Client' or 'Absence'. The banner
+     * printed the bare code straight after an em dash, so "This week was
+     * rejected — Manager" read as the name of whoever rejected it. The
+     * prototype's LOV is the long form.
+     */
+    rejectReasonLabel(code) {
+      const map = {
+        Manager: 'Manager driven',
+        Client:  'Client driven',
+        Absence: 'Absence',
+      };
+      return map[code] || code || 'not given';
+    }
+
+    /** " (by Navamani Solairajan)", or nothing when the trail has no name. */
+    rejectedByLabel(name) {
+      return name ? ' (by ' + name + ')' : '';
+    }
+
+    /** " (2026-09-03)." — the sentence has to end whether or not a date exists. */
+    cutoffSuffix(cutoff) {
+      return cutoff ? ' (' + cutoff + ').' : '.';
+    }
+
+    /**
+     * One line of the workflow strip. The view hands back the raw event -
+     * 'Submit', 'Reject', 'Approve' - which is a database word, not a sentence.
+     */
+    wfTitle(row) {
+      if (!row) { return ''; }
+      const by = row.changed_by ? ' by ' + row.changed_by : '';
+      const scope = row.entry_date ? ' (' + row.entry_date + ')' : '';
+      const said = {
+        Submit:         'Submitted',
+        Resubmit:       'Corrected and resubmitted',
+        Approve:        'Approved',
+        AdvanceApprove: 'Approved in advance',
+        Reject:         'Rejected',
+        Revoke:         'Decision undone',
+        Confirm:        'Confirmed to accrual',
+        Default:        'Defaulted at the cut-off',
+        Release:        'Salary hold released',
+        Override:       'Hours changed by the manager',
+        Adjustment:     'Retro adjustment',
+        Reversal:       'Reversal',
+        ManagerEdit:    'Edited by the manager',
+        Import:         'Imported',
+      }[row.change_type] || row.change_type;
+      return said + scope + by;
+    }
+
+    /** Timestamp column. Trimmed to the minute - seconds are noise here. */
+    wfWhen(row) {
+      const t = (row && row.changed_on) || '';
+      return t.length >= 16 ? t.substring(0, 16) : t;
+    }
+
+    /** Red for a rejection, green for an approval, grey for everything else. */
+    wfDotClass(row) {
+      const t = (row && row.change_type) || '';
+      if (t === 'Reject') { return 'rw-wf-dot rw-wf-dot-reject'; }
+      if (t === 'Approve' || t === 'AdvanceApprove' || t === 'Confirm') {
+        return 'rw-wf-dot rw-wf-dot-approve';
+      }
+      return 'rw-wf-dot';
+    }
+
     /** Accessible name for a grid line's remove button. */
     removeLineLabel(taskName) {
       return 'Remove ' + taskName;

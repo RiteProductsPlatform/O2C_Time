@@ -218,6 +218,36 @@ define([
           $page.variables.rejectedDates = [];
         }
 
+        // ── Approval workflow (prototype, foot of the page) ────
+        //
+        // Also where the banner's "(by ...)" comes from. The week row carries
+        // reject_reason and reject_remarks but not WHO decided, so the employee
+        // was told their week had been sent back without being told by whom -
+        // and had no record that they had already corrected and resubmitted it
+        // once, which is the thing most likely to be in dispute.
+        //
+        // Not fatal. The trail is context for the grid, never a gate on it, so
+        // a failure here must not stop the timesheet rendering.
+        try {
+          const act = await Actions.callRest(context, {
+            endpoint: 'oc_time/getWeekActivity',
+            uriParams: { tsWeekId: weekId, _t: Date.now() },
+          });
+
+          const rows = (act.ok && act.body && act.body.items) || [];
+          $page.variables.activityRows = rows;
+
+          // The LATEST rejection, not the first: a week can be sent back more
+          // than once, and the name that matters is the one the employee has to
+          // answer to now. The feed is ordered oldest first.
+          const rej = rows.filter((r) => r.change_type === 'Reject');
+          $page.variables.rejectedBy = rej.length
+            ? (rej[rej.length - 1].changed_by || '') : '';
+        } catch (e) {
+          $page.variables.activityRows = [];
+          $page.variables.rejectedBy   = '';
+        }
+
         // ── Retro adjustments already applied (FLD-016..018) ───
         if ($page.variables.adjustmentAllowed) {
           const adj = await Actions.callRest(context, {

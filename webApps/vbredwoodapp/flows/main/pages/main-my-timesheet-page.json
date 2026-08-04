@@ -233,6 +233,16 @@
       "defaultValue": [],
       "input": "none"
     },
+    "activityRows": {
+      "type": "any[]",
+      "defaultValue": [],
+      "input": "none"
+    },
+    "rejectedBy": {
+      "type": "string",
+      "defaultValue": "",
+      "input": "none"
+    },
     "adjWorkDate": {
       "type": "string",
       "defaultValue": "",

@@ -3501,6 +3501,46 @@
         }
       }
     },
+    "/oc/time/weeks/{tsWeekId}/activity": {
+      "get": {
+        "operationId": "getWeekActivity",
+        "summary": "Submitted / rejected / approved trail for one week, shown to the employee",
+        "x-vb": {
+          "actionHint": "getMany"
+        },
+        "parameters": [
+          {
+            "name": "tsWeekId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "_t",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Cache-buster. A GET refreshed after a write must not be served from a browser 304."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Rejected dates",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Collection"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/oc/time/shift/{tsWeekId}": {
       "get": {
         "operationId": "getShiftRow",

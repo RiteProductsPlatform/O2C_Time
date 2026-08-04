@@ -85,21 +85,39 @@
     </div>
 
     <!-- ══════════════════ Rejection notice (#5) ══════════════════ -->
-    <!-- The employee sees the reason, the remarks and exactly which dates were
-         rejected, so they know what to correct before resubmitting. -->
+    <!-- The prototype's warn-banner recoloured red: full width, between the
+         week selector and the grid, carrying the manager's reason, remarks and
+         the exact dates sent back so the employee knows what to correct.
+
+         .rw-reject-banner, NOT .rw-shell-error - that one is the "the whole
+         shell failed" box and carries max-width:640px; margin:48px auto, which
+         rendered this as a narrow panel floating in the middle of the page. -->
     <oj-bind-if test="[[ $variables.weekStatus === 'Rejected' ]]">
-      <div class="oj-sm-padding-3x rw-shell-error" role="alert">
-        <div class="oj-typography-body-md oj-typography-semi-bold">
+      <div class="rw-reject-banner" role="alert">
+        <div class="rw-reject-title">
           <oj-bind-text value="[[$application.translations.appBundle.my_timesheet_this_week_was_rejected]]"></oj-bind-text>
-          <oj-bind-text value="[[ $variables.rejectReason ]]"></oj-bind-text>
+        </div>
+        <div>
+          <oj-bind-text value="[[$application.translations.appBundle.my_timesheet_correct_the_hours_below_and_submit_again_you]]"></oj-bind-text>
+          <oj-bind-text value="[[ $page.functions.cutoffSuffix($variables.deliveryCutoff) ]]"></oj-bind-text>
+        </div>
+        <div class="oj-sm-margin-1x-top">
+          <oj-bind-text value="[[$application.translations.appBundle.my_timesheet_reject_reason_label]]"></oj-bind-text>
+          <!-- The stored code is 'Manager' / 'Client' / 'Absence'. Printed raw
+               and straight after an em dash it read as the name of a person. -->
+          <strong><oj-bind-text value="[[ $page.functions.rejectReasonLabel($variables.rejectReason) ]]"></oj-bind-text></strong>
+          <oj-bind-if test="[[ $variables.rejectedBy ]]">
+            <span><oj-bind-text value="[[ $page.functions.rejectedByLabel($variables.rejectedBy) ]]"></oj-bind-text></span>
+          </oj-bind-if>
         </div>
         <oj-bind-if test="[[ $variables.rejectRemarks ]]">
-          <div class="oj-typography-body-sm oj-sm-margin-1x-top">
-            <oj-bind-text value="[[ $variables.rejectRemarks ]]"></oj-bind-text>
+          <div>
+            <oj-bind-text value="[[$application.translations.appBundle.my_timesheet_reject_remarks_label]]"></oj-bind-text>
+            <em><oj-bind-text value="[[ $variables.rejectRemarks ]]"></oj-bind-text></em>
           </div>
         </oj-bind-if>
         <oj-bind-if test="[[ $variables.rejectedDates.length > 0 ]]">
-          <div class="oj-typography-body-sm oj-sm-margin-1x-top oj-flex oj-sm-gap-1x oj-sm-flex-wrap oj-sm-align-items-center">
+          <div class="oj-sm-margin-1x-top oj-flex oj-sm-gap-1x oj-sm-flex-wrap oj-sm-align-items-center">
             <span><oj-bind-text value="[[$application.translations.appBundle.my_timesheet_rejected_dates]]"></oj-bind-text></span>
             <oj-bind-for-each data="[[ $variables.rejectedDates ]]">
               <template>
@@ -110,9 +128,6 @@
             </oj-bind-for-each>
           </div>
         </oj-bind-if>
-        <div class="oj-typography-body-sm oj-sm-margin-1x-top">
-          <oj-bind-text value="[[$application.translations.appBundle.my_timesheet_correct_the_hours_below_and_submit_again_you]]"></oj-bind-text><oj-bind-text value="[[ $variables.deliveryCutoff || 'not set' ]]"></oj-bind-text>).
-        </div>
       </div>
     </oj-bind-if>
 
@@ -398,6 +413,51 @@
             <oj-bind-text value="[[ $application.functions.ifEq($variables.weekStatus, 'Rejected', 'Correct & resubmit', 'Submit for approval') ]]"></oj-bind-text>
           </span>
         </oj-button>
+      </div>
+    </oj-bind-if>
+
+    <!-- ══════════════════ Approval workflow (prototype foot of page) ══════════════════ -->
+    <!-- The prototype closes My Timesheet with the week's decision trail, and
+         the employee had nothing: the banner said a manager sent the week back
+         but never which manager, and no record at all that they had already
+         corrected and resubmitted once. Same view as the manager's change
+         history - two accounts of the same week that can disagree is worse
+         than one. -->
+    <oj-bind-if test="[[ $variables.weekId ]]">
+      <div class="oj-sm-padding-4x rw-metric">
+        <h2 class="oj-typography-heading-xs oj-sm-margin-0">
+          <oj-bind-text value="[[$application.translations.appBundle.my_timesheet_approval_workflow]]"></oj-bind-text>
+        </h2>
+        <p class="oj-typography-body-sm rw-metric-label oj-sm-margin-1x-top">
+          <oj-bind-text value="[[$application.translations.appBundle.my_timesheet_approval_workflow_sub]]"></oj-bind-text>
+        </p>
+
+        <oj-bind-if test="[[ $variables.activityRows.length === 0 ]]">
+          <div class="oj-typography-body-sm rw-metric-label oj-sm-margin-2x-top" role="status">
+            <oj-bind-text value="[[$application.translations.appBundle.my_timesheet_no_activity_yet]]"></oj-bind-text>
+          </div>
+        </oj-bind-if>
+
+        <oj-bind-if test="[[ $variables.activityRows.length > 0 ]]">
+          <div class="rw-wf oj-sm-margin-2x-top">
+            <oj-bind-for-each data="[[ $variables.activityRows ]]">
+              <template>
+                <div class="rw-wf-row">
+                  <span :class="[[ $page.functions.wfDotClass($current.data) ]]" aria-hidden="true"></span>
+                  <span class="rw-wf-what">
+                    <strong><oj-bind-text value="[[ $page.functions.wfTitle($current.data) ]]"></oj-bind-text></strong>
+                    <oj-bind-if test="[[ $current.data.change_reason ]]">
+                      <span> &#8212; <oj-bind-text value="[[ $current.data.change_reason ]]"></oj-bind-text></span>
+                    </oj-bind-if>
+                  </span>
+                  <span class="rw-wf-when">
+                    <oj-bind-text value="[[ $page.functions.wfWhen($current.data) ]]"></oj-bind-text>
+                  </span>
+                </div>
+              </template>
+            </oj-bind-for-each>
+          </div>
+        </oj-bind-if>
       </div>
     </oj-bind-if>
 
