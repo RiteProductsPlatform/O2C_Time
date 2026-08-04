@@ -198,7 +198,6 @@ define([], () => {
       v.stdHoursPerDay  = 8;
       v.totalAllocPct   = 0;
       v.openPeriodId    = null;
-      v.contextLoadedFor = null;   // next sign-in reloads the lists
       v.actingManagerId = '';
 
       // Period context too: leaving the last user's month selected would show

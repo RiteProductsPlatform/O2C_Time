@@ -447,11 +447,6 @@
         "data": []
       },
       "description": "Assigned explicitly by loadContextChain, never live-bound: at application scope a live binding is evaluated during variable setup and leaves the ADP half-built."
-    },
-    "contextLoadedFor": {
-      "type": "number",
-      "defaultValue": null,
-      "description": "Which user the month and manager lists were loaded for, so a second loadContextChain in the same session is a no-op rather than a second round-trip. Cleared by session.clear()."
     }
   },
   "userConfig": {

@@ -43,32 +43,20 @@
             </template>
           </oj-select-single>
 
-          <!-- ACT-011 / FLD-026. A split employee reports into more than one
-               manager, so a manager can act as another to review that team.
-               On this page, not the banner: the prototype puts it here, next
-               to the team it changes, and a topbar copy is context nobody can
-               act on from the other screens. Only rendered when there is more
-               than one to choose from. -->
-          <oj-bind-if test="[[ $application.variables.managerOptionsArray.length > 1 ]]">
-            <oj-select-single label-hint="[[$application.translations.appBundle.team_approvals_reviewing_team_of]]"
-                              data="[[ $application.variables.managerOptions ]]"
-                              value="{{ $application.variables.actingManagerId }}"
-                              item-text="label"
-                              on-value-changed="[[ $listeners.switchManager ]]">
-              <template slot="noData">
-                <span class="rw-metric-label"><oj-bind-text value="[[$application.translations.appBundle.team_approvals_no_other_teams]]"></oj-bind-text></span>
-              </template>
-            </oj-select-single>
-          </oj-bind-if>
-
-          <oj-bind-if test="[[ $application.variables.managerOptionsArray.length <= 1 ]]">
-            <oj-label-value>
-              <span slot="label" class="oj-label-nowrap"><oj-bind-text value="[[$application.translations.appBundle.team_approvals_reviewing_as]]"></oj-bind-text></span>
-              <span slot="value" class="oj-typography-body-md">
-                <oj-bind-text value="[[ $application.variables.actingManagerId ]]"></oj-bind-text>
-              </span>
-            </oj-label-value>
-          </oj-bind-if>
+          <!-- No manager switcher. ACT-011 lets a manager act as another to
+               review that team, but getManagers returns the reporting TREE, so
+               a senior manager was offered their own subordinates — which is
+               not what the requirement is about and is not this person's work.
+               Removed by decision (04-Aug-2026); the read-only label stays.
+               To restore it, the query has to be narrowed first. -->
+          <oj-label-value>
+            <span slot="label" class="oj-label-nowrap">
+              <oj-bind-text value="[[$application.translations.appBundle.team_approvals_reviewing_as]]"></oj-bind-text>
+            </span>
+            <span slot="value" class="oj-typography-body-md">
+              <oj-bind-text value="[[ $application.variables.actingManagerId ]]"></oj-bind-text>
+            </span>
+          </oj-label-value>
         </oj-form-layout>
 
         <div class="oj-flex oj-sm-gap-2x">

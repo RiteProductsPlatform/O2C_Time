@@ -229,16 +229,6 @@
           "chain": "cancelAdvanceApproveChain"
         }
       ]
-    },
-    "switchManager": {
-      "chains": [
-        {
-          "chain": "switchManagerChain",
-          "parameters": {
-            "managerId": "{{ $event.detail.value }}"
-          }
-        }
-      ]
     }
   },
   "imports": {

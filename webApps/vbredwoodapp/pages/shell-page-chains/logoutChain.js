@@ -30,7 +30,6 @@ define([
       session.clearToken();
 
       $page.variables.shellError          = '';
-      $page.variables.managerOptionsArray = [];
       $page.variables.sidebarCollapsed    = true;
       $application.variables.periodOptionsArray = [];
       $application.variables.periodOptions = {
