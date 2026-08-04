@@ -277,18 +277,40 @@ BEGIN
     p_module_name => 'oc.time.approval', p_pattern => 'approve/month',
     p_method => 'POST',
     p_source_type => ORDS.source_type_plsql,
+    p_mimes_allowed => 'application/json',
     p_source => q'~
-      DECLARE v_done NUMBER := 0;
+      DECLARE
+        -- :body_text, not named binds. A payload carrying a JSON ARRAY cannot be
+        -- bound field by field - ORDS has no SQL type for the array, so the
+        -- whole request fails with ORA-17004 before any of this runs and the
+        -- caller only sees "The request could not be processed for a user
+        -- defined resource". Path parameters are unaffected.
+        v_body   CLOB := :body_text;
+        v_proj   NUMBER;
+        v_period NUMBER;
+        v_aeid   VARCHAR2(50);
+        v_actor  VARCHAR2(100);
+        v_trace  VARCHAR2(64);
+        v_done   NUMBER := 0;
       BEGIN
-        FOR e IN (SELECT emp FROM JSON_TABLE(TO_CLOB(:employees), '$[*]'
+        SELECT proj, per, aeid, NVL(act,'VBCS_USER'), tr
+          INTO v_proj, v_period, v_aeid, v_actor, v_trace
+          FROM JSON_TABLE(v_body, '$'
+                 COLUMNS (proj NUMBER        PATH '$.projectId',
+                          per  NUMBER        PATH '$.periodId',
+                          aeid VARCHAR2(50)  PATH '$.actorEmpId',
+                          act  VARCHAR2(100) PATH '$.actor',
+                          tr   VARCHAR2(64)  PATH '$.traceId'));
+
+        FOR e IN (SELECT emp FROM JSON_TABLE(v_body, '$.employees[*]'
                                 COLUMNS (emp VARCHAR2(50) PATH '$'))) LOOP
           oc_time_pkg.approve_employee_month(
-            p_project_id   => :projectId,
-            p_period_id    => :periodId,
+            p_project_id   => v_proj,
+            p_period_id    => v_period,
             p_employee_id  => e.emp,
-            p_actor_emp_id => :actorEmpId,
-            p_actor        => NVL(:actor,'VBCS_USER'),
-            p_trace_id     => :traceId);
+            p_actor_emp_id => v_aeid,
+            p_actor        => v_actor,
+            p_trace_id     => v_trace);
           v_done := v_done + 1;
         END LOOP;
         COMMIT;
@@ -313,20 +335,46 @@ BEGIN
     p_module_name => 'oc.time.approval', p_pattern => 'reject/month',
     p_method => 'POST',
     p_source_type => ORDS.source_type_plsql,
+    p_mimes_allowed => 'application/json',
     p_source => q'~
-      DECLARE v_done NUMBER := 0;
+      DECLARE
+        -- :body_text, not named binds. A payload carrying a JSON ARRAY cannot be
+        -- bound field by field - ORDS has no SQL type for the array, so the
+        -- whole request fails with ORA-17004 before any of this runs and the
+        -- caller only sees "The request could not be processed for a user
+        -- defined resource". Path parameters are unaffected.
+        v_body   CLOB := :body_text;
+        v_proj    NUMBER;
+        v_period  NUMBER;
+        v_reason  VARCHAR2(20);
+        v_remarks VARCHAR2(1000);
+        v_aeid    VARCHAR2(50);
+        v_actor   VARCHAR2(100);
+        v_trace   VARCHAR2(64);
+        v_done    NUMBER := 0;
       BEGIN
-        FOR e IN (SELECT emp FROM JSON_TABLE(TO_CLOB(:employees), '$[*]'
+        SELECT proj, per, rsn, rmk, aeid, NVL(act,'VBCS_USER'), tr
+          INTO v_proj, v_period, v_reason, v_remarks, v_aeid, v_actor, v_trace
+          FROM JSON_TABLE(v_body, '$'
+                 COLUMNS (proj NUMBER         PATH '$.projectId',
+                          per  NUMBER         PATH '$.periodId',
+                          rsn  VARCHAR2(20)   PATH '$.reason',
+                          rmk  VARCHAR2(1000) PATH '$.remarks',
+                          aeid VARCHAR2(50)   PATH '$.actorEmpId',
+                          act  VARCHAR2(100)  PATH '$.actor',
+                          tr   VARCHAR2(64)   PATH '$.traceId'));
+
+        FOR e IN (SELECT emp FROM JSON_TABLE(v_body, '$.employees[*]'
                                 COLUMNS (emp VARCHAR2(50) PATH '$'))) LOOP
           oc_time_pkg.reject_employee_month(
-            p_project_id   => :projectId,
-            p_period_id    => :periodId,
+            p_project_id   => v_proj,
+            p_period_id    => v_period,
             p_employee_id  => e.emp,
-            p_reason       => :reason,
-            p_remarks      => :remarks,
-            p_actor_emp_id => :actorEmpId,
-            p_actor        => NVL(:actor,'VBCS_USER'),
-            p_trace_id     => :traceId);
+            p_reason       => v_reason,
+            p_remarks      => v_remarks,
+            p_actor_emp_id => v_aeid,
+            p_actor        => v_actor,
+            p_trace_id     => v_trace);
           v_done := v_done + 1;
         END LOOP;
         COMMIT;
@@ -402,15 +450,33 @@ BEGIN
     p_module_name => 'oc.time.approval', p_pattern => 'approve/day/:id',
     p_method => 'POST',
     p_source_type => ORDS.source_type_plsql,
+    p_mimes_allowed => 'application/json',
     p_source => q'~
       DECLARE
+        -- :body_text, not named binds. A payload carrying a JSON ARRAY cannot be
+        -- bound field by field - ORDS has no SQL type for the array, so the
+        -- whole request fails with ORA-17004 before any of this runs and the
+        -- caller only sees "The request could not be processed for a user
+        -- defined resource". Path parameters are unaffected.
+        v_body   CLOB := :body_text;
+        v_aeid   VARCHAR2(50);
+        v_actor  VARCHAR2(100);
+        v_trace  VARCHAR2(64);
         v_done   NUMBER := 0;
         v_status VARCHAR2(30);
       BEGIN
-        FOR d IN (SELECT dt FROM JSON_TABLE(TO_CLOB(:dates), '$[*]'
-                                COLUMNS (dt VARCHAR2(10) PATH '$'))) LOOP
-          oc_time_pkg.approve_day(:id, TO_DATE(d.dt,'YYYY-MM-DD'), :actorEmpId,
-                                  NVL(:actor,'VBCS_USER'), :traceId);
+        SELECT aeid, NVL(act,'VBCS_USER'), tr
+          INTO v_aeid, v_actor, v_trace
+          FROM JSON_TABLE(v_body, '$'
+                 COLUMNS (aeid VARCHAR2(50)  PATH '$.actorEmpId',
+                          act  VARCHAR2(100) PATH '$.actor',
+                          tr   VARCHAR2(64)  PATH '$.traceId'));
+
+        -- 30 not 10: toApiDate() appends T00:00:00Z; SUBSTR below trims it.
+        FOR d IN (SELECT dt FROM JSON_TABLE(v_body, '$.dates[*]'
+                                COLUMNS (dt VARCHAR2(30) PATH '$'))) LOOP
+          oc_time_pkg.approve_day(:id, TO_DATE(SUBSTR(d.dt,1,10),'YYYY-MM-DD'),
+                                  v_aeid, v_actor, v_trace);
           v_done := v_done + 1;
         END LOOP;
         SELECT week_status INTO v_status FROM oc_ts_week WHERE ts_week_id = :id;
@@ -434,13 +500,35 @@ BEGIN
     p_module_name => 'oc.time.approval', p_pattern => 'reject/day/:id',
     p_method => 'POST',
     p_source_type => ORDS.source_type_plsql,
+    p_mimes_allowed => 'application/json',
     p_source => q'~
-      DECLARE v_done NUMBER := 0;
+      DECLARE
+        -- :body_text, not named binds. A payload carrying a JSON ARRAY cannot be
+        -- bound field by field - ORDS has no SQL type for the array, so the
+        -- whole request fails with ORA-17004 before any of this runs and the
+        -- caller only sees "The request could not be processed for a user
+        -- defined resource". Path parameters are unaffected.
+        v_body   CLOB := :body_text;
+        v_reason  VARCHAR2(20);
+        v_remarks VARCHAR2(1000);
+        v_aeid    VARCHAR2(50);
+        v_actor   VARCHAR2(100);
+        v_trace   VARCHAR2(64);
+        v_done    NUMBER := 0;
       BEGIN
-        FOR d IN (SELECT dt FROM JSON_TABLE(TO_CLOB(:dates), '$[*]'
-                                COLUMNS (dt VARCHAR2(10) PATH '$'))) LOOP
-          oc_time_pkg.reject_day(:id, TO_DATE(d.dt,'YYYY-MM-DD'), :reason, :remarks,
-                                 :actorEmpId, NVL(:actor,'VBCS_USER'), :traceId);
+        SELECT rsn, rmk, aeid, NVL(act,'VBCS_USER'), tr
+          INTO v_reason, v_remarks, v_aeid, v_actor, v_trace
+          FROM JSON_TABLE(v_body, '$'
+                 COLUMNS (rsn  VARCHAR2(20)   PATH '$.reason',
+                          rmk  VARCHAR2(1000) PATH '$.remarks',
+                          aeid VARCHAR2(50)   PATH '$.actorEmpId',
+                          act  VARCHAR2(100)  PATH '$.actor',
+                          tr   VARCHAR2(64)   PATH '$.traceId'));
+
+        FOR d IN (SELECT dt FROM JSON_TABLE(v_body, '$.dates[*]'
+                                COLUMNS (dt VARCHAR2(30) PATH '$'))) LOOP
+          oc_time_pkg.reject_day(:id, TO_DATE(SUBSTR(d.dt,1,10),'YYYY-MM-DD'),
+                                 v_reason, v_remarks, v_aeid, v_actor, v_trace);
           v_done := v_done + 1;
         END LOOP;
         COMMIT; :status_code := 200;
@@ -544,21 +632,47 @@ BEGIN
     p_module_name => 'oc.time.approval', p_pattern => 'advanceapprove',
     p_method => 'POST',
     p_source_type => ORDS.source_type_plsql,
+    p_mimes_allowed => 'application/json',
     p_source => q'~
-      DECLARE v_done NUMBER := 0;
+      DECLARE
+        -- :body_text, not named binds. A payload carrying a JSON ARRAY cannot be
+        -- bound field by field - ORDS has no SQL type for the array, so the
+        -- whole request fails with ORA-17004 before any of this runs and the
+        -- caller only sees "The request could not be processed for a user
+        -- defined resource". Path parameters are unaffected.
+        v_body   CLOB := :body_text;
+        v_proj   NUMBER;
+        v_period NUMBER;
+        v_aeid   VARCHAR2(50);
+        v_actor  VARCHAR2(100);
+        v_trace  VARCHAR2(64);
+        v_count  NUMBER;
+        v_done   NUMBER := 0;
       BEGIN
-        IF :employees IS NULL THEN
+        SELECT proj, per, aeid, NVL(act,'VBCS_USER'), tr
+          INTO v_proj, v_period, v_aeid, v_actor, v_trace
+          FROM JSON_TABLE(v_body, '$'
+                 COLUMNS (proj NUMBER        PATH '$.projectId',
+                          per  NUMBER        PATH '$.periodId',
+                          aeid VARCHAR2(50)  PATH '$.actorEmpId',
+                          act  VARCHAR2(100) PATH '$.actor',
+                          tr   VARCHAR2(64)  PATH '$.traceId'));
+
+        -- "employees omitted" is an empty row set now, not a NULL bind.
+        SELECT COUNT(*) INTO v_count
+          FROM JSON_TABLE(v_body, '$.employees[*]'
+                 COLUMNS (emp VARCHAR2(50) PATH '$'));
+
+        IF v_count = 0 THEN
           -- Whole project month.
           oc_time_pkg.advance_approve_month(
-            :projectId, :periodId, NULL, :actorEmpId,
-            NVL(:actor,'VBCS_USER'), :traceId);
+            v_proj, v_period, NULL, v_aeid, v_actor, v_trace);
           v_done := 1;
         ELSE
-          FOR e IN (SELECT emp FROM JSON_TABLE(TO_CLOB(:employees), '$[*]'
+          FOR e IN (SELECT emp FROM JSON_TABLE(v_body, '$.employees[*]'
                                   COLUMNS (emp VARCHAR2(50) PATH '$'))) LOOP
             oc_time_pkg.advance_approve_month(
-              :projectId, :periodId, e.emp, :actorEmpId,
-              NVL(:actor,'VBCS_USER'), :traceId);
+              v_proj, v_period, e.emp, v_aeid, v_actor, v_trace);
             v_done := v_done + 1;
           END LOOP;
         END IF;

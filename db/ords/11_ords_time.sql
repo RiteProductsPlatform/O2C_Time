@@ -253,18 +253,36 @@ BEGIN
   ORDS.DEFINE_HANDLER(
     p_module_name => 'oc.time', p_pattern => 'entries/batch', p_method => 'POST',
     p_source_type => ORDS.source_type_plsql,
+    p_mimes_allowed => 'application/json',
     p_source => q'~
       DECLARE
-        v_saved NUMBER := 0;
+        -- :body_text is ORDS's implicit CLOB of the whole payload, and the
+        -- scalars are read out of it rather than bound by name. A payload
+        -- carrying a JSON ARRAY cannot be bound field by field: ORDS has no SQL
+        -- type for the array, so the request fails with ORA-17004 before any of
+        -- this runs and the caller sees only "The request could not be
+        -- processed for a user defined resource". :cells was still a named bind
+        -- here after the other handlers were converted, so every Save draft and
+        -- every Submit failed.
+        v_body   CLOB := :body_text;
+        v_source VARCHAR2(20);
+        v_actor  VARCHAR2(100);
+        v_saved  NUMBER := 0;
       BEGIN
+        SELECT NVL(src,'Employee'), NVL(act,'VBCS_USER')
+          INTO v_source, v_actor
+          FROM JSON_TABLE(v_body, '$'
+                 COLUMNS (src VARCHAR2(20)  PATH '$.source',
+                          act VARCHAR2(100) PATH '$.actor'));
+
         FOR c IN (
           SELECT ts_week_id, project_id, task_id, entry_date, hours, unbilled_reason
-            FROM JSON_TABLE(TO_CLOB(:cells), '$[*]'
+            FROM JSON_TABLE(v_body, '$.cells[*]'
                    COLUMNS (
                      ts_week_id      NUMBER        PATH '$.tsWeekId',
                      project_id      NUMBER        PATH '$.projectId',
                      task_id         NUMBER        PATH '$.taskId',
-                     entry_date      VARCHAR2(10)  PATH '$.entryDate',
+                     entry_date      VARCHAR2(30)  PATH '$.entryDate',
                      hours           NUMBER        PATH '$.hours',
                      unbilled_reason VARCHAR2(60)  PATH '$.unbilledReason')))
         LOOP
@@ -272,11 +290,14 @@ BEGIN
             p_ts_week_id      => c.ts_week_id,
             p_project_id      => c.project_id,
             p_task_id         => c.task_id,
-            p_entry_date      => TO_DATE(c.entry_date,'YYYY-MM-DD'),
+            -- toApiDate() appends T00:00:00Z, so the value is 20 chars, not 10.
+            -- SUBSTR before TO_DATE rather than widening the format mask, which
+            -- would have to know about the Z.
+            p_entry_date      => TO_DATE(SUBSTR(c.entry_date,1,10),'YYYY-MM-DD'),
             p_hours           => c.hours,
-            p_source          => NVL(:source,'Employee'),
+            p_source          => v_source,
             p_unbilled_reason => c.unbilled_reason,
-            p_actor           => NVL(:actor,'VBCS_USER'));
+            p_actor           => v_actor);
           v_saved := v_saved + 1;
         END LOOP;
         COMMIT;

@@ -1,5 +1,25 @@
 {
   "component-dependencies": {
+    "oj-dynamic": {
+      "version": "2604.1.0",
+      "components": {
+        "container": "2604.1.0",
+        "form": "2604.1.0",
+        "table": "2604.1.0"
+      }
+    },
+    "oj-oacp": {
+      "version": "2601.0.1",
+      "components": {
+        "pubsub": "2601.0.1"
+      }
+    },
+    "oj-oars": {
+      "version": "2601.0.1",
+      "components": {
+        "resource": "2601.0.1"
+      }
+    },
     "oj-sp": {
       "version": "2604.1.0",
       "components": {
@@ -137,14 +157,6 @@
         "activity-list-item": "2604.1.0",
         "ai-input-rich-text": "2604.1.0",
         "ai-output-rich-text": "2604.1.0"
-      }
-    },
-    "oj-dynamic": {
-      "version": "2604.1.0",
-      "components": {
-        "container": "2604.1.0",
-        "form": "2604.1.0",
-        "table": "2604.1.0"
       }
     }
   }
