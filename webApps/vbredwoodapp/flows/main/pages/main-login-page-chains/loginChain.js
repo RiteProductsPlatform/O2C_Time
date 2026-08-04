@@ -5,11 +5,13 @@ define([
   'vb/action/actions',
   'resources/js/session',
   'resources/js/navModel',
+  'resources/js/contextLoader',
 ], (
   ActionChain,
   Actions,
   session,
-  navModel
+  navModel,
+  contextLoader
 ) => {
   'use strict';
 
@@ -66,9 +68,21 @@ define([
       session.apply($application, identity, identity.token);
       session.writeToken(identity.token);
 
-      // Tells the shell to load the period list and the manager switcher. An
-      // event because this page is in the 'main' flow and cannot call a chain
-      // that belongs to the shell page.
+      // Load the period list and the manager switcher HERE, awaited, before
+      // navigating anywhere.
+      //
+      // This used to fire sessionEstablished and let the shell's listener do it.
+      // Awaiting fireEvent waits for the DISPATCH, not for the listener chains,
+      // so the landing page mounted while getPeriods was still in flight and the
+      // month selector was empty until the user pressed F5. A refresh always
+      // worked because checkSessionChain awaits the load before it navigates —
+      // this is now the same shape.
+      //
+      // Shared module rather than the shell's chain: a page chain cannot call a
+      // chain that belongs to the shell page.
+      await contextLoader.loadAll(context, Actions, $application);
+
+      // Still fired, for anything that listens for a session beginning.
       await Actions.fireEvent(context, { event: 'sessionEstablished' });
 
       const landing = navModel.landingFor(identity.role);

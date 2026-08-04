@@ -3,132 +3,53 @@
 define([
   'vb/action/actionChain',
   'vb/action/actions',
+  'resources/js/contextLoader',
 ], (
   ActionChain,
-  Actions
+  Actions,
+  contextLoader
 ) => {
   'use strict';
 
   /**
    * Runs once a session exists, from either path that creates one — the shell
-   * restoring a stored token, or the login form firing sessionEstablished.
+   * restoring a stored token, or the login form.
    *
-   * Loads the month list (RULE-004 / RULE-007) and, for managers, the teams they
-   * may review (ACT-011). Neither is fatal if it fails: a user with no period
-   * list can still see their weeks, and a manager without the switcher still
-   * reviews their own team. Both failures are surfaced, though — a silently
-   * empty month selector looks like there are no periods, which is a different
-   * and much more alarming thing.
+   * The work itself lives in resources/js/contextLoader so that loginChain can
+   * await exactly the same thing before it navigates. A page chain cannot call a
+   * chain belonging to the shell page, and firing an event at the shell is not a
+   * substitute: awaiting fireEvent waits for the DISPATCH, not for the listener
+   * chains, so login navigated while the periods were still loading and the
+   * month selector stayed empty until a browser refresh.
+   *
+   * Neither list is fatal if it fails. A user with no period list can still see
+   * their weeks, and a manager without the switcher still reviews their own
+   * team. A silently empty month selector is worth saying out loud, though — it
+   * reads as "there are no periods", which is a different and much more
+   * alarming thing than "the list did not load".
    */
   class loadContextChain extends ActionChain {
 
     async run(context) {
-      const { $page, $application } = context;
+      const { $application } = context;
 
-      await this.loadPeriods(context, $application);
+      const ok = await contextLoader.loadAll(context, Actions, $application);
 
-      // Manager only. PER-004's admin menu has no team pages, so loading the
-      // switcher for an admin would be a request whose answer is never shown.
-      if ($application.variables.currentRole === 'ROLE_TIME_MANAGER') {
-        await this.loadManagers(context, $page, $application);
-      }
-
-      // Tell the pages the periods have actually arrived. sessionEstablished
-      // says a session exists, which is a different and earlier moment: login
-      // awaits fireEvent, but that only waits for the DISPATCH, so it navigated
-      // to the landing page while this chain was still running and the month
-      // selector came up empty until a browser refresh.
-      await Actions.fireEvent(context, { event: 'contextLoaded' });
-    }
-
-    async loadPeriods(context, $application) {
-      let rows;
-      try {
-        const resp = await Actions.callRest(context, {
-          endpoint: 'oc_time/getPeriods',
-          uriParams: { _t: Date.now() },
-        });
-        if (!resp.ok || !resp.body || !resp.body.items) {
-          throw new Error('period list unavailable');
-        }
-        rows = resp.body.items;
-      } catch (e) {
+      if (!ok) {
         await Actions.fireNotificationEvent(context, {
           summary: 'Periods unavailable',
-          message: 'The month list could not be loaded, so cut-off dates and ' +
-                   'period status will not be shown.',
+          message: 'The month list could not be loaded, so cut-off dates and '
+                 + 'period status will not be shown.',
           severity: 'warning',
           type: 'warning',
           displayMode: 'transient',
         });
-        return;
       }
 
-      const opts = rows.map((r) => ({
-        value:             r.period_id,
-        label:             r.period_name,
-        periodState:       r.period_state,
-        editableFlag:      r.editable_flag,
-        adjustmentAllowed: r.adjustment_allowed,
-      }));
-
-      // periodOptions is assigned explicitly rather than live-bound to the
-      // array. The array-linked ADP pattern is fine at PAGE scope, where the two
-      // variables initialise together; at APPLICATION scope the binding is
-      // evaluated during app-variable setup and leaves the ADP half-built, which
-      // throws inside every oj-select-single that binds it and blanks the page.
-      $application.variables.periodOptionsArray = opts;
-      $application.variables.periodOptions = {
-        itemType: 'periodOptionType',
-        keyAttributes: 'value',
-        data: opts,
-      };
-
-      // Default to the Open period; fall back to the newest row so the selector
-      // is never left empty when a month is between states.
-      const open = opts.find((o) => o.periodState === 'Open') || opts[0];
-      if (!open) {
-        return;
-      }
-
-      $application.variables.selectedPeriodId   = open.value;
-      $application.variables.selectedPeriodName = open.label;
-      $application.variables.periodEditable     = open.editableFlag || 'N';
-      $application.variables.adjustmentAllowed  = open.adjustmentAllowed || 'N';
-
-      if (!$application.variables.openPeriodId && open.periodState === 'Open') {
-        $application.variables.openPeriodId = open.value;
-      }
-    }
-
-    async loadManagers(context, $page, $application) {
-      try {
-        const resp = await Actions.callRest(context, {
-          endpoint: 'oc_time/getManagers',
-          uriParams: {
-            employeeId: $application.variables.employeeId,
-            _t: Date.now(),
-          },
-        });
-        if (resp.ok && resp.body && resp.body.items) {
-          // Application scope, not shell-page scope: the switcher itself lives
-          // on PAGE-003 now (the prototype puts it there, not in the banner),
-          // but sign-in is what knows which managers this user may act as.
-          const opts = resp.body.items.map((m) => ({
-            value: m.employee_id,
-            label: m.employee_name,
-          }));
-          $application.variables.managerOptionsArray = opts;
-          $application.variables.managerOptions = {
-            itemType: 'lovOptionType',
-            keyAttributes: 'value',
-            data: opts,
-          };
-        }
-      } catch (e) {
-        // The switcher is a convenience: without it the manager still reviews
-        // their own team, so this degrades quietly by design.
-      }
+      // Belt and braces, now that both session paths load the context before
+      // navigating: a page reached by some route that does neither still gets
+      // its selector filled in.
+      await Actions.fireEvent(context, { event: 'contextLoaded' });
     }
   }
 

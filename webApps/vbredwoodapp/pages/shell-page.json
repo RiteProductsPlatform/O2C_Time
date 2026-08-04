@@ -54,13 +54,6 @@
         }
       ]
     },
-    "application:sessionEstablished": {
-      "chains": [
-        {
-          "chain": "loadContextChain"
-        }
-      ]
-    },
     "navClick": {
       "chains": [
         {
