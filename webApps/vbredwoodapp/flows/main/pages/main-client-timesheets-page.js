@@ -19,8 +19,8 @@ define([], () => {
      * after uploading 30MB and being rejected. The server checks again — this is
      * courtesy, not the control.
      */
-    fileSelected(event) {
-      const page = this.$page.variables;
+    fileSelected(page, files) {
+      if (!page) { return; }
 
       page.uploadHint      = '';
       page.pendingFileName = '';
@@ -29,7 +29,6 @@ define([], () => {
       page.pendingSize     = 0;
       page.pendingSizeKb   = 0;
 
-      const files = event && event.detail && event.detail.files;
       if (!files || !files.length) { return; }
 
       const file = files[0];
@@ -92,16 +91,6 @@ define([], () => {
       return 'Remove ' + docName;
     }
 
-    /**
-     * Delegates to the chain that opens the confirmation dialog.
-     *
-     * The payload is a bare { docId } because that is exactly the shape the
-     * page's askRemoveDoc listener destructures ({{ $event.docId }}). Nesting it
-     * under `detail` would arrive as undefined and delete nothing.
-     */
-    askRemoveDoc(docId) {
-      this.$page.listeners.askRemoveDoc({ docId: docId });
-    }
   }
 
   return PageModule;

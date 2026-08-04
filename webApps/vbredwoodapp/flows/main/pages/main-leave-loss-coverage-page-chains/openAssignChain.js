@@ -23,8 +23,17 @@ define([
      * @param {Object} context
      * @param {{llcId:number, absenceDate:string, label:string}} params
      */
-    async run(context, { llcId, absenceDate, label }) {
+    async run(context, { row } = {}) {
       const { $page, $application } = context;
+
+      // The row whole, not pre-extracted fields: the label is built by a page
+      // function, and a listener parameter cannot invoke one. It used to be
+      // computed inside an inline handler that was never wired up.
+      if (!row) { return; }
+
+      const llcId       = row.llcId;
+      const absenceDate = row.absenceDate;
+      const label       = $page.functions.absenceLabel(row);
 
       if (!llcId) { return; }
 

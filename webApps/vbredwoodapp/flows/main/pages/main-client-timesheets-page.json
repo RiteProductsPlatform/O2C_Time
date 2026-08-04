@@ -178,7 +178,7 @@
         {
           "chain": "askRemoveDocChain",
           "parameters": {
-            "docId": "{{ $event.docId }}"
+            "docId": "{{ $current.row.docId }}"
           }
         }
       ]
@@ -194,6 +194,16 @@
       "chains": [
         {
           "chain": "cancelRemoveDocChain"
+        }
+      ]
+    },
+    "fileSelected": {
+      "chains": [
+        {
+          "chain": "fileSelectedChain",
+          "parameters": {
+            "files": "{{ $event.detail.files }}"
+          }
         }
       ]
     }

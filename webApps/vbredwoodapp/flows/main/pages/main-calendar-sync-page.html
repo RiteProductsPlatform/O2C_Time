@@ -97,18 +97,14 @@
               <oj-button chroming="borderless"
                          disabled="[[ cell.row.dayCount === 0 ]]"
                          :aria-label="[[ $page.functions.inspectLabel(cell.row.layerLabel) ]]"
-                         on-oj-action="[[ function(){
-                            $page.listeners.openInspect({
-                              layer: cell.row.layer,
-                              scopeHint: cell.row.scopeHint }); } ]]">
+                         on-oj-action="[[ $listeners.openInspect ]]">
                 <span>Inspect</span>
               </oj-button>
               <!-- ACT-030. RA-005 closed calendar *authoring*, not syncing; the
                    Pages sheet lists sync-buttons as a required component. -->
               <oj-button chroming="outlined" disabled="[[ $variables.busy ]]"
                          :aria-label="[[ $page.functions.syncLabel(cell.row.layerLabel) ]]"
-                         on-oj-action="[[ function(){
-                            $page.listeners.syncLayer({ layer: cell.row.layer }); } ]]">
+                         on-oj-action="[[ $listeners.syncLayer ]]">
                 <span>Sync</span>
               </oj-button>
             </div>

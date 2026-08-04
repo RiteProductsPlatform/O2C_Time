@@ -193,9 +193,7 @@
         {
           "chain": "openAssignChain",
           "parameters": {
-            "llcId": "{{ $event.llcId }}",
-            "absenceDate": "{{ $event.absenceDate }}",
-            "label": "{{ $event.label }}"
+            "row": "{{ $current.row }}"
           }
         }
       ]
@@ -205,7 +203,7 @@
         {
           "chain": "approveCoverChain",
           "parameters": {
-            "llcId": "{{ $event.llcId }}"
+            "llcId": "{{ $current.row.llcId }}"
           }
         }
       ]

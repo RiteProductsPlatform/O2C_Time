@@ -156,10 +156,7 @@
             <template slot="actionCell" data-oj-as="cell">
               <oj-button chroming="outlined"
                          :aria-label="[[ $page.functions.extractLabel(cell.row.projectName) ]]"
-                         on-oj-action="[[ function(){
-                            $page.listeners.openExtract({
-                              confirmId: cell.row.confirmId,
-                              label: cell.row.projectName }); } ]]">
+                         on-oj-action="[[ $listeners.openExtract ]]">
                 <span>Extract</span>
               </oj-button>
             </template>

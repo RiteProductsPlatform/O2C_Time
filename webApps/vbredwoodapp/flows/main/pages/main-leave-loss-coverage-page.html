@@ -154,11 +154,7 @@
                 <oj-bind-if test="[[ cell.row.llcStatus !== 'Approved' ]]">
                   <oj-button chroming="borderless" disabled="[[ $variables.busy ]]"
                              :aria-label="[[ $page.functions.assignLabel(cell.row.absentEmployeeName) ]]"
-                             on-oj-action="[[ function(){
-                                $page.listeners.openAssign({
-                                  llcId: cell.row.llcId,
-                                  absenceDate: cell.row.absenceDate,
-                                  label: $page.functions.absenceLabel(cell.row) }); } ]]">
+                             on-oj-action="[[ $listeners.openAssign ]]">
                     <span><oj-bind-text value="[[ $application.functions.ifSet(cell.row.coverEmployeeId, 'Reassign', 'Assign') ]]"></oj-bind-text></span>
                   </oj-button>
                 </oj-bind-if>
@@ -166,8 +162,7 @@
                 <oj-bind-if test="[[ cell.row.llcStatus === 'Assigned' ]]">
                   <oj-button chroming="outlined" disabled="[[ $variables.busy ]]"
                              :aria-label="[[ $page.functions.approveLabel(cell.row.absentEmployeeName) ]]"
-                             on-oj-action="[[ function(){
-                                $page.listeners.approveOne({ llcId: cell.row.llcId }); } ]]">
+                             on-oj-action="[[ $listeners.approveOne ]]">
                     <span>Approve</span>
                   </oj-button>
                 </oj-bind-if>

@@ -222,8 +222,8 @@
         {
           "chain": "openExtractChain",
           "parameters": {
-            "confirmId": "{{ $event.confirmId }}",
-            "label": "{{ $event.label }}"
+            "confirmId": "{{ $current.row.confirmId }}",
+            "label": "{{ $current.row.projectName }}"
           }
         }
       ]

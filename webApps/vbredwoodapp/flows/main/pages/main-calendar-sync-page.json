@@ -117,8 +117,8 @@
         {
           "chain": "openInspectChain",
           "parameters": {
-            "layer": "{{ $event.layer }}",
-            "scopeHint": "{{ $event.scopeHint }}"
+            "layer": "{{ $current.row.layer }}",
+            "scopeHint": "{{ $current.row.scopeHint }}"
           }
         }
       ]
@@ -128,7 +128,7 @@
         {
           "chain": "syncLayerChain",
           "parameters": {
-            "layer": "{{ $event.layer }}"
+            "layer": "{{ $current.row.layer }}"
           }
         }
       ]

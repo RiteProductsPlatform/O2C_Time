@@ -59,7 +59,7 @@
                after a rejected request. -->
           <oj-file-picker accept='["application/pdf",".pdf",".doc",".docx",".xls",".xlsx",".png",".jpg",".jpeg"]'
                           selection-mode="single"
-                          on-oj-select="[[ function(e){ $page.functions.fileSelected(e); } ]]">
+                          on-oj-select="[[ $listeners.fileSelected ]]">
             <span>Drop a PDF, Word, Excel or image file here, or click to browse (max 25&nbsp;MB)</span>
           </oj-file-picker>
 
@@ -165,7 +165,7 @@
                 </a>
                 <oj-button chroming="borderless" display="icons"
                            :aria-label="[[ $page.functions.removeLabel(cell.row.docName) ]]"
-                           on-oj-action="[[ function(){ $page.functions.askRemoveDoc(cell.row.docId); } ]]">
+                           on-oj-action="[[ $listeners.askRemoveDoc ]]">
                   <span slot="startIcon" class="oj-ux-ico-trash"></span>
                   <span>Remove</span>
                 </oj-button>

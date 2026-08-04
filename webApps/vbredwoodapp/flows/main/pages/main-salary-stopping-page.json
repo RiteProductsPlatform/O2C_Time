@@ -4,10 +4,19 @@
     "periodId": {
       "type": "number",
       "defaultValue": null,
-      "onValueChanged": { "chains": [ { "chain": "loadHoldsChain" } ] }
+      "onValueChanged": {
+        "chains": [
+          {
+            "chain": "loadHoldsChain"
+          }
+        ]
+      }
     },
-
-    "holds": { "type": "any[]", "defaultValue": [], "input": "none" },
+    "holds": {
+      "type": "any[]",
+      "defaultValue": [],
+      "input": "none"
+    },
     "holdsADP": {
       "type": "vb/ArrayDataProvider2",
       "defaultValue": {
@@ -16,14 +25,37 @@
         "data": "{{ $page.variables.holds }}"
       }
     },
-
-    "heldCount":     { "type": "number", "defaultValue": 0, "input": "none" },
-    "releasedCount": { "type": "number", "defaultValue": 0, "input": "none" },
-    "expiredCount":  { "type": "number", "defaultValue": 0, "input": "none", "description": "Holds past the release window — RA-012 (forfeit or escalate) is still an open question, so they are only flagged, never auto-resolved." },
-
-    "showWeeks":  { "type": "boolean", "defaultValue": false, "input": "none" },
-    "weeksLabel": { "type": "string",  "defaultValue": "", "input": "none" },
-    "weekRows":   { "type": "any[]",   "defaultValue": [], "input": "none" },
+    "heldCount": {
+      "type": "number",
+      "defaultValue": 0,
+      "input": "none"
+    },
+    "releasedCount": {
+      "type": "number",
+      "defaultValue": 0,
+      "input": "none"
+    },
+    "expiredCount": {
+      "type": "number",
+      "defaultValue": 0,
+      "input": "none",
+      "description": "Holds past the release window — RA-012 (forfeit or escalate) is still an open question, so they are only flagged, never auto-resolved."
+    },
+    "showWeeks": {
+      "type": "boolean",
+      "defaultValue": false,
+      "input": "none"
+    },
+    "weeksLabel": {
+      "type": "string",
+      "defaultValue": "",
+      "input": "none"
+    },
+    "weekRows": {
+      "type": "any[]",
+      "defaultValue": [],
+      "input": "none"
+    },
     "weekRowsADP": {
       "type": "vb/ArrayDataProvider2",
       "defaultValue": {
@@ -32,51 +64,128 @@
         "data": "{{ $page.variables.weekRows }}"
       }
     },
-
-    "showRelease":    { "type": "boolean", "defaultValue": false, "input": "none" },
-    "releaseHoldId":  { "type": "number",  "defaultValue": null, "input": "none" },
-    "releaseLabel":   { "type": "string",  "defaultValue": "", "input": "none" },
-    "releaseBlocked": { "type": "boolean", "defaultValue": false, "input": "none", "description": "True when the employee still has a defaulted week — the hold cannot be released until it is corrected (ACT-026 precondition)." },
-    "releaseRemarks": { "type": "string",  "defaultValue": "" },
-
-    "busy": { "type": "boolean", "defaultValue": false, "input": "none" }
+    "showRelease": {
+      "type": "boolean",
+      "defaultValue": false,
+      "input": "none"
+    },
+    "releaseHoldId": {
+      "type": "number",
+      "defaultValue": null,
+      "input": "none"
+    },
+    "releaseLabel": {
+      "type": "string",
+      "defaultValue": "",
+      "input": "none"
+    },
+    "releaseBlocked": {
+      "type": "boolean",
+      "defaultValue": false,
+      "input": "none",
+      "description": "True when the employee still has a defaulted week — the hold cannot be released until it is corrected (ACT-026 precondition)."
+    },
+    "releaseRemarks": {
+      "type": "string",
+      "defaultValue": ""
+    },
+    "busy": {
+      "type": "boolean",
+      "defaultValue": false,
+      "input": "none"
+    }
   },
-
   "types": {
     "holdRowType": {
-      "holdId": "number", "employeeId": "string", "employeeName": "string",
-      "workerType": "string", "baseCountry": "string",
-      "weeksTotal": "number", "weeksSubmitted": "number", "weeksDefaulted": "number",
+      "holdId": "number",
+      "employeeId": "string",
+      "employeeName": "string",
+      "workerType": "string",
+      "baseCountry": "string",
+      "weeksTotal": "number",
+      "weeksSubmitted": "number",
+      "weeksDefaulted": "number",
       "weeksSplit": "string",
-      "appliedHours": "number", "defaultHours": "number",
-      "salaryStatus": "string", "holdReleaseDays": "number",
-      "windowExpiresOn": "string", "windowExpired": "string",
-      "heldOn": "string", "releasedOn": "string", "releasedBy": "string",
+      "appliedHours": "number",
+      "defaultHours": "number",
+      "salaryStatus": "string",
+      "holdReleaseDays": "number",
+      "windowExpiresOn": "string",
+      "windowExpired": "string",
+      "heldOn": "string",
+      "releasedOn": "string",
+      "releasedBy": "string",
       "remarks": "string"
     },
     "weekRowType": {
-      "tsWeekId": "number", "weekIndex": "number", "weekRange": "string",
-      "weekStatus": "string", "defaultedFlag": "string", "lockedFlag": "string",
-      "totalHours": "number", "appliedHours": "number", "defaultHours": "number"
+      "tsWeekId": "number",
+      "weekIndex": "number",
+      "weekRange": "string",
+      "weekStatus": "string",
+      "defaultedFlag": "string",
+      "lockedFlag": "string",
+      "totalHours": "number",
+      "appliedHours": "number",
+      "defaultHours": "number"
     }
   },
-
   "chains": {},
-
   "eventListeners": {
-    "vbEnter":     { "chains": [ { "chain": "enterChain" } ] },
-    "reload":      { "chains": [ { "chain": "loadHoldsChain" } ] },
-    "runJob":      { "chains": [ { "chain": "runJobChain" } ] },
-    "doRelease":   { "chains": [ { "chain": "releaseHoldChain" } ] },
-    "closeWeeks":  { "chains": [ { "chain": "closeDialogChain", "parameters": { "which": "weeks" } } ] },
-    "closeRelease":{ "chains": [ { "chain": "closeDialogChain", "parameters": { "which": "release" } } ] },
+    "vbEnter": {
+      "chains": [
+        {
+          "chain": "enterChain"
+        }
+      ]
+    },
+    "reload": {
+      "chains": [
+        {
+          "chain": "loadHoldsChain"
+        }
+      ]
+    },
+    "runJob": {
+      "chains": [
+        {
+          "chain": "runJobChain"
+        }
+      ]
+    },
+    "doRelease": {
+      "chains": [
+        {
+          "chain": "releaseHoldChain"
+        }
+      ]
+    },
+    "closeWeeks": {
+      "chains": [
+        {
+          "chain": "closeDialogChain",
+          "parameters": {
+            "which": "weeks"
+          }
+        }
+      ]
+    },
+    "closeRelease": {
+      "chains": [
+        {
+          "chain": "closeDialogChain",
+          "parameters": {
+            "which": "release"
+          }
+        }
+      ]
+    },
     "viewWeeks": {
       "chains": [
         {
           "chain": "viewWeeksChain",
           "parameters": {
-            "employeeId": "{{ $event.employeeId }}",
-            "label":      "{{ $event.label }}"
+            "employeeId": "{{ $current.row.employeeId }}",
+            "label": "{{ $current.row.employeeName }}"
           }
         }
       ]
@@ -86,9 +195,9 @@
         {
           "chain": "openReleaseChain",
           "parameters": {
-            "holdId":         "{{ $event.holdId }}",
-            "label":          "{{ $event.label }}",
-            "weeksDefaulted": "{{ $event.weeksDefaulted }}"
+            "holdId": "{{ $current.row.holdId }}",
+            "label": "{{ $current.row.employeeName }}",
+            "weeksDefaulted": "{{ $current.row.weeksDefaulted }}"
           }
         }
       ]
@@ -98,26 +207,45 @@
         {
           "chain": "editDefaultedChain",
           "parameters": {
-            "employeeId":   "{{ $event.employeeId }}",
-            "employeeName": "{{ $event.employeeName }}"
+            "employeeId": "{{ $current.row.employeeId }}",
+            "employeeName": "{{ $current.row.employeeName }}"
           }
         }
       ]
     }
   },
-
   "imports": {
     "components": {
-      "oj-sp-general-overview-page": { "path": "oj-sp/general-overview-page/loader" },
-      "oj-button":          { "path": "ojs/ojbutton" },
-      "oj-text-area":       { "path": "ojs/ojinputtext" },
-      "oj-select-single":   { "path": "ojs/ojselectsingle" },
-      "oj-form-layout":     { "path": "ojs/ojformlayout" },
-      "oj-table":           { "path": "ojs/ojtable" },
-      "oj-dialog":          { "path": "ojs/ojdialog" },
-      "oj-progress-circle": { "path": "ojs/ojprogress-circle" },
-      "oj-bind-if":         { "path": "ojs/ojbindif" },
-      "oj-bind-text":       { "path": "ojs/ojbindtext" }
+      "oj-sp-general-overview-page": {
+        "path": "oj-sp/general-overview-page/loader"
+      },
+      "oj-button": {
+        "path": "ojs/ojbutton"
+      },
+      "oj-text-area": {
+        "path": "ojs/ojinputtext"
+      },
+      "oj-select-single": {
+        "path": "ojs/ojselectsingle"
+      },
+      "oj-form-layout": {
+        "path": "ojs/ojformlayout"
+      },
+      "oj-table": {
+        "path": "ojs/ojtable"
+      },
+      "oj-dialog": {
+        "path": "ojs/ojdialog"
+      },
+      "oj-progress-circle": {
+        "path": "ojs/ojprogress-circle"
+      },
+      "oj-bind-if": {
+        "path": "ojs/ojbindif"
+      },
+      "oj-bind-text": {
+        "path": "ojs/ojbindtext"
+      }
     }
   }
 }

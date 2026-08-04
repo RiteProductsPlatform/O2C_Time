@@ -183,8 +183,7 @@
               <oj-bind-if test="[[ cell.row.resolvedFlag !== 'Y' ]]">
                 <oj-button chroming="outlined" disabled="[[ $variables.busy ]]"
                            :aria-label="[[ $page.functions.retryLabel(cell.row.entityKey) ]]"
-                           on-oj-action="[[ function(){
-                              $page.listeners.retryRecord({ failedId: cell.row.failedId }); } ]]">
+                           on-oj-action="[[ $listeners.retryRecord ]]">
                   <span>Retry</span>
                 </oj-button>
               </oj-bind-if>
