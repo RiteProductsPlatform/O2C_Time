@@ -203,6 +203,16 @@
               <span>
                 <oj-bind-text value="[[ cell.row.approvedWeeks ]]"></oj-bind-text> /
                 <oj-bind-text value="[[ cell.row.weekCount ]]"></oj-bind-text>
+                <!-- The weeks waiting on this manager. Approved/total alone left
+                     an employee who had just submitted looking identical to one
+                     who had entered nothing, so a submission "did not reflect"
+                     anywhere on the list the manager actually works from. -->
+                <oj-bind-if test="[[ cell.row.submittedWeeks > 0 ]]">
+                  <span class="rw-status rw-status-submitted rw-week-pending">
+                    <oj-bind-text value="[[ cell.row.submittedWeeks ]]"></oj-bind-text>
+                    <span> to review</span>
+                  </span>
+                </oj-bind-if>
               </span>
             </template>
 

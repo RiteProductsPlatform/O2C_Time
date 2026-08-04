@@ -62,6 +62,7 @@ define([
           leaveHours: e.leave_hours || 0,
           totalHours: e.total_hours || 0,
           weekCount: e.week_count || 0,
+          submittedWeeks: e.submitted_weeks || 0,
           approvedWeeks: e.approved_weeks || 0,
           rejectedWeeks: e.rejected_weeks || 0,
           monthStatus: e.month_status,

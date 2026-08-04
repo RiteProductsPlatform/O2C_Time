@@ -227,6 +227,10 @@
   .rw-status-closed       { opacity:0.85; }
   /* Rejected — needs the employee to act. */
   .rw-status-rejected     { background:#fdeceb; color:#8c1d18; }
+
+  /* The "n to review" marker beside approved/total in the monthly summary.
+     Page-level <page>.css is never loaded, so every class has to live here. */
+  .rw-week-pending { margin-left:8px; font-size:0.75rem; }
   /* Defaulted — a cut-off was missed. Warning, not error: the hours exist. */
   .rw-status-defaulted    { background:#fdf1e0; color:#6b4100; }
 

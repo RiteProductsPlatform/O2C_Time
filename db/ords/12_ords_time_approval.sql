@@ -121,7 +121,7 @@ BEGIN
       SELECT employee_id, employee_name, worker_type,
              billing_status, client_role, cap_type, cap_hours,
              billable_hours, non_billable_hours, leave_hours, total_hours,
-             week_count, approved_weeks, rejected_weeks,
+             week_count, submitted_weeks, approved_weeks, rejected_weeks,
              month_status, approved_on,
              overridden_flag, advance_closure_flag,
              project_id, period_id
@@ -244,8 +244,12 @@ BEGIN
                    WHERE ts_week_id = :tsWeekId
                    ORDER BY entry_date, project_name, task_code)
         LOOP
+          -- entry_date is ALREADY a string: V_OC_TS_DAY_DETAIL selects
+          -- TO_CHAR(e.entry_date,'YYYY-MM-DD'). Formatting it again raised
+          -- ORA-01722 on the first row, and the only handler below catches
+          -- NO_DATA_FOUND, so ORDS answered 555 and the download did nothing.
           HTP.P(d.ts_entry_id                             || ',' ||
-                TO_CHAR(d.entry_date, 'YYYY-MM-DD')       || ',' ||
+                d.entry_date                              || ',' ||
                 csv(d.day_name)                           || ',' ||
                 csv(d.project_name)                       || ',' ||
                 csv(d.task_code || ' ' || d.task_name)    || ',' ||
@@ -257,11 +261,18 @@ BEGIN
                 TO_CHAR(d.standard_hours, 'FM99990.00')   || ',' ||
                 csv(d.day_status));
         END LOOP;
-      EXCEPTION WHEN NO_DATA_FOUND THEN
-        -- Plain text, not JSON: the browser is navigating to this URL, so
-        -- whatever comes back is what the user reads.
-        OWA_UTIL.mime_header('text/plain', TRUE);
-        HTP.P('No such week.');
+      EXCEPTION
+        WHEN NO_DATA_FOUND THEN
+          -- Plain text, not JSON: the browser is navigating to this URL, so
+          -- whatever comes back is what the user reads.
+          OWA_UTIL.mime_header('text/plain', TRUE);
+          HTP.P('No such week.');
+        WHEN OTHERS THEN
+          -- Anything else used to escape and become an ORDS 555, which the
+          -- browser shows as a failed download with no clue why. Say what
+          -- happened, in the response the user is already looking at.
+          OWA_UTIL.mime_header('text/plain', TRUE);
+          HTP.P('The export could not be produced: ' || SQLERRM);
       END;
     ~');
   COMMIT;

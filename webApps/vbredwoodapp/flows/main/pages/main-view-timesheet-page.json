@@ -106,6 +106,7 @@
       "leaveHours": "number",
       "totalHours": "number",
       "weekCount": "number",
+      "submittedWeeks": "number",
       "approvedWeeks": "number",
       "rejectedWeeks": "number",
       "monthStatus": "string",

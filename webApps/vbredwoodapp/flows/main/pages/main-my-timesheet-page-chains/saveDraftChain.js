@@ -70,14 +70,34 @@ define([
           $page.variables.dirtyCells = [];
           $page.variables.hasUnsaved = false;
 
-          await Actions.fireNotificationEvent(context, {
-            summary: 'Draft saved',
-            message: ((resp.body && resp.body.saved) || cells.length) +
-                     ' entries saved.',
-            severity: 'confirmation',
-            type: 'confirmation',
-            displayMode: 'transient',
-          });
+          // Report what the SERVER saved, not what we hoped it would.
+          // `(resp.body.saved || cells.length)` quietly substituted the number
+          // sent whenever the server said 0, so a request that reached the
+          // handler and stored nothing still read as a success. A 200 with
+          // saved = 0 means the rows did not arrive in the shape the handler
+          // reads — that is worth saying, not papering over.
+          const saved = (resp.body && typeof resp.body.saved === 'number')
+            ? resp.body.saved : null;
+
+          if (saved === 0 && cells.length > 0) {
+            await Actions.fireNotificationEvent(context, {
+              summary: 'Nothing was saved',
+              message: 'The server accepted the request but stored none of the '
+                     + cells.length + ' changed cells. Your hours are still on '
+                     + 'screen — please report this rather than retyping them.',
+              severity: 'error',
+              type: 'error',
+              displayMode: 'transient',
+            });
+          } else {
+            await Actions.fireNotificationEvent(context, {
+              summary: 'Draft saved',
+              message: (saved === null ? cells.length : saved) + ' entries saved.',
+              severity: 'confirmation',
+              type: 'confirmation',
+              displayMode: 'transient',
+            });
+          }
 
           // Reload so server-derived values the client cannot compute — billing
           // loss, the roll-up, the day statuses — are the ones on screen.

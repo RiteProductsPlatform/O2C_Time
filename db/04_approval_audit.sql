@@ -281,6 +281,13 @@ SELECT e.project_id,
                            THEN w.ts_week_id END)              AS approved_weeks,
        COUNT(DISTINCT CASE WHEN w.week_status = 'Rejected'
                            THEN w.ts_week_id END)              AS rejected_weeks,
+       -- The weeks WAITING ON THE MANAGER. Without this the monthly summary
+       -- counted only approved and rejected, so an employee submitting changed
+       -- nothing a manager could see on the list they work from — the week said
+       -- Submitted one screen deeper and the row above it looked identical to
+       -- an employee who had not filled anything in.
+       COUNT(DISTINCT CASE WHEN w.week_status = 'Submitted'
+                           THEN w.ts_week_id END)              AS submitted_weeks,
        CASE
          WHEN COUNT(DISTINCT CASE WHEN w.week_status = 'Rejected'
                                   THEN w.ts_week_id END) > 0 THEN 'Rejected'
