@@ -1058,12 +1058,20 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
            updated_by   = p_actor
      WHERE ts_week_id = p_ts_week_id;
 
-    -- The days go back to Draft: they are no longer awaiting a decision.
+    -- Days stay 'Pending'. There is NO draft day status: CHK_OC_TSE_DSTAT
+    -- allows only Pending/Approved/Rejected, and DAY_STATUS defaults to
+    -- 'Pending' from the moment population creates the row. Submitted-ness
+    -- lives on the WEEK, not the day — which is the whole reason revoking only
+    -- has to move week_status. Setting it explicitly anyway so a day left
+    -- Rejected by an earlier round is cleared along with its reason.
+    --
     -- late_submission_flag is deliberately LEFT SET — the week did land after
     -- the cut-off, and revoking it does not un-happen that.
     UPDATE oc_ts_entry
-       SET day_status = 'Draft',
-           updated_by = p_actor
+       SET day_status     = 'Pending',
+           reject_reason  = NULL,
+           reject_remarks = NULL,
+           updated_by     = p_actor
      WHERE ts_week_id = p_ts_week_id;
 
     log_event(p_ts_week_id, v_emp, NULL, v_period, 'WEEK', NULL,
