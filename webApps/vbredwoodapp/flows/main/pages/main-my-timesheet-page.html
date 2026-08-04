@@ -14,8 +14,8 @@
   id="myTimesheetPage"
   class="oj-sm-width-full rw-page-full"
   display-options.responsive-padding="off"
-  page-title="My Timesheet"
-  page-subtitle="Record your time per task per day, then submit the week for approval.">
+  page-title="[[$application.translations.appBundle.my_timesheet_my_timesheet]]"
+  page-subtitle="[[$application.translations.appBundle.my_timesheet_record_your_time_per_task_per_day_then_submi]]">
 
   <div class="oj-flex oj-sm-flex-direction-column oj-sm-width-full oj-sm-gap-4x"
        slot="main">
@@ -26,23 +26,23 @@
       <div class="oj-flex oj-sm-justify-content-space-between oj-sm-align-items-start oj-sm-flex-wrap">
         <oj-form-layout max-columns="4" direction="row" label-edge="top" class="oj-flex-item">
 
-          <oj-select-single label-hint="Month"
+          <oj-select-single label-hint="[[$application.translations.appBundle.common_month]]"
                             data="[[ $application.variables.periodOptions ]]"
                             value="{{ $variables.periodId }}"
                             item-text="label"
-                            placeholder="Select month">
+                            placeholder="[[$application.translations.appBundle.my_timesheet_select_month]]">
           </oj-select-single>
 
-          <oj-select-single label-hint="Select Week"
+          <oj-select-single label-hint="[[$application.translations.appBundle.my_timesheet_select_week]]"
                             data="[[ $variables.weekOptions ]]"
                             value="{{ $variables.weekId }}"
                             item-text="label"
-                            placeholder="Select week">
+                            placeholder="[[$application.translations.appBundle.my_timesheet_select_week_2]]">
           </oj-select-single>
 
           <!-- FLD-003 weekly cut-off, shown to the employee -->
           <oj-label-value>
-            <span slot="label" class="oj-label-nowrap">Weekly cut-off</span>
+            <span slot="label" class="oj-label-nowrap"><oj-bind-text value="[[$application.translations.appBundle.my_timesheet_weekly_cut_off]]"></oj-bind-text></span>
             <span slot="value" class="oj-typography-body-md">
               <oj-bind-text value="[[ $variables.weeklyCutoff || '—' ]]"></oj-bind-text>
             </span>
@@ -51,7 +51,7 @@
           <!-- FLD-004 week status. The status text is always rendered, so the
                capsule colour is a reinforcement and never the only signal. -->
           <oj-label-value>
-            <span slot="label" class="oj-label-nowrap">Status</span>
+            <span slot="label" class="oj-label-nowrap"><oj-bind-text value="[[$application.translations.appBundle.my_timesheet_status]]"></oj-bind-text></span>
             <span slot="value">
               <span :class="[[ $application.functions.statusClass($variables.weekStatus) ]]">
                 <oj-bind-text value="[[ $variables.weekStatus ]]"></oj-bind-text>
@@ -64,7 +64,7 @@
         <!-- FLD-005 / ACT-008 -->
         <oj-button chroming="borderless" on-oj-action="[[ $listeners.showAllocation ]]">
           <span slot="startIcon" class="oj-ux-ico-information-s"></span>
-          <span>My allocation</span>
+          <span><oj-bind-text value="[[$application.translations.appBundle.my_timesheet_my_allocation]]"></oj-bind-text></span>
         </oj-button>
       </div>
 
@@ -90,7 +90,7 @@
     <oj-bind-if test="[[ $variables.weekStatus === 'Rejected' ]]">
       <div class="oj-sm-padding-3x rw-shell-error" role="alert">
         <div class="oj-typography-body-md oj-typography-semi-bold">
-          This week was rejected —
+          <oj-bind-text value="[[$application.translations.appBundle.my_timesheet_this_week_was_rejected]]"></oj-bind-text>
           <oj-bind-text value="[[ $variables.rejectReason ]]"></oj-bind-text>
         </div>
         <oj-bind-if test="[[ $variables.rejectRemarks ]]">
@@ -100,7 +100,7 @@
         </oj-bind-if>
         <oj-bind-if test="[[ $variables.rejectedDates.length > 0 ]]">
           <div class="oj-typography-body-sm oj-sm-margin-1x-top oj-flex oj-sm-gap-1x oj-sm-flex-wrap oj-sm-align-items-center">
-            <span>Rejected dates:</span>
+            <span><oj-bind-text value="[[$application.translations.appBundle.my_timesheet_rejected_dates]]"></oj-bind-text></span>
             <oj-bind-for-each data="[[ $variables.rejectedDates ]]">
               <template>
                 <span class="rw-flag rw-flag-reversal">
@@ -111,9 +111,7 @@
           </div>
         </oj-bind-if>
         <div class="oj-typography-body-sm oj-sm-margin-1x-top">
-          Correct the hours below and submit again. You can resubmit until the
-          delivery cut-off
-          (<oj-bind-text value="[[ $variables.deliveryCutoff || 'not set' ]]"></oj-bind-text>).
+          <oj-bind-text value="[[$application.translations.appBundle.my_timesheet_correct_the_hours_below_and_submit_again_you]]"></oj-bind-text><oj-bind-text value="[[ $variables.deliveryCutoff || 'not set' ]]"></oj-bind-text>).
         </div>
       </div>
     </oj-bind-if>
@@ -126,8 +124,7 @@
          Without a notice, a read-only grid just looks broken. -->
     <oj-bind-if test="[[ $variables.periodState === 'Future' ]]">
       <div class="oj-sm-padding-3x rw-notice" role="status">
-        This month has not started yet. Values are shown for reference but cannot
-        be filled in.
+        <oj-bind-text value="[[$application.translations.appBundle.my_timesheet_this_month_has_not_started_yet_values_are_sh]]"></oj-bind-text>
       </div>
     </oj-bind-if>
 
@@ -146,17 +143,13 @@
          approve and the employee is not at fault, so the wording differs. -->
     <oj-bind-if test="[[ $variables.locked ]]">
       <div class="oj-sm-padding-3x rw-notice rw-notice-warning" role="status">
-        This week was auto-submitted with default hours at the weekly cut-off and
-        is locked. Ask your manager to correct it — a defaulted timesheet also
-        holds salary until it is fixed.
+        <oj-bind-text value="[[$application.translations.appBundle.my_timesheet_this_week_was_auto_submitted_with_default_ho]]"></oj-bind-text>
       </div>
     </oj-bind-if>
 
     <oj-bind-if test="[[ !$variables.locked && $variables.defaultedBy === 'MANAGER' ]]">
       <div class="oj-sm-padding-3x rw-notice rw-notice-warning" role="status">
-        The delivery cut-off passed before your manager acted on this week. It is
-        marked Defaulted, but nothing is required from you and your salary is not
-        held — your manager can still approve it.
+        <oj-bind-text value="[[$application.translations.appBundle.my_timesheet_the_delivery_cut_off_passed_before_your_mana]]"></oj-bind-text>
       </div>
     </oj-bind-if>
 
@@ -182,12 +175,12 @@
     <div class="oj-sm-padding-4x rw-metric">
       <div class="oj-flex oj-sm-justify-content-space-between oj-sm-align-items-center oj-sm-margin-3x-bottom">
         <h2 class="oj-typography-heading-xs oj-sm-margin-0">
-          Week <oj-bind-text value="[[ $variables.weekRange ]]"></oj-bind-text>
+          <oj-bind-text value="[[$application.translations.appBundle.common_week]]"></oj-bind-text> <oj-bind-text value="[[ $variables.weekRange ]]"></oj-bind-text>
         </h2>
         <oj-bind-if test="[[ $variables.editable ]]">
           <oj-button chroming="outlined" on-oj-action="[[ $listeners.openAddLine ]]">
             <span slot="startIcon" class="oj-ux-ico-plus"></span>
-            <span>Add line</span>
+            <span><oj-bind-text value="[[$application.translations.appBundle.my_timesheet_add_line]]"></oj-bind-text></span>
           </oj-button>
         </oj-bind-if>
       </div>
@@ -197,8 +190,8 @@
 
           <!-- Header -->
           <div class="rw-ts-row rw-ts-head" role="row">
-            <span class="rw-ts-proj" role="columnheader">Project</span>
-            <span class="rw-ts-task" role="columnheader">Task (WBS)</span>
+            <span class="rw-ts-proj" role="columnheader"><oj-bind-text value="[[$application.translations.appBundle.common_project]]"></oj-bind-text></span>
+            <span class="rw-ts-task" role="columnheader"><oj-bind-text value="[[$application.translations.appBundle.my_timesheet_task_wbs]]"></oj-bind-text></span>
             <oj-bind-for-each data="[[ $variables.dayHeaders ]]">
               <template data-oj-as="day">
                 <span role="columnheader"
@@ -211,7 +204,7 @@
                 </span>
               </template>
             </oj-bind-for-each>
-            <span class="rw-ts-tot" role="columnheader">Total</span>
+            <span class="rw-ts-tot" role="columnheader"><oj-bind-text value="[[$application.translations.appBundle.my_timesheet_total]]"></oj-bind-text></span>
             <span class="rw-ts-act" role="columnheader"></span>
           </div>
 
@@ -221,8 +214,8 @@
                  (colspan=2). Split across the two columns it read as though
                  "from HCM, read-only" were the task on a line. -->
             <span class="rw-ts-proj rw-ts-syslabel" role="rowheader">
-              Shift
-              <span class="rw-ts-note">per day · from HCM, read-only</span>
+              <oj-bind-text value="[[$application.translations.appBundle.my_timesheet_shift]]"></oj-bind-text>
+              <span class="rw-ts-note"><oj-bind-text value="[[$application.translations.appBundle.my_timesheet_per_day_from_hcm_read_only]]"></oj-bind-text></span>
             </span>
             <span class="rw-ts-task"></span>
             <oj-bind-for-each data="[[ $variables.dayHeaders ]]">
@@ -239,7 +232,7 @@
           <!-- Entry lines -->
           <oj-bind-if test="[[ $variables.gridRows.length === 0 ]]">
             <div class="rw-ts-row" role="row">
-              <span class="rw-ts-empty" role="cell">No hours yet for this week.</span>
+              <span class="rw-ts-empty" role="cell"><oj-bind-text value="[[$application.translations.appBundle.my_timesheet_no_hours_yet_for_this_week]]"></oj-bind-text></span>
             </div>
           </oj-bind-if>
 
@@ -264,7 +257,7 @@
                   </oj-bind-if>
                   <oj-bind-if test="[[ line.data.isLeave === 'Y' ]]">
                     <span class="rw-flag rw-flag-advance"
-                          title="Sourced from HCM Absence. Leave is never entered here (RULE-008).">From HR</span>
+                          title="Sourced from HCM Absence. Leave is never entered here (RULE-008)."><oj-bind-text value="[[$application.translations.appBundle.my_timesheet_from_hr]]"></oj-bind-text></span>
                   </oj-bind-if>
                 </span>
 
@@ -289,13 +282,13 @@
                                        aria-label="Add 15 minutes" title="+15 min"
                                        on-oj-action="[[ $listeners.stepUp ]]">
                               <span slot="startIcon" class="oj-ux-ico-chevron-up"></span>
-                              <span>Up</span>
+                              <span><oj-bind-text value="[[$application.translations.appBundle.my_timesheet_up]]"></oj-bind-text></span>
                             </oj-button>
                             <oj-button class="rw-hr-step" display="icons" chroming="borderless"
                                        aria-label="Subtract 15 minutes" title="-15 min"
                                        on-oj-action="[[ $listeners.stepDown ]]">
                               <span slot="startIcon" class="oj-ux-ico-chevron-down"></span>
-                              <span>Down</span>
+                              <span><oj-bind-text value="[[$application.translations.appBundle.my_timesheet_down]]"></oj-bind-text></span>
                             </oj-button>
                           </span>
                         </oj-bind-if>
@@ -316,7 +309,7 @@
                                :aria-label="[[ $page.functions.removeLineLabel(line.data.taskName) ]]"
                                on-oj-action="[[ $listeners.removeLine ]]">
                       <span slot="startIcon" class="oj-ux-ico-trash"></span>
-                      <span>Remove</span>
+                      <span><oj-bind-text value="[[$application.translations.appBundle.common_remove]]"></oj-bind-text></span>
                     </oj-button>
                   </oj-bind-if>
                 </span>
@@ -328,7 +321,7 @@
           <!-- Entered per day. RULE-003 is a cross-line rule, so a breach is
                reported on the column total: no single cell is at fault. -->
           <div class="rw-ts-row rw-ts-sys rw-grid-total" role="row">
-            <span class="rw-ts-proj rw-ts-syslabel" role="rowheader">Entered</span>
+            <span class="rw-ts-proj rw-ts-syslabel" role="rowheader"><oj-bind-text value="[[$application.translations.appBundle.my_timesheet_entered]]"></oj-bind-text></span>
             <span class="rw-ts-task"></span>
             <oj-bind-for-each data="[[ $variables.dayHeaders ]]">
               <template data-oj-as="day">
@@ -345,7 +338,7 @@
 
           <!-- Standard / day (FLD-011) -->
           <div class="rw-ts-row rw-ts-sys" role="row">
-            <span class="rw-ts-proj rw-ts-syslabel" role="rowheader">Standard / day</span>
+            <span class="rw-ts-proj rw-ts-syslabel" role="rowheader"><oj-bind-text value="[[$application.translations.appBundle.my_timesheet_standard_day]]"></oj-bind-text></span>
             <span class="rw-ts-task"></span>
             <oj-bind-for-each data="[[ $variables.dayHeaders ]]">
               <template data-oj-as="day">
@@ -372,12 +365,12 @@
     <oj-bind-if test="[[ $variables.weekStatus === 'Submitted' ]]">
       <div class="oj-flex oj-sm-align-items-center oj-sm-gap-3x oj-sm-justify-content-flex-end">
         <span class="oj-flex-item oj-typography-body-sm rw-metric-label" role="status">
-          Submitted and waiting for your manager. Withdraw it if you need to change something.
+          <oj-bind-text value="[[$application.translations.appBundle.my_timesheet_submitted_and_waiting_for_your_manager_withd]]"></oj-bind-text>
         </span>
         <oj-button chroming="outlined" disabled="[[ $variables.busy ]]"
                    on-oj-action="[[ $listeners.revokeWeek ]]">
           <span slot="startIcon" class="oj-ux-ico-undo"></span>
-          <span>Withdraw submission</span>
+          <span><oj-bind-text value="[[$application.translations.appBundle.my_timesheet_withdraw_submission]]"></oj-bind-text></span>
         </oj-button>
       </div>
     </oj-bind-if>
@@ -385,12 +378,12 @@
     <oj-bind-if test="[[ $variables.editable ]]">
       <div class="oj-flex oj-sm-align-items-center oj-sm-gap-3x oj-sm-justify-content-flex-end">
         <oj-bind-if test="[[ $variables.hasUnsaved ]]">
-          <span class="oj-flex-item oj-typography-body-sm rw-metric-label" role="status">Unsaved changes</span>
+          <span class="oj-flex-item oj-typography-body-sm rw-metric-label" role="status"><oj-bind-text value="[[$application.translations.appBundle.my_timesheet_unsaved_changes]]"></oj-bind-text></span>
         </oj-bind-if>
         <oj-button chroming="outlined" disabled="[[ $variables.busy ]]"
                    on-oj-action="[[ $listeners.saveDraft ]]">
           <span slot="startIcon" :class="[[ $application.functions.busyIcon($variables.busy, 'oj-ux-ico-save') ]]"></span>
-          <span>Save draft</span>
+          <span><oj-bind-text value="[[$application.translations.appBundle.my_timesheet_save_draft]]"></oj-bind-text></span>
         </oj-button>
         <oj-button chroming="callToAction" disabled="[[ $variables.busy ]]"
                    on-oj-action="[[ $listeners.submitWeek ]]">
@@ -410,16 +403,13 @@
       <div class="oj-sm-padding-4x rw-metric">
         <div class="oj-flex oj-sm-justify-content-space-between oj-sm-align-items-start oj-sm-gap-4x">
           <div class="oj-flex-item">
-            <h2 class="oj-typography-heading-xs oj-sm-margin-0">Backdated Project / WBS change</h2>
+            <h2 class="oj-typography-heading-xs oj-sm-margin-0"><oj-bind-text value="[[$application.translations.appBundle.my_timesheet_backdated_project_wbs_change]]"></oj-bind-text></h2>
             <p class="oj-typography-body-sm rw-metric-label oj-sm-margin-1x-top">
-              This month is closed. A correction is posted day-wise as a
-              Reversal&nbsp;(&minus;) of the old line and an Adjustment&nbsp;(+) on
-              the new one, into the currently open period, and needs your
-              manager's approval.
+              <oj-bind-text value="[[$application.translations.appBundle.my_timesheet_this_month_is_closed_a_correction_is_posted_]]"></oj-bind-text>
             </p>
           </div>
           <oj-button chroming="outlined" on-oj-action="[[ $listeners.openAdjustment ]]">
-            <span>Enter new &amp; reverse old</span>
+            <span><oj-bind-text value="[[$application.translations.appBundle.my_timesheet_enter_new_reverse_old]]"></oj-bind-text></span>
           </oj-button>
         </div>
 
@@ -444,7 +434,7 @@
                 <span>
                   <oj-bind-text value="[[ cell.row.oldProjectName ]]"></oj-bind-text> /
                   <oj-bind-text value="[[ cell.row.oldTaskCode ]]"></oj-bind-text>
-                  (&minus;<oj-bind-text value="[[ $application.functions.fmtHours(cell.row.oldHours) ]]"></oj-bind-text>)
+                  <oj-bind-text value="[[$application.translations.appBundle.my_timesheet_text]]"></oj-bind-text><oj-bind-text value="[[ $application.functions.fmtHours(cell.row.oldHours) ]]"></oj-bind-text>)
                 </span>
               </template>
               <template slot="newCell" data-oj-as="cell">
@@ -455,7 +445,7 @@
                     (+<oj-bind-text value="[[ $application.functions.fmtHours(cell.row.newHours) ]]"></oj-bind-text>)
                   </oj-bind-if>
                   <oj-bind-if test="[[ !cell.row.newProjectName ]]">
-                    <span class="rw-metric-label">Reversal only</span>
+                    <span class="rw-metric-label"><oj-bind-text value="[[$application.translations.appBundle.common_reversal_only]]"></oj-bind-text></span>
                   </oj-bind-if>
                 </span>
               </template>
@@ -477,14 +467,14 @@
     <oj-bind-if test="[[ $variables.busy ]]">
       <div class="oj-flex oj-sm-align-items-center oj-sm-gap-2x" role="status" aria-live="polite">
         <oj-progress-circle size="sm" value="-1"></oj-progress-circle>
-        <span class="oj-typography-body-sm">Working…</span>
+        <span class="oj-typography-body-sm"><oj-bind-text value="[[$application.translations.appBundle.common_working]]"></oj-bind-text></span>
       </div>
     </oj-bind-if>
 
   </div>
 
   <!-- ══════════════════ Allocation dialog (ACT-008) ══════════════════ -->
-  <oj-dialog id="allocDlg" dialog-title="My allocation"
+  <oj-dialog id="allocDlg" dialog-title="[[$application.translations.appBundle.my_timesheet_my_allocation]]"
              cancel-behavior="icon">
     <div slot="body">
       <oj-bind-if test="[[ $variables.allocationWarning ]]">
@@ -510,7 +500,7 @@
     </div>
     <div slot="footer">
       <oj-button on-oj-action="[[ $listeners.closeAllocation ]]">
-        <span>Close</span>
+        <span><oj-bind-text value="[[$application.translations.appBundle.common_close]]"></oj-bind-text></span>
       </oj-button>
     </div>
   </oj-dialog>
@@ -520,11 +510,11 @@
        here rather than edited in the grid: RULE-010 constrains the task to the
        project's WBS or a common non-billable task, so the two have to be chosen
        together to be validated together. The grid then shows them read-only. -->
-  <oj-dialog id="addLineDlg" dialog-title="Add a line"
+  <oj-dialog id="addLineDlg" dialog-title="[[$application.translations.appBundle.my_timesheet_add_a_line]]"
              cancel-behavior="icon">
     <div slot="body">
       <oj-form-layout label-edge="top" max-columns="1">
-        <oj-select-single label-hint="Project" required="true"
+        <oj-select-single label-hint="[[$application.translations.appBundle.common_project]]" required="true"
                           data="[[ $variables.projectOptions ]]"
                           value="{{ $variables.newLineProjectId }}"
                           item-text="label"
@@ -533,7 +523,7 @@
 
         <!-- RULE-010: the LOV is this project's WBS plus the common
              non-billable tasks. Leave is not offered (RULE-008). -->
-        <oj-select-single label-hint="Task (WBS)" required="true"
+        <oj-select-single label-hint="[[$application.translations.appBundle.my_timesheet_task_wbs]]" required="true"
                           data="[[ $variables.taskOptions ]]"
                           value="{{ $variables.newLineTaskId }}"
                           item-text="label"
@@ -543,76 +533,75 @@
     </div>
     <div slot="footer">
       <oj-button on-oj-action="[[ $listeners.closeAddLine ]]">
-        <span>Cancel</span>
+        <span><oj-bind-text value="[[$application.translations.appBundle.common_cancel]]"></oj-bind-text></span>
       </oj-button>
       <oj-button chroming="callToAction" on-oj-action="[[ $listeners.addLine ]]">
-        <span>Add</span>
+        <span><oj-bind-text value="[[$application.translations.appBundle.my_timesheet_add]]"></oj-bind-text></span>
       </oj-button>
     </div>
   </oj-dialog>
 
   <!-- ══════════════════ Adjustment dialog (ACT-009) ══════════════════ -->
-  <oj-dialog id="adjDlg" dialog-title="Backdated Project / WBS change"
+  <oj-dialog id="adjDlg" dialog-title="[[$application.translations.appBundle.my_timesheet_backdated_project_wbs_change]]"
              cancel-behavior="icon">
     <div slot="body">
       <p class="oj-typography-body-sm rw-metric-label">
-        Adjustments are day-wise. Enter the day, the hours to take off the old
-        project/task, and where they should go instead.
+        <oj-bind-text value="[[$application.translations.appBundle.my_timesheet_adjustments_are_day_wise_enter_the_day_the_h]]"></oj-bind-text>
       </p>
 
       <oj-form-layout label-edge="top" max-columns="2">
-        <oj-input-date label-hint="Adjustment date" required="true"
+        <oj-input-date label-hint="[[$application.translations.appBundle.my_timesheet_adjustment_date]]" required="true"
                        value="{{ $variables.adjWorkDate }}">
         </oj-input-date>
 
-        <oj-input-number label-hint="Hours to reverse (−)" required="true"
+        <oj-input-number label-hint="[[$application.translations.appBundle.my_timesheet_hours_to_reverse]]" required="true"
                          value="{{ $variables.adjOldHours }}"
                          min="0" max="24" step="0.25">
         </oj-input-number>
 
-        <oj-select-single label-hint="Old project" required="true"
+        <oj-select-single label-hint="[[$application.translations.appBundle.my_timesheet_old_project]]" required="true"
                           data="[[ $variables.projectOptions ]]"
                           value="{{ $variables.adjOldProjectId }}"
                           item-text="label">
         </oj-select-single>
 
-        <oj-select-single label-hint="Old task" required="true"
+        <oj-select-single label-hint="[[$application.translations.appBundle.my_timesheet_old_task]]" required="true"
                           data="[[ $variables.taskOptions ]]"
                           value="{{ $variables.adjOldTaskId }}"
                           item-text="label">
         </oj-select-single>
 
-        <oj-select-single label-hint="New project"
+        <oj-select-single label-hint="[[$application.translations.appBundle.my_timesheet_new_project]]"
                           data="[[ $variables.projectOptions ]]"
                           value="{{ $variables.adjNewProjectId }}"
                           item-text="label"
                           on-value-changed="[[ $listeners.adjProjectChanged ]]">
         </oj-select-single>
 
-        <oj-select-single label-hint="New task"
+        <oj-select-single label-hint="[[$application.translations.appBundle.my_timesheet_new_task]]"
                           data="[[ $variables.adjTaskOptions ]]"
                           value="{{ $variables.adjNewTaskId }}"
                           item-text="label"
                           disabled="[[ !$variables.adjNewProjectId ]]">
         </oj-select-single>
 
-        <oj-input-number label-hint="Hours to add (+)"
+        <oj-input-number label-hint="[[$application.translations.appBundle.my_timesheet_hours_to_add]]"
                          value="{{ $variables.adjNewHours }}"
                          min="0" max="24" step="0.25">
         </oj-input-number>
       </oj-form-layout>
 
-      <oj-text-area label-hint="Reason" rows="2"
+      <oj-text-area label-hint="[[$application.translations.appBundle.my_timesheet_reason]]" rows="2"
                     value="{{ $variables.adjReason }}">
       </oj-text-area>
     </div>
     <div slot="footer">
       <oj-button on-oj-action="[[ $listeners.closeAdjustment ]]">
-        <span>Cancel</span>
+        <span><oj-bind-text value="[[$application.translations.appBundle.common_cancel]]"></oj-bind-text></span>
       </oj-button>
       <oj-button chroming="callToAction" disabled="[[ $variables.busy ]]"
                  on-oj-action="[[ $listeners.applyAdjustment ]]">
-        <span>Apply &amp; send for approval</span>
+        <span><oj-bind-text value="[[$application.translations.appBundle.my_timesheet_apply_send_for_approval]]"></oj-bind-text></span>
       </oj-button>
     </div>
   </oj-dialog>

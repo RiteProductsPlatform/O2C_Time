@@ -1,3 +1,1254 @@
 {
-    "root": true
+  "accrual_integration_accrual_integration": "Accrual Integration",
+  "@accrual_integration_accrual_integration": {
+    "description": "Accrual Integration"
+  },
+  "accrual_integration_confirmed_project_months_the_extract_waiting": "Confirmed project-months, the extract waiting for the accrual application, and the leave-loss annexure.",
+  "@accrual_integration_confirmed_project_months_the_extract_waiting": {
+    "description": "Confirmed project-months, the extract waiting for the accrual application, and the leave-loss annexure."
+  },
+  "common_month": "Month",
+  "@common_month": {
+    "description": "Month"
+  },
+  "accrual_integration_post_approved_adjustments": "Post approved adjustments",
+  "@accrual_integration_post_approved_adjustments": {
+    "description": "Post approved adjustments"
+  },
+  "common_refresh": "Refresh",
+  "@common_refresh": {
+    "description": "Refresh"
+  },
+  "accrual_integration_the_accrual_application": "The accrual application",
+  "@accrual_integration_the_accrual_application": {
+    "description": "The accrual application"
+  },
+  "accrual_integration_pulls": "pulls",
+  "@accrual_integration_pulls": {
+    "description": "pulls"
+  },
+  "accrual_integration_from_the_interface_table_after_month_end_app": "from the interface table\n        after month-end approval and acknowledges each batch. Rows shown as\n        pending have been written and are waiting to be collected — nothing is\n        pushed from this screen.",
+  "@accrual_integration_from_the_interface_table_after_month_end_app": {
+    "description": "from the interface table\n        after month-end approval and acknowledges each batch. Rows shown as\n        pending hav"
+  },
+  "accrual_integration_post_approved_adjustments_2": "Post approved\n        adjustments",
+  "@accrual_integration_post_approved_adjustments_2": {
+    "description": "Post approved\n        adjustments"
+  },
+  "accrual_integration_to_add_them_to_the_interface": "to add them to the interface.",
+  "@accrual_integration_to_add_them_to_the_interface": {
+    "description": "to add them to the interface."
+  },
+  "accrual_integration_confirmed_project_months": "Confirmed project-months",
+  "@accrual_integration_confirmed_project_months": {
+    "description": "Confirmed project-months"
+  },
+  "accrual_integration_no_month_confirmed_yet_for_this_period": "No month confirmed yet for this period.",
+  "@accrual_integration_no_month_confirmed_yet_for_this_period": {
+    "description": "No month confirmed yet for this period."
+  },
+  "common_advance_closure": "Advance closure",
+  "@common_advance_closure": {
+    "description": "Advance closure"
+  },
+  "accrual_integration_pulled": "pulled /",
+  "@accrual_integration_pulled": {
+    "description": "pulled /"
+  },
+  "accrual_integration_pending": "pending",
+  "@accrual_integration_pending": {
+    "description": "pending"
+  },
+  "accrual_integration_extract": "Extract",
+  "@accrual_integration_extract": {
+    "description": "Extract"
+  },
+  "accrual_integration_extract_2": "Extract —",
+  "@accrual_integration_extract_2": {
+    "description": "Extract —"
+  },
+  "accrual_integration_all": "All",
+  "@accrual_integration_all": {
+    "description": "All"
+  },
+  "common_billed": "Billed",
+  "@common_billed": {
+    "description": "Billed"
+  },
+  "accrual_integration_unbilled": "Unbilled",
+  "@accrual_integration_unbilled": {
+    "description": "Unbilled"
+  },
+  "common_leave": "Leave",
+  "@common_leave": {
+    "description": "Leave"
+  },
+  "accrual_integration_net_of_reversal_adjustment": "Net of Reversal + Adjustment",
+  "@accrual_integration_net_of_reversal_adjustment": {
+    "description": "Net of Reversal + Adjustment"
+  },
+  "accrual_integration_no_rows_in_this_view": "No rows in this view.",
+  "@accrual_integration_no_rows_in_this_view": {
+    "description": "No rows in this view."
+  },
+  "accrual_integration_leave_loss_invoice_annexure": "Leave-loss invoice annexure",
+  "@accrual_integration_leave_loss_invoice_annexure": {
+    "description": "Leave-loss invoice annexure"
+  },
+  "accrual_integration_approved_coverage_for_the_month_absence_hour": "Approved coverage for the month: absence hours that became billable\n          because a colleague covered the day.",
+  "@accrual_integration_approved_coverage_for_the_month_absence_hour": {
+    "description": "Approved coverage for the month: absence hours that became billable\n          because a colleague covered the day."
+  },
+  "common_working": "Working…",
+  "@common_working": {
+    "description": "Working…"
+  },
+  "approval_detail_approval_detail": "Approval Detail",
+  "@approval_detail_approval_detail": {
+    "description": "Approval Detail"
+  },
+  "approval_detail_approve_or_reject_by_week_or_open_a_week_and": "Approve or reject by week, or open a week and act on specific dates.",
+  "@approval_detail_approve_or_reject_by_week_or_open_a_week_and": {
+    "description": "Approve or reject by week, or open a week and act on specific dates."
+  },
+  "common_reject": "Reject",
+  "@common_reject": {
+    "description": "Reject"
+  },
+  "common_rejection_reason": "Rejection reason",
+  "@common_rejection_reason": {
+    "description": "Rejection reason"
+  },
+  "common_select_a_reason": "Select a reason",
+  "@common_select_a_reason": {
+    "description": "Select a reason"
+  },
+  "common_remarks": "Remarks",
+  "@common_remarks": {
+    "description": "Remarks"
+  },
+  "common_what_needs_to_change": "What needs to change?",
+  "@common_what_needs_to_change": {
+    "description": "What needs to change?"
+  },
+  "approval_detail_correct_hours": "Correct hours",
+  "@approval_detail_correct_hours": {
+    "description": "Correct hours"
+  },
+  "approval_detail_corrected_hours": "Corrected hours",
+  "@approval_detail_corrected_hours": {
+    "description": "Corrected hours"
+  },
+  "approval_detail_reason_for_the_correction": "Reason for the correction",
+  "@approval_detail_reason_for_the_correction": {
+    "description": "Reason for the correction"
+  },
+  "approval_detail_kept_in_the_audit_trail": "Kept in the audit trail",
+  "@approval_detail_kept_in_the_audit_trail": {
+    "description": "Kept in the audit trail"
+  },
+  "approval_detail_approve_all_pending_weeks": "Approve all pending weeks",
+  "@approval_detail_approve_all_pending_weeks": {
+    "description": "Approve all pending weeks"
+  },
+  "approval_detail_monthly_summary": "Monthly summary",
+  "@approval_detail_monthly_summary": {
+    "description": "Monthly summary"
+  },
+  "common_weeks": "Weeks",
+  "@common_weeks": {
+    "description": "Weeks"
+  },
+  "approval_detail_weekly_cut_off": "weekly cut-off",
+  "@approval_detail_weekly_cut_off": {
+    "description": "weekly cut-off"
+  },
+  "common_selected": "selected",
+  "@common_selected": {
+    "description": "selected"
+  },
+  "common_select_all_pending": "Select all pending",
+  "@common_select_all_pending": {
+    "description": "Select all pending"
+  },
+  "common_clear": "Clear",
+  "@common_clear": {
+    "description": "Clear"
+  },
+  "common_reject_selected": "Reject selected",
+  "@common_reject_selected": {
+    "description": "Reject selected"
+  },
+  "common_approve_selected": "Approve selected",
+  "@common_approve_selected": {
+    "description": "Approve selected"
+  },
+  "approval_detail_no_submitted_weeks_this_employee_has_no_week": "No submitted weeks — this employee has no weeks on this project for this month.",
+  "@approval_detail_no_submitted_weeks_this_employee_has_no_week": {
+    "description": "No submitted weeks — this employee has no weeks on this project for this month."
+  },
+  "common_week": "Week",
+  "@common_week": {
+    "description": "Week"
+  },
+  "approval_detail_appr": "appr.",
+  "@approval_detail_appr": {
+    "description": "appr."
+  },
+  "approval_detail_rej": "rej.",
+  "@approval_detail_rej": {
+    "description": "rej."
+  },
+  "common_open": "Open",
+  "@common_open": {
+    "description": "Open"
+  },
+  "approval_detail_all_weeks": "All weeks",
+  "@approval_detail_all_weeks": {
+    "description": "All weeks"
+  },
+  "approval_detail_dates_selected": "dates selected",
+  "@approval_detail_dates_selected": {
+    "description": "dates selected"
+  },
+  "approval_detail_download_csv": "Download CSV",
+  "@approval_detail_download_csv": {
+    "description": "Download CSV"
+  },
+  "approval_detail_select_all_dates": "Select all dates",
+  "@approval_detail_select_all_dates": {
+    "description": "Select all dates"
+  },
+  "approval_detail_reject_dates": "Reject dates",
+  "@approval_detail_reject_dates": {
+    "description": "Reject dates"
+  },
+  "approval_detail_approve_dates": "Approve dates",
+  "@approval_detail_approve_dates": {
+    "description": "Approve dates"
+  },
+  "approval_detail_cell_s_corrected_in_this_sitting_close_the_w": "cell(s) corrected in this sitting. Close the week with",
+  "@approval_detail_cell_s_corrected_in_this_sitting_close_the_w": {
+    "description": "cell(s) corrected in this sitting. Close the week with"
+  },
+  "approval_detail_so_it_is_recorded_as_overridden_and_approved": "so it is recorded as\n                \"Overridden and approved\" rather than a plain approval.",
+  "@approval_detail_so_it_is_recorded_as_overridden_and_approved": {
+    "description": "so it is recorded as\n                \"Overridden and approved\" rather than a plain approval."
+  },
+  "approval_detail_no_time_lines_on_this_week": "No time lines on this week.",
+  "@approval_detail_no_time_lines_on_this_week": {
+    "description": "No time lines on this week."
+  },
+  "approval_detail_reversal": "Reversal",
+  "@approval_detail_reversal": {
+    "description": "Reversal"
+  },
+  "approval_detail_adjustment": "Adjustment",
+  "@approval_detail_adjustment": {
+    "description": "Adjustment"
+  },
+  "approval_detail_default_hours": "Default hours",
+  "@approval_detail_default_hours": {
+    "description": "Default hours"
+  },
+  "common_correct": "Correct",
+  "@common_correct": {
+    "description": "Correct"
+  },
+  "approval_detail_change_history": "Change history",
+  "@approval_detail_change_history": {
+    "description": "Change history"
+  },
+  "approval_detail_every_manager_correction_and_retro_adjustmen": "Every manager correction and retro adjustment on this week, with the\n          employee's original value retained.",
+  "@approval_detail_every_manager_correction_and_retro_adjustmen": {
+    "description": "Every manager correction and retro adjustment on this week, with the\n          employee's original value retained."
+  },
+  "approval_detail_nothing_has_been_changed_on_this_week": "Nothing has been changed on this week.",
+  "@approval_detail_nothing_has_been_changed_on_this_week": {
+    "description": "Nothing has been changed on this week."
+  },
+  "common_cancel": "Cancel",
+  "@common_cancel": {
+    "description": "Cancel"
+  },
+  "approval_detail_the_employee_s_original_value_is_kept_in_the": "The employee's original value is kept in the change history. This corrects\n        the cell only — close the week with",
+  "@approval_detail_the_employee_s_original_value_is_kept_in_the": {
+    "description": "The employee's original value is kept in the change history. This corrects\n        the cell only — close the week with"
+  },
+  "approval_detail_when_you_are_done": "when you are done.",
+  "@approval_detail_when_you_are_done": {
+    "description": "when you are done."
+  },
+  "approval_detail_apply_correction": "Apply correction",
+  "@approval_detail_apply_correction": {
+    "description": "Apply correction"
+  },
+  "common_approve_all": "Approve all",
+  "@common_approve_all": {
+    "description": "Approve all"
+  },
+  "calendar_sync_calendar_fusion_sync": "Calendar (Fusion Sync)",
+  "@calendar_sync_calendar_fusion_sync": {
+    "description": "Calendar (Fusion Sync)"
+  },
+  "calendar_sync_what_has_been_synced_from_oracle_fusion_by_l": "What has been synced from Oracle Fusion, by layer, and a re-sync per layer. Calendar days are authored in Fusion, never here.",
+  "@calendar_sync_what_has_been_synced_from_oracle_fusion_by_l": {
+    "description": "What has been synced from Oracle Fusion, by layer, and a re-sync per layer. Calendar days are authored in Fusion, never "
+  },
+  "calendar_sync_calendar_days": "Calendar days",
+  "@calendar_sync_calendar_days": {
+    "description": "Calendar days"
+  },
+  "calendar_sync_scope_key": "Scope key",
+  "@calendar_sync_scope_key": {
+    "description": "Scope key"
+  },
+  "calendar_sync_from": "From",
+  "@calendar_sync_from": {
+    "description": "From"
+  },
+  "calendar_sync_to": "To",
+  "@calendar_sync_to": {
+    "description": "To"
+  },
+  "calendar_sync_layers": "Layers",
+  "@calendar_sync_layers": {
+    "description": "Layers"
+  },
+  "calendar_sync_where_two_layers_cover_the_same_day_the_high": "Where two layers cover the same day the higher precedence wins:",
+  "@calendar_sync_where_two_layers_cover_the_same_day_the_high": {
+    "description": "Where two layers cover the same day the higher precedence wins:"
+  },
+  "calendar_sync_non_working": "non-working",
+  "@calendar_sync_non_working": {
+    "description": "non-working"
+  },
+  "calendar_sync_never_synced": "Never synced",
+  "@calendar_sync_never_synced": {
+    "description": "Never synced"
+  },
+  "calendar_sync_inspect": "Inspect",
+  "@calendar_sync_inspect": {
+    "description": "Inspect"
+  },
+  "calendar_sync_sync": "Sync",
+  "@calendar_sync_sync": {
+    "description": "Sync"
+  },
+  "calendar_sync_layer": "Layer",
+  "@calendar_sync_layer": {
+    "description": "Layer"
+  },
+  "calendar_sync_scope_keys_are_exact": ".\n        Scope keys are exact —",
+  "@calendar_sync_scope_keys_are_exact": {
+    "description": ".\n        Scope keys are exact —"
+  },
+  "calendar_sync_show_days": "Show days",
+  "@calendar_sync_show_days": {
+    "description": "Show days"
+  },
+  "common_close": "Close",
+  "@common_close": {
+    "description": "Close"
+  },
+  "client_timesheets_client_timesheets": "Client Timesheets",
+  "@client_timesheets_client_timesheets": {
+    "description": "Client Timesheets"
+  },
+  "client_timesheets_attach_the_customer_approved_timesheet_for_a": "Attach the customer-approved timesheet for a project and billing period. Several documents per period are fine, and there is no approval step.",
+  "@client_timesheets_attach_the_customer_approved_timesheet_for_a": {
+    "description": "Attach the customer-approved timesheet for a project and billing period. Several documents per period are fine, and ther"
+  },
+  "common_project": "Project",
+  "@common_project": {
+    "description": "Project"
+  },
+  "common_select_project": "Select project",
+  "@common_select_project": {
+    "description": "Select project"
+  },
+  "client_timesheets_billing_period": "Billing Period",
+  "@client_timesheets_billing_period": {
+    "description": "Billing Period"
+  },
+  "common_select_period": "Select period",
+  "@common_select_period": {
+    "description": "Select period"
+  },
+  "client_timesheets_display": "Display",
+  "@client_timesheets_display": {
+    "description": "Display"
+  },
+  "client_timesheets_week_number": "Week number",
+  "@client_timesheets_week_number": {
+    "description": "Week number"
+  },
+  "client_timesheets_remove_document": "Remove document",
+  "@client_timesheets_remove_document": {
+    "description": "Remove document"
+  },
+  "client_timesheets_attach_customer_timesheet": "Attach Customer Timesheet",
+  "@client_timesheets_attach_customer_timesheet": {
+    "description": "Attach Customer Timesheet"
+  },
+  "client_timesheets_choose_a_project_and_a_billing_period_first": "Choose a project and a billing period first.",
+  "@client_timesheets_choose_a_project_and_a_billing_period_first": {
+    "description": "Choose a project and a billing period first."
+  },
+  "client_timesheets_attach_document": "Attach document",
+  "@client_timesheets_attach_document": {
+    "description": "Attach document"
+  },
+  "client_timesheets_attached_documents": "Attached documents",
+  "@client_timesheets_attached_documents": {
+    "description": "Attached documents"
+  },
+  "client_timesheets_no_documents_attached_yet": "No documents attached yet.",
+  "@client_timesheets_no_documents_attached_yet": {
+    "description": "No documents attached yet."
+  },
+  "client_timesheets_download": "Download",
+  "@client_timesheets_download": {
+    "description": "Download"
+  },
+  "common_remove": "Remove",
+  "@common_remove": {
+    "description": "Remove"
+  },
+  "client_timesheets_signed_client_timesheets_are_billing_evidenc": "Signed client timesheets are billing evidence and are retained for audit.",
+  "@client_timesheets_signed_client_timesheets_are_billing_evidenc": {
+    "description": "Signed client timesheets are billing evidence and are retained for audit."
+  },
+  "integrations_integrations": "Integrations",
+  "@integrations_integrations": {
+    "description": "Integrations"
+  },
+  "integrations_reference_catalogue_of_the_oracle_fusion_and": "Reference catalogue of the Oracle Fusion and OTL surfaces this module reads from and writes to.",
+  "@integrations_reference_catalogue_of_the_oracle_fusion_and": {
+    "description": "Reference catalogue of the Oracle Fusion and OTL surfaces this module reads from and writes to."
+  },
+  "integrations_area": "Area",
+  "@integrations_area": {
+    "description": "Area"
+  },
+  "integrations_fusion_connection": "Fusion connection",
+  "@integrations_fusion_connection": {
+    "description": "Fusion connection"
+  },
+  "integrations_asks_hcm_for_one_worker_through_the_vb_proxy": "Asks HCM for one worker through the VB proxy. No credential reaches\n            this browser.",
+  "@integrations_asks_hcm_for_one_worker_through_the_vb_proxy": {
+    "description": "Asks HCM for one worker through the VB proxy. No credential reaches\n            this browser."
+  },
+  "integrations_connected": "Connected",
+  "@integrations_connected": {
+    "description": "Connected"
+  },
+  "integrations_not_connected": "Not connected",
+  "@integrations_not_connected": {
+    "description": "Not connected"
+  },
+  "integrations_otl_push_readiness": "OTL push readiness",
+  "@integrations_otl_push_readiness": {
+    "description": "OTL push readiness"
+  },
+  "integrations_check_readiness": "Check readiness",
+  "@integrations_check_readiness": {
+    "description": "Check readiness"
+  },
+  "integrations_not_checked_yet_or_no_active_project_has_any": "Not checked yet, or no active project has any allocation.",
+  "@integrations_not_checked_yet_or_no_active_project_has_any": {
+    "description": "Not checked yet, or no active project has any allocation."
+  },
+  "integrations_catalogue": "Catalogue\n        (",
+  "@integrations_catalogue": {
+    "description": "Catalogue\n        ("
+  },
+  "leave_loss_coverage_leave_loss_coverage": "Leave Loss Coverage",
+  "@leave_loss_coverage_leave_loss_coverage": {
+    "description": "Leave Loss Coverage"
+  },
+  "leave_loss_coverage_cover_an_absentee_with_an_unbilled_colleague": "Cover an absentee with an unbilled colleague so the absence hours count as billed.",
+  "@leave_loss_coverage_cover_an_absentee_with_an_unbilled_colleague": {
+    "description": "Cover an absentee with an unbilled colleague so the absence hours count as billed."
+  },
+  "leave_loss_coverage_project_fcp_with_leave_loss": "Project (FCP with leave loss)",
+  "@leave_loss_coverage_project_fcp_with_leave_loss": {
+    "description": "Project (FCP with leave loss)"
+  },
+  "leave_loss_coverage_assign_a_covering_colleague": "Assign a covering colleague",
+  "@leave_loss_coverage_assign_a_covering_colleague": {
+    "description": "Assign a covering colleague"
+  },
+  "leave_loss_coverage_covering_colleague": "Covering colleague",
+  "@leave_loss_coverage_covering_colleague": {
+    "description": "Covering colleague"
+  },
+  "leave_loss_coverage_select_a_colleague": "Select a colleague",
+  "@leave_loss_coverage_select_a_colleague": {
+    "description": "Select a colleague"
+  },
+  "leave_loss_coverage_approve_all_assigned_coverage": "Approve all assigned coverage",
+  "@leave_loss_coverage_approve_all_assigned_coverage": {
+    "description": "Approve all assigned coverage"
+  },
+  "leave_loss_coverage_refresh_absences_from_hr": "Refresh absences from HR",
+  "@leave_loss_coverage_refresh_absences_from_hr": {
+    "description": "Refresh absences from HR"
+  },
+  "leave_loss_coverage_none_of_your_projects_is_a_fixed_capacity_pr": "None of your projects is a Fixed Capacity Project with leave loss\n          enabled, so there is nothing to cover here.",
+  "@leave_loss_coverage_none_of_your_projects_is_a_fixed_capacity_pr": {
+    "description": "None of your projects is a Fixed Capacity Project with leave loss\n          enabled, so there is nothing to cover here."
+  },
+  "leave_loss_coverage_uncovered": "Uncovered",
+  "@leave_loss_coverage_uncovered": {
+    "description": "Uncovered"
+  },
+  "leave_loss_coverage_assigned_awaiting_approval": "Assigned, awaiting approval",
+  "@leave_loss_coverage_assigned_awaiting_approval": {
+    "description": "Assigned, awaiting approval"
+  },
+  "common_approved": "Approved",
+  "@common_approved": {
+    "description": "Approved"
+  },
+  "leave_loss_coverage_hours_recovered_as_billed": "Hours recovered as billed",
+  "@leave_loss_coverage_hours_recovered_as_billed": {
+    "description": "Hours recovered as billed"
+  },
+  "leave_loss_coverage_absences": "Absences",
+  "@leave_loss_coverage_absences": {
+    "description": "Absences"
+  },
+  "leave_loss_coverage_approve_all_assigned": "Approve all assigned\n            (",
+  "@leave_loss_coverage_approve_all_assigned": {
+    "description": "Approve all assigned\n            ("
+  },
+  "leave_loss_coverage_no_absence_records_this_period_use": "No absence records this period. Use",
+  "@leave_loss_coverage_no_absence_records_this_period_use": {
+    "description": "No absence records this period. Use"
+  },
+  "leave_loss_coverage_if_leave_has_since_been_approved": "if leave has since been approved.",
+  "@leave_loss_coverage_if_leave_has_since_been_approved": {
+    "description": "if leave has since been approved."
+  },
+  "leave_loss_coverage_no_cover_assigned": "No cover assigned",
+  "@leave_loss_coverage_no_cover_assigned": {
+    "description": "No cover assigned"
+  },
+  "common_approve": "Approve",
+  "@common_approve": {
+    "description": "Approve"
+  },
+  "leave_loss_coverage_only_colleagues_who_are_unbilled_on_this_pro": "Only colleagues who are unbilled on this project that day, not absent\n        themselves and not already covering someone are listed (RULE-014).",
+  "@leave_loss_coverage_only_colleagues_who_are_unbilled_on_this_pro": {
+    "description": "Only colleagues who are unbilled on this project that day, not absent\n        themselves and not already covering someon"
+  },
+  "leave_loss_coverage_nobody_is_eligible_to_cover_this_day_the_abs": "Nobody is eligible to cover this day. The absence stays unbilled — that\n          is a real outcome, not an error.",
+  "@leave_loss_coverage_nobody_is_eligible_to_cover_this_day_the_abs": {
+    "description": "Nobody is eligible to cover this day. The absence stays unbilled — that\n          is a real outcome, not an error."
+  },
+  "leave_loss_coverage_assign": "Assign",
+  "@leave_loss_coverage_assign": {
+    "description": "Assign"
+  },
+  "common_email_address": "Email address",
+  "@common_email_address": {
+    "description": "Email address"
+  },
+  "login_you_rite_digital": "you@rite.digital",
+  "@login_you_rite_digital": {
+    "description": "you@rite.digital"
+  },
+  "common_password": "Password",
+  "@common_password": {
+    "description": "Password"
+  },
+  "common_rite_digital": "Rite Digital",
+  "@common_rite_digital": {
+    "description": "Rite Digital"
+  },
+  "common_o2c_platform": "O2C Platform",
+  "@common_o2c_platform": {
+    "description": "O2C Platform"
+  },
+  "login_record_time_against_your_projects_submit_it_": "Record time against your projects, submit it weekly, and let your\n          manager approve it — with holidays, shifts and absences already\n          filled in from Oracle Fusion.",
+  "@login_record_time_against_your_projects_submit_it_": {
+    "description": "Record time against your projects, submit it weekly, and let your\n          manager approve it — with holidays, shifts a"
+  },
+  "login_pre_populated_from_your_work_pattern_and_cal": "Pre-populated from your work pattern and calendar",
+  "@login_pre_populated_from_your_work_pattern_and_cal": {
+    "description": "Pre-populated from your work pattern and calendar"
+  },
+  "login_weekly_submission_with_monthly_confirmation": "Weekly submission with monthly confirmation",
+  "@login_weekly_submission_with_monthly_confirmation": {
+    "description": "Weekly submission with monthly confirmation"
+  },
+  "login_leave_loss_coverage_and_salary_stopping": "Leave loss coverage and salary stopping",
+  "@login_leave_loss_coverage_and_salary_stopping": {
+    "description": "Leave loss coverage and salary stopping"
+  },
+  "login_approved_time_flows_straight_into_revenue_ac": "Approved time flows straight into revenue accrual",
+  "@login_approved_time_flows_straight_into_revenue_ac": {
+    "description": "Approved time flows straight into revenue accrual"
+  },
+  "login_welcome_back": "Welcome back",
+  "@login_welcome_back": {
+    "description": "Welcome back"
+  },
+  "login_sign_in_to_your_timesheet": "Sign in to your timesheet",
+  "@login_sign_in_to_your_timesheet": {
+    "description": "Sign in to your timesheet"
+  },
+  "login_first_time_here_or_been_invited": "First time here, or been invited?",
+  "@login_first_time_here_or_been_invited": {
+    "description": "First time here, or been invited?"
+  },
+  "common_set_your_password": "Set your password",
+  "@common_set_your_password": {
+    "description": "Set your password"
+  },
+  "my_timesheet_my_timesheet": "My Timesheet",
+  "@my_timesheet_my_timesheet": {
+    "description": "My Timesheet"
+  },
+  "my_timesheet_record_your_time_per_task_per_day_then_submi": "Record your time per task per day, then submit the week for approval.",
+  "@my_timesheet_record_your_time_per_task_per_day_then_submi": {
+    "description": "Record your time per task per day, then submit the week for approval."
+  },
+  "my_timesheet_select_month": "Select month",
+  "@my_timesheet_select_month": {
+    "description": "Select month"
+  },
+  "my_timesheet_select_week": "Select Week",
+  "@my_timesheet_select_week": {
+    "description": "Select Week"
+  },
+  "my_timesheet_select_week_2": "Select week",
+  "@my_timesheet_select_week_2": {
+    "description": "Select week"
+  },
+  "my_timesheet_my_allocation": "My allocation",
+  "@my_timesheet_my_allocation": {
+    "description": "My allocation"
+  },
+  "my_timesheet_add_a_line": "Add a line",
+  "@my_timesheet_add_a_line": {
+    "description": "Add a line"
+  },
+  "my_timesheet_task_wbs": "Task (WBS)",
+  "@my_timesheet_task_wbs": {
+    "description": "Task (WBS)"
+  },
+  "my_timesheet_backdated_project_wbs_change": "Backdated Project / WBS change",
+  "@my_timesheet_backdated_project_wbs_change": {
+    "description": "Backdated Project / WBS change"
+  },
+  "my_timesheet_adjustment_date": "Adjustment date",
+  "@my_timesheet_adjustment_date": {
+    "description": "Adjustment date"
+  },
+  "my_timesheet_hours_to_reverse": "Hours to reverse (−)",
+  "@my_timesheet_hours_to_reverse": {
+    "description": "Hours to reverse (−)"
+  },
+  "my_timesheet_old_project": "Old project",
+  "@my_timesheet_old_project": {
+    "description": "Old project"
+  },
+  "my_timesheet_old_task": "Old task",
+  "@my_timesheet_old_task": {
+    "description": "Old task"
+  },
+  "my_timesheet_new_project": "New project",
+  "@my_timesheet_new_project": {
+    "description": "New project"
+  },
+  "my_timesheet_new_task": "New task",
+  "@my_timesheet_new_task": {
+    "description": "New task"
+  },
+  "my_timesheet_hours_to_add": "Hours to add (+)",
+  "@my_timesheet_hours_to_add": {
+    "description": "Hours to add (+)"
+  },
+  "my_timesheet_reason": "Reason",
+  "@my_timesheet_reason": {
+    "description": "Reason"
+  },
+  "my_timesheet_weekly_cut_off": "Weekly cut-off",
+  "@my_timesheet_weekly_cut_off": {
+    "description": "Weekly cut-off"
+  },
+  "my_timesheet_status": "Status",
+  "@my_timesheet_status": {
+    "description": "Status"
+  },
+  "my_timesheet_this_week_was_rejected": "This week was rejected —",
+  "@my_timesheet_this_week_was_rejected": {
+    "description": "This week was rejected —"
+  },
+  "my_timesheet_rejected_dates": "Rejected dates:",
+  "@my_timesheet_rejected_dates": {
+    "description": "Rejected dates:"
+  },
+  "my_timesheet_correct_the_hours_below_and_submit_again_you": "Correct the hours below and submit again. You can resubmit until the\n          delivery cut-off\n          (",
+  "@my_timesheet_correct_the_hours_below_and_submit_again_you": {
+    "description": "Correct the hours below and submit again. You can resubmit until the\n          delivery cut-off\n          ("
+  },
+  "my_timesheet_this_month_has_not_started_yet_values_are_sh": "This month has not started yet. Values are shown for reference but cannot\n        be filled in.",
+  "@my_timesheet_this_month_has_not_started_yet_values_are_sh": {
+    "description": "This month has not started yet. Values are shown for reference but cannot\n        be filled in."
+  },
+  "my_timesheet_this_week_was_auto_submitted_with_default_ho": "This week was auto-submitted with default hours at the weekly cut-off and\n        is locked. Ask your manager to correct it — a defaulted timesheet also\n        holds salary until it is fixed.",
+  "@my_timesheet_this_week_was_auto_submitted_with_default_ho": {
+    "description": "This week was auto-submitted with default hours at the weekly cut-off and\n        is locked. Ask your manager to correct"
+  },
+  "my_timesheet_the_delivery_cut_off_passed_before_your_mana": "The delivery cut-off passed before your manager acted on this week. It is\n        marked Defaulted, but nothing is required from you and your salary is not\n        held — your manager can still approve it.",
+  "@my_timesheet_the_delivery_cut_off_passed_before_your_mana": {
+    "description": "The delivery cut-off passed before your manager acted on this week. It is\n        marked Defaulted, but nothing is requi"
+  },
+  "my_timesheet_add_line": "Add line",
+  "@my_timesheet_add_line": {
+    "description": "Add line"
+  },
+  "my_timesheet_total": "Total",
+  "@my_timesheet_total": {
+    "description": "Total"
+  },
+  "my_timesheet_shift": "Shift",
+  "@my_timesheet_shift": {
+    "description": "Shift"
+  },
+  "my_timesheet_per_day_from_hcm_read_only": "per day · from HCM, read-only",
+  "@my_timesheet_per_day_from_hcm_read_only": {
+    "description": "per day · from HCM, read-only"
+  },
+  "my_timesheet_no_hours_yet_for_this_week": "No hours yet for this week.",
+  "@my_timesheet_no_hours_yet_for_this_week": {
+    "description": "No hours yet for this week."
+  },
+  "my_timesheet_from_hr": "From HR",
+  "@my_timesheet_from_hr": {
+    "description": "From HR"
+  },
+  "my_timesheet_up": "Up",
+  "@my_timesheet_up": {
+    "description": "Up"
+  },
+  "my_timesheet_down": "Down",
+  "@my_timesheet_down": {
+    "description": "Down"
+  },
+  "my_timesheet_entered": "Entered",
+  "@my_timesheet_entered": {
+    "description": "Entered"
+  },
+  "my_timesheet_standard_day": "Standard / day",
+  "@my_timesheet_standard_day": {
+    "description": "Standard / day"
+  },
+  "my_timesheet_submitted_and_waiting_for_your_manager_withd": "Submitted and waiting for your manager. Withdraw it if you need to change something.",
+  "@my_timesheet_submitted_and_waiting_for_your_manager_withd": {
+    "description": "Submitted and waiting for your manager. Withdraw it if you need to change something."
+  },
+  "my_timesheet_withdraw_submission": "Withdraw submission",
+  "@my_timesheet_withdraw_submission": {
+    "description": "Withdraw submission"
+  },
+  "my_timesheet_unsaved_changes": "Unsaved changes",
+  "@my_timesheet_unsaved_changes": {
+    "description": "Unsaved changes"
+  },
+  "my_timesheet_save_draft": "Save draft",
+  "@my_timesheet_save_draft": {
+    "description": "Save draft"
+  },
+  "common_reversal_only": "Reversal only",
+  "@common_reversal_only": {
+    "description": "Reversal only"
+  },
+  "my_timesheet_add": "Add",
+  "@my_timesheet_add": {
+    "description": "Add"
+  },
+  "my_timesheet_adjustments_are_day_wise_enter_the_day_the_h": "Adjustments are day-wise. Enter the day, the hours to take off the old\n        project/task, and where they should go instead.",
+  "@my_timesheet_adjustments_are_day_wise_enter_the_day_the_h": {
+    "description": "Adjustments are day-wise. Enter the day, the hours to take off the old\n        project/task, and where they should go in"
+  },
+  "salary_stopping_salary_stopping": "Salary Stopping",
+  "@salary_stopping_salary_stopping": {
+    "description": "Salary Stopping"
+  },
+  "salary_stopping_employees_whose_timesheet_defaulted_and_the_": "Employees whose timesheet defaulted, and the release once it is corrected.",
+  "@salary_stopping_employees_whose_timesheet_defaulted_and_the_": {
+    "description": "Employees whose timesheet defaulted, and the release once it is corrected."
+  },
+  "salary_stopping_weeks_breakdown": "Weeks breakdown",
+  "@salary_stopping_weeks_breakdown": {
+    "description": "Weeks breakdown"
+  },
+  "salary_stopping_release_the_salary_hold": "Release the salary hold",
+  "@salary_stopping_release_the_salary_hold": {
+    "description": "Release the salary hold"
+  },
+  "salary_stopping_why_is_the_hold_being_released": "Why is the hold being released?",
+  "@salary_stopping_why_is_the_hold_being_released": {
+    "description": "Why is the hold being released?"
+  },
+  "salary_stopping_re_evaluate_holds": "Re-evaluate holds",
+  "@salary_stopping_re_evaluate_holds": {
+    "description": "Re-evaluate holds"
+  },
+  "salary_stopping_salary_held": "Salary held",
+  "@salary_stopping_salary_held": {
+    "description": "Salary held"
+  },
+  "salary_stopping_released": "Released",
+  "@salary_stopping_released": {
+    "description": "Released"
+  },
+  "salary_stopping_past_the_release_window": "Past the release window",
+  "@salary_stopping_past_the_release_window": {
+    "description": "Past the release window"
+  },
+  "salary_stopping_hold_s_are_past_the_release_window_what_shou": "hold(s) are past the release window. What should happen then — forfeit\n          or escalate — has not been decided (RA-012), so they are flagged here\n          and left for a human to resolve.",
+  "@salary_stopping_hold_s_are_past_the_release_window_what_shou": {
+    "description": "hold(s) are past the release window. What should happen then — forfeit\n          or escalate — has not been decided (RA-"
+  },
+  "salary_stopping_holds": "Holds",
+  "@salary_stopping_holds": {
+    "description": "Holds"
+  },
+  "salary_stopping_no_defaulted_timesheets_every_timesheet_was_": "No defaulted timesheets — every timesheet was filed this month.",
+  "@salary_stopping_no_defaulted_timesheets_every_timesheet_was_": {
+    "description": "No defaulted timesheets — every timesheet was filed this month."
+  },
+  "salary_stopping_contractor": "· Contractor",
+  "@salary_stopping_contractor": {
+    "description": "· Contractor"
+  },
+  "salary_stopping_defaulted_of": "defaulted\n                of",
+  "@salary_stopping_defaulted_of": {
+    "description": "defaulted\n                of"
+  },
+  "salary_stopping_submitted": "submitted",
+  "@salary_stopping_submitted": {
+    "description": "submitted"
+  },
+  "salary_stopping_expired": "Expired",
+  "@salary_stopping_expired": {
+    "description": "Expired"
+  },
+  "salary_stopping_release": "Release",
+  "@salary_stopping_release": {
+    "description": "Release"
+  },
+  "salary_stopping_which_weeks_were_filed_and_which_defaulted_m": "—\n        which weeks were filed and which defaulted. \"Missed one week\" and \"filed\n        nothing all month\" deserve very different responses.",
+  "@salary_stopping_which_weeks_were_filed_and_which_defaulted_m": {
+    "description": "—\n        which weeks were filed and which defaulted. \"Missed one week\" and \"filed\n        nothing all month\" deserve ve"
+  },
+  "salary_stopping_locked": "Locked",
+  "@salary_stopping_locked": {
+    "description": "Locked"
+  },
+  "salary_stopping_this_employee_still_has_a_defaulted_week_cor": "This employee still has a defaulted week. Correct it first — the hold\n          cannot be released while time is missing.",
+  "@salary_stopping_this_employee_still_has_a_defaulted_week_cor": {
+    "description": "This employee still has a defaulted week. Correct it first — the hold\n          cannot be released while time is missing"
+  },
+  "salary_stopping_release_hold": "Release hold",
+  "@salary_stopping_release_hold": {
+    "description": "Release hold"
+  },
+  "set_password_current_password_leave_empty_if_invited": "Current password (leave empty if invited)",
+  "@set_password_current_password_leave_empty_if_invited": {
+    "description": "Current password (leave empty if invited)"
+  },
+  "set_password_new_password": "New password",
+  "@set_password_new_password": {
+    "description": "New password"
+  },
+  "set_password_confirm_new_password": "Confirm new password",
+  "@set_password_confirm_new_password": {
+    "description": "Confirm new password"
+  },
+  "set_password_choose_a_password_only_you_know_setting_one_": "Choose a password only you know. Setting one signs you out everywhere\n          else, so any session still open elsewhere stops working straight away.",
+  "@set_password_choose_a_password_only_you_know_setting_one_": {
+    "description": "Choose a password only you know. Setting one signs you out everywhere\n          else, so any session still open elsewher"
+  },
+  "set_password_set_it_for_the_first_time_or_change_it": "Set it for the first time, or change it",
+  "@set_password_set_it_for_the_first_time_or_change_it": {
+    "description": "Set it for the first time, or change it"
+  },
+  "set_password_at_least_8_characters_leave": "At least 8 characters. Leave",
+  "@set_password_at_least_8_characters_leave": {
+    "description": "At least 8 characters. Leave"
+  },
+  "set_password_current_password": "Current password",
+  "@set_password_current_password": {
+    "description": "Current password"
+  },
+  "set_password_empty_if_you_were_invited_and_have_never_set": "empty if\n          you were invited and have never set one.",
+  "@set_password_empty_if_you_were_invited_and_have_never_set": {
+    "description": "empty if\n          you were invited and have never set one."
+  },
+  "set_password_back_to_sign_in": "Back to sign in",
+  "@set_password_back_to_sign_in": {
+    "description": "Back to sign in"
+  },
+  "sync_status_sync_status": "Sync Status",
+  "@sync_status_sync_status": {
+    "description": "Sync Status"
+  },
+  "sync_status_population_daily_action_date_and_defaulting_": "Population, daily action-date and defaulting jobs, and the records they could not process.",
+  "@sync_status_population_daily_action_date_and_defaulting_": {
+    "description": "Population, daily action-date and defaulting jobs, and the records they could not process."
+  },
+  "sync_status_period_for_the_job": "Period for the job",
+  "@sync_status_period_for_the_job": {
+    "description": "Period for the job"
+  },
+  "sync_status_show_resolved_too": "Show resolved too",
+  "@sync_status_show_resolved_too": {
+    "description": "Show resolved too"
+  },
+  "sync_status_run_the_defaulting_job": "Run the defaulting job",
+  "@sync_status_run_the_defaulting_job": {
+    "description": "Run the defaulting job"
+  },
+  "sync_status_run_daily_process": "Run daily process",
+  "@sync_status_run_daily_process": {
+    "description": "Run daily process"
+  },
+  "sync_status_run_weekly_defaulting": "Run weekly defaulting",
+  "@sync_status_run_weekly_defaulting": {
+    "description": "Run weekly defaulting"
+  },
+  "sync_status_run_delivery_defaulting": "Run delivery defaulting",
+  "@sync_status_run_delivery_defaulting": {
+    "description": "Run delivery defaulting"
+  },
+  "sync_status_run_population": "Run population",
+  "@sync_status_run_population": {
+    "description": "Run population"
+  },
+  "sync_status_record_s_still_failing_a_retry_only_succeeds": "record(s) still failing. A retry only succeeds once the cause is fixed\n          at source — an allocation created, a shift calendar loaded.",
+  "@sync_status_record_s_still_failing_a_retry_only_succeeds": {
+    "description": "record(s) still failing. A retry only succeeds once the cause is fixed\n          at source — an allocation created, a sh"
+  },
+  "sync_status_latest_run_per_job": "Latest run per job",
+  "@sync_status_latest_run_per_job": {
+    "description": "Latest run per job"
+  },
+  "sync_status_no_job_has_run_yet": "No job has run yet.",
+  "@sync_status_no_job_has_run_yet": {
+    "description": "No job has run yet."
+  },
+  "sync_status_failed_records": "Failed records",
+  "@sync_status_failed_records": {
+    "description": "Failed records"
+  },
+  "sync_status_no_failed_records": "No failed records.",
+  "@sync_status_no_failed_records": {
+    "description": "No failed records."
+  },
+  "sync_status_retry": "Retry",
+  "@sync_status_retry": {
+    "description": "Retry"
+  },
+  "sync_status_run_defaulting": "Run defaulting",
+  "@sync_status_run_defaulting": {
+    "description": "Run defaulting"
+  },
+  "common_team_approvals": "Team Approvals",
+  "@common_team_approvals": {
+    "description": "Team Approvals"
+  },
+  "team_approvals_open_a_project_to_review_and_approve_your_te": "Open a project to review and approve your team's time.",
+  "@team_approvals_open_a_project_to_review_and_approve_your_te": {
+    "description": "Open a project to review and approve your team's time."
+  },
+  "team_approvals_month_year": "Month / Year",
+  "@team_approvals_month_year": {
+    "description": "Month / Year"
+  },
+  "team_approvals_all_projects": "All projects",
+  "@team_approvals_all_projects": {
+    "description": "All projects"
+  },
+  "team_approvals_reviewing_team_of": "Reviewing team of",
+  "@team_approvals_reviewing_team_of": {
+    "description": "Reviewing team of"
+  },
+  "team_approvals_advance_approve_month": "Advance-approve month",
+  "@team_approvals_advance_approve_month": {
+    "description": "Advance-approve month"
+  },
+  "team_approvals_no_projects_this_month": "No projects this month",
+  "@team_approvals_no_projects_this_month": {
+    "description": "No projects this month"
+  },
+  "team_approvals_no_other_teams": "No other teams",
+  "@team_approvals_no_other_teams": {
+    "description": "No other teams"
+  },
+  "team_approvals_reviewing_as": "Reviewing as",
+  "@team_approvals_reviewing_as": {
+    "description": "Reviewing as"
+  },
+  "team_approvals_all_cut_offs": "All cut-offs",
+  "@team_approvals_all_cut_offs": {
+    "description": "All cut-offs"
+  },
+  "team_approvals_cut_off_for": "Cut-off for",
+  "@team_approvals_cut_off_for": {
+    "description": "Cut-off for"
+  },
+  "team_approvals_delivery_cut_off": "Delivery cut-off",
+  "@team_approvals_delivery_cut_off": {
+    "description": "Delivery cut-off"
+  },
+  "team_approvals_approve_every_week_of_the_month_before_this_": "Approve every week of the month before this date. Missing it marks the\n          month Defaulted against the manager — it does not hold the employee's\n          salary.",
+  "@team_approvals_approve_every_week_of_the_month_before_this_": {
+    "description": "Approve every week of the month before this date. Missing it marks the\n          month Defaulted against the manager — i"
+  },
+  "team_approvals_advance_approval": "Advance approval",
+  "@team_approvals_advance_approval": {
+    "description": "Advance approval"
+  },
+  "team_approvals_this_month_has_not_started_yet_you_can_advan": "This month has not started yet. You can advance-approve it now — the\n          month is tagged",
+  "@team_approvals_this_month_has_not_started_yet_you_can_advan": {
+    "description": "This month has not started yet. You can advance-approve it now — the\n          month is tagged"
+  },
+  "team_approvals_defaulted_hours_are_treated_as_approved_and_": ", defaulted hours are\n          treated as approved, and any later actuals come through as flagged\n          adjustments.",
+  "@team_approvals_defaulted_hours_are_treated_as_approved_and_": {
+    "description": ", defaulted hours are\n          treated as approved, and any later actuals come through as flagged\n          adjustments"
+  },
+  "team_approvals_backdated_changes_awaiting_your_approval": "Backdated changes awaiting your approval\n          (",
+  "@team_approvals_backdated_changes_awaiting_your_approval": {
+    "description": "Backdated changes awaiting your approval\n          ("
+  },
+  "team_approvals_projects_for": "Projects for",
+  "@team_approvals_projects_for": {
+    "description": "Projects for"
+  },
+  "team_approvals_fcp_leave_loss": "FCP · Leave loss",
+  "@team_approvals_fcp_leave_loss": {
+    "description": "FCP · Leave loss"
+  },
+  "team_approvals_adj": "adj.",
+  "@team_approvals_adj": {
+    "description": "adj."
+  },
+  "team_approvals_approved": "approved",
+  "@team_approvals_approved": {
+    "description": "approved"
+  },
+  "team_approvals_rejected": "rejected",
+  "@team_approvals_rejected": {
+    "description": "rejected"
+  },
+  "team_approvals_confirmed": "Confirmed",
+  "@team_approvals_confirmed": {
+    "description": "Confirmed"
+  },
+  "team_approvals_advance": "· advance",
+  "@team_approvals_advance": {
+    "description": "· advance"
+  },
+  "team_approvals_advance_approve": "Advance-approve",
+  "@team_approvals_advance_approve": {
+    "description": "Advance-approve"
+  },
+  "view_timesheet_monthly_summary": "Monthly Summary",
+  "@view_timesheet_monthly_summary": {
+    "description": "Monthly Summary"
+  },
+  "view_timesheet_hours_are_shown_at_task_wbs_level_open_an_em": "Hours are shown at task (WBS) level; open an employee to approve by week or by day.",
+  "@view_timesheet_hours_are_shown_at_task_wbs_level_open_an_em": {
+    "description": "Hours are shown at task (WBS) level; open an employee to approve by week or by day."
+  },
+  "view_timesheet_reject_selected_employees": "Reject selected employees",
+  "@view_timesheet_reject_selected_employees": {
+    "description": "Reject selected employees"
+  },
+  "view_timesheet_confirm_month_to_accrual": "Confirm month to accrual",
+  "@view_timesheet_confirm_month_to_accrual": {
+    "description": "Confirm month to accrual"
+  },
+  "view_timesheet_team": "Team",
+  "@view_timesheet_team": {
+    "description": "Team"
+  },
+  "view_timesheet_pending": "Pending",
+  "@view_timesheet_pending": {
+    "description": "Pending"
+  },
+  "view_timesheet_rejected": "Rejected",
+  "@view_timesheet_rejected": {
+    "description": "Rejected"
+  },
+  "view_timesheet_this_month_has_been_confirmed": "This month has been confirmed",
+  "@view_timesheet_this_month_has_been_confirmed": {
+    "description": "This month has been confirmed"
+  },
+  "view_timesheet_confirmed_on": "Confirmed on",
+  "@view_timesheet_confirmed_on": {
+    "description": "Confirmed on"
+  },
+  "view_timesheet_interface_rows_were_written_for_the_accrual_": "interface rows were written for the accrual application to collect\n          (status:",
+  "@view_timesheet_interface_rows_were_written_for_the_accrual_": {
+    "description": "interface rows were written for the accrual application to collect\n          (status:"
+  },
+  "view_timesheet_not_ready_to_confirm_to_accrual": "Not ready to confirm to accrual",
+  "@view_timesheet_not_ready_to_confirm_to_accrual": {
+    "description": "Not ready to confirm to accrual"
+  },
+  "view_timesheet_every_employee_on_the_project_must_be_approv": "Every employee on the project must be approved first.",
+  "@view_timesheet_every_employee_on_the_project_must_be_approv": {
+    "description": "Every employee on the project must be approved first."
+  },
+  "view_timesheet_still_pending": "still pending",
+  "@view_timesheet_still_pending": {
+    "description": "still pending"
+  },
+  "view_timesheet_rejected_and_back_with_the_employee": "rejected and back with the employee",
+  "@view_timesheet_rejected_and_back_with_the_employee": {
+    "description": "rejected and back with the employee"
+  },
+  "view_timesheet_employees": "Employees",
+  "@view_timesheet_employees": {
+    "description": "Employees"
+  },
+  "view_timesheet_no_employees_on_project_nobody_has_time_on_t": "No employees on project — nobody has time on this project for this month.",
+  "@view_timesheet_no_employees_on_project_nobody_has_time_on_t": {
+    "description": "No employees on project — nobody has time on this project for this month."
+  },
+  "view_timesheet_contractor": "Contractor",
+  "@view_timesheet_contractor": {
+    "description": "Contractor"
+  },
+  "view_timesheet_overridden": "Overridden",
+  "@view_timesheet_overridden": {
+    "description": "Overridden"
+  },
+  "view_timesheet_late": "Late",
+  "@view_timesheet_late": {
+    "description": "Late"
+  },
+  "view_timesheet_defaulted": "Defaulted",
+  "@view_timesheet_defaulted": {
+    "description": "Defaulted"
+  },
+  "view_timesheet_confirms_the_whole_project_month_for": "Confirms the whole project month for",
+  "@view_timesheet_confirms_the_whole_project_month_for": {
+    "description": "Confirms the whole project month for"
+  },
+  "view_timesheet_all_employees_at_once": "all employees at once",
+  "@view_timesheet_all_employees_at_once": {
+    "description": "all employees at once"
+  },
+  "view_timesheet_the_reason_and_remarks_are_shown_to_the_empl": "The reason and remarks are shown to the employee together with the\n        rejected dates, so they know exactly what to correct.",
+  "@view_timesheet_the_reason_and_remarks_are_shown_to_the_empl": {
+    "description": "The reason and remarks are shown to the employee together with the\n        rejected dates, so they know exactly what to "
+  },
+  "view_timesheet_confirm_month": "Confirm month",
+  "@view_timesheet_confirm_month": {
+    "description": "Confirm month"
+  },
+  "shell_o2c_timesheet": "O2C Timesheet",
+  "@shell_o2c_timesheet": {
+    "description": "O2C Timesheet"
+  },
+  "shell_sign_out": "Sign out",
+  "@shell_sign_out": {
+    "description": "Sign out"
+  },
+  "shell_cannot_open_the_time_module": "Cannot open the Time module",
+  "@shell_cannot_open_the_time_module": {
+    "description": "Cannot open the Time module"
+  },
+  "shell_timesheet": "Timesheet",
+  "@shell_timesheet": {
+    "description": "Timesheet"
+  },
+  "shell_you_are_signed_in_but_your_account_has_not_b": "You are signed in, but your account has not been granted access to any\n          part of the Time module. Contact your administrator.",
+  "@shell_you_are_signed_in_but_your_account_has_not_b": {
+    "description": "You are signed in, but your account has not been granted access to any\n          part of the Time module. Contact your a"
+  },
+  "accrual_integration_a_retro_adjustment_approved_after_its_month_": "A retro adjustment approved after its month was confirmed writes a\n        day-wise Reversal(−) and Adjustment(+) pair, but the month's\n        extract was already built. Use",
+  "@accrual_integration_a_retro_adjustment_approved_after_its_month_": {
+    "description": "A retro adjustment approved after its month was confirmed writes a\n        day-wise Reversal(−) and Adjustment(+) pair, "
+  },
+  "accrual_integration_actual_default": "Actual & default",
+  "@accrual_integration_actual_default": {
+    "description": "Actual & default"
+  },
+  "accrual_integration_reversal_adjustment": "Reversal & adjustment",
+  "@accrual_integration_reversal_adjustment": {
+    "description": "Reversal & adjustment"
+  },
+  "approval_detail_finish_approve": "Finish & approve",
+  "@approval_detail_finish_approve": {
+    "description": "Finish & approve"
+  },
+  "calendar_sync_shift_client_project_corporate": "Shift > Client > Project > Corporate",
+  "@calendar_sync_shift_client_project_corporate": {
+    "description": "Shift > Client > Project > Corporate"
+  },
+  "calendar_sync_text": "→",
+  "@calendar_sync_text": {
+    "description": "→"
+  },
+  "client_timesheets_drop_a_pdf_word_excel_or_image_file_here_or_": "Drop a PDF, Word, Excel or image file here, or click to browse (max 25 MB)",
+  "@client_timesheets_drop_a_pdf_word_excel_or_image_file_here_or_": {
+    "description": "Drop a PDF, Word, Excel or image file here, or click to browse (max 25 MB)"
+  },
+  "client_timesheets_kb": " KB)",
+  "@client_timesheets_kb": {
+    "description": " KB)"
+  },
+  "client_timesheets_text": " ",
+  "@client_timesheets_text": {
+    "description": " "
+  },
+  "integrations_oracle_time_labor_is_the_system_of_record_th": "Oracle Time & Labor is the system of record. This module pushes\n        approved time to OTL, which feeds Project Costing and Payroll natively —\n        nothing here writes to Payroll or Costing directly.",
+  "@integrations_oracle_time_labor_is_the_system_of_record_th": {
+    "description": "Oracle Time & Labor is the system of record. This module pushes\n        approved time to OTL, which feeds Project Costin"
+  },
+  "integrations_a_project_can_only_be_pushed_to_oracle_time_": "A project can only be pushed to Oracle Time & Labor once every\n            chargeable task has an expenditure type and every allocated worker\n            an expenditure organization.",
+  "@integrations_a_project_can_only_be_pushed_to_oracle_time_": {
+    "description": "A project can only be pushed to Oracle Time & Labor once every\n            chargeable task has an expenditure type and e"
+  },
+  "login_timesheet_time_approval": "Timesheet & Time Approval",
+  "@login_timesheet_time_approval": {
+    "description": "Timesheet & Time Approval"
+  },
+  "my_timesheet_this_month_is_closed_a_correction_is_posted_": "This month is closed. A correction is posted day-wise as a\n              Reversal (−) of the old line and an Adjustment (+) on\n              the new one, into the currently open period, and needs your\n              manager's approval.",
+  "@my_timesheet_this_month_is_closed_a_correction_is_posted_": {
+    "description": "This month is closed. A correction is posted day-wise as a\n              Reversal (−) of the old line and an Adjustment "
+  },
+  "my_timesheet_enter_new_reverse_old": "Enter new & reverse old",
+  "@my_timesheet_enter_new_reverse_old": {
+    "description": "Enter new & reverse old"
+  },
+  "my_timesheet_text": "(−",
+  "@my_timesheet_text": {
+    "description": "(−"
+  },
+  "my_timesheet_apply_send_for_approval": "Apply & send for approval",
+  "@my_timesheet_apply_send_for_approval": {
+    "description": "Apply & send for approval"
+  },
+  "team_approvals_each_row_is_one_day_approving_posts_a_revers": "Each row is one day. Approving posts a Reversal (−) against\n          the old project and an Adjustment (+) on the new one, in the\n          currently open period. A change that moves hours between two projects\n          needs both managers to approve.",
+  "@team_approvals_each_row_is_one_day_approving_posts_a_revers": {
+    "description": "Each row is one day. Approving posts a Reversal (−) against\n          the old project and an Adjustment (+) on the new o"
+  },
+  "view_timesheet_monthly_accrual": "Monthly → Accrual",
+  "@view_timesheet_monthly_accrual": {
+    "description": "Monthly → Accrual"
+  },
+  "view_timesheet_and_fills_the_accrual_interface_with_the_con": "and fills the accrual interface with the consolidated timesheet\n        (employee × project × task × day) plus any day-wise\n        Reversal (−)/Adjustment (+) rows. The accrual application\n        collects it from there. Approved time is also pushed to Oracle Time &\n        Labor, which feeds Project Costing and Payroll.",
+  "@view_timesheet_and_fills_the_accrual_interface_with_the_con": {
+    "description": "and fills the accrual interface with the consolidated timesheet\n        (employee × project × task × day) plus any day-w"
+  }
 }

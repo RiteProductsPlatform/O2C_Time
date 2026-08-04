@@ -12,8 +12,8 @@
   id="teamApprovalsPage"
   class="oj-sm-width-full rw-page-full"
   display-options.responsive-padding="off"
-  page-title="Team Approvals"
-  page-subtitle="Open a project to review and approve your team's time.">
+  page-title="[[$application.translations.appBundle.common_team_approvals]]"
+  page-subtitle="[[$application.translations.appBundle.team_approvals_open_a_project_to_review_and_approve_your_te]]">
 
   <div class="oj-flex oj-sm-flex-direction-column oj-sm-width-full oj-sm-gap-4x"
        slot="main">
@@ -22,7 +22,7 @@
     <div class="oj-sm-padding-4x rw-metric">
       <div class="oj-flex oj-sm-justify-content-space-between oj-sm-align-items-start oj-sm-flex-wrap oj-sm-gap-3x">
         <oj-form-layout max-columns="3" direction="row" label-edge="top" class="oj-flex-item">
-          <oj-select-single label-hint="Month / Year"
+          <oj-select-single label-hint="[[$application.translations.appBundle.team_approvals_month_year]]"
                             data="[[ $application.variables.periodOptions ]]"
                             value="{{ $variables.periodId }}"
                             item-text="label">
@@ -33,13 +33,13 @@
                the prototype offers exactly that list with an "All projects"
                entry. Typing a name that matches nothing looked like an empty
                team rather than a typo. -->
-          <oj-select-single label-hint="Project"
+          <oj-select-single label-hint="[[$application.translations.appBundle.common_project]]"
                             data="[[ $variables.projectOptions ]]"
                             value="{{ $variables.projectPick }}"
                             item-text="label"
-                            placeholder="All projects">
+                            placeholder="[[$application.translations.appBundle.team_approvals_all_projects]]">
             <template slot="noData">
-              <span class="rw-metric-label">No projects this month</span>
+              <span class="rw-metric-label"><oj-bind-text value="[[$application.translations.appBundle.team_approvals_no_projects_this_month]]"></oj-bind-text></span>
             </template>
           </oj-select-single>
 
@@ -50,20 +50,20 @@
                act on from the other screens. Only rendered when there is more
                than one to choose from. -->
           <oj-bind-if test="[[ $application.variables.managerOptionsArray.length > 1 ]]">
-            <oj-select-single label-hint="Reviewing team of"
+            <oj-select-single label-hint="[[$application.translations.appBundle.team_approvals_reviewing_team_of]]"
                               data="[[ $application.variables.managerOptions ]]"
                               value="{{ $application.variables.actingManagerId }}"
                               item-text="label"
                               on-value-changed="[[ $listeners.switchManager ]]">
               <template slot="noData">
-                <span class="rw-metric-label">No other teams</span>
+                <span class="rw-metric-label"><oj-bind-text value="[[$application.translations.appBundle.team_approvals_no_other_teams]]"></oj-bind-text></span>
               </template>
             </oj-select-single>
           </oj-bind-if>
 
           <oj-bind-if test="[[ $application.variables.managerOptionsArray.length <= 1 ]]">
             <oj-label-value>
-              <span slot="label" class="oj-label-nowrap">Reviewing as</span>
+              <span slot="label" class="oj-label-nowrap"><oj-bind-text value="[[$application.translations.appBundle.team_approvals_reviewing_as]]"></oj-bind-text></span>
               <span slot="value" class="oj-typography-body-md">
                 <oj-bind-text value="[[ $application.variables.actingManagerId ]]"></oj-bind-text>
               </span>
@@ -74,11 +74,11 @@
         <div class="oj-flex oj-sm-gap-2x">
           <oj-button chroming="borderless" on-oj-action="[[ $listeners.toggleCutoffs ]]">
             <span slot="startIcon" class="oj-ux-ico-calendar-clock"></span>
-            <span>All cut-offs</span>
+            <span><oj-bind-text value="[[$application.translations.appBundle.team_approvals_all_cut_offs]]"></oj-bind-text></span>
           </oj-button>
           <oj-button chroming="borderless" on-oj-action="[[ $listeners.reload ]]">
             <span slot="startIcon" class="oj-ux-ico-refresh"></span>
-            <span>Refresh</span>
+            <span><oj-bind-text value="[[$application.translations.appBundle.common_refresh]]"></oj-bind-text></span>
           </oj-button>
         </div>
       </div>
@@ -94,18 +94,16 @@
     <oj-bind-if test="[[ $variables.showCutoffs && $variables.cutoffs ]]">
       <div class="oj-sm-padding-4x rw-metric">
         <h2 class="oj-typography-heading-xs oj-sm-margin-0 oj-sm-margin-3x-bottom">
-          Cut-off for <oj-bind-text value="[[ $variables.cutoffs.period_name ]]"></oj-bind-text>
+          <oj-bind-text value="[[$application.translations.appBundle.team_approvals_cut_off_for]]"></oj-bind-text> <oj-bind-text value="[[ $variables.cutoffs.period_name ]]"></oj-bind-text>
         </h2>
         <oj-label-value>
-          <span slot="label" class="oj-label-nowrap">Delivery cut-off</span>
+          <span slot="label" class="oj-label-nowrap"><oj-bind-text value="[[$application.translations.appBundle.team_approvals_delivery_cut_off]]"></oj-bind-text></span>
           <span slot="value" class="oj-typography-body-md">
             <oj-bind-text value="[[ $variables.cutoffs.delivery_cutoff || '—' ]]"></oj-bind-text>
           </span>
         </oj-label-value>
         <div class="oj-typography-body-sm rw-metric-label oj-sm-margin-3x-top">
-          Approve every week of the month before this date. Missing it marks the
-          month Defaulted against the manager — it does not hold the employee's
-          salary.
+          <oj-bind-text value="[[$application.translations.appBundle.team_approvals_approve_every_week_of_the_month_before_this_]]"></oj-bind-text>
         </div>
       </div>
     </oj-bind-if>
@@ -116,15 +114,12 @@
          adjustments. -->
     <oj-bind-if test="[[ $variables.isFuturePeriod ]]">
       <div class="oj-sm-padding-4x rw-metric">
-        <h2 class="oj-typography-heading-xs oj-sm-margin-0">Advance approval</h2>
+        <h2 class="oj-typography-heading-xs oj-sm-margin-0"><oj-bind-text value="[[$application.translations.appBundle.team_approvals_advance_approval]]"></oj-bind-text></h2>
         <p class="oj-typography-body-sm rw-metric-label oj-sm-margin-1x-top">
-          This month has not started yet. You can advance-approve it now — the
-          month is tagged <strong>Advance closure</strong>, defaulted hours are
-          treated as approved, and any later actuals come through as flagged
-          adjustments.
+          <oj-bind-text value="[[$application.translations.appBundle.team_approvals_this_month_has_not_started_yet_you_can_advan]]"></oj-bind-text> <strong><oj-bind-text value="[[$application.translations.appBundle.common_advance_closure]]"></oj-bind-text></strong><oj-bind-text value="[[$application.translations.appBundle.team_approvals_defaulted_hours_are_treated_as_approved_and_]]"></oj-bind-text>
         </p>
         <oj-form-layout max-columns="2" direction="row" label-edge="top">
-          <oj-select-single label-hint="Project"
+          <oj-select-single label-hint="[[$application.translations.appBundle.common_project]]"
                             data="[[ $variables.projectsAllADP ]]"
                             value="{{ $variables.advanceProjectId }}"
                             item-text="projectName">
@@ -134,7 +129,7 @@
           <oj-button chroming="callToAction"
                      disabled="[[ $variables.busy || !$variables.advanceProjectId ]]"
                      on-oj-action="[[ $listeners.advanceApprove ]]">
-            <span>Advance-approve month</span>
+            <span><oj-bind-text value="[[$application.translations.appBundle.team_approvals_advance_approve_month]]"></oj-bind-text></span>
           </oj-button>
         </div>
       </div>
@@ -144,14 +139,10 @@
     <oj-bind-if test="[[ $variables.adjustments.length > 0 ]]">
       <div class="oj-sm-padding-4x rw-metric">
         <h2 class="oj-typography-heading-xs oj-sm-margin-0">
-          Backdated changes awaiting your approval
-          (<oj-bind-text value="[[ $variables.adjustments.length ]]"></oj-bind-text>)
+          <oj-bind-text value="[[$application.translations.appBundle.team_approvals_backdated_changes_awaiting_your_approval]]"></oj-bind-text><oj-bind-text value="[[ $variables.adjustments.length ]]"></oj-bind-text>)
         </h2>
         <p class="oj-typography-body-sm rw-metric-label oj-sm-margin-1x-top">
-          Each row is one day. Approving posts a Reversal&nbsp;(&minus;) against
-          the old project and an Adjustment&nbsp;(+) on the new one, in the
-          currently open period. A change that moves hours between two projects
-          needs both managers to approve.
+          <oj-bind-text value="[[$application.translations.appBundle.team_approvals_each_row_is_one_day_approving_posts_a_revers]]"></oj-bind-text>
         </p>
 
         <div class="rw-grid-scroll oj-sm-margin-3x-top">
@@ -179,7 +170,7 @@
               <span>
                 <oj-bind-text value="[[ cell.row.oldProjectName ]]"></oj-bind-text> /
                 <oj-bind-text value="[[ cell.row.oldTaskCode ]]"></oj-bind-text>
-                (&minus;<oj-bind-text value="[[ $application.functions.fmtHours(cell.row.oldHours) ]]"></oj-bind-text>)
+                <oj-bind-text value="[[$application.translations.appBundle.my_timesheet_text]]"></oj-bind-text><oj-bind-text value="[[ $application.functions.fmtHours(cell.row.oldHours) ]]"></oj-bind-text>)
               </span>
             </template>
 
@@ -191,7 +182,7 @@
                   (+<oj-bind-text value="[[ $application.functions.fmtHours(cell.row.newHours) ]]"></oj-bind-text>)
                 </oj-bind-if>
                 <oj-bind-if test="[[ !cell.row.newProjectName ]]">
-                  <span class="rw-metric-label">Reversal only</span>
+                  <span class="rw-metric-label"><oj-bind-text value="[[$application.translations.appBundle.common_reversal_only]]"></oj-bind-text></span>
                 </oj-bind-if>
               </span>
             </template>
@@ -215,7 +206,7 @@
                          disabled="[[ $variables.busy || $page.functions.alreadyActed(cell.row) ]]"
                          :aria-label="[[ $page.functions.approveAdjLabel(cell.row.employeeName) ]]"
                          on-oj-action="[[ $listeners.approveAdjustment ]]">
-                <span>Approve</span>
+                <span><oj-bind-text value="[[$application.translations.appBundle.common_approve]]"></oj-bind-text></span>
               </oj-button>
             </template>
           </oj-table>
@@ -226,7 +217,7 @@
     <!-- ══════════════════ Projects managed ══════════════════ -->
     <div class="oj-sm-padding-4x rw-metric">
       <h2 class="oj-typography-heading-xs oj-sm-margin-0 oj-sm-margin-3x-bottom">
-        Projects for
+        <oj-bind-text value="[[$application.translations.appBundle.team_approvals_projects_for]]"></oj-bind-text>
         <oj-bind-text value="[[ $application.variables.selectedPeriodName ]]"></oj-bind-text>
       </h2>
 
@@ -260,11 +251,11 @@
               <span>
                 <oj-bind-text value="[[ cell.row.projectName ]]"></oj-bind-text>
                 <oj-bind-if test="[[ cell.row.revenueModel === 'FCP' && cell.row.leaveLossFlag === 'Y' ]]">
-                  <span class="rw-flag rw-flag-advance" title="Fixed Capacity Project with leave loss coverage — absences need a covering colleague (PAGE-006).">FCP · Leave loss</span>
+                  <span class="rw-flag rw-flag-advance" title="Fixed Capacity Project with leave loss coverage — absences need a covering colleague (PAGE-006)."><oj-bind-text value="[[$application.translations.appBundle.team_approvals_fcp_leave_loss]]"></oj-bind-text></span>
                 </oj-bind-if>
                 <oj-bind-if test="[[ cell.row.pendingAdjustments > 0 ]]">
                   <span class="rw-flag rw-flag-defaulted">
-                    <oj-bind-text value="[[ cell.row.pendingAdjustments ]]"></oj-bind-text> adj.
+                    <oj-bind-text value="[[ cell.row.pendingAdjustments ]]"></oj-bind-text> <oj-bind-text value="[[$application.translations.appBundle.team_approvals_adj]]"></oj-bind-text>
                   </span>
                 </oj-bind-if>
               </span>
@@ -282,10 +273,10 @@
             <template slot="teamCell" data-oj-as="cell">
               <span>
                 <oj-bind-text value="[[ cell.row.approvedEmployees ]]"></oj-bind-text> /
-                <oj-bind-text value="[[ cell.row.employees ]]"></oj-bind-text> approved
+                <oj-bind-text value="[[ cell.row.employees ]]"></oj-bind-text> <oj-bind-text value="[[$application.translations.appBundle.team_approvals_approved]]"></oj-bind-text>
                 <oj-bind-if test="[[ cell.row.rejectedEmployees > 0 ]]">
                   <span class="rw-flag rw-flag-reversal">
-                    <oj-bind-text value="[[ cell.row.rejectedEmployees ]]"></oj-bind-text> rejected
+                    <oj-bind-text value="[[ cell.row.rejectedEmployees ]]"></oj-bind-text> <oj-bind-text value="[[$application.translations.appBundle.team_approvals_rejected]]"></oj-bind-text>
                   </span>
                 </oj-bind-if>
               </span>
@@ -308,7 +299,7 @@
                 </span>
                 <oj-bind-if test="[[ cell.row.confirmId ]]">
                   <span class="rw-flag rw-flag-adjustment">
-                    Confirmed<oj-bind-if test="[[ cell.row.confirmType === 'Advance closure' ]]"> · advance</oj-bind-if>
+                    <oj-bind-text value="[[$application.translations.appBundle.team_approvals_confirmed]]"></oj-bind-text><oj-bind-if test="[[ cell.row.confirmType === 'Advance closure' ]]"> <oj-bind-text value="[[$application.translations.appBundle.team_approvals_advance]]"></oj-bind-text></oj-bind-if>
                   </span>
                 </oj-bind-if>
               </span>
@@ -318,7 +309,7 @@
               <oj-button chroming="outlined"
                          :aria-label="[[ $page.functions.openProjectLabel(cell.row.projectName) ]]"
                          on-oj-action="[[ $listeners.openProject ]]">
-                <span>Open</span>
+                <span><oj-bind-text value="[[$application.translations.appBundle.common_open]]"></oj-bind-text></span>
               </oj-button>
             </template>
           </oj-table>
@@ -329,7 +320,7 @@
     <oj-bind-if test="[[ $variables.busy ]]">
       <div class="oj-flex oj-sm-align-items-center oj-sm-gap-2x" role="status" aria-live="polite">
         <oj-progress-circle size="sm" value="-1"></oj-progress-circle>
-        <span class="oj-typography-body-sm">Working…</span>
+        <span class="oj-typography-body-sm"><oj-bind-text value="[[$application.translations.appBundle.common_working]]"></oj-bind-text></span>
       </div>
     </oj-bind-if>
 
@@ -338,7 +329,7 @@
   <!-- ══════════════════ Confirmation ══════════════════ -->
   <!-- oj-dialog opened via Actions.callComponentMethod, not window.confirm:
        SES blocks browser globals inside chains (knowledge/14 §7). -->
-  <oj-dialog id="advanceApproveDlg" dialog-title="Advance-approve month" cancel-behavior="icon">
+  <oj-dialog id="advanceApproveDlg" dialog-title="[[$application.translations.appBundle.team_approvals_advance_approve_month]]" cancel-behavior="icon">
     <div slot="body">
       <p class="oj-typography-body-md">
         <oj-bind-text value="[[ $variables.confirmMessage ]]"></oj-bind-text>
@@ -346,11 +337,11 @@
     </div>
     <div slot="footer">
       <oj-button on-oj-action="[[ $listeners.cancelAdvanceApprove ]]">
-        <span>Cancel</span>
+        <span><oj-bind-text value="[[$application.translations.appBundle.common_cancel]]"></oj-bind-text></span>
       </oj-button>
       <oj-button chroming="callToAction" disabled="[[ $variables.busy ]]"
                  on-oj-action="[[ $listeners.confirmAdvanceApprove ]]">
-        <span>Advance-approve</span>
+        <span><oj-bind-text value="[[$application.translations.appBundle.team_approvals_advance_approve]]"></oj-bind-text></span>
       </oj-button>
     </div>
   </oj-dialog>

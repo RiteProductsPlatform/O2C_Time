@@ -13,8 +13,8 @@
   id="accrualIntegrationPage"
   class="oj-sm-width-full rw-page-full"
   display-options.responsive-padding="off"
-  page-title="Accrual Integration"
-  page-subtitle="Confirmed project-months, the extract waiting for the accrual application, and the leave-loss annexure.">
+  page-title="[[$application.translations.appBundle.accrual_integration_accrual_integration]]"
+  page-subtitle="[[$application.translations.appBundle.accrual_integration_confirmed_project_months_the_extract_waiting]]">
 
   <div class="oj-flex oj-sm-flex-direction-column oj-sm-width-full oj-sm-gap-4x"
        slot="main">
@@ -23,7 +23,7 @@
     <div class="oj-sm-padding-4x rw-metric">
       <div class="oj-flex oj-sm-justify-content-space-between oj-sm-align-items-start oj-sm-flex-wrap oj-sm-gap-3x">
         <oj-form-layout max-columns="2" direction="row" label-edge="top" class="oj-flex-item">
-          <oj-select-single label-hint="Month"
+          <oj-select-single label-hint="[[$application.translations.appBundle.common_month]]"
                             data="[[ $application.variables.periodOptions ]]"
                             value="{{ $variables.periodId }}"
                             item-text="label">
@@ -38,20 +38,17 @@
                      disabled="[[ $variables.busy || $variables.confirmed.length === 0 ]]"
                      on-oj-action="[[ $listeners.runAccrualJob ]]">
             <span slot="startIcon" class="oj-ux-ico-data-flow"></span>
-            <span>Post approved adjustments</span>
+            <span><oj-bind-text value="[[$application.translations.appBundle.accrual_integration_post_approved_adjustments]]"></oj-bind-text></span>
           </oj-button>
           <oj-button chroming="borderless" on-oj-action="[[ $listeners.reload ]]">
             <span slot="startIcon" class="oj-ux-ico-refresh"></span>
-            <span>Refresh</span>
+            <span><oj-bind-text value="[[$application.translations.appBundle.common_refresh]]"></oj-bind-text></span>
           </oj-button>
         </div>
       </div>
 
       <div class="oj-sm-padding-3x oj-sm-margin-3x-top rw-notice" role="status">
-        The accrual application <strong>pulls</strong> from the interface table
-        after month-end approval and acknowledges each batch. Rows shown as
-        pending have been written and are waiting to be collected — nothing is
-        pushed from this screen.
+        <oj-bind-text value="[[$application.translations.appBundle.accrual_integration_the_accrual_application]]"></oj-bind-text> <strong><oj-bind-text value="[[$application.translations.appBundle.accrual_integration_pulls]]"></oj-bind-text></strong> <oj-bind-text value="[[$application.translations.appBundle.accrual_integration_from_the_interface_table_after_month_end_app]]"></oj-bind-text>
       </div>
 
       <!-- Retro adjustments are the one thing month confirmation cannot have
@@ -59,22 +56,19 @@
            makes the button above make sense. -->
       <div class="oj-sm-padding-3x oj-sm-margin-2x-top rw-notice rw-notice-warning"
            role="status">
-        A retro adjustment approved after its month was confirmed writes a
-        day-wise Reversal(&minus;) and Adjustment(+) pair, but the month's
-        extract was already built. Use <strong>Post approved
-        adjustments</strong> to add them to the interface.
+        <oj-bind-text value="[[$application.translations.appBundle.accrual_integration_a_retro_adjustment_approved_after_its_month_]]"></oj-bind-text> <strong><oj-bind-text value="[[$application.translations.appBundle.accrual_integration_post_approved_adjustments_2]]"></oj-bind-text></strong> <oj-bind-text value="[[$application.translations.appBundle.accrual_integration_to_add_them_to_the_interface]]"></oj-bind-text>
       </div>
     </div>
 
     <!-- ══════════════════ Confirmed months ══════════════════ -->
     <div class="oj-sm-padding-4x rw-metric">
       <h2 class="oj-typography-heading-xs oj-sm-margin-0 oj-sm-margin-3x-bottom">
-        Confirmed project-months
+        <oj-bind-text value="[[$application.translations.appBundle.accrual_integration_confirmed_project_months]]"></oj-bind-text>
       </h2>
 
       <oj-bind-if test="[[ $variables.confirmed.length === 0 && !$variables.busy ]]">
         <div class="oj-typography-body-sm rw-metric-label" role="status">
-          No month confirmed yet for this period.
+          <oj-bind-text value="[[$application.translations.appBundle.accrual_integration_no_month_confirmed_yet_for_this_period]]"></oj-bind-text>
         </div>
       </oj-bind-if>
 
@@ -128,7 +122,7 @@
                   <oj-bind-text value="[[ cell.row.confirmedBy ]]"></oj-bind-text>
                 </div>
                 <oj-bind-if test="[[ cell.row.confirmType === 'Advance closure' ]]">
-                  <span class="rw-flag rw-flag-advance">Advance closure</span>
+                  <span class="rw-flag rw-flag-advance"><oj-bind-text value="[[$application.translations.appBundle.common_advance_closure]]"></oj-bind-text></span>
                 </oj-bind-if>
               </span>
             </template>
@@ -147,8 +141,8 @@
                   <oj-bind-text value="[[ cell.row.accrualStatus ]]"></oj-bind-text>
                 </span>
                 <div class="oj-typography-body-xs rw-metric-label">
-                  <oj-bind-text value="[[ cell.row.rowsPulled ]]"></oj-bind-text> pulled /
-                  <oj-bind-text value="[[ cell.row.rowsPending ]]"></oj-bind-text> pending
+                  <oj-bind-text value="[[ cell.row.rowsPulled ]]"></oj-bind-text> <oj-bind-text value="[[$application.translations.appBundle.accrual_integration_pulled]]"></oj-bind-text>
+                  <oj-bind-text value="[[ cell.row.rowsPending ]]"></oj-bind-text> <oj-bind-text value="[[$application.translations.appBundle.accrual_integration_pending]]"></oj-bind-text>
                 </div>
               </span>
             </template>
@@ -157,7 +151,7 @@
               <oj-button chroming="outlined"
                          :aria-label="[[ $page.functions.extractLabel(cell.row.projectName) ]]"
                          on-oj-action="[[ $listeners.openExtract ]]">
-                <span>Extract</span>
+                <span><oj-bind-text value="[[$application.translations.appBundle.accrual_integration_extract]]"></oj-bind-text></span>
               </oj-button>
             </template>
           </oj-table>
@@ -170,20 +164,20 @@
       <div class="oj-sm-padding-4x rw-metric">
         <div class="oj-flex oj-sm-justify-content-space-between oj-sm-align-items-center oj-sm-flex-wrap oj-sm-gap-2x">
           <h2 class="oj-typography-heading-xs oj-sm-margin-0">
-            Extract — <oj-bind-text value="[[ $variables.extractLabel ]]"></oj-bind-text>
+            <oj-bind-text value="[[$application.translations.appBundle.accrual_integration_extract_2]]"></oj-bind-text> <oj-bind-text value="[[ $variables.extractLabel ]]"></oj-bind-text>
           </h2>
           <div class="oj-flex oj-sm-gap-1x">
             <oj-button :chroming="[[ $application.functions.ifEq($variables.extractView, 'all', 'outlined', 'borderless') ]]"
                        on-oj-action="[[ $listeners.showAll ]]">
-              <span>All</span>
+              <span><oj-bind-text value="[[$application.translations.appBundle.accrual_integration_all]]"></oj-bind-text></span>
             </oj-button>
             <oj-button :chroming="[[ $application.functions.ifEq($variables.extractView, 'actual', 'outlined', 'borderless') ]]"
                        on-oj-action="[[ $listeners.showActual ]]">
-              <span>Actual &amp; default</span>
+              <span><oj-bind-text value="[[$application.translations.appBundle.accrual_integration_actual_default]]"></oj-bind-text></span>
             </oj-button>
             <oj-button :chroming="[[ $application.functions.ifEq($variables.extractView, 'adjustment', 'outlined', 'borderless') ]]"
                        on-oj-action="[[ $listeners.showAdjustment ]]">
-              <span>Reversal &amp; adjustment</span>
+              <span><oj-bind-text value="[[$application.translations.appBundle.accrual_integration_reversal_adjustment]]"></oj-bind-text></span>
             </oj-button>
           </div>
         </div>
@@ -191,25 +185,25 @@
         <div class="oj-flex oj-sm-flex-wrap oj-sm-gap-6x oj-sm-margin-4x-top oj-sm-margin-3x-bottom">
           <div class="oj-flex-item">
             <div class="rw-metric-value"><oj-bind-text value="[[ $application.functions.fmtHours($variables.sumBilled) ]]"></oj-bind-text></div>
-            <div class="rw-metric-label">Billed</div>
+            <div class="rw-metric-label"><oj-bind-text value="[[$application.translations.appBundle.common_billed]]"></oj-bind-text></div>
           </div>
           <div class="oj-flex-item">
             <div class="rw-metric-value"><oj-bind-text value="[[ $application.functions.fmtHours($variables.sumUnbilled) ]]"></oj-bind-text></div>
-            <div class="rw-metric-label">Unbilled</div>
+            <div class="rw-metric-label"><oj-bind-text value="[[$application.translations.appBundle.accrual_integration_unbilled]]"></oj-bind-text></div>
           </div>
           <div class="oj-flex-item">
             <div class="rw-metric-value"><oj-bind-text value="[[ $application.functions.fmtHours($variables.sumLeave) ]]"></oj-bind-text></div>
-            <div class="rw-metric-label">Leave</div>
+            <div class="rw-metric-label"><oj-bind-text value="[[$application.translations.appBundle.common_leave]]"></oj-bind-text></div>
           </div>
           <div class="oj-flex-item">
             <div class="rw-metric-value"><oj-bind-text value="[[ $application.functions.fmtHours($variables.sumAdjustment) ]]"></oj-bind-text></div>
-            <div class="rw-metric-label">Net of Reversal + Adjustment</div>
+            <div class="rw-metric-label"><oj-bind-text value="[[$application.translations.appBundle.accrual_integration_net_of_reversal_adjustment]]"></oj-bind-text></div>
           </div>
         </div>
 
         <oj-bind-if test="[[ $variables.extract.length === 0 && !$variables.busy ]]">
           <div class="oj-typography-body-sm rw-metric-label" role="status">
-            No rows in this view.
+            <oj-bind-text value="[[$application.translations.appBundle.accrual_integration_no_rows_in_this_view]]"></oj-bind-text>
           </div>
         </oj-bind-if>
 
@@ -283,10 +277,9 @@
     <!-- ══════════════════ Leave-loss annexure (REP-002) ══════════════════ -->
     <oj-bind-if test="[[ $variables.annexure.length > 0 ]]">
       <div class="oj-sm-padding-4x rw-metric">
-        <h2 class="oj-typography-heading-xs oj-sm-margin-0">Leave-loss invoice annexure</h2>
+        <h2 class="oj-typography-heading-xs oj-sm-margin-0"><oj-bind-text value="[[$application.translations.appBundle.accrual_integration_leave_loss_invoice_annexure]]"></oj-bind-text></h2>
         <p class="oj-typography-body-sm rw-metric-label oj-sm-margin-1x-top">
-          Approved coverage for the month: absence hours that became billable
-          because a colleague covered the day.
+          <oj-bind-text value="[[$application.translations.appBundle.accrual_integration_approved_coverage_for_the_month_absence_hour]]"></oj-bind-text>
         </p>
 
         <div class="rw-grid-scroll oj-sm-margin-3x-top">
@@ -321,7 +314,7 @@
     <oj-bind-if test="[[ $variables.busy ]]">
       <div class="oj-flex oj-sm-align-items-center oj-sm-gap-2x" role="status" aria-live="polite">
         <oj-progress-circle size="sm" value="-1"></oj-progress-circle>
-        <span class="oj-typography-body-sm">Working…</span>
+        <span class="oj-typography-body-sm"><oj-bind-text value="[[$application.translations.appBundle.common_working]]"></oj-bind-text></span>
       </div>
     </oj-bind-if>
 

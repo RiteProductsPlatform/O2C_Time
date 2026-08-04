@@ -4,8 +4,8 @@
 
   <div class="login-topbar">
     <div class="login-brand-texts">
-      <span class="login-brand-title">Rite Digital</span>
-      <span class="login-brand-sub">O2C Platform</span>
+      <span class="login-brand-title"><oj-bind-text value="[[$application.translations.appBundle.common_rite_digital]]"></oj-bind-text></span>
+      <span class="login-brand-sub"><oj-bind-text value="[[$application.translations.appBundle.common_o2c_platform]]"></oj-bind-text></span>
     </div>
   </div>
 
@@ -14,29 +14,27 @@
     <!-- Left: what this application is for -->
     <div class="login-hero">
       <div class="login-hero-inner">
-        <h1 class="login-hero-title">Timesheet &amp; Time Approval</h1>
+        <h1 class="login-hero-title"><oj-bind-text value="[[$application.translations.appBundle.login_timesheet_time_approval]]"></oj-bind-text></h1>
         <p class="login-hero-sub">
-          Record time against your projects, submit it weekly, and let your
-          manager approve it — with holidays, shifts and absences already
-          filled in from Oracle Fusion.
+          <oj-bind-text value="[[$application.translations.appBundle.login_record_time_against_your_projects_submit_it_]]"></oj-bind-text>
         </p>
 
         <div class="login-hero-features">
           <div class="login-feature-item">
             <span class="login-feature-check">&#10003;</span>
-            Pre-populated from your work pattern and calendar
+            <oj-bind-text value="[[$application.translations.appBundle.login_pre_populated_from_your_work_pattern_and_cal]]"></oj-bind-text>
           </div>
           <div class="login-feature-item">
             <span class="login-feature-check">&#10003;</span>
-            Weekly submission with monthly confirmation
+            <oj-bind-text value="[[$application.translations.appBundle.login_weekly_submission_with_monthly_confirmation]]"></oj-bind-text>
           </div>
           <div class="login-feature-item">
             <span class="login-feature-check">&#10003;</span>
-            Leave loss coverage and salary stopping
+            <oj-bind-text value="[[$application.translations.appBundle.login_leave_loss_coverage_and_salary_stopping]]"></oj-bind-text>
           </div>
           <div class="login-feature-item">
             <span class="login-feature-check">&#10003;</span>
-            Approved time flows straight into revenue accrual
+            <oj-bind-text value="[[$application.translations.appBundle.login_approved_time_flows_straight_into_revenue_ac]]"></oj-bind-text>
           </div>
         </div>
       </div>
@@ -51,8 +49,8 @@
             <span class="oj-ux-ico-clock" style="font-size:26px; color:#1565C0;"></span>
           </div>
           <div>
-            <div class="login-logo">Welcome back</div>
-            <div class="login-sub">Sign in to your timesheet</div>
+            <div class="login-logo"><oj-bind-text value="[[$application.translations.appBundle.login_welcome_back]]"></oj-bind-text></div>
+            <div class="login-sub"><oj-bind-text value="[[$application.translations.appBundle.login_sign_in_to_your_timesheet]]"></oj-bind-text></div>
           </div>
         </div>
 
@@ -76,11 +74,11 @@
           <div class="login-field">
             <oj-input-text id="loginEmail"
               value="{{ $variables.email }}"
-              label-hint="Email address"
+              label-hint="[[$application.translations.appBundle.common_email_address]]"
               label-edge="inside"
               required="true"
               autocomplete="username"
-              placeholder="you@rite.digital"
+              placeholder="[[$application.translations.appBundle.login_you_rite_digital]]"
               on-keyup="[[$listeners.doLogin]]">
             </oj-input-text>
           </div>
@@ -90,7 +88,7 @@
                  every key but Enter, so this costs nothing when it is not one. -->
             <oj-input-password id="loginPassword"
               value="{{ $variables.password }}"
-              label-hint="Password"
+              label-hint="[[$application.translations.appBundle.common_password]]"
               label-edge="inside"
               required="true"
               autocomplete="current-password"
@@ -111,9 +109,9 @@
         </div>
 
         <div class="login-alt">
-          First time here, or been invited?
+          <oj-bind-text value="[[$application.translations.appBundle.login_first_time_here_or_been_invited]]"></oj-bind-text>
           <button type="button" class="login-alt-link"
-                  on-click="[[$listeners.goToSetPassword]]">Set your password</button>
+                  on-click="[[$listeners.goToSetPassword]]"><oj-bind-text value="[[$application.translations.appBundle.common_set_your_password]]"></oj-bind-text></button>
         </div>
 
       </div>

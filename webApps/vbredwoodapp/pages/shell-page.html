@@ -457,7 +457,7 @@
 
     <header class="rw-topbar">
       <div class="rw-topbar-left">
-        <span class="rw-topbar-title">O2C Timesheet</span>
+        <span class="rw-topbar-title"><oj-bind-text value="[[$application.translations.appBundle.shell_o2c_timesheet]]"></oj-bind-text></span>
       </div>
 
       <div class="rw-topbar-right">
@@ -495,7 +495,7 @@
         <oj-button display="icons" chroming="borderless"
                    on-oj-action="[[$listeners.doLogout]]" title="Sign out">
           <span slot="startIcon" class="oj-ux-ico-log-out"></span>
-          Sign out
+          <oj-bind-text value="[[$application.translations.appBundle.shell_sign_out]]"></oj-bind-text>
         </oj-button>
 
         <button class="rw-topbar-hamburger" title="Toggle menu"
@@ -510,7 +510,7 @@
            An ordinary page error goes to the banner below, not here. -->
       <oj-bind-if test="[[ $variables.shellError ]]">
         <div class="rw-shell-error">
-          <div class="rw-shell-error-title">Cannot open the Time module</div>
+          <div class="rw-shell-error-title"><oj-bind-text value="[[$application.translations.appBundle.shell_cannot_open_the_time_module]]"></oj-bind-text></div>
           <div class="rw-shell-error-body">
             <oj-bind-text value="[[ $variables.shellError ]]"></oj-bind-text>
           </div>
@@ -537,8 +537,8 @@
 
     <div class="rw-sidebar-logo">
       <div class="rw-sidebar-logo-texts">
-        <div class="rw-sidebar-logo-title">Timesheet</div>
-        <div class="rw-sidebar-logo-sub">O2C Platform</div>
+        <div class="rw-sidebar-logo-title"><oj-bind-text value="[[$application.translations.appBundle.shell_timesheet]]"></oj-bind-text></div>
+        <div class="rw-sidebar-logo-sub"><oj-bind-text value="[[$application.translations.appBundle.common_o2c_platform]]"></oj-bind-text></div>
       </div>
       <button class="rw-sidebar-toggle" title="Close menu"
               on-click="[[$listeners.toggleSidebar]]">&#10005;</button>
@@ -574,8 +574,7 @@
 
       <oj-bind-if test="[[ $page.functions.hasNoNav($application.variables.currentRole) ]]">
         <div class="rw-nav-empty">
-          You are signed in, but your account has not been granted access to any
-          part of the Time module. Contact your administrator.
+          <oj-bind-text value="[[$application.translations.appBundle.shell_you_are_signed_in_but_your_account_has_not_b]]"></oj-bind-text>
         </div>
       </oj-bind-if>
     </nav>

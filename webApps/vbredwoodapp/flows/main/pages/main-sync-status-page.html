@@ -13,8 +13,8 @@
   id="syncStatusPage"
   class="oj-sm-width-full rw-page-full"
   display-options.responsive-padding="off"
-  page-title="Sync Status"
-  page-subtitle="Population, daily action-date and defaulting jobs, and the records they could not process.">
+  page-title="[[$application.translations.appBundle.sync_status_sync_status]]"
+  page-subtitle="[[$application.translations.appBundle.sync_status_population_daily_action_date_and_defaulting_]]">
 
   <div class="oj-flex oj-sm-flex-direction-column oj-sm-width-full oj-sm-gap-4x"
        slot="main">
@@ -23,27 +23,27 @@
     <div class="oj-sm-padding-4x rw-metric">
       <div class="oj-flex oj-sm-justify-content-space-between oj-sm-align-items-start oj-sm-flex-wrap oj-sm-gap-3x">
         <oj-form-layout max-columns="2" direction="row" label-edge="top" class="oj-flex-item">
-          <oj-select-single label-hint="Period for the job"
+          <oj-select-single label-hint="[[$application.translations.appBundle.sync_status_period_for_the_job]]"
                             data="[[ $application.variables.periodOptions ]]"
                             value="{{ $variables.runJobPeriodId }}"
                             item-text="label"
-                            placeholder="Select period">
+                            placeholder="[[$application.translations.appBundle.common_select_period]]">
           </oj-select-single>
         </oj-form-layout>
 
         <div class="oj-flex oj-sm-gap-2x oj-sm-flex-wrap">
           <oj-button chroming="borderless" on-oj-action="[[ $listeners.reload ]]">
             <span slot="startIcon" class="oj-ux-ico-refresh"></span>
-            <span>Refresh</span>
+            <span><oj-bind-text value="[[$application.translations.appBundle.common_refresh]]"></oj-bind-text></span>
           </oj-button>
           <oj-button chroming="outlined" disabled="[[ $variables.busy ]]"
                      on-oj-action="[[ $listeners.runDaily ]]">
-            <span>Run daily process</span>
+            <span><oj-bind-text value="[[$application.translations.appBundle.sync_status_run_daily_process]]"></oj-bind-text></span>
           </oj-button>
           <oj-button chroming="outlined"
                      disabled="[[ $variables.busy || !$variables.runJobPeriodId ]]"
                      on-oj-action="[[ $listeners.runDefaulting ]]">
-            <span>Run weekly defaulting</span>
+            <span><oj-bind-text value="[[$application.translations.appBundle.sync_status_run_weekly_defaulting]]"></oj-bind-text></span>
           </oj-button>
           <!-- The manager side of the pair (RULE-007). Separate button, not a
                mode of the one above, because they run at different times and
@@ -52,12 +52,12 @@
           <oj-button chroming="outlined"
                      disabled="[[ $variables.busy || !$variables.runJobPeriodId ]]"
                      on-oj-action="[[ $listeners.runDeliveryDefaulting ]]">
-            <span>Run delivery defaulting</span>
+            <span><oj-bind-text value="[[$application.translations.appBundle.sync_status_run_delivery_defaulting]]"></oj-bind-text></span>
           </oj-button>
           <oj-button chroming="callToAction"
                      disabled="[[ $variables.busy || !$variables.runJobPeriodId ]]"
                      on-oj-action="[[ $listeners.runPopulation ]]">
-            <span>Run population</span>
+            <span><oj-bind-text value="[[$application.translations.appBundle.sync_status_run_population]]"></oj-bind-text></span>
           </oj-button>
         </div>
       </div>
@@ -65,8 +65,7 @@
       <oj-bind-if test="[[ $variables.openFailures > 0 ]]">
         <div class="oj-sm-padding-3x oj-sm-margin-3x-top rw-notice rw-notice-warning" role="status">
           <oj-bind-text value="[[ $variables.openFailures ]]"></oj-bind-text>
-          record(s) still failing. A retry only succeeds once the cause is fixed
-          at source — an allocation created, a shift calendar loaded.
+          <oj-bind-text value="[[$application.translations.appBundle.sync_status_record_s_still_failing_a_retry_only_succeeds]]"></oj-bind-text>
         </div>
       </oj-bind-if>
     </div>
@@ -74,12 +73,12 @@
     <!-- ══════════════════ Job cards ══════════════════ -->
     <div class="oj-sm-padding-4x rw-metric">
       <h2 class="oj-typography-heading-xs oj-sm-margin-0 oj-sm-margin-3x-bottom">
-        Latest run per job
+        <oj-bind-text value="[[$application.translations.appBundle.sync_status_latest_run_per_job]]"></oj-bind-text>
       </h2>
 
       <oj-bind-if test="[[ $variables.jobs.length === 0 && !$variables.busy ]]">
         <div class="oj-typography-body-sm rw-metric-label" role="status">
-          No job has run yet.
+          <oj-bind-text value="[[$application.translations.appBundle.sync_status_no_job_has_run_yet]]"></oj-bind-text>
         </div>
       </oj-bind-if>
 
@@ -132,15 +131,15 @@
     <!-- ══════════════════ Failed-record queue ══════════════════ -->
     <div class="oj-sm-padding-4x rw-metric">
       <div class="oj-flex oj-sm-justify-content-space-between oj-sm-align-items-center oj-sm-flex-wrap oj-sm-gap-2x oj-sm-margin-3x-bottom">
-        <h2 class="oj-typography-heading-xs oj-sm-margin-0">Failed records</h2>
-        <oj-switch label-hint="Show resolved too"
+        <h2 class="oj-typography-heading-xs oj-sm-margin-0"><oj-bind-text value="[[$application.translations.appBundle.sync_status_failed_records]]"></oj-bind-text></h2>
+        <oj-switch label-hint="[[$application.translations.appBundle.sync_status_show_resolved_too]]"
                    value="{{ $variables.showResolved }}">
         </oj-switch>
       </div>
 
       <oj-bind-if test="[[ $variables.failed.length === 0 && !$variables.busy ]]">
         <div class="oj-typography-body-sm rw-metric-label" role="status">
-          No failed records.
+          <oj-bind-text value="[[$application.translations.appBundle.sync_status_no_failed_records]]"></oj-bind-text>
         </div>
       </oj-bind-if>
 
@@ -184,7 +183,7 @@
                 <oj-button chroming="outlined" disabled="[[ $variables.busy ]]"
                            :aria-label="[[ $page.functions.retryLabel(cell.row.entityKey) ]]"
                            on-oj-action="[[ $listeners.retryRecord ]]">
-                  <span>Retry</span>
+                  <span><oj-bind-text value="[[$application.translations.appBundle.sync_status_retry]]"></oj-bind-text></span>
                 </oj-button>
               </oj-bind-if>
             </template>
@@ -196,7 +195,7 @@
     <oj-bind-if test="[[ $variables.busy ]]">
       <div class="oj-flex oj-sm-align-items-center oj-sm-gap-2x" role="status" aria-live="polite">
         <oj-progress-circle size="sm" value="-1"></oj-progress-circle>
-        <span class="oj-typography-body-sm">Working…</span>
+        <span class="oj-typography-body-sm"><oj-bind-text value="[[$application.translations.appBundle.common_working]]"></oj-bind-text></span>
       </div>
     </oj-bind-if>
 
@@ -205,7 +204,7 @@
   <!-- ══════════════════ Confirmation ══════════════════ -->
   <!-- oj-dialog opened via Actions.callComponentMethod, not window.confirm:
        SES blocks browser globals inside chains (knowledge/14 §7). -->
-  <oj-dialog id="runDefaultingDlg" dialog-title="Run the defaulting job" cancel-behavior="icon">
+  <oj-dialog id="runDefaultingDlg" dialog-title="[[$application.translations.appBundle.sync_status_run_the_defaulting_job]]" cancel-behavior="icon">
     <div slot="body">
       <p class="oj-typography-body-md">
         <oj-bind-text value="[[ $variables.confirmMessage ]]"></oj-bind-text>
@@ -213,11 +212,11 @@
     </div>
     <div slot="footer">
       <oj-button on-oj-action="[[ $listeners.cancelRunDefaulting ]]">
-        <span>Cancel</span>
+        <span><oj-bind-text value="[[$application.translations.appBundle.common_cancel]]"></oj-bind-text></span>
       </oj-button>
       <oj-button chroming="danger" disabled="[[ $variables.busy ]]"
                  on-oj-action="[[ $listeners.confirmRunDefaulting ]]">
-        <span>Run defaulting</span>
+        <span><oj-bind-text value="[[$application.translations.appBundle.sync_status_run_defaulting]]"></oj-bind-text></span>
       </oj-button>
     </div>
   </oj-dialog>

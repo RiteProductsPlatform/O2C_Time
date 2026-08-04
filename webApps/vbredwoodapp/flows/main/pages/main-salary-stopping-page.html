@@ -14,8 +14,8 @@
   id="salaryStoppingPage"
   class="oj-sm-width-full rw-page-full"
   display-options.responsive-padding="off"
-  page-title="Salary Stopping"
-  page-subtitle="Employees whose timesheet defaulted, and the release once it is corrected.">
+  page-title="[[$application.translations.appBundle.salary_stopping_salary_stopping]]"
+  page-subtitle="[[$application.translations.appBundle.salary_stopping_employees_whose_timesheet_defaulted_and_the_]]">
 
   <div class="oj-flex oj-sm-flex-direction-column oj-sm-width-full oj-sm-gap-4x"
        slot="main">
@@ -24,7 +24,7 @@
     <div class="oj-sm-padding-4x rw-metric">
       <div class="oj-flex oj-sm-justify-content-space-between oj-sm-align-items-start oj-sm-flex-wrap oj-sm-gap-3x">
         <oj-form-layout max-columns="2" direction="row" label-edge="top" class="oj-flex-item">
-          <oj-select-single label-hint="Month"
+          <oj-select-single label-hint="[[$application.translations.appBundle.common_month]]"
                             data="[[ $application.variables.periodOptions ]]"
                             value="{{ $variables.periodId }}"
                             item-text="label">
@@ -34,12 +34,12 @@
         <div class="oj-flex oj-sm-gap-2x">
           <oj-button chroming="borderless" on-oj-action="[[ $listeners.reload ]]">
             <span slot="startIcon" class="oj-ux-ico-refresh"></span>
-            <span>Refresh</span>
+            <span><oj-bind-text value="[[$application.translations.appBundle.common_refresh]]"></oj-bind-text></span>
           </oj-button>
           <oj-button chroming="outlined"
                      disabled="[[ $variables.busy || !$variables.periodId ]]"
                      on-oj-action="[[ $listeners.runJob ]]">
-            <span>Re-evaluate holds</span>
+            <span><oj-bind-text value="[[$application.translations.appBundle.salary_stopping_re_evaluate_holds]]"></oj-bind-text></span>
           </oj-button>
         </div>
       </div>
@@ -47,35 +47,33 @@
       <div class="oj-flex oj-sm-flex-wrap oj-sm-gap-6x oj-sm-margin-4x-top">
         <div class="oj-flex-item">
           <div class="rw-metric-value"><oj-bind-text value="[[ $variables.heldCount ]]"></oj-bind-text></div>
-          <div class="rw-metric-label">Salary held</div>
+          <div class="rw-metric-label"><oj-bind-text value="[[$application.translations.appBundle.salary_stopping_salary_held]]"></oj-bind-text></div>
         </div>
         <div class="oj-flex-item">
           <div class="rw-metric-value"><oj-bind-text value="[[ $variables.releasedCount ]]"></oj-bind-text></div>
-          <div class="rw-metric-label">Released</div>
+          <div class="rw-metric-label"><oj-bind-text value="[[$application.translations.appBundle.salary_stopping_released]]"></oj-bind-text></div>
         </div>
         <div class="oj-flex-item">
           <div class="rw-metric-value"><oj-bind-text value="[[ $variables.expiredCount ]]"></oj-bind-text></div>
-          <div class="rw-metric-label">Past the release window</div>
+          <div class="rw-metric-label"><oj-bind-text value="[[$application.translations.appBundle.salary_stopping_past_the_release_window]]"></oj-bind-text></div>
         </div>
       </div>
 
       <oj-bind-if test="[[ $variables.expiredCount > 0 ]]">
         <div class="oj-sm-padding-3x oj-sm-margin-3x-top rw-notice rw-notice-warning" role="status">
           <oj-bind-text value="[[ $variables.expiredCount ]]"></oj-bind-text>
-          hold(s) are past the release window. What should happen then — forfeit
-          or escalate — has not been decided (RA-012), so they are flagged here
-          and left for a human to resolve.
+          <oj-bind-text value="[[$application.translations.appBundle.salary_stopping_hold_s_are_past_the_release_window_what_shou]]"></oj-bind-text>
         </div>
       </oj-bind-if>
     </div>
 
     <!-- ══════════════════ Holds ══════════════════ -->
     <div class="oj-sm-padding-4x rw-metric">
-      <h2 class="oj-typography-heading-xs oj-sm-margin-0 oj-sm-margin-3x-bottom">Holds</h2>
+      <h2 class="oj-typography-heading-xs oj-sm-margin-0 oj-sm-margin-3x-bottom"><oj-bind-text value="[[$application.translations.appBundle.salary_stopping_holds]]"></oj-bind-text></h2>
 
       <oj-bind-if test="[[ $variables.holds.length === 0 && !$variables.busy ]]">
         <div class="oj-typography-body-sm rw-metric-label" role="status">
-          No defaulted timesheets — every timesheet was filed this month.
+          <oj-bind-text value="[[$application.translations.appBundle.salary_stopping_no_defaulted_timesheets_every_timesheet_was_]]"></oj-bind-text>
         </div>
       </oj-bind-if>
 
@@ -103,7 +101,7 @@
                 <div class="oj-typography-body-xs rw-metric-label">
                   <oj-bind-text value="[[ cell.row.employeeId ]]"></oj-bind-text>
                   <oj-bind-if test="[[ cell.row.workerType === 'Contractor' ]]">
-                    · Contractor
+                    <oj-bind-text value="[[$application.translations.appBundle.salary_stopping_contractor]]"></oj-bind-text>
                   </oj-bind-if>
                 </div>
               </span>
@@ -111,10 +109,9 @@
 
             <template slot="weeksCell" data-oj-as="cell">
               <span>
-                <oj-bind-text value="[[ cell.row.weeksDefaulted ]]"></oj-bind-text> defaulted
-                of <oj-bind-text value="[[ cell.row.weeksTotal ]]"></oj-bind-text>
+                <oj-bind-text value="[[ cell.row.weeksDefaulted ]]"></oj-bind-text> <oj-bind-text value="[[$application.translations.appBundle.salary_stopping_defaulted_of]]"></oj-bind-text> <oj-bind-text value="[[ cell.row.weeksTotal ]]"></oj-bind-text>
                 <div class="oj-typography-body-xs rw-metric-label">
-                  <oj-bind-text value="[[ cell.row.weeksSubmitted ]]"></oj-bind-text> submitted
+                  <oj-bind-text value="[[ cell.row.weeksSubmitted ]]"></oj-bind-text> <oj-bind-text value="[[$application.translations.appBundle.salary_stopping_submitted]]"></oj-bind-text>
                 </div>
               </span>
             </template>
@@ -136,7 +133,7 @@
               <span>
                 <oj-bind-text value="[[ $application.functions.fmtDate(cell.row.windowExpiresOn) ]]"></oj-bind-text>
                 <oj-bind-if test="[[ cell.row.windowExpired === 'Y' && cell.row.salaryStatus === 'Held' ]]">
-                  <span class="rw-flag rw-flag-reversal">Expired</span>
+                  <span class="rw-flag rw-flag-reversal"><oj-bind-text value="[[$application.translations.appBundle.salary_stopping_expired]]"></oj-bind-text></span>
                 </oj-bind-if>
               </span>
             </template>
@@ -146,19 +143,19 @@
                 <oj-button chroming="borderless"
                            :aria-label="[[ $page.functions.weeksLabel(cell.row.employeeName) ]]"
                            on-oj-action="[[ $listeners.viewWeeks ]]">
-                  <span>Weeks</span>
+                  <span><oj-bind-text value="[[$application.translations.appBundle.common_weeks]]"></oj-bind-text></span>
                 </oj-button>
 
                 <oj-bind-if test="[[ cell.row.salaryStatus === 'Held' ]]">
                   <oj-button chroming="borderless"
                              :aria-label="[[ $page.functions.correctLabel(cell.row.employeeName) ]]"
                              on-oj-action="[[ $listeners.editDefaulted ]]">
-                    <span>Correct</span>
+                    <span><oj-bind-text value="[[$application.translations.appBundle.common_correct]]"></oj-bind-text></span>
                   </oj-button>
                   <oj-button chroming="outlined" disabled="[[ $variables.busy ]]"
                              :aria-label="[[ $page.functions.releaseLabel(cell.row.employeeName) ]]"
                              on-oj-action="[[ $listeners.openRelease ]]">
-                    <span>Release</span>
+                    <span><oj-bind-text value="[[$application.translations.appBundle.salary_stopping_release]]"></oj-bind-text></span>
                   </oj-button>
                 </oj-bind-if>
               </div>
@@ -171,19 +168,17 @@
     <oj-bind-if test="[[ $variables.busy ]]">
       <div class="oj-flex oj-sm-align-items-center oj-sm-gap-2x" role="status" aria-live="polite">
         <oj-progress-circle size="sm" value="-1"></oj-progress-circle>
-        <span class="oj-typography-body-sm">Working…</span>
+        <span class="oj-typography-body-sm"><oj-bind-text value="[[$application.translations.appBundle.common_working]]"></oj-bind-text></span>
       </div>
     </oj-bind-if>
 
   </div>
 
   <!-- ══════════════════ Weeks breakdown (#3) ══════════════════ -->
-  <oj-dialog id="weeksDlg" dialog-title="Weeks breakdown" cancel-behavior="icon">
+  <oj-dialog id="weeksDlg" dialog-title="[[$application.translations.appBundle.salary_stopping_weeks_breakdown]]" cancel-behavior="icon">
     <div slot="body">
       <p class="oj-typography-body-sm rw-metric-label">
-        <oj-bind-text value="[[ $variables.weeksLabel ]]"></oj-bind-text> —
-        which weeks were filed and which defaulted. "Missed one week" and "filed
-        nothing all month" deserve very different responses.
+        <oj-bind-text value="[[ $variables.weeksLabel ]]"></oj-bind-text> <oj-bind-text value="[[$application.translations.appBundle.salary_stopping_which_weeks_were_filed_and_which_defaulted_m]]"></oj-bind-text>
       </p>
 
       <div class="rw-grid-scroll">
@@ -201,7 +196,7 @@
                   ]'>
           <template slot="wCell" data-oj-as="cell">
             <span>
-              Week <oj-bind-text value="[[ cell.row.weekIndex ]]"></oj-bind-text>
+              <oj-bind-text value="[[$application.translations.appBundle.common_week]]"></oj-bind-text> <oj-bind-text value="[[ cell.row.weekIndex ]]"></oj-bind-text>
               <div class="oj-typography-body-xs rw-metric-label">
                 <oj-bind-text value="[[ cell.row.weekRange ]]"></oj-bind-text>
               </div>
@@ -213,7 +208,7 @@
                 <oj-bind-text value="[[ cell.row.weekStatus ]]"></oj-bind-text>
               </span>
               <oj-bind-if test="[[ cell.row.lockedFlag === 'Y' ]]">
-                <span class="rw-flag rw-flag-defaulted" title="Locked to the employee — only a manager can edit it.">Locked</span>
+                <span class="rw-flag rw-flag-defaulted" title="Locked to the employee — only a manager can edit it."><oj-bind-text value="[[$application.translations.appBundle.salary_stopping_locked]]"></oj-bind-text></span>
               </oj-bind-if>
             </span>
           </template>
@@ -231,13 +226,13 @@
     </div>
     <div slot="footer">
       <oj-button on-oj-action="[[ $listeners.closeWeeks ]]">
-        <span>Close</span>
+        <span><oj-bind-text value="[[$application.translations.appBundle.common_close]]"></oj-bind-text></span>
       </oj-button>
     </div>
   </oj-dialog>
 
   <!-- ══════════════════ Release dialog (ACT-026) ══════════════════ -->
-  <oj-dialog id="releaseDlg" dialog-title="Release the salary hold"
+  <oj-dialog id="releaseDlg" dialog-title="[[$application.translations.appBundle.salary_stopping_release_the_salary_hold]]"
              cancel-behavior="icon">
     <div slot="body">
       <p class="oj-typography-body-sm rw-metric-label">
@@ -248,26 +243,25 @@
            has to be corrected before the hold can go (ACT-026 precondition). -->
       <oj-bind-if test="[[ $variables.releaseBlocked ]]">
         <div class="oj-sm-padding-3x rw-notice rw-notice-warning" role="alert">
-          This employee still has a defaulted week. Correct it first — the hold
-          cannot be released while time is missing.
+          <oj-bind-text value="[[$application.translations.appBundle.salary_stopping_this_employee_still_has_a_defaulted_week_cor]]"></oj-bind-text>
         </div>
       </oj-bind-if>
 
       <oj-form-layout label-edge="top" max-columns="1">
-        <oj-text-area label-hint="Remarks" rows="3"
+        <oj-text-area label-hint="[[$application.translations.appBundle.common_remarks]]" rows="3"
                       value="{{ $variables.releaseRemarks }}"
-                      placeholder="Why is the hold being released?">
+                      placeholder="[[$application.translations.appBundle.salary_stopping_why_is_the_hold_being_released]]">
         </oj-text-area>
       </oj-form-layout>
     </div>
     <div slot="footer">
       <oj-button on-oj-action="[[ $listeners.closeRelease ]]">
-        <span>Cancel</span>
+        <span><oj-bind-text value="[[$application.translations.appBundle.common_cancel]]"></oj-bind-text></span>
       </oj-button>
       <oj-button chroming="callToAction"
                  disabled="[[ $variables.busy || $variables.releaseBlocked ]]"
                  on-oj-action="[[ $listeners.doRelease ]]">
-        <span>Release hold</span>
+        <span><oj-bind-text value="[[$application.translations.appBundle.salary_stopping_release_hold]]"></oj-bind-text></span>
       </oj-button>
     </div>
   </oj-dialog>

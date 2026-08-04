@@ -9,8 +9,8 @@
   id="integrationsPage"
   class="oj-sm-width-full rw-page-full"
   display-options.responsive-padding="off"
-  page-title="Integrations"
-  page-subtitle="Reference catalogue of the Oracle Fusion and OTL surfaces this module reads from and writes to.">
+  page-title="[[$application.translations.appBundle.integrations_integrations]]"
+  page-subtitle="[[$application.translations.appBundle.integrations_reference_catalogue_of_the_oracle_fusion_and]]">
 
   <div class="oj-flex oj-sm-flex-direction-column oj-sm-width-full oj-sm-gap-4x"
        slot="main">
@@ -18,7 +18,7 @@
     <div class="oj-sm-padding-4x rw-metric">
       <div class="oj-flex oj-sm-justify-content-space-between oj-sm-align-items-start oj-sm-flex-wrap oj-sm-gap-3x">
         <oj-form-layout max-columns="2" direction="row" label-edge="top" class="oj-flex-item">
-          <oj-select-single label-hint="Area"
+          <oj-select-single label-hint="[[$application.translations.appBundle.integrations_area]]"
                             data="[[ $variables.areaOptions ]]"
                             value="{{ $variables.areaFilter }}"
                             item-text="label">
@@ -26,14 +26,12 @@
         </oj-form-layout>
         <oj-button chroming="borderless" on-oj-action="[[ $listeners.reload ]]">
           <span slot="startIcon" class="oj-ux-ico-refresh"></span>
-          <span>Refresh</span>
+          <span><oj-bind-text value="[[$application.translations.appBundle.common_refresh]]"></oj-bind-text></span>
         </oj-button>
       </div>
 
       <div class="oj-sm-padding-3x oj-sm-margin-3x-top rw-notice" role="status">
-        Oracle Time &amp; Labor is the system of record. This module pushes
-        approved time to OTL, which feeds Project Costing and Payroll natively —
-        nothing here writes to Payroll or Costing directly.
+        <oj-bind-text value="[[$application.translations.appBundle.integrations_oracle_time_labor_is_the_system_of_record_th]]"></oj-bind-text>
       </div>
     </div>
 
@@ -47,10 +45,9 @@
     <div class="oj-sm-padding-4x rw-metric">
       <div class="oj-flex oj-sm-justify-content-space-between oj-sm-align-items-start oj-sm-flex-wrap oj-sm-gap-3x">
         <div>
-          <h2 class="oj-typography-heading-xs oj-sm-margin-0">Fusion connection</h2>
+          <h2 class="oj-typography-heading-xs oj-sm-margin-0"><oj-bind-text value="[[$application.translations.appBundle.integrations_fusion_connection]]"></oj-bind-text></h2>
           <p class="oj-typography-body-sm rw-metric-label oj-sm-margin-1x-top oj-sm-margin-0-bottom">
-            Asks HCM for one worker through the VB proxy. No credential reaches
-            this browser.
+            <oj-bind-text value="[[$application.translations.appBundle.integrations_asks_hcm_for_one_worker_through_the_vb_proxy]]"></oj-bind-text>
           </p>
         </div>
         <oj-button chroming="callToAction" disabled="[[ $variables.probing ]]"
@@ -64,7 +61,7 @@
 
       <oj-bind-if test="[[ $variables.probeState === 'ok' ]]">
         <div class="oj-sm-padding-3x oj-sm-margin-3x-top rw-notice" role="status">
-          <div class="oj-typography-body-md oj-typography-semi-bold">Connected</div>
+          <div class="oj-typography-body-md oj-typography-semi-bold"><oj-bind-text value="[[$application.translations.appBundle.integrations_connected]]"></oj-bind-text></div>
           <div class="oj-typography-body-sm oj-sm-margin-1x-top">
             <oj-bind-text value="[[ $variables.probeMessage ]]"></oj-bind-text>
           </div>
@@ -73,7 +70,7 @@
 
       <oj-bind-if test="[[ $variables.probeState === 'fail' ]]">
         <div class="oj-sm-padding-3x oj-sm-margin-3x-top rw-notice rw-notice-warning" role="alert">
-          <div class="oj-typography-body-md oj-typography-semi-bold">Not connected</div>
+          <div class="oj-typography-body-md oj-typography-semi-bold"><oj-bind-text value="[[$application.translations.appBundle.integrations_not_connected]]"></oj-bind-text></div>
           <div class="oj-typography-body-sm oj-sm-margin-1x-top">
             <oj-bind-text value="[[ $variables.probeMessage ]]"></oj-bind-text>
           </div>
@@ -92,23 +89,21 @@
     <div class="oj-sm-padding-4x rw-metric">
       <div class="oj-flex oj-sm-justify-content-space-between oj-sm-align-items-start oj-sm-flex-wrap oj-sm-gap-3x">
         <div>
-          <h2 class="oj-typography-heading-xs oj-sm-margin-0">OTL push readiness</h2>
+          <h2 class="oj-typography-heading-xs oj-sm-margin-0"><oj-bind-text value="[[$application.translations.appBundle.integrations_otl_push_readiness]]"></oj-bind-text></h2>
           <p class="oj-typography-body-sm rw-metric-label oj-sm-margin-1x-top oj-sm-margin-0-bottom">
-            A project can only be pushed to Oracle Time &amp; Labor once every
-            chargeable task has an expenditure type and every allocated worker
-            an expenditure organization.
+            <oj-bind-text value="[[$application.translations.appBundle.integrations_a_project_can_only_be_pushed_to_oracle_time_]]"></oj-bind-text>
           </p>
         </div>
         <oj-button chroming="borderless" disabled="[[ $variables.busy ]]"
                    on-oj-action="[[ $listeners.loadPoet ]]">
           <span slot="startIcon" class="oj-ux-ico-refresh"></span>
-          <span>Check readiness</span>
+          <span><oj-bind-text value="[[$application.translations.appBundle.integrations_check_readiness]]"></oj-bind-text></span>
         </oj-button>
       </div>
 
       <oj-bind-if test="[[ $variables.poet.length === 0 && !$variables.busy ]]">
         <div class="oj-typography-body-sm rw-metric-label oj-sm-margin-3x-top" role="status">
-          Not checked yet, or no active project has any allocation.
+          <oj-bind-text value="[[$application.translations.appBundle.integrations_not_checked_yet_or_no_active_project_has_any]]"></oj-bind-text>
         </div>
       </oj-bind-if>
 
@@ -146,8 +141,7 @@
 
     <div class="oj-sm-padding-4x rw-metric">
       <h2 class="oj-typography-heading-xs oj-sm-margin-0 oj-sm-margin-3x-bottom">
-        Catalogue
-        (<oj-bind-text value="[[ $variables.rows.length ]]"></oj-bind-text>)
+        <oj-bind-text value="[[$application.translations.appBundle.integrations_catalogue]]"></oj-bind-text><oj-bind-text value="[[ $variables.rows.length ]]"></oj-bind-text>)
       </h2>
 
       <oj-bind-if test="[[ $variables.rows.length === 0 && !$variables.busy ]]">
@@ -180,7 +174,7 @@
     <oj-bind-if test="[[ $variables.busy ]]">
       <div class="oj-flex oj-sm-align-items-center oj-sm-gap-2x" role="status" aria-live="polite">
         <oj-progress-circle size="sm" value="-1"></oj-progress-circle>
-        <span class="oj-typography-body-sm">Working…</span>
+        <span class="oj-typography-body-sm"><oj-bind-text value="[[$application.translations.appBundle.common_working]]"></oj-bind-text></span>
       </div>
     </oj-bind-if>
 

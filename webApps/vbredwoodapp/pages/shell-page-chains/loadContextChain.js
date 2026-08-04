@@ -25,6 +25,18 @@ define([
     async run(context) {
       const { $page, $application } = context;
 
+      // Both paths that create a session end up here, and on a restore both
+      // fire: checkSessionChain calls this directly so the month LOV is
+      // populated before the landing page renders, and the shell's
+      // sessionEstablished listener calls it again. Guarding on the user makes
+      // the second call free instead of a second round-trip per list.
+      const who = $application.variables.currentUserId;
+      if (who && $application.variables.contextLoadedFor === who
+          && ($application.variables.periodOptionsArray || []).length) {
+        return;
+      }
+      $application.variables.contextLoadedFor = who;
+
       await this.loadPeriods(context, $application);
 
       // Manager only. PER-004's admin menu has no team pages, so loading the

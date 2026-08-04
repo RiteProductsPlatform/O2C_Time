@@ -15,8 +15,8 @@
   id="viewTimesheetPage"
   class="oj-sm-width-full rw-page-full"
   display-options.responsive-padding="off"
-  page-title="Monthly Summary"
-  page-subtitle="Hours are shown at task (WBS) level; open an employee to approve by week or by day.">
+  page-title="[[$application.translations.appBundle.view_timesheet_monthly_summary]]"
+  page-subtitle="[[$application.translations.appBundle.view_timesheet_hours_are_shown_at_task_wbs_level_open_an_em]]">
 
   <div class="oj-flex oj-sm-flex-direction-column oj-sm-width-full oj-sm-gap-4x"
        slot="main">
@@ -27,7 +27,7 @@
         <div class="oj-flex-item">
           <oj-button chroming="borderless" on-oj-action="[[ $listeners.goBack ]]">
             <span slot="startIcon" class="oj-ux-ico-arrow-left"></span>
-            <span>Team Approvals</span>
+            <span><oj-bind-text value="[[$application.translations.appBundle.common_team_approvals]]"></oj-bind-text></span>
           </oj-button>
           <h2 class="oj-typography-heading-sm oj-sm-margin-0 oj-sm-margin-1x-top">
             <oj-bind-text value="[[ $application.variables.selectedProjectName ]]"></oj-bind-text>
@@ -38,26 +38,26 @@
         </div>
         <oj-button chroming="borderless" on-oj-action="[[ $listeners.reload ]]">
           <span slot="startIcon" class="oj-ux-ico-refresh"></span>
-          <span>Refresh</span>
+          <span><oj-bind-text value="[[$application.translations.appBundle.common_refresh]]"></oj-bind-text></span>
         </oj-button>
       </div>
 
       <div class="oj-flex oj-sm-flex-wrap oj-sm-gap-6x oj-sm-margin-4x-top">
         <div class="oj-flex-item">
           <div class="rw-metric-value"><oj-bind-text value="[[ $variables.totalEmployees ]]"></oj-bind-text></div>
-          <div class="rw-metric-label">Team</div>
+          <div class="rw-metric-label"><oj-bind-text value="[[$application.translations.appBundle.view_timesheet_team]]"></oj-bind-text></div>
         </div>
         <div class="oj-flex-item">
           <div class="rw-metric-value"><oj-bind-text value="[[ $variables.approvedEmployees ]]"></oj-bind-text></div>
-          <div class="rw-metric-label">Approved</div>
+          <div class="rw-metric-label"><oj-bind-text value="[[$application.translations.appBundle.common_approved]]"></oj-bind-text></div>
         </div>
         <div class="oj-flex-item">
           <div class="rw-metric-value"><oj-bind-text value="[[ $variables.pendingEmployees ]]"></oj-bind-text></div>
-          <div class="rw-metric-label">Pending</div>
+          <div class="rw-metric-label"><oj-bind-text value="[[$application.translations.appBundle.view_timesheet_pending]]"></oj-bind-text></div>
         </div>
         <div class="oj-flex-item">
           <div class="rw-metric-value"><oj-bind-text value="[[ $variables.rejectedEmployees ]]"></oj-bind-text></div>
-          <div class="rw-metric-label">Rejected</div>
+          <div class="rw-metric-label"><oj-bind-text value="[[$application.translations.appBundle.view_timesheet_rejected]]"></oj-bind-text></div>
         </div>
       </div>
     </div>
@@ -65,12 +65,11 @@
     <!-- ══════════════════ Confirmation state ══════════════════ -->
     <oj-bind-if test="[[ $variables.alreadyConfirmed ]]">
       <div class="oj-sm-padding-3x rw-notice" role="status">
-        <div class="oj-typography-body-md oj-typography-semi-bold">This month has been confirmed</div>
+        <div class="oj-typography-body-md oj-typography-semi-bold"><oj-bind-text value="[[$application.translations.appBundle.view_timesheet_this_month_has_been_confirmed]]"></oj-bind-text></div>
         <div class="oj-typography-body-sm oj-sm-margin-1x-top">
-          Confirmed on <oj-bind-text value="[[ $variables.confirmedOn ]]"></oj-bind-text>.
+          <oj-bind-text value="[[$application.translations.appBundle.view_timesheet_confirmed_on]]"></oj-bind-text> <oj-bind-text value="[[ $variables.confirmedOn ]]"></oj-bind-text>.
           <oj-bind-text value="[[ $variables.accrualRows ]]"></oj-bind-text>
-          interface rows were written for the accrual application to collect
-          (status: <oj-bind-text value="[[ $variables.accrualStatus ]]"></oj-bind-text>).
+          <oj-bind-text value="[[$application.translations.appBundle.view_timesheet_interface_rows_were_written_for_the_accrual_]]"></oj-bind-text> <oj-bind-text value="[[ $variables.accrualStatus ]]"></oj-bind-text>).
         </div>
       </div>
     </oj-bind-if>
@@ -79,13 +78,13 @@
     <oj-bind-if test="[[ !$variables.alreadyConfirmed && !$variables.confirmAllowed
                       && $variables.totalEmployees > 0 ]]">
       <div class="oj-sm-padding-3x rw-notice rw-notice-warning" role="status">
-        <div class="oj-typography-body-md oj-typography-semi-bold">Not ready to confirm to accrual</div>
+        <div class="oj-typography-body-md oj-typography-semi-bold"><oj-bind-text value="[[$application.translations.appBundle.view_timesheet_not_ready_to_confirm_to_accrual]]"></oj-bind-text></div>
         <div class="oj-typography-body-sm oj-sm-margin-1x-top">
-          Every employee on the project must be approved first.
+          <oj-bind-text value="[[$application.translations.appBundle.view_timesheet_every_employee_on_the_project_must_be_approv]]"></oj-bind-text>
           <oj-bind-text value="[[ $variables.pendingEmployees ]]"></oj-bind-text>
-          still pending<oj-bind-if test="[[ $variables.rejectedEmployees > 0 ]]">,
+          <oj-bind-text value="[[$application.translations.appBundle.view_timesheet_still_pending]]"></oj-bind-text><oj-bind-if test="[[ $variables.rejectedEmployees > 0 ]]">,
           <oj-bind-text value="[[ $variables.rejectedEmployees ]]"></oj-bind-text>
-          rejected and back with the employee</oj-bind-if>.
+          <oj-bind-text value="[[$application.translations.appBundle.view_timesheet_rejected_and_back_with_the_employee]]"></oj-bind-text></oj-bind-if>.
         </div>
       </div>
     </oj-bind-if>
@@ -93,38 +92,38 @@
     <!-- ══════════════════ Employees ══════════════════ -->
     <div class="oj-sm-padding-4x rw-metric">
       <div class="oj-flex oj-sm-justify-content-space-between oj-sm-align-items-center oj-sm-flex-wrap oj-sm-gap-2x oj-sm-margin-3x-bottom">
-        <h2 class="oj-typography-heading-xs oj-sm-margin-0">Employees</h2>
+        <h2 class="oj-typography-heading-xs oj-sm-margin-0"><oj-bind-text value="[[$application.translations.appBundle.view_timesheet_employees]]"></oj-bind-text></h2>
         <div class="oj-flex oj-sm-align-items-center oj-sm-gap-2x oj-sm-flex-wrap">
           <span class="oj-typography-body-sm rw-metric-label">
-            <oj-bind-text value="[[ $variables.selectedKeys.length ]]"></oj-bind-text> selected
+            <oj-bind-text value="[[ $variables.selectedKeys.length ]]"></oj-bind-text> <oj-bind-text value="[[$application.translations.appBundle.common_selected]]"></oj-bind-text>
           </span>
           <!-- BRD: "approve all or some employees". Select all skips anyone already
                approved, so an approve-all never re-sends settled rows. -->
           <oj-button chroming="borderless"
                      on-oj-action="[[ $listeners.selectAllPending ]]">
-            <span>Select all pending</span>
+            <span><oj-bind-text value="[[$application.translations.appBundle.common_select_all_pending]]"></oj-bind-text></span>
           </oj-button>
           <oj-button chroming="borderless"
                      disabled="[[ $variables.selectedKeys.length === 0 ]]"
                      on-oj-action="[[ $listeners.clearSelection ]]">
-            <span>Clear</span>
+            <span><oj-bind-text value="[[$application.translations.appBundle.common_clear]]"></oj-bind-text></span>
           </oj-button>
           <oj-button chroming="outlined"
                      disabled="[[ $variables.busy || $variables.selectedKeys.length === 0 ]]"
                      on-oj-action="[[ $listeners.openReject ]]">
-            <span>Reject selected</span>
+            <span><oj-bind-text value="[[$application.translations.appBundle.common_reject_selected]]"></oj-bind-text></span>
           </oj-button>
           <oj-button chroming="callToAction"
                      disabled="[[ $variables.busy || $variables.selectedKeys.length === 0 ]]"
                      on-oj-action="[[ $listeners.approveSelected ]]">
-            <span>Approve selected</span>
+            <span><oj-bind-text value="[[$application.translations.appBundle.common_approve_selected]]"></oj-bind-text></span>
           </oj-button>
         </div>
       </div>
 
       <oj-bind-if test="[[ $variables.employees.length === 0 && !$variables.busy ]]">
         <div class="oj-typography-body-sm rw-metric-label" role="status">
-          No employees on project — nobody has time on this project for this month.
+          <oj-bind-text value="[[$application.translations.appBundle.view_timesheet_no_employees_on_project_nobody_has_time_on_t]]"></oj-bind-text>
         </div>
       </oj-bind-if>
 
@@ -170,19 +169,19 @@
               <span>
                 <oj-bind-text value="[[ cell.row.employeeName ]]"></oj-bind-text>
                 <oj-bind-if test="[[ cell.row.workerType === 'Contractor' ]]">
-                  <span class="rw-flag rw-flag-advance">Contractor</span>
+                  <span class="rw-flag rw-flag-advance"><oj-bind-text value="[[$application.translations.appBundle.view_timesheet_contractor]]"></oj-bind-text></span>
                 </oj-bind-if>
                 <oj-bind-if test="[[ cell.row.overriddenFlag === 'Y' ]]">
-                  <span class="rw-flag rw-flag-overridden" title="A manager changed hours before approving. The originals are in the audit trail.">Overridden</span>
+                  <span class="rw-flag rw-flag-overridden" title="A manager changed hours before approving. The originals are in the audit trail."><oj-bind-text value="[[$application.translations.appBundle.view_timesheet_overridden]]"></oj-bind-text></span>
                 </oj-bind-if>
                 <oj-bind-if test="[[ cell.row.lateSubmissionFlag === 'Y' ]]">
-                  <span class="rw-flag rw-flag-late" title="Submitted after the weekly cut-off. The status is still Submitted; this records the SLA miss.">Late</span>
+                  <span class="rw-flag rw-flag-late" title="Submitted after the weekly cut-off. The status is still Submitted; this records the SLA miss."><oj-bind-text value="[[$application.translations.appBundle.view_timesheet_late]]"></oj-bind-text></span>
                 </oj-bind-if>
                 <oj-bind-if test="[[ cell.row.defaultedFlag === 'Y' ]]">
-                  <span class="rw-flag rw-flag-defaulted" title="A cut-off was missed on at least one week this month.">Defaulted</span>
+                  <span class="rw-flag rw-flag-defaulted" title="A cut-off was missed on at least one week this month."><oj-bind-text value="[[$application.translations.appBundle.view_timesheet_defaulted]]"></oj-bind-text></span>
                 </oj-bind-if>
                 <oj-bind-if test="[[ cell.row.advanceClosureFlag === 'Y' ]]">
-                  <span class="rw-flag rw-flag-advance" title="Approved at month level before the work happened (PROC-010).">Advance closure</span>
+                  <span class="rw-flag rw-flag-advance" title="Approved at month level before the work happened (PROC-010)."><oj-bind-text value="[[$application.translations.appBundle.common_advance_closure]]"></oj-bind-text></span>
                 </oj-bind-if>
               </span>
             </template>
@@ -217,7 +216,7 @@
               <oj-button chroming="outlined"
                          :aria-label="[[ $page.functions.openEmployeeLabel(cell.row.employeeName) ]]"
                          on-oj-action="[[ $listeners.openEmployee ]]">
-                <span>Open</span>
+                <span><oj-bind-text value="[[$application.translations.appBundle.common_open]]"></oj-bind-text></span>
               </oj-button>
             </template>
           </oj-table>
@@ -227,14 +226,10 @@
 
     <!-- ══════════════════ Confirm month → accrual ══════════════════ -->
     <div class="oj-sm-padding-4x rw-metric">
-      <h2 class="oj-typography-heading-xs oj-sm-margin-0">Monthly &#8594; Accrual</h2>
+      <h2 class="oj-typography-heading-xs oj-sm-margin-0"><oj-bind-text value="[[$application.translations.appBundle.view_timesheet_monthly_accrual]]"></oj-bind-text></h2>
       <p class="oj-typography-body-sm rw-metric-label oj-sm-margin-1x-top">
-        Confirms the whole project month for <strong>all employees at once</strong>
-        and fills the accrual interface with the consolidated timesheet
-        (employee &times; project &times; task &times; day) plus any day-wise
-        Reversal&nbsp;(&minus;)/Adjustment&nbsp;(+) rows. The accrual application
-        collects it from there. Approved time is also pushed to Oracle Time &amp;
-        Labor, which feeds Project Costing and Payroll.
+        <oj-bind-text value="[[$application.translations.appBundle.view_timesheet_confirms_the_whole_project_month_for]]"></oj-bind-text> <strong><oj-bind-text value="[[$application.translations.appBundle.view_timesheet_all_employees_at_once]]"></oj-bind-text></strong>
+        <oj-bind-text value="[[$application.translations.appBundle.view_timesheet_and_fills_the_accrual_interface_with_the_con]]"></oj-bind-text>
       </p>
       <div class="oj-flex oj-sm-justify-content-flex-end oj-sm-margin-3x-top">
         <oj-button chroming="callToAction"
@@ -250,41 +245,40 @@
     <oj-bind-if test="[[ $variables.busy ]]">
       <div class="oj-flex oj-sm-align-items-center oj-sm-gap-2x" role="status" aria-live="polite">
         <oj-progress-circle size="sm" value="-1"></oj-progress-circle>
-        <span class="oj-typography-body-sm">Working…</span>
+        <span class="oj-typography-body-sm"><oj-bind-text value="[[$application.translations.appBundle.common_working]]"></oj-bind-text></span>
       </div>
     </oj-bind-if>
 
   </div>
 
   <!-- ══════════════════ Reject dialog (RULE-013) ══════════════════ -->
-  <oj-dialog id="rejectDlg" dialog-title="Reject selected employees"
+  <oj-dialog id="rejectDlg" dialog-title="[[$application.translations.appBundle.view_timesheet_reject_selected_employees]]"
              cancel-behavior="icon">
     <div slot="body">
       <p class="oj-typography-body-sm rw-metric-label">
-        The reason and remarks are shown to the employee together with the
-        rejected dates, so they know exactly what to correct.
+        <oj-bind-text value="[[$application.translations.appBundle.view_timesheet_the_reason_and_remarks_are_shown_to_the_empl]]"></oj-bind-text>
       </p>
       <oj-form-layout label-edge="top" max-columns="1">
-        <oj-select-single label-hint="Rejection reason" required="true"
+        <oj-select-single label-hint="[[$application.translations.appBundle.common_rejection_reason]]" required="true"
                           data="[[ $application.variables.rejectReasonOptions ]]"
                           value="{{ $variables.rejectReason }}"
                           item-text="label"
-                          placeholder="Select a reason">
+                          placeholder="[[$application.translations.appBundle.common_select_a_reason]]">
         </oj-select-single>
-        <oj-text-area label-hint="Remarks" rows="3"
+        <oj-text-area label-hint="[[$application.translations.appBundle.common_remarks]]" rows="3"
                       value="{{ $variables.rejectRemarks }}"
-                      placeholder="What needs to change?">
+                      placeholder="[[$application.translations.appBundle.common_what_needs_to_change]]">
         </oj-text-area>
       </oj-form-layout>
     </div>
     <div slot="footer">
       <oj-button on-oj-action="[[ $listeners.closeReject ]]">
-        <span>Cancel</span>
+        <span><oj-bind-text value="[[$application.translations.appBundle.common_cancel]]"></oj-bind-text></span>
       </oj-button>
       <oj-button chroming="callToAction"
                  disabled="[[ $variables.busy || !$variables.rejectReason ]]"
                  on-oj-action="[[ $listeners.rejectSelected ]]">
-        <span>Reject</span>
+        <span><oj-bind-text value="[[$application.translations.appBundle.common_reject]]"></oj-bind-text></span>
       </oj-button>
     </div>
   </oj-dialog>
@@ -292,7 +286,7 @@
   <!-- ══════════════════ Confirmation ══════════════════ -->
   <!-- oj-dialog opened via Actions.callComponentMethod, not window.confirm:
        SES blocks browser globals inside chains (knowledge/14 §7). -->
-  <oj-dialog id="confirmMonthDlg" dialog-title="Confirm month to accrual" cancel-behavior="icon">
+  <oj-dialog id="confirmMonthDlg" dialog-title="[[$application.translations.appBundle.view_timesheet_confirm_month_to_accrual]]" cancel-behavior="icon">
     <div slot="body">
       <p class="oj-typography-body-md">
         <oj-bind-text value="[[ $variables.confirmMessage ]]"></oj-bind-text>
@@ -300,11 +294,11 @@
     </div>
     <div slot="footer">
       <oj-button on-oj-action="[[ $listeners.cancelConfirmMonth ]]">
-        <span>Cancel</span>
+        <span><oj-bind-text value="[[$application.translations.appBundle.common_cancel]]"></oj-bind-text></span>
       </oj-button>
       <oj-button chroming="callToAction" disabled="[[ $variables.busy ]]"
                  on-oj-action="[[ $listeners.confirmConfirmMonth ]]">
-        <span>Confirm month</span>
+        <span><oj-bind-text value="[[$application.translations.appBundle.view_timesheet_confirm_month]]"></oj-bind-text></span>
       </oj-button>
     </div>
   </oj-dialog>

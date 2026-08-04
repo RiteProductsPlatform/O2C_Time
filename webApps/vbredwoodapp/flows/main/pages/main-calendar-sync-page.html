@@ -12,8 +12,8 @@
   id="calendarSyncPage"
   class="oj-sm-width-full rw-page-full"
   display-options.responsive-padding="off"
-  page-title="Calendar (Fusion Sync)"
-  page-subtitle="What has been synced from Oracle Fusion, by layer, and a re-sync per layer. Calendar days are authored in Fusion, never here.">
+  page-title="[[$application.translations.appBundle.calendar_sync_calendar_fusion_sync]]"
+  page-subtitle="[[$application.translations.appBundle.calendar_sync_what_has_been_synced_from_oracle_fusion_by_l]]">
 
   <div class="oj-flex oj-sm-flex-direction-column oj-sm-width-full oj-sm-gap-4x"
        slot="main">
@@ -21,15 +21,15 @@
     <div class="oj-sm-padding-4x rw-metric">
       <div class="oj-flex oj-sm-justify-content-space-between oj-sm-align-items-center oj-sm-flex-wrap oj-sm-gap-2x">
         <div>
-          <h2 class="oj-typography-heading-xs oj-sm-margin-0">Layers</h2>
+          <h2 class="oj-typography-heading-xs oj-sm-margin-0"><oj-bind-text value="[[$application.translations.appBundle.calendar_sync_layers]]"></oj-bind-text></h2>
           <p class="oj-typography-body-sm rw-metric-label oj-sm-margin-1x-top">
-            Where two layers cover the same day the higher precedence wins:
-            <strong>Shift &gt; Client &gt; Project &gt; Corporate</strong>.
+            <oj-bind-text value="[[$application.translations.appBundle.calendar_sync_where_two_layers_cover_the_same_day_the_high]]"></oj-bind-text>
+            <strong><oj-bind-text value="[[$application.translations.appBundle.calendar_sync_shift_client_project_corporate]]"></oj-bind-text></strong>.
           </p>
         </div>
         <oj-button chroming="borderless" on-oj-action="[[ $listeners.reload ]]">
           <span slot="startIcon" class="oj-ux-ico-refresh"></span>
-          <span>Refresh</span>
+          <span><oj-bind-text value="[[$application.translations.appBundle.common_refresh]]"></oj-bind-text></span>
         </oj-button>
       </div>
 
@@ -67,7 +67,7 @@
               <oj-bind-text value="[[ cell.row.dayCount ]]"></oj-bind-text>
               <oj-bind-if test="[[ cell.row.nonWorkingDays > 0 ]]">
                 <div class="oj-typography-body-xs rw-metric-label">
-                  <oj-bind-text value="[[ cell.row.nonWorkingDays ]]"></oj-bind-text> non-working
+                  <oj-bind-text value="[[ cell.row.nonWorkingDays ]]"></oj-bind-text> <oj-bind-text value="[[$application.translations.appBundle.calendar_sync_non_working]]"></oj-bind-text>
                 </div>
               </oj-bind-if>
             </span>
@@ -76,7 +76,7 @@
           <template slot="rangeCell" data-oj-as="cell">
             <span>
               <oj-bind-text value="[[ cell.row.fromDate ]]"></oj-bind-text>
-              &rarr;
+              <oj-bind-text value="[[$application.translations.appBundle.calendar_sync_text]]"></oj-bind-text>
               <oj-bind-text value="[[ cell.row.toDate ]]"></oj-bind-text>
             </span>
           </template>
@@ -87,7 +87,7 @@
                 <oj-bind-text value="[[ cell.row.lastSyncedOn ]]"></oj-bind-text>
               </oj-bind-if>
               <oj-bind-if test="[[ !cell.row.lastSyncedOn ]]">
-                <span class="rw-flag rw-flag-defaulted">Never synced</span>
+                <span class="rw-flag rw-flag-defaulted"><oj-bind-text value="[[$application.translations.appBundle.calendar_sync_never_synced]]"></oj-bind-text></span>
               </oj-bind-if>
             </span>
           </template>
@@ -98,14 +98,14 @@
                          disabled="[[ cell.row.dayCount === 0 ]]"
                          :aria-label="[[ $page.functions.inspectLabel(cell.row.layerLabel) ]]"
                          on-oj-action="[[ $listeners.openInspect ]]">
-                <span>Inspect</span>
+                <span><oj-bind-text value="[[$application.translations.appBundle.calendar_sync_inspect]]"></oj-bind-text></span>
               </oj-button>
               <!-- ACT-030. RA-005 closed calendar *authoring*, not syncing; the
                    Pages sheet lists sync-buttons as a required component. -->
               <oj-button chroming="outlined" disabled="[[ $variables.busy ]]"
                          :aria-label="[[ $page.functions.syncLabel(cell.row.layerLabel) ]]"
                          on-oj-action="[[ $listeners.syncLayer ]]">
-                <span>Sync</span>
+                <span><oj-bind-text value="[[$application.translations.appBundle.calendar_sync_sync]]"></oj-bind-text></span>
               </oj-button>
             </div>
           </template>
@@ -116,34 +116,33 @@
     <oj-bind-if test="[[ $variables.busy ]]">
       <div class="oj-flex oj-sm-align-items-center oj-sm-gap-2x" role="status" aria-live="polite">
         <oj-progress-circle size="sm" value="-1"></oj-progress-circle>
-        <span class="oj-typography-body-sm">Working…</span>
+        <span class="oj-typography-body-sm"><oj-bind-text value="[[$application.translations.appBundle.common_working]]"></oj-bind-text></span>
       </div>
     </oj-bind-if>
 
   </div>
 
   <!-- ══════════════════ Day inspector ══════════════════ -->
-  <oj-dialog id="inspectDlg" dialog-title="Calendar days" cancel-behavior="icon">
+  <oj-dialog id="inspectDlg" dialog-title="[[$application.translations.appBundle.calendar_sync_calendar_days]]" cancel-behavior="icon">
     <div slot="body">
       <p class="oj-typography-body-sm rw-metric-label">
-        Layer <strong><oj-bind-text value="[[ $variables.inspectLayer ]]"></oj-bind-text></strong>.
-        Scope keys are exact — <oj-bind-text value="[[ $page.functions.scopeHintFor($variables.inspectLayer) ]]"></oj-bind-text>.
+        <oj-bind-text value="[[$application.translations.appBundle.calendar_sync_layer]]"></oj-bind-text> <strong><oj-bind-text value="[[ $variables.inspectLayer ]]"></oj-bind-text></strong><oj-bind-text value="[[$application.translations.appBundle.calendar_sync_scope_keys_are_exact]]"></oj-bind-text> <oj-bind-text value="[[ $page.functions.scopeHintFor($variables.inspectLayer) ]]"></oj-bind-text>.
       </p>
 
       <oj-form-layout max-columns="3" direction="row" label-edge="top">
-        <oj-input-text label-hint="Scope key" required="true"
+        <oj-input-text label-hint="[[$application.translations.appBundle.calendar_sync_scope_key]]" required="true"
                        value="{{ $variables.inspectScope }}"
                        :placeholder="[[ $page.functions.scopeHintFor($variables.inspectLayer) ]]">
         </oj-input-text>
-        <oj-input-date label-hint="From" value="{{ $variables.inspectFrom }}"></oj-input-date>
-        <oj-input-date label-hint="To" value="{{ $variables.inspectTo }}"></oj-input-date>
+        <oj-input-date label-hint="[[$application.translations.appBundle.calendar_sync_from]]" value="{{ $variables.inspectFrom }}"></oj-input-date>
+        <oj-input-date label-hint="[[$application.translations.appBundle.calendar_sync_to]]" value="{{ $variables.inspectTo }}"></oj-input-date>
       </oj-form-layout>
 
       <div class="oj-flex oj-sm-justify-content-flex-end oj-sm-margin-2x-bottom">
         <oj-button chroming="callToAction"
                    disabled="[[ $variables.busy || !$variables.inspectScope ]]"
                    on-oj-action="[[ $listeners.loadDays ]]">
-          <span>Show days</span>
+          <span><oj-bind-text value="[[$application.translations.appBundle.calendar_sync_show_days]]"></oj-bind-text></span>
         </oj-button>
       </div>
 
@@ -184,7 +183,7 @@
     </div>
     <div slot="footer">
       <oj-button on-oj-action="[[ $listeners.closeInspect ]]">
-        <span>Close</span>
+        <span><oj-bind-text value="[[$application.translations.appBundle.common_close]]"></oj-bind-text></span>
       </oj-button>
     </div>
   </oj-dialog>

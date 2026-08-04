@@ -9,8 +9,8 @@
   id="clientTimesheetsPage"
   class="oj-sm-width-full rw-page-full"
   display-options.responsive-padding="off"
-  page-title="Client Timesheets"
-  page-subtitle="Attach the customer-approved timesheet for a project and billing period. Several documents per period are fine, and there is no approval step.">
+  page-title="[[$application.translations.appBundle.client_timesheets_client_timesheets]]"
+  page-subtitle="[[$application.translations.appBundle.client_timesheets_attach_the_customer_approved_timesheet_for_a]]">
 
   <div class="oj-flex oj-sm-flex-direction-column oj-sm-width-full oj-sm-gap-4x"
        slot="main">
@@ -18,21 +18,21 @@
     <!-- ══════════════════ Selection ══════════════════ -->
     <div class="oj-sm-padding-4x rw-metric">
       <oj-form-layout max-columns="3" direction="row" label-edge="top">
-        <oj-select-single label-hint="Project" required="true"
+        <oj-select-single label-hint="[[$application.translations.appBundle.common_project]]" required="true"
                           data="[[ $variables.projectOptions ]]"
                           value="{{ $variables.projectId }}"
                           item-text="label"
-                          placeholder="Select project">
+                          placeholder="[[$application.translations.appBundle.common_select_project]]">
         </oj-select-single>
 
-        <oj-select-single label-hint="Billing Period" required="true"
+        <oj-select-single label-hint="[[$application.translations.appBundle.client_timesheets_billing_period]]" required="true"
                           data="[[ $application.variables.periodOptions ]]"
                           value="{{ $variables.periodId }}"
                           item-text="label"
-                          placeholder="Select period">
+                          placeholder="[[$application.translations.appBundle.common_select_period]]">
         </oj-select-single>
 
-        <oj-select-single label-hint="Display"
+        <oj-select-single label-hint="[[$application.translations.appBundle.client_timesheets_display]]"
                           data="[[ $variables.displayModeOptions ]]"
                           value="{{ $variables.displayMode }}"
                           item-text="label">
@@ -43,12 +43,12 @@
     <!-- ══════════════════ Upload ══════════════════ -->
     <div class="oj-sm-padding-4x rw-metric">
       <h2 class="oj-typography-heading-xs oj-sm-margin-0 oj-sm-margin-3x-bottom">
-        Attach Customer Timesheet
+        <oj-bind-text value="[[$application.translations.appBundle.client_timesheets_attach_customer_timesheet]]"></oj-bind-text>
       </h2>
 
       <oj-bind-if test="[[ !$variables.projectId || !$variables.periodId ]]">
         <div class="oj-sm-padding-3x rw-notice" role="status">
-          Choose a project and a billing period first.
+          <oj-bind-text value="[[$application.translations.appBundle.client_timesheets_choose_a_project_and_a_billing_period_first]]"></oj-bind-text>
         </div>
       </oj-bind-if>
 
@@ -60,7 +60,7 @@
           <oj-file-picker accept='["application/pdf",".pdf",".doc",".docx",".xls",".xlsx",".png",".jpg",".jpeg"]'
                           selection-mode="single"
                           on-oj-select="[[ $listeners.fileSelected ]]">
-            <span>Drop a PDF, Word, Excel or image file here, or click to browse (max 25&nbsp;MB)</span>
+            <span><oj-bind-text value="[[$application.translations.appBundle.client_timesheets_drop_a_pdf_word_excel_or_image_file_here_or_]]"></oj-bind-text></span>
           </oj-file-picker>
 
           <oj-bind-if test="[[ $variables.pendingFileName ]]">
@@ -68,7 +68,7 @@
               <span class="oj-ux-ico-file" aria-hidden="true"></span>
               <strong><oj-bind-text value="[[ $variables.pendingFileName ]]"></oj-bind-text></strong>
               <span class="rw-metric-label">
-                (<oj-bind-text value="[[ $variables.pendingSizeKb ]]"></oj-bind-text>&nbsp;KB)
+                (<oj-bind-text value="[[ $variables.pendingSizeKb ]]"></oj-bind-text><oj-bind-text value="[[$application.translations.appBundle.client_timesheets_kb]]"></oj-bind-text>
               </span>
             </div>
           </oj-bind-if>
@@ -81,11 +81,11 @@
 
           <oj-form-layout max-columns="2" direction="row" label-edge="top">
             <oj-bind-if test="[[ $variables.displayMode === 'Week-wise' ]]">
-              <oj-input-number label-hint="Week number" value="{{ $variables.weekIndex }}"
+              <oj-input-number label-hint="[[$application.translations.appBundle.client_timesheets_week_number]]" value="{{ $variables.weekIndex }}"
                                min="1" max="6" step="1">
               </oj-input-number>
             </oj-bind-if>
-            <oj-input-text label-hint="Remarks" value="{{ $variables.remarks }}">
+            <oj-input-text label-hint="[[$application.translations.appBundle.common_remarks]]" value="{{ $variables.remarks }}">
             </oj-input-text>
           </oj-form-layout>
 
@@ -94,7 +94,7 @@
                        disabled="[[ $variables.busy || !$variables.pendingBase64 ]]"
                        on-oj-action="[[ $listeners.uploadDoc ]]">
               <span slot="startIcon" :class="[[ $application.functions.busyIcon($variables.busy, 'oj-ux-ico-upload') ]]"></span>
-              <span>Attach document</span>
+              <span><oj-bind-text value="[[$application.translations.appBundle.client_timesheets_attach_document]]"></oj-bind-text></span>
             </oj-button>
           </div>
         </div>
@@ -104,16 +104,16 @@
     <!-- ══════════════════ Documents ══════════════════ -->
     <div class="oj-sm-padding-4x rw-metric">
       <div class="oj-flex oj-sm-justify-content-space-between oj-sm-align-items-center oj-sm-margin-3x-bottom">
-        <h2 class="oj-typography-heading-xs oj-sm-margin-0">Attached documents</h2>
+        <h2 class="oj-typography-heading-xs oj-sm-margin-0"><oj-bind-text value="[[$application.translations.appBundle.client_timesheets_attached_documents]]"></oj-bind-text></h2>
         <oj-button chroming="borderless" on-oj-action="[[ $listeners.reloadDocs ]]">
           <span slot="startIcon" class="oj-ux-ico-refresh"></span>
-          <span>Refresh</span>
+          <span><oj-bind-text value="[[$application.translations.appBundle.common_refresh]]"></oj-bind-text></span>
         </oj-button>
       </div>
 
       <oj-bind-if test="[[ $variables.docs.length === 0 ]]">
         <div class="oj-typography-body-sm rw-metric-label" role="status">
-          No documents attached yet.
+          <oj-bind-text value="[[$application.translations.appBundle.client_timesheets_no_documents_attached_yet]]"></oj-bind-text>
         </div>
       </oj-bind-if>
 
@@ -136,7 +136,7 @@
 
             <template slot="nameCell" data-oj-as="cell">
               <span>
-                <span class="oj-ux-ico-file" aria-hidden="true"></span>&nbsp;
+                <span class="oj-ux-ico-file" aria-hidden="true"></span><oj-bind-text value="[[$application.translations.appBundle.client_timesheets_text]]"></oj-bind-text>
                 <oj-bind-text value="[[ cell.row.docName ]]"></oj-bind-text>
               </span>
             </template>
@@ -145,7 +145,7 @@
               <span>
                 <oj-bind-text value="[[ cell.row.displayMode ]]"></oj-bind-text>
                 <oj-bind-if test="[[ cell.row.weekIndex ]]">
-                  <span class="rw-flag rw-flag-advance">Week
+                  <span class="rw-flag rw-flag-advance"><oj-bind-text value="[[$application.translations.appBundle.common_week]]"></oj-bind-text>
                     <oj-bind-text value="[[ cell.row.weekIndex ]]"></oj-bind-text>
                   </span>
                 </oj-bind-if>
@@ -161,13 +161,13 @@
                    :aria-label="[[ $page.functions.downloadLabel(cell.row.docName) ]]"
                    target="_blank" rel="noopener">
                   <span class="oj-ux-ico-download" aria-hidden="true"></span>
-                  <span>Download</span>
+                  <span><oj-bind-text value="[[$application.translations.appBundle.client_timesheets_download]]"></oj-bind-text></span>
                 </a>
                 <oj-button chroming="borderless" display="icons"
                            :aria-label="[[ $page.functions.removeLabel(cell.row.docName) ]]"
                            on-oj-action="[[ $listeners.askRemoveDoc ]]">
                   <span slot="startIcon" class="oj-ux-ico-trash"></span>
-                  <span>Remove</span>
+                  <span><oj-bind-text value="[[$application.translations.appBundle.common_remove]]"></oj-bind-text></span>
                 </oj-button>
               </div>
             </template>
@@ -179,7 +179,7 @@
     <oj-bind-if test="[[ $variables.busy ]]">
       <div class="oj-flex oj-sm-align-items-center oj-sm-gap-2x" role="status" aria-live="polite">
         <oj-progress-circle size="sm" value="-1"></oj-progress-circle>
-        <span class="oj-typography-body-sm">Working…</span>
+        <span class="oj-typography-body-sm"><oj-bind-text value="[[$application.translations.appBundle.common_working]]"></oj-bind-text></span>
       </div>
     </oj-bind-if>
 
@@ -190,22 +190,22 @@
        policy, so removal is a deliberate two-step action. An oj-dialog opened by
        Actions.callComponentMethod, not window.confirm — SES blocks browser
        globals in chains (knowledge/14 §7). -->
-  <oj-dialog id="removeDocDlg" dialog-title="Remove document" cancel-behavior="icon">
+  <oj-dialog id="removeDocDlg" dialog-title="[[$application.translations.appBundle.client_timesheets_remove_document]]" cancel-behavior="icon">
     <div slot="body">
       <p class="oj-typography-body-md">
         <oj-bind-text value="[[ $variables.confirmMessage ]]"></oj-bind-text>
       </p>
       <p class="oj-typography-body-sm ctim-muted">
-        Signed client timesheets are billing evidence and are retained for audit.
+        <oj-bind-text value="[[$application.translations.appBundle.client_timesheets_signed_client_timesheets_are_billing_evidenc]]"></oj-bind-text>
       </p>
     </div>
     <div slot="footer">
       <oj-button on-oj-action="[[ $listeners.cancelRemoveDoc ]]">
-        <span>Cancel</span>
+        <span><oj-bind-text value="[[$application.translations.appBundle.common_cancel]]"></oj-bind-text></span>
       </oj-button>
       <oj-button chroming="danger" disabled="[[ $variables.busy ]]"
                  on-oj-action="[[ $listeners.confirmRemoveDoc ]]">
-        <span>Remove</span>
+        <span><oj-bind-text value="[[$application.translations.appBundle.common_remove]]"></oj-bind-text></span>
       </oj-button>
     </div>
   </oj-dialog>

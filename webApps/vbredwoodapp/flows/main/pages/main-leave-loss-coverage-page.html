@@ -13,8 +13,8 @@
   id="leaveLossCoveragePage"
   class="oj-sm-width-full rw-page-full"
   display-options.responsive-padding="off"
-  page-title="Leave Loss Coverage"
-  page-subtitle="Cover an absentee with an unbilled colleague so the absence hours count as billed.">
+  page-title="[[$application.translations.appBundle.leave_loss_coverage_leave_loss_coverage]]"
+  page-subtitle="[[$application.translations.appBundle.leave_loss_coverage_cover_an_absentee_with_an_unbilled_colleague]]">
 
   <div class="oj-flex oj-sm-flex-direction-column oj-sm-width-full oj-sm-gap-4x"
        slot="main">
@@ -23,13 +23,13 @@
     <div class="oj-sm-padding-4x rw-metric">
       <div class="oj-flex oj-sm-justify-content-space-between oj-sm-align-items-start oj-sm-flex-wrap oj-sm-gap-3x">
         <oj-form-layout max-columns="2" direction="row" label-edge="top" class="oj-flex-item">
-          <oj-select-single label-hint="Project (FCP with leave loss)"
+          <oj-select-single label-hint="[[$application.translations.appBundle.leave_loss_coverage_project_fcp_with_leave_loss]]"
                             data="[[ $variables.projectOptions ]]"
                             value="{{ $variables.projectId }}"
                             item-text="label"
-                            placeholder="Select project">
+                            placeholder="[[$application.translations.appBundle.common_select_project]]">
           </oj-select-single>
-          <oj-select-single label-hint="Month"
+          <oj-select-single label-hint="[[$application.translations.appBundle.common_month]]"
                             data="[[ $application.variables.periodOptions ]]"
                             value="{{ $variables.periodId }}"
                             item-text="label">
@@ -39,39 +39,38 @@
         <div class="oj-flex oj-sm-gap-2x">
           <oj-button chroming="borderless" on-oj-action="[[ $listeners.reload ]]">
             <span slot="startIcon" class="oj-ux-ico-refresh"></span>
-            <span>Refresh</span>
+            <span><oj-bind-text value="[[$application.translations.appBundle.common_refresh]]"></oj-bind-text></span>
           </oj-button>
           <oj-button chroming="outlined"
                      disabled="[[ $variables.busy || !$variables.projectId || !$variables.periodId ]]"
                      on-oj-action="[[ $listeners.generate ]]">
-            <span>Refresh absences from HR</span>
+            <span><oj-bind-text value="[[$application.translations.appBundle.leave_loss_coverage_refresh_absences_from_hr]]"></oj-bind-text></span>
           </oj-button>
         </div>
       </div>
 
       <oj-bind-if test="[[ $variables.projectOptionsArray.length === 0 ]]">
         <div class="oj-sm-padding-3x oj-sm-margin-3x-top rw-notice" role="status">
-          None of your projects is a Fixed Capacity Project with leave loss
-          enabled, so there is nothing to cover here.
+          <oj-bind-text value="[[$application.translations.appBundle.leave_loss_coverage_none_of_your_projects_is_a_fixed_capacity_pr]]"></oj-bind-text>
         </div>
       </oj-bind-if>
 
       <div class="oj-flex oj-sm-flex-wrap oj-sm-gap-6x oj-sm-margin-4x-top">
         <div class="oj-flex-item">
           <div class="rw-metric-value"><oj-bind-text value="[[ $variables.openCount ]]"></oj-bind-text></div>
-          <div class="rw-metric-label">Uncovered</div>
+          <div class="rw-metric-label"><oj-bind-text value="[[$application.translations.appBundle.leave_loss_coverage_uncovered]]"></oj-bind-text></div>
         </div>
         <div class="oj-flex-item">
           <div class="rw-metric-value"><oj-bind-text value="[[ $variables.assignedCount ]]"></oj-bind-text></div>
-          <div class="rw-metric-label">Assigned, awaiting approval</div>
+          <div class="rw-metric-label"><oj-bind-text value="[[$application.translations.appBundle.leave_loss_coverage_assigned_awaiting_approval]]"></oj-bind-text></div>
         </div>
         <div class="oj-flex-item">
           <div class="rw-metric-value"><oj-bind-text value="[[ $variables.approvedCount ]]"></oj-bind-text></div>
-          <div class="rw-metric-label">Approved</div>
+          <div class="rw-metric-label"><oj-bind-text value="[[$application.translations.appBundle.common_approved]]"></oj-bind-text></div>
         </div>
         <div class="oj-flex-item">
           <div class="rw-metric-value"><oj-bind-text value="[[ $application.functions.fmtHours($variables.billedHours) ]]"></oj-bind-text></div>
-          <div class="rw-metric-label">Hours recovered as billed</div>
+          <div class="rw-metric-label"><oj-bind-text value="[[$application.translations.appBundle.leave_loss_coverage_hours_recovered_as_billed]]"></oj-bind-text></div>
         </div>
       </div>
     </div>
@@ -79,19 +78,18 @@
     <!-- ══════════════════ Absentee lines ══════════════════ -->
     <div class="oj-sm-padding-4x rw-metric">
       <div class="oj-flex oj-sm-justify-content-space-between oj-sm-align-items-center oj-sm-flex-wrap oj-sm-gap-2x oj-sm-margin-3x-bottom">
-        <h2 class="oj-typography-heading-xs oj-sm-margin-0">Absences</h2>
+        <h2 class="oj-typography-heading-xs oj-sm-margin-0"><oj-bind-text value="[[$application.translations.appBundle.leave_loss_coverage_absences]]"></oj-bind-text></h2>
         <oj-button chroming="callToAction"
                    disabled="[[ $variables.busy || $variables.assignedCount === 0 ]]"
                    on-oj-action="[[ $listeners.approveAll ]]">
-          <span>Approve all assigned
-            (<oj-bind-text value="[[ $variables.assignedCount ]]"></oj-bind-text>)</span>
+          <span><oj-bind-text value="[[$application.translations.appBundle.leave_loss_coverage_approve_all_assigned]]"></oj-bind-text><oj-bind-text value="[[ $variables.assignedCount ]]"></oj-bind-text>)</span>
         </oj-button>
       </div>
 
       <oj-bind-if test="[[ $variables.lines.length === 0 && !$variables.busy ]]">
         <div class="oj-typography-body-sm rw-metric-label" role="status">
-          No absence records this period. Use
-          <strong>Refresh absences from HR</strong> if leave has since been approved.
+          <oj-bind-text value="[[$application.translations.appBundle.leave_loss_coverage_no_absence_records_this_period_use]]"></oj-bind-text>
+          <strong><oj-bind-text value="[[$application.translations.appBundle.leave_loss_coverage_refresh_absences_from_hr]]"></oj-bind-text></strong> <oj-bind-text value="[[$application.translations.appBundle.leave_loss_coverage_if_leave_has_since_been_approved]]"></oj-bind-text>
         </div>
       </oj-bind-if>
 
@@ -131,7 +129,7 @@
                   <oj-bind-text value="[[ cell.row.coverEmployeeName ]]"></oj-bind-text>
                 </oj-bind-if>
                 <oj-bind-if test="[[ !cell.row.coverEmployeeName ]]">
-                  <span class="rw-metric-label">No cover assigned</span>
+                  <span class="rw-metric-label"><oj-bind-text value="[[$application.translations.appBundle.leave_loss_coverage_no_cover_assigned]]"></oj-bind-text></span>
                 </oj-bind-if>
               </span>
             </template>
@@ -142,7 +140,7 @@
                   <oj-bind-text value="[[ cell.row.llcStatus ]]"></oj-bind-text>
                 </span>
                 <oj-bind-if test="[[ cell.row.billedFlag === 'Y' ]]">
-                  <span class="rw-flag rw-flag-adjustment" title="On the invoice annexure (REP-002).">Billed</span>
+                  <span class="rw-flag rw-flag-adjustment" title="On the invoice annexure (REP-002)."><oj-bind-text value="[[$application.translations.appBundle.common_billed]]"></oj-bind-text></span>
                 </oj-bind-if>
               </span>
             </template>
@@ -163,7 +161,7 @@
                   <oj-button chroming="outlined" disabled="[[ $variables.busy ]]"
                              :aria-label="[[ $page.functions.approveLabel(cell.row.absentEmployeeName) ]]"
                              on-oj-action="[[ $listeners.approveOne ]]">
-                    <span>Approve</span>
+                    <span><oj-bind-text value="[[$application.translations.appBundle.common_approve]]"></oj-bind-text></span>
                   </oj-button>
                 </oj-bind-if>
               </div>
@@ -176,49 +174,47 @@
     <oj-bind-if test="[[ $variables.busy ]]">
       <div class="oj-flex oj-sm-align-items-center oj-sm-gap-2x" role="status" aria-live="polite">
         <oj-progress-circle size="sm" value="-1"></oj-progress-circle>
-        <span class="oj-typography-body-sm">Working…</span>
+        <span class="oj-typography-body-sm"><oj-bind-text value="[[$application.translations.appBundle.common_working]]"></oj-bind-text></span>
       </div>
     </oj-bind-if>
 
   </div>
 
   <!-- ══════════════════ Assign dialog (ACT-022) ══════════════════ -->
-  <oj-dialog id="assignDlg" dialog-title="Assign a covering colleague"
+  <oj-dialog id="assignDlg" dialog-title="[[$application.translations.appBundle.leave_loss_coverage_assign_a_covering_colleague]]"
              cancel-behavior="icon">
     <div slot="body">
       <p class="oj-typography-body-sm rw-metric-label">
         <oj-bind-text value="[[ $variables.assignLabel ]]"></oj-bind-text>
       </p>
       <p class="oj-typography-body-sm rw-metric-label">
-        Only colleagues who are unbilled on this project that day, not absent
-        themselves and not already covering someone are listed (RULE-014).
+        <oj-bind-text value="[[$application.translations.appBundle.leave_loss_coverage_only_colleagues_who_are_unbilled_on_this_pro]]"></oj-bind-text>
       </p>
 
       <oj-bind-if test="[[ $variables.coverOptionsArray.length === 0 ]]">
         <div class="oj-sm-padding-3x rw-notice rw-notice-warning" role="status">
-          Nobody is eligible to cover this day. The absence stays unbilled — that
-          is a real outcome, not an error.
+          <oj-bind-text value="[[$application.translations.appBundle.leave_loss_coverage_nobody_is_eligible_to_cover_this_day_the_abs]]"></oj-bind-text>
         </div>
       </oj-bind-if>
 
       <oj-form-layout label-edge="top" max-columns="1">
-        <oj-select-single label-hint="Covering colleague" required="true"
+        <oj-select-single label-hint="[[$application.translations.appBundle.leave_loss_coverage_covering_colleague]]" required="true"
                           data="[[ $variables.coverOptions ]]"
                           value="{{ $variables.assignCoverId }}"
                           item-text="label"
                           disabled="[[ $variables.coverOptionsArray.length === 0 ]]"
-                          placeholder="Select a colleague">
+                          placeholder="[[$application.translations.appBundle.leave_loss_coverage_select_a_colleague]]">
         </oj-select-single>
       </oj-form-layout>
     </div>
     <div slot="footer">
       <oj-button on-oj-action="[[ $listeners.closeAssign ]]">
-        <span>Cancel</span>
+        <span><oj-bind-text value="[[$application.translations.appBundle.common_cancel]]"></oj-bind-text></span>
       </oj-button>
       <oj-button chroming="callToAction"
                  disabled="[[ $variables.busy || !$variables.assignCoverId ]]"
                  on-oj-action="[[ $listeners.doAssign ]]">
-        <span>Assign</span>
+        <span><oj-bind-text value="[[$application.translations.appBundle.leave_loss_coverage_assign]]"></oj-bind-text></span>
       </oj-button>
     </div>
   </oj-dialog>
@@ -226,7 +222,7 @@
   <!-- ══════════════════ Confirmation ══════════════════ -->
   <!-- oj-dialog opened via Actions.callComponentMethod, not window.confirm:
        SES blocks browser globals inside chains (knowledge/14 §7). -->
-  <oj-dialog id="approveAllDlg" dialog-title="Approve all assigned coverage" cancel-behavior="icon">
+  <oj-dialog id="approveAllDlg" dialog-title="[[$application.translations.appBundle.leave_loss_coverage_approve_all_assigned_coverage]]" cancel-behavior="icon">
     <div slot="body">
       <p class="oj-typography-body-md">
         <oj-bind-text value="[[ $variables.confirmMessage ]]"></oj-bind-text>
@@ -234,11 +230,11 @@
     </div>
     <div slot="footer">
       <oj-button on-oj-action="[[ $listeners.cancelApproveAll ]]">
-        <span>Cancel</span>
+        <span><oj-bind-text value="[[$application.translations.appBundle.common_cancel]]"></oj-bind-text></span>
       </oj-button>
       <oj-button chroming="callToAction" disabled="[[ $variables.busy ]]"
                  on-oj-action="[[ $listeners.confirmApproveAll ]]">
-        <span>Approve all</span>
+        <span><oj-bind-text value="[[$application.translations.appBundle.common_approve_all]]"></oj-bind-text></span>
       </oj-button>
     </div>
   </oj-dialog>
