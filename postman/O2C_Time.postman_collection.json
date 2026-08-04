@@ -651,6 +651,41 @@
           }
         },
         {
+          "name": "revokeWeek",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/oc/time/weeks/{{id}}/revoke",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "oc",
+                "time",
+                "weeks",
+                "{{id}}",
+                "revoke"
+              ]
+            },
+            "description": "Pull a submitted week back so the employee can correct it",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"actor\": \"{{actorEmail}}\",\n  \"traceId\": \"{{$guid}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
           "name": "submitWeek",
           "request": {
             "method": "POST",

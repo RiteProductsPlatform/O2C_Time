@@ -67,6 +67,14 @@ define([
       session.apply($application, identity, token);
       await Actions.callChain(context, { chain: 'loadContextChain' });
 
+      // A restored session has to announce itself exactly as a fresh login
+      // does. On a refresh the router mounts the page before this validation
+      // finishes, so the page's vbEnter finds no employeeId and loads nothing;
+      // it listens for this event and loads then. Only loginChain used to fire
+      // it, which is why a refresh left every page empty with a "worker record
+      // could not be resolved" toast while the banner showed the right name.
+      await Actions.fireEvent(context, { event: 'sessionEstablished' });
+
       const landing = navModel.landingFor(identity.role);
       if (!landing) {
         // A login that resolves to no entitlement is not an error to hide: the

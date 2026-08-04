@@ -52,12 +52,18 @@ define([
           // A week is editable when the period allows it AND the week itself is
           // not locked or already closed. RULE-004 / RULE-006 / RULE-007.
           //
-          // The editable statuses are the 3 of the 7 that are still the
-          // employee's to change. 'Late submission' is NOT among them — it
-          // stopped being a status in the 30-Jul-2026 revision and is now a flag
-          // on a week whose status is 'Submitted'.
+          // Only the 2 of the 7 statuses that are still the employee's to
+          // change. A SUBMITTED week is frozen: it is with the manager, and
+          // editing underneath a pending approval means they approve something
+          // other than what they read. To correct one, revoke it first (ACT
+          // revoke below) — or, once approved, ask the manager to send it back.
+          // This matches the prototype's weekEditable(), which is
+          // 'Not submitted' or 'Rejected' and nothing else.
+          //
+          // 'Late submission' is NOT a status here — it stopped being one in the
+          // 30-Jul-2026 revision and is a flag on a week that is Submitted.
           const periodOk = $application.variables.periodEditable === 'Y';
-          const stateOk  = ['Not yet submitted', 'Rejected', 'Submitted']
+          const stateOk  = ['Not yet submitted', 'Rejected']
                              .indexOf(week.week_status) !== -1;
           $page.variables.editable = periodOk && stateOk && week.locked_flag !== 'Y';
 

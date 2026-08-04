@@ -23,16 +23,14 @@ define([
 
       $application.variables.activeNav = 'main-my-timesheet';
 
-      if (!$application.variables.employeeId) {
-        await Actions.fireNotificationEvent(context, {
-          summary: 'Not signed in',
-          message: 'Your worker record could not be resolved. Please sign in again.',
-          severity: 'error',
-          type: 'error',
-          displayMode: 'transient',
-        });
-        return;
-      }
+      // Not an error — a race. On a REFRESH the shell is still validating the
+      // stored token when the router mounts this page, so employeeId is empty
+      // for a moment and the old code reported that as "your worker record
+      // could not be resolved", on every single load. Return quietly; the
+      // application:sessionEstablished listener runs this chain again once the
+      // identity is in place. Only login can legitimately leave it empty, and
+      // login never reaches this page.
+      if (!$application.variables.employeeId) { return; }
 
       // Projects the employee may charge to: their allocations plus the
       // Organization (Non-Billable) project that everyone gets (FLD-006).

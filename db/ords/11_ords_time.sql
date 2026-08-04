@@ -17,6 +17,7 @@
 --   POST entries/batch                           save many cells in one call
 --   DELETE line/:tsWeekId/:projectId/:taskId     remove a line
 --   POST weeks/:id/submit                        submit for approval
+--   POST weeks/:id/revoke                        pull a submission back
 --   GET  allocation/:employeeId                  allocation pop-up
 --   GET  tasks/:projectId                        task LOV (WBS + common)
 --   GET  projects/:employeeId                    projects the employee may charge
@@ -323,6 +324,36 @@ BEGIN
       DECLARE v_status VARCHAR2(30);
       BEGIN
         oc_time_pkg.submit_week(:id, NVL(:actor,'VBCS_USER'), :traceId);
+        SELECT week_status INTO v_status FROM oc_ts_week WHERE ts_week_id = :id;
+        COMMIT;
+        :status_code := 200;
+        HTP.P('{"tsWeekId":' || :id || ',"weekStatus":"' || v_status || '"}');
+      EXCEPTION WHEN OTHERS THEN
+        ROLLBACK;
+        :status_code := CASE WHEN SQLCODE BETWEEN -20025 AND -20001 THEN 400 ELSE 500 END;
+        HTP.P('{"error":"' ||
+              REPLACE(REPLACE(SQLERRM,'ORA-'||LTRIM(TO_CHAR(ABS(SQLCODE)))||': ',''),'"','\"')
+              || '"}');
+      END;
+    ]');
+  COMMIT;
+END;
+/
+
+-- ── POST weeks/:id/revoke ────────────────────────────────────
+-- Pull back a submission made by mistake. Submitted only; once the manager has
+-- approved, undoing it is their send-back, not the employee's revoke. The
+-- package raises -20021/-20022 for those two refusals, both inside the band
+-- mapped to 400 below so the UI can show the message verbatim.
+BEGIN
+  ORDS.DEFINE_TEMPLATE(p_module_name => 'oc.time', p_pattern => 'weeks/:id/revoke');
+  ORDS.DEFINE_HANDLER(
+    p_module_name => 'oc.time', p_pattern => 'weeks/:id/revoke', p_method => 'POST',
+    p_source_type => ORDS.source_type_plsql,
+    p_source => q'[
+      DECLARE v_status VARCHAR2(30);
+      BEGIN
+        oc_time_pkg.revoke_week(:id, NVL(:actor,'VBCS_USER'), :traceId);
         SELECT week_status INTO v_status FROM oc_ts_week WHERE ts_week_id = :id;
         COMMIT;
         :status_code := 200;

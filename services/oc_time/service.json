@@ -3620,6 +3620,54 @@
           }
         }
       }
+    },
+    "/oc/time/weeks/{id}/revoke": {
+      "post": {
+        "operationId": "revokeWeek",
+        "summary": "Pull a submitted week back so the employee can correct it",
+        "description": "Submitted only. Once a manager has approved, undoing it is their send-back, not the employee’s revoke — the package refuses with -20021. A closed period refuses with -20022; correct that through a backdated adjustment (RULE-019).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActorPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Submitted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WeekStatusResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Business rule violated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {

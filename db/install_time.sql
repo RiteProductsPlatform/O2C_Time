@@ -194,6 +194,7 @@ PROMPT >>> 10 seed (dictionaries, common tasks, PRJ-ORG, config, periods)
 -- and OC_TIME_PERIOD; before the ORDS surface, which calls its hash function.
 PROMPT >>> 11 auth (OC_TIME_USER, OC_TIME_SESSION, hash, sign-in view)
 @@11_auth.sql
+@@12_revoke.sql
 
 -- ── REST surface ─────────────────────────────────────────────
 PROMPT >>> 12 ORDS oc.time            (employee)

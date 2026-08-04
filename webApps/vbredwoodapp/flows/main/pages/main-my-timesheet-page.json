@@ -541,6 +541,20 @@
           }
         }
       ]
+    },
+    "application:sessionEstablished": {
+      "chains": [
+        {
+          "chain": "enterChain"
+        }
+      ]
+    },
+    "revokeWeek": {
+      "chains": [
+        {
+          "chain": "revokeWeekChain"
+        }
+      ]
     }
   },
   "imports": {

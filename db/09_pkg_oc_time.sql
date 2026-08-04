@@ -120,6 +120,14 @@ CREATE OR REPLACE PACKAGE oc_time_pkg AS
     p_actor      IN VARCHAR2 DEFAULT 'VBCS_USER',
     p_trace_id   IN VARCHAR2 DEFAULT NULL);
 
+  -- Pull a submitted week back so the employee can correct it. Submitted only:
+  -- once a manager has approved, undoing it is their decision (a send-back),
+  -- not the employee's.
+  PROCEDURE revoke_week(
+    p_ts_week_id IN NUMBER,
+    p_actor      IN VARCHAR2 DEFAULT 'VBCS_USER',
+    p_trace_id   IN VARCHAR2 DEFAULT NULL);
+
   -- The two defaulting jobs. Both produce week_status 'Defaulted'; they differ
   -- in who missed the cut-off, and that difference decides whether the
   -- employee's pay is held (RULE-016, TIMESHEET_FLOW.html §01).
@@ -1005,6 +1013,62 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
               CASE WHEN v_corr = 'Y' THEN 'Resubmit' ELSE 'Submit' END,
               NULL, NULL, v_emp, p_trace_id);
   END submit_week;
+
+
+  PROCEDURE revoke_week(
+    p_ts_week_id IN NUMBER,
+    p_actor      IN VARCHAR2 DEFAULT 'VBCS_USER',
+    p_trace_id   IN VARCHAR2 DEFAULT NULL)
+  IS
+    v_emp     oc_ts_week.employee_id%TYPE;
+    v_period  oc_ts_week.period_id%TYPE;
+    v_status  oc_ts_week.week_status%TYPE;
+    v_pstatus oc_time_period.status%TYPE;
+  BEGIN
+    SELECT w.employee_id, w.period_id, w.week_status, p.status
+      INTO v_emp, v_period, v_status, v_pstatus
+      FROM oc_ts_week     w
+      JOIN oc_time_period p ON p.period_id = w.period_id
+     WHERE w.ts_week_id = p_ts_week_id;
+
+    -- Only a week that is still waiting on the manager. Approved, Overridden
+    -- and approved, and Closed are all decisions somebody else has taken, and
+    -- Defaulted is the cut-off job's — reversing any of those is a manager
+    -- send-back, not a revoke.
+    IF v_status <> 'Submitted' THEN
+      RAISE_APPLICATION_ERROR(-20021,
+        'Only a submitted week can be revoked. This week is ' || v_status ||
+        '. Ask your manager to send it back.');
+    END IF;
+
+    -- assert_editable is deliberately NOT used: it refuses a Submitted week,
+    -- which is precisely the state being undone here. The period gate still
+    -- applies — a closed month is corrected by a retro adjustment (RULE-019),
+    -- never by reopening a week inside it.
+    IF v_pstatus <> 'Open' THEN
+      RAISE_APPLICATION_ERROR(-20022,
+        'The period is not open, so this week cannot be revoked. Raise a '
+        || 'backdated adjustment instead.');
+    END IF;
+
+    UPDATE oc_ts_week
+       SET week_status  = 'Not yet submitted',
+           submitted_by = NULL,
+           submitted_on = NULL,
+           updated_by   = p_actor
+     WHERE ts_week_id = p_ts_week_id;
+
+    -- The days go back to Draft: they are no longer awaiting a decision.
+    -- late_submission_flag is deliberately LEFT SET — the week did land after
+    -- the cut-off, and revoking it does not un-happen that.
+    UPDATE oc_ts_entry
+       SET day_status = 'Draft',
+           updated_by = p_actor
+     WHERE ts_week_id = p_ts_week_id;
+
+    log_event(p_ts_week_id, v_emp, NULL, v_period, 'WEEK', NULL,
+              'Revoke', NULL, NULL, v_emp, p_trace_id);
+  END revoke_week;
 
 
   -- RULE-006: at the weekly cut-off an unsubmitted week is auto-submitted with
