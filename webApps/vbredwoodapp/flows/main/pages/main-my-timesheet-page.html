@@ -270,26 +270,33 @@
                   <template data-oj-as="cell">
                     <span class="rw-grid-day" role="cell">
                       <span class="rw-hr">
+                        <!-- Tab moves box to box across the week. The arrows are
+                             deliberately OUT of the tab order (tabindex="-1"):
+                             with them in it, filling seven days took 21 tab
+                             presses instead of 7. Keyboard users lose nothing —
+                             Up/Down arrow keys in the box step by the same
+                             quarter hour, which is the usual convention for a
+                             numeric field and needs no reaching for a button.
+
+                             Plain <button>, as in the prototype's .hr-arr: an
+                             oj-button's inner element may keep its own tab stop
+                             regardless of tabindex here, and this pattern is
+                             already proven in the shell's hamburger. -->
                         <oj-input-text class="rw-hr-box"
-                          aria-label="Hours"
+                          :aria-label="[[ $page.functions.hoursLabel(cell.data.entryDate) ]]"
                           value="[[ $page.functions.hoursAt(line.data, cell.data.dayIndex) ]]"
                           readonly="[[ !$variables.editable ]]"
-                          on-value-changed="[[ $listeners.cellChanged ]]">
+                          on-value-changed="[[ $listeners.cellChanged ]]"
+                          on-keydown="[[ $listeners.cellKey ]]">
                         </oj-input-text>
                         <oj-bind-if test="[[ $variables.editable ]]">
                           <span class="rw-hr-arr">
-                            <oj-button class="rw-hr-step" display="icons" chroming="borderless"
-                                       aria-label="Add 15 minutes" title="+15 min"
-                                       on-oj-action="[[ $listeners.stepUp ]]">
-                              <span slot="startIcon" class="oj-ux-ico-chevron-up"></span>
-                              <span><oj-bind-text value="[[$application.translations.appBundle.my_timesheet_up]]"></oj-bind-text></span>
-                            </oj-button>
-                            <oj-button class="rw-hr-step" display="icons" chroming="borderless"
-                                       aria-label="Subtract 15 minutes" title="-15 min"
-                                       on-oj-action="[[ $listeners.stepDown ]]">
-                              <span slot="startIcon" class="oj-ux-ico-chevron-down"></span>
-                              <span><oj-bind-text value="[[$application.translations.appBundle.my_timesheet_down]]"></oj-bind-text></span>
-                            </oj-button>
+                            <button type="button" tabindex="-1" class="rw-hr-step"
+                                    title="+15 min" aria-hidden="true"
+                                    on-click="[[ $listeners.stepUp ]]">&#9650;</button>
+                            <button type="button" tabindex="-1" class="rw-hr-step"
+                                    title="-15 min" aria-hidden="true"
+                                    on-click="[[ $listeners.stepDown ]]">&#9660;</button>
                           </span>
                         </oj-bind-if>
                       </span>

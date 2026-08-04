@@ -562,6 +562,17 @@
           "chain": "enterChain"
         }
       ]
+    },
+    "cellKey": {
+      "chains": [
+        {
+          "chain": "cellKeyChain",
+          "parameters": {
+            "cell": "{{ $current.data }}",
+            "key": "{{ $event.key }}"
+          }
+        }
+      ]
     }
   },
   "imports": {

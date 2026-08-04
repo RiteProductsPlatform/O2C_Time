@@ -29,6 +29,18 @@ define([], () => {
     }
 
     /**
+     * Accessible name for an hours box.
+     *
+     * Every cell used to be labelled just "Hours", which is useless in a grid of
+     * seven identical boxes — and it matters more now that the +/- buttons are
+     * aria-hidden and out of the tab order, so the box is the only thing a
+     * screen reader lands on.
+     */
+    hoursLabel(entryDate) {
+      return 'Hours for ' + (entryDate || 'this day');
+    }
+
+    /**
      * Hours on a line for one day column.
      *
      * The day columns are generated from dayHeaders, so the cell only knows its

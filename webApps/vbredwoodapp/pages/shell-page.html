@@ -310,9 +310,18 @@
   .rw-hr      { display:inline-flex; align-items:center; gap:4px; }
   .rw-hr-box  { width:4.5rem; }
   .rw-hr-box .oj-text-field-input { text-align:right; font-variant-numeric:tabular-nums; }
-  .rw-hr-arr  { display:inline-flex; flex-direction:column; gap:1px; }
-  .rw-hr-step { min-height:14px; height:14px; }
-  .rw-hr-step .oj-button-button { min-height:14px; height:14px; padding:0 2px; }
+  .rw-hr-arr  { display:inline-flex; flex-direction:column; gap:2px; }
+
+  /* Plain buttons, as in the prototype's .hr-arr, and deliberately out of the
+     tab order — see the comment on the day cell. Sized so the pair together is
+     no taller than the input beside them. */
+  .rw-hr-step { width:20px; height:13px; padding:0; line-height:1;
+                border:1px solid var(--rw-border); border-radius:3px;
+                background:#fff; color:var(--rw-slate); font-size:9px;
+                cursor:pointer; display:flex; align-items:center;
+                justify-content:center; font-family:inherit; }
+  .rw-hr-step:hover { background:var(--rw-hover); color:var(--rw-coal); }
+  .rw-hr-step:active { background:var(--rw-border-2); }
 
   /* ══ Page-specific odds and ends ═════════════════════════════
      These were written into the pages' own .css files, which are never
