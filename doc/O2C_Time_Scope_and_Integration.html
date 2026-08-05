@@ -594,16 +594,17 @@
           </tr>
           <tr>
             <td><code>PARTNER_STATUS</code></td>
-            <td><strong>The main O2C application&rsquo;s own accrual chain.</strong> A
-              second, direct hand-off that writes into the main application rather than
-              waiting for it to pull from the interface table. It exists because the
-              reporting product that used to feed that chain is being retired, and the
-              main application still needs timesheet figures.</td>
-            <td><strong>Built, deliberately dormant.</strong> By explicit instruction,
-              confirmed months are held locally and nothing is written to the main
-              application yet. The column stays <em>Pending</em>, which is what makes the
-              fact that it has not run visible rather than assumed.</td>
+            <td><strong>A staging table in our own schema that the accrual module pulls
+              from.</strong> It holds three things for a confirmed month: the
+              <strong>summary</strong>, the <strong>complete timesheet employee-wise</strong>,
+              and <strong>any adjustments</strong>. We write it; accrual reads it. Nothing
+              is pushed into accrual&rsquo;s tables.</td>
+            <td><strong>Structure pending.</strong> The accrual side is defining the shape
+              and that work is in progress, so the columns are not fixed yet. The direct
+              push that previously occupied this column is superseded &mdash; see the note
+              below.</td>
           </tr>
+
           <tr>
             <td><code>OTL_STATUS</code></td>
             <td>Oracle Time &amp; Labor &mdash; the push of approved time into OTL.</td>
@@ -615,6 +616,32 @@
         </tbody>
       </table>
     </div>
+
+    <div class="note">
+      <strong>This replaces a push with a pull, and most of it already exists.</strong>
+      <code>PARTNER_STATUS</code> used to track a direct hand-off that wrote into the main
+      O2C application&rsquo;s accrual tables. That is superseded: accrual will pull from a
+      table in our schema instead.
+      <br /><br />
+      Worth knowing before the structure is agreed &mdash; the interface behind
+      <code>ACCRUAL_STATUS</code> is <strong>already</strong> a pull, already day-wise and
+      never rolled up, already carries the <em>Reversal</em> and <em>Adjustment</em> rows
+      with a link back to the adjustment they came from, and already has the
+      claim-a-batch-once bookkeeping a puller needs. So of the three things required, the
+      <strong>complete timesheet</strong> and the <strong>adjustments</strong> are in place
+      in some form. The genuine gap is the <strong>summary grain</strong> &mdash; that
+      table holds day rows only.
+      <br /><br />
+      Which raises the question to settle <em>before</em> the accrual side finalises
+      anything: <strong>is this one interface or two?</strong> If accrual pulls everything
+      from one place, then <code>ACCRUAL_STATUS</code> and <code>PARTNER_STATUS</code>
+      are tracking the same hand-off and should collapse into one column. If they stay
+      separate, the split needs to be deliberate &mdash; for example summary against one
+      and detail against the other &mdash; rather than an accident of the push having been
+      replaced. Two pull interfaces for one consumer, filled by the same confirm step, is
+      the shape most likely to drift apart.
+    </div>
+
 
     <!-- 4. OUTBOUND -->
     <h2><span class="num">4</span>What is sent to Oracle Project Costing</h2>
@@ -702,6 +729,8 @@
           <tr><td>16</td><td>Session token strengthening before production</td><td>build &mdash; one line and a grant</td></tr>
           <tr><td>17</td><td><strong>Where <code>REVENUE_MODEL</code> and <code>LEAVE_LOSS_FLAG</code> come from</strong> &mdash; neither is read from Fusion and both are null today, so leave-loss cannot fire for any project (&sect;6.1)</td><td>functional decision</td></tr>
           <tr><td>18</td><td>Test data prepared for <strong>each revenue model</strong> &mdash; T&amp;M, FCP with and without leave loss, Milestone (&sect;6) <em>&mdash; agreed, functional team owns this</em></td><td>functional team &mdash; <strong>agreed</strong></td></tr>
+          <tr><td>19</td><td><strong>Structure of the accrual staging table</strong> &mdash; summary, complete timesheet employee-wise and adjustments, in our schema for accrual to pull (&sect;3.5, &sect;7.4). Being defined on the accrual side, <em>work in progress</em>.</td><td>accrual team &mdash; then build</td></tr>
+          <tr><td>20</td><td><strong>One accrual interface or two?</strong> The existing interface is already a day-wise pull carrying adjustments, so <code>ACCRUAL_STATUS</code> and <code>PARTNER_STATUS</code> may be tracking the same hand-off. Decide before the structure is fixed (&sect;3.5).</td><td>functional + accrual team</td></tr>
         </tbody>
       </table>
     </div>
@@ -846,7 +875,7 @@
           <tr><td class="arrow">&#8595;</td><td class="arrow">&#8595;</td><td class="arrow">&#8595;</td></tr>
           <tr>
             <td class="box good"><strong>PROJECT COSTING</strong><br />POST unprocessedProjectCosts<br /><strong>one row per approved entry</strong><br />POET in the flexfield block<br />IS_LEAVE = Y excluded</td>
-            <td class="box good"><strong>ACCRUAL &mdash; SUMMARY</strong><br />one row per employee &times; project-month<br />billable / non-billable / leave hours<br />PUSH_STATE READY or BLOCKED</td>
+            <td class="box good"><strong>ACCRUAL STAGING &mdash; our schema</strong><br />summary<br />complete timesheet, employee-wise<br />adjustments if any</td>
             <td class="box off"><strong>NOT SENT</strong><br />OTL push &mdash; on hold<br />Payroll &mdash; out of scope<br />Absence &mdash; nothing written back</td>
           </tr>
           <tr>
@@ -856,7 +885,7 @@
           </tr>
           <tr>
             <td class="box"><em>Import Costs</em> (ESS, in Fusion)<br />then read rejections back<br />StatusCode = 'R'</td>
-            <td class="box good"><strong>ACCRUAL &mdash; TIMESHEET LINES</strong><br />the day rows for that employee<br /><strong>after</strong> the summary &mdash; they attach<br />to the id it returns</td>
+            <td class="box good"><strong>ACCRUAL MODULE PULLS</strong><br />reads from our table &mdash; we never<br />write into accrual&rsquo;s own tables<br /><em>structure WIP, from the accrual side</em></td>
             <td></td>
           </tr>
           <tr>
@@ -954,15 +983,9 @@
           </tr>
           <tr>
             <td>2</td>
-            <td><strong>Accrual &mdash; summary</strong></td>
-            <td>one row per <strong>employee &times; project-month</strong></td>
-            <td>Billable, non-billable and leave hours. <code>PUSH_STATE</code> is READY or BLOCKED &mdash; a month that cannot be handed over is returned rather than filtered out, so it is visible instead of missing.</td>
-          </tr>
-          <tr>
-            <td>3</td>
-            <td><strong>Accrual &mdash; timesheet lines</strong></td>
-            <td>the <strong>day rows</strong> for one employee</td>
-            <td><strong>Must follow the summary</strong>, because the lines attach to the id it returns. Built and deliberately dormant &mdash; nothing is written to the main application yet.</td>
+            <td><strong>Accrual staging table</strong><br /><span class="why">in our schema; accrual pulls</span></td>
+            <td>three record kinds together: the <strong>summary</strong>, the <strong>complete timesheet employee-wise</strong>, and <strong>adjustments</strong> if any</td>
+            <td>We fill it on month confirm; the accrual module reads it. Nothing is written into accrual&rsquo;s own tables. <strong>The structure is being defined on the accrual side and is not final</strong> &mdash; open item 19. See also the note in 3.5 on whether this is one interface or two.</td>
           </tr>
           <tr>
             <td>&mdash;</td>

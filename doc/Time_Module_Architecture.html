@@ -427,11 +427,11 @@ flowchart LR
     C1 --> C2 --> C3 --> C4 --> C5
   end
 
-  subgraph ACC["ACCRUAL - two grains, in order"]
+  subgraph ACC["ACCRUAL - staged in OUR schema, accrual PULLS"]
     direction TB
-    S1["SUMMARY&lt;br/&gt;one row per employee x project-month&lt;br/&gt;billable / non-billable / leave hours&lt;br/&gt;PUSH_STATE READY or BLOCKED"]
-    S2["TIMESHEET LINES&lt;br/&gt;the day rows for that employee&lt;br/&gt;attach to the id the summary returns"]
-    S1 -->|"summary FIRST - not a preference"| S2
+    S1["STAGING TABLE - our schema&lt;br/&gt;filled on month confirm&lt;br/&gt;1 summary&lt;br/&gt;2 complete timesheet, employee-wise&lt;br/&gt;3 adjustments if any"]
+    S2["ACCRUAL MODULE READS IT&lt;br/&gt;we never write into accrual's tables&lt;br/&gt;structure WIP, defined on the accrual side"]
+    S1 -->|"pull, not push"| S2
   end
 
   subgraph NOT["NOT SENT"]
@@ -580,11 +580,11 @@ flowchart LR
     C1 --> C2 --> C3 --> C4 --> C5
   end
 
-  subgraph ACC["ACCRUAL - two grains, in order"]
+  subgraph ACC["ACCRUAL - staged in OUR schema, accrual PULLS"]
     direction TB
-    S1["SUMMARY&lt;br/&gt;one row per employee x project-month&lt;br/&gt;billable / non-billable / leave hours&lt;br/&gt;PUSH_STATE READY or BLOCKED"]
-    S2["TIMESHEET LINES&lt;br/&gt;the day rows for that employee&lt;br/&gt;attach to the id the summary returns"]
-    S1 -->|"summary FIRST - not a preference"| S2
+    S1["STAGING TABLE - our schema&lt;br/&gt;filled on month confirm&lt;br/&gt;1 summary&lt;br/&gt;2 complete timesheet, employee-wise&lt;br/&gt;3 adjustments if any"]
+    S2["ACCRUAL MODULE READS IT&lt;br/&gt;we never write into accrual's tables&lt;br/&gt;structure WIP, defined on the accrual side"]
+    S1 -->|"pull, not push"| S2
   end
 
   subgraph NOT["NOT SENT"]
