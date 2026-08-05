@@ -234,49 +234,36 @@
     <p class="dgm-sub">Everything read live from Fusion as the screen loads, and what each read feeds. There is no scheduled sync and no staged copy.</p>
     <div class="diagram" id="pane-inbound" data-name="Time_Module_inbound">
 <pre class="mermaid">
-flowchart LR
+flowchart TD
 
-  subgraph SRC["ORACLE FUSION - read at the moment the screen needs it"]
-    direction TB
-    A1["Projects the person may charge&lt;br/&gt;GET projectLaborResources, projects"]
-    A2["WBS tasks + chargeable / billable&lt;br/&gt;GET projects/id/child/Tasks&lt;br/&gt;projectFinancialTasks"]
-    A3["Expenditure type&lt;br/&gt;GET expenditureTypes"]
-    A4["Expenditure organization&lt;br/&gt;from the person's assignment"]
-    A5["Allocation % and dates&lt;br/&gt;GET projectResourceAssignments&lt;br/&gt;personAssignmentLaborSchedules"]
-    A6["Rate&lt;br/&gt;GET rateSchedules"]
-    A7["Work schedule + shift pattern&lt;br/&gt;workforceScheduleDefinitions / Shifts&lt;br/&gt;BIP runReport where REST cannot answer"]
-    A8["Calendar by location + events&lt;br/&gt;BIP runReport"]
-    A9["Absence - THIS person, THESE dates&lt;br/&gt;GET absences"]
-  end
+  F["ORACLE FUSION&lt;br/&gt;read live as the screen loads&lt;br/&gt;no scheduled sync &middot; no staged copy"]
 
-  subgraph USE["WHAT IT FEEDS"]
-    direction TB
-    U1["PICKERS&lt;br/&gt;Project and Task the employee may choose"]
-    U2["POET on the entry&lt;br/&gt;P + O + E + T snapshotted at save"]
-    U3["PREPOPULATE the month&lt;br/&gt;std hours/day x allocation %&lt;br/&gt;quarter-rounded, non-working days skipped&lt;br/&gt;ONE line on the first chargeable task"]
-    U4["LEAVE rows&lt;br/&gt;own duration, IS_LEAVE = Y, read-only"]
-    U5["Accrual valuation&lt;br/&gt;not sent to Costing"]
-  end
+  G1["Project &middot; WBS task&lt;br/&gt;Expenditure type &middot; Expenditure org"]
+  G2["Allocation % &middot; Rate&lt;br/&gt;Work schedule &middot; Shift pattern&lt;br/&gt;Calendar by location + events"]
+  G3["Absence&lt;br/&gt;this person, these dates"]
 
-  A1 --> U1
-  A2 --> U1
-  A2 --> U2
-  A3 --> U2
-  A4 --> U2
-  A5 --> U3
-  A7 --> U3
-  A8 --> U3
-  A9 --> U4
-  A6 --> U5
+  U1["PICKERS&lt;br/&gt;and the POET snapshot&lt;br/&gt;written onto each entry at save"]
+  U2["PREPOPULATE&lt;br/&gt;std hours/day x allocation %&lt;br/&gt;quarter-rounded&lt;br/&gt;non-working days skipped&lt;br/&gt;ONE line, first chargeable task"]
+  U3["LEAVE ROWS&lt;br/&gt;own duration &middot; IS_LEAVE = Y&lt;br/&gt;read-only"]
 
-  N1["NO scheduled sync &middot; NO staged copy&lt;br/&gt;a BIP report called live is still a live read"]
+  W(["The week exists&lt;br/&gt;Not yet submitted"])
+
+  F --> G1
+  F --> G2
+  F --> G3
+  G1 --> U1
+  G2 --> U2
+  G3 --> U3
+  U1 --> W
+  U2 --> W
+  U3 --> W
 
   classDef live fill:#e6f2ff,stroke:#3b82c4,color:#0b3d66;
   classDef use  fill:#fff4e6,stroke:#e08e0b,color:#7a4a00;
-  classDef note fill:#fdf6e9,stroke:#d9a53c,color:#7a5a12;
-  class A1,A2,A3,A4,A5,A6,A7,A8,A9 live;
-  class U1,U2,U3,U4,U5 use;
-  class N1 note;
+  classDef st   fill:#eef0f6,stroke:#6b74a8,color:#2c3266;
+  class F,G1,G2,G3 live;
+  class U1,U2,U3 use;
+  class W st;
 </pre>
     </div>
   </div>
@@ -285,7 +272,7 @@ flowchart LR
     <p class="dgm-sub">Everything in one chart. Six statuses, applying to whatever you are looking at &mdash; there is no separate scheme for a day, a week or a month. A record is in exactly one status at a time; the <strong>flags</strong> sit on the edges that raise them, because a flag is something an event leaves behind rather than a place the record sits.</p>
     <div class="diagram" id="pane-status" data-name="Time_Module_status">
 <pre class="mermaid">
-flowchart LR
+flowchart TD
 
   NYS(["Not yet submitted"])
   SUB(["Submitted"])
@@ -389,7 +376,7 @@ flowchart LR
     <p class="dgm-sub">What leaves once a month is confirmed, at which grain, and in which order. Project Costing takes one row per approved entry; accrual takes a summary and then its timesheet lines.</p>
     <div class="diagram" id="pane-outbound" data-name="Time_Module_outbound">
 <pre class="mermaid">
-flowchart LR
+flowchart TD
 
   CONF{"MONTH CONFIRMED&lt;br/&gt;OC_TS_MONTH_CONFIRM&lt;br/&gt;Normal / Advance closure / Reopened"}
 
@@ -447,51 +434,38 @@ flowchart LR
   <details>
     <summary>Mermaid source &mdash; all three diagrams</summary>
     <p style="font-family:var(--mono);font-size:0.75rem;color:var(--accent);margin:1rem 0 0.25rem">Flow 1 &mdash; Inbound integration</p>
-    <pre class="source">flowchart LR
+    <pre class="source">flowchart TD
 
-  subgraph SRC["ORACLE FUSION - read at the moment the screen needs it"]
-    direction TB
-    A1["Projects the person may charge&lt;br/&gt;GET projectLaborResources, projects"]
-    A2["WBS tasks + chargeable / billable&lt;br/&gt;GET projects/id/child/Tasks&lt;br/&gt;projectFinancialTasks"]
-    A3["Expenditure type&lt;br/&gt;GET expenditureTypes"]
-    A4["Expenditure organization&lt;br/&gt;from the person's assignment"]
-    A5["Allocation % and dates&lt;br/&gt;GET projectResourceAssignments&lt;br/&gt;personAssignmentLaborSchedules"]
-    A6["Rate&lt;br/&gt;GET rateSchedules"]
-    A7["Work schedule + shift pattern&lt;br/&gt;workforceScheduleDefinitions / Shifts&lt;br/&gt;BIP runReport where REST cannot answer"]
-    A8["Calendar by location + events&lt;br/&gt;BIP runReport"]
-    A9["Absence - THIS person, THESE dates&lt;br/&gt;GET absences"]
-  end
+  F["ORACLE FUSION&lt;br/&gt;read live as the screen loads&lt;br/&gt;no scheduled sync &middot; no staged copy"]
 
-  subgraph USE["WHAT IT FEEDS"]
-    direction TB
-    U1["PICKERS&lt;br/&gt;Project and Task the employee may choose"]
-    U2["POET on the entry&lt;br/&gt;P + O + E + T snapshotted at save"]
-    U3["PREPOPULATE the month&lt;br/&gt;std hours/day x allocation %&lt;br/&gt;quarter-rounded, non-working days skipped&lt;br/&gt;ONE line on the first chargeable task"]
-    U4["LEAVE rows&lt;br/&gt;own duration, IS_LEAVE = Y, read-only"]
-    U5["Accrual valuation&lt;br/&gt;not sent to Costing"]
-  end
+  G1["Project &middot; WBS task&lt;br/&gt;Expenditure type &middot; Expenditure org"]
+  G2["Allocation % &middot; Rate&lt;br/&gt;Work schedule &middot; Shift pattern&lt;br/&gt;Calendar by location + events"]
+  G3["Absence&lt;br/&gt;this person, these dates"]
 
-  A1 --> U1
-  A2 --> U1
-  A2 --> U2
-  A3 --> U2
-  A4 --> U2
-  A5 --> U3
-  A7 --> U3
-  A8 --> U3
-  A9 --> U4
-  A6 --> U5
+  U1["PICKERS&lt;br/&gt;and the POET snapshot&lt;br/&gt;written onto each entry at save"]
+  U2["PREPOPULATE&lt;br/&gt;std hours/day x allocation %&lt;br/&gt;quarter-rounded&lt;br/&gt;non-working days skipped&lt;br/&gt;ONE line, first chargeable task"]
+  U3["LEAVE ROWS&lt;br/&gt;own duration &middot; IS_LEAVE = Y&lt;br/&gt;read-only"]
 
-  N1["NO scheduled sync &middot; NO staged copy&lt;br/&gt;a BIP report called live is still a live read"]
+  W(["The week exists&lt;br/&gt;Not yet submitted"])
+
+  F --> G1
+  F --> G2
+  F --> G3
+  G1 --> U1
+  G2 --> U2
+  G3 --> U3
+  U1 --> W
+  U2 --> W
+  U3 --> W
 
   classDef live fill:#e6f2ff,stroke:#3b82c4,color:#0b3d66;
   classDef use  fill:#fff4e6,stroke:#e08e0b,color:#7a4a00;
-  classDef note fill:#fdf6e9,stroke:#d9a53c,color:#7a5a12;
-  class A1,A2,A3,A4,A5,A6,A7,A8,A9 live;
-  class U1,U2,U3,U4,U5 use;
-  class N1 note;</pre>
+  classDef st   fill:#eef0f6,stroke:#6b74a8,color:#2c3266;
+  class F,G1,G2,G3 live;
+  class U1,U2,U3 use;
+  class W st;</pre>
     <p style="font-family:var(--mono);font-size:0.75rem;color:var(--accent);margin:1rem 0 0.25rem">Lifecycle &mdash; Status only - week, day, month</p>
-    <pre class="source">flowchart LR
+    <pre class="source">flowchart TD
 
   NYS(["Not yet submitted"])
   SUB(["Submitted"])
@@ -528,7 +502,7 @@ flowchart LR
   class CONF gate;
   class F note;</pre>
     <p style="font-family:var(--mono);font-size:0.75rem;color:var(--accent);margin:1rem 0 0.25rem">Flow 2 &mdash; Outbound integration</p>
-    <pre class="source">flowchart LR
+    <pre class="source">flowchart TD
 
   CONF{"MONTH CONFIRMED&lt;br/&gt;OC_TS_MONTH_CONFIRM&lt;br/&gt;Normal / Advance closure / Reopened"}
 
