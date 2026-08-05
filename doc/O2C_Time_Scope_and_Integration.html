@@ -670,14 +670,79 @@
           <tr><td>14</td><td>Rejected-cost read-back so a failed post is visible (&sect;4.4)</td><td>build</td></tr>
           <tr><td>15</td><td>Period auto-close has no job</td><td>build</td></tr>
           <tr><td>16</td><td>Session token strengthening before production</td><td>build &mdash; one line and a grant</td></tr>
+          <tr><td>17</td><td><strong>Where <code>REVENUE_MODEL</code> and <code>LEAVE_LOSS_FLAG</code> come from</strong> &mdash; neither is read from Fusion and both are null today, so leave-loss cannot fire for any project (&sect;6.1)</td><td>functional decision</td></tr>
+          <tr><td>18</td><td>Test data prepared for <strong>each revenue model</strong> &mdash; T&amp;M, FCP with and without leave loss, Milestone (&sect;6) <em>&mdash; agreed, functional team owns this</em></td><td>functional team &mdash; <strong>agreed</strong></td></tr>
         </tbody>
       </table>
     </div>
 
-    <h4>Data conditions in Fusion that block time entry</h4>
+    <h2><span class="num">6</span>Test data preparation, by revenue model</h2>
+    <p class="lede"><strong>Agreed: the functional team will prepare the data.</strong>
+    Every scenario has to be exercised against each revenue model, because the rules
+    that fire are different for each &mdash; and today only one model has data behind
+    it at all.</p>
+
+    <h3>6.1 The three revenue models, and what each has to exercise</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Revenue model</th><th>What is different about it</th><th>Data needed to exercise it</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>T&amp;M</strong><br /><span class="why">Time &amp; Material</span></td>
+            <td>Hours are the billable unit. The straightforward path: capture, approve, cost. Leave-loss does not apply.</td>
+            <td>A project with a manager, at least two chargeable WBS tasks, and resources allocated at 100% and at a part percentage. Absence inside the month, to prove leave shows without triggering leave-loss.</td>
+          </tr>
+          <tr>
+            <td><strong>FCP</strong><br /><span class="why">Fixed Capacity</span></td>
+            <td><strong>The only model where leave-loss applies.</strong> Absence on a billable allocation is a loss of committed capacity, so PROC-006 / RULE-014 fire &mdash; and both gate on revenue model <em>and</em> the leave-loss flag together. This is the richest case and the one most likely to be missed.</td>
+            <td>A project with <code>revenue model = FCP</code> <strong>and</strong> <code>leave loss = Yes</code>; an allocated resource with an approved absence on a working day; and a second eligible resource available on the same dates, so cover assignment can be exercised. Also a project with FCP but leave loss = No, to prove the rule declines it.</td>
+          </tr>
+          <tr>
+            <td><strong>Milestone</strong></td>
+            <td>Revenue is not driven by hours. Time is still captured, approved and costed, but nothing about the revenue position follows from the hours.</td>
+            <td>A project with a manager and chargeable tasks, and an allocated resource. Confirms that capture and the cost post behave identically while no revenue rule engages.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="why">The distinction matters because the leave-loss refusal is explicit:
+    coverage applies <em>only</em> to FCP projects with leave loss set to Yes. Test data
+    that is all T&amp;M will never reach that rule, and test data that is all FCP will
+    never prove the rule declines the others.</p>
+
+    <div class="note">
+      <strong>Blocker to resolve first &mdash; the revenue model has no source.</strong>
+      <code>REVENUE_MODEL</code> and <code>LEAVE_LOSS_FLAG</code> are commercial
+      attributes this module owns. They are <strong>not read from Fusion</strong> and
+      never have been &mdash; they were deliberately excluded from the old extract as
+      values the module sets itself, and they are null for every project that arrived
+      that way. With the extract removed and all project data now read live from Fusion
+      (&sect;2), these two have <strong>no source at all</strong>.
+      <br /><br />
+      So data cannot be &ldquo;prepared for each revenue model&rdquo; until we decide
+      where the value lives. Two options:
+      <br /><br />
+      <strong>(a) Map it from a Fusion attribute.</strong> The project resource carries
+      user-definable code and text slots (<code>ProjectCode01</code> onward) which is
+      exactly where a value like this is normally held. One of them is nominated, the
+      functional team populates it per project, and the module reads it with everything
+      else. Preferred: the data then lives with the project, one place, maintained by
+      the people who own the commercial terms.
+      <br /><br />
+      <strong>(b) Keep it local to this module.</strong> A small maintained mapping of
+      project number to revenue model and leave-loss flag. Works, but it is a second
+      place to keep current, and a project whose commercial basis changes in Fusion will
+      not change here.
+      <br /><br />
+      Until one is chosen, <strong>leave-loss cannot fire for any project</strong>,
+      because the rule requires a value that nothing sets.
+    </div>
+
+    <h3>6.2 Conditions in Fusion that block time entry</h3>
     <p class="why">Measured on the reference pod, 01&ndash;02 Aug 2026. These are data to
-    correct in Fusion, not defects in the module &mdash; but each one stops somebody
-    entering or costing time.</p>
+    correct rather than defects in the module &mdash; but each one stops somebody
+    entering or costing time, and each has to be clear for the projects chosen as test
+    data above.</p>
     <div class="table-wrap">
       <table>
         <thead><tr><th>Condition</th><th>Measured</th><th>Effect</th></tr></thead>
@@ -686,9 +751,15 @@
           <tr><td>Projects with no project manager</td><td>237 of 424</td><td>approval has no routing target</td></tr>
           <tr><td>Projects marked to track time</td><td>only 48 of 424</td><td>the rest are invisible to time entry &mdash; confirm intended</td></tr>
           <tr><td>Projects with no chargeable WBS task</td><td>15 projects, 42 allocations</td><td>nothing to prepopulate or charge against</td></tr>
+          <tr><td>Projects with a revenue model set</td><td><strong>none</strong></td><td>leave-loss can never fire &mdash; see the blocker above</td></tr>
         </tbody>
       </table>
     </div>
+    <p class="why">A useful test project therefore needs all five clear at once: a
+    manager, track-time enabled, at least one chargeable WBS task, an allocated resource
+    whose expenditure organization is set, and a revenue model. That combination is
+    scarcer than any single figure above suggests, which is why choosing the projects
+    deliberately matters more than the counts.</p>
 
     <hr />
     <p class="why" style="font-size:0.8rem">
