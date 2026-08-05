@@ -244,7 +244,7 @@
           <li><strong>Calendar and shift authoring.</strong> Read from Fusion; no maintenance screen.</li>
           <li><strong>Period control screen.</strong> Periods and cut-offs are reference data, exposed read-only.</li>
           <li><strong>Mobile</strong> &mdash; phase 2.</li>
-          <li><strong>Direct Fusion calls from the browser</strong> with credentials in the client (NFR-005). All Fusion traffic is server-side or proxied.</li>
+          <li><strong>Fusion credentials in the browser</strong> (NFR-005). The screens do read Fusion live (&sect;2) &mdash; what is barred is the client <em>holding a credential</em> to do it. Every call is either made server-side or forwarded by a server-side proxy that attaches the credential, so nothing secret reaches the browser. Which of those two, see &sect;2.4.</li>
           <li><strong>Timesheet upload</strong> (CSV in). Download exists; upload is on hold by decision.</li>
         </ul>
       </div>
@@ -371,6 +371,29 @@
       real login who need not exist as a worker in HCM at all. A decision is needed on
       whether worker identity remains local.
     </div>
+
+    <h3>2.4 Where the call is made from &mdash; open</h3>
+    <p>Two placements satisfy the constraint above, and they are not equivalent.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Placement</th><th>What it gives</th><th>What it costs</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>From the page, through the server-side proxy</strong></td>
+            <td>Already proven &mdash; the Fusion backend is configured and answers today. Nothing new to install, and the credential is attached by the server, never by the client.</td>
+            <td>Data fetched this way does not pass through the rules in the database, so nothing validates it. Workable only if what the user picked is written back with the entry &mdash; which is what the POET snapshot in 3.1 does.</td>
+          </tr>
+          <tr>
+            <td><strong>From the database, server-side</strong></td>
+            <td>One path for screens, defaulting and validation alike; every rule keeps working unchanged.</td>
+            <td>Requires outbound HTTPS from the database &mdash; a privilege grant and a network rule that <strong>have not been requested or proven on this environment</strong>. Until they are, this option is not known to be available.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="why">Either satisfies NFR-005. The choice decides how much of the rule
+    enforcement can stay in the database, so it should be settled before the live reads are
+    built &mdash; open item 22.</p>
 
     <!-- 3. THE MODULE -->
     <h2><span class="num">3</span>The time module &mdash; prepopulation, status and flags</h2>
@@ -739,6 +762,7 @@
           <tr><td>19</td><td><strong>Structure of the accrual staging table</strong> &mdash; summary, complete timesheet employee-wise and adjustments, in our schema for accrual to pull (&sect;3.5, &sect;7.3). Being defined on the accrual side, <em>work in progress</em>.</td><td>accrual team &mdash; then build</td></tr>
           <tr><td>20</td><td><strong>One accrual interface or two?</strong> The existing interface is already a day-wise pull carrying adjustments, so <code>ACCRUAL_STATUS</code> and <code>PARTNER_STATUS</code> may be tracking the same hand-off. Decide before the structure is fixed (&sect;3.5).</td><td>functional + accrual team</td></tr>
           <tr><td>21</td><td><strong>Make the schema match the single status set</strong> &mdash; the week, day, month and retro-adjustment statuses are separate columns with different permitted values today (&sect;3.2)</td><td>build</td></tr>
+          <tr><td>22</td><td><strong>Where the live Fusion call is made from</strong> &mdash; the page through the server-side proxy, or the database (&sect;2.4). Decides how much rule enforcement can stay in the database; the database option needs a privilege grant that has not been proven here.</td><td>build decision &mdash; needs a spike</td></tr>
         </tbody>
       </table>
     </div>
