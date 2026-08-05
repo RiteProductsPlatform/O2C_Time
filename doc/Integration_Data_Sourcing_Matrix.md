@@ -19,13 +19,17 @@ Eleven extracts exist in `integration/bip/extracts.py` and all eleven have been
 run against a pod. **`integration/bip/README.md` documents only eight** — the
 three schedule extracts are missing from its table. Corrected here.
 
+`ABSENCES` is struck through: it still exists and still runs, but it is no longer
+the source the module reads — absence is fetched live per person per date (§4). Ten
+extracts feed the cache.
+
 | Extract | INT | Target | Fusion sources | Suggested cadence |
 |---|---|---|---|---|
 | `WORKERS` | INT-001 | `OC_TIME_WORKER` | `PER_ALL_PEOPLE_F`, `PER_PERSON_NAMES_F`, `PER_ALL_ASSIGNMENTS_M`, `PER_EMAIL_ADDRESSES`, `PER_PERIODS_OF_SERVICE`, `PER_ASSIGNMENT_SUPERVISORS_F`, `HR_LOCATIONS_ALL_F`, `HR_ALL_ORGANIZATION_UNITS_F_VL` | **daily** |
 | `PROJECTS` | INT-002 | `OC_TIME_PROJECT` | `PJF_PROJECTS_ALL_B/_TL`, `PJF_PROJECT_TYPES_TL`, `PJF_PROJECT_PARTIES`, `HZ_PARTIES`, `PJT_PROJECT_ROLES_VL` | monthly |
 | `TASKS` | INT-002 | `OC_TIME_TASK` | `PJF_PROJ_ELEMENTS_B/_TL` | monthly |
 | `ALLOCATIONS` | INT-003 | `OC_TIME_ALLOCATION` | `PJF_PROJECT_PARTIES`, `PJR_ASSIGNMENT` | **daily** |
-| `ABSENCES` | INT-006 | `OC_TIME_ABSENCE` | `ANC_PER_ABS_ENTRIES`, `ANC_PER_ABS_ENTRY_DTLS`, `ANC_ABSENCE_TYPES_VL` | **daily** |
+| ~~`ABSENCES`~~ | INT-006 | ~~`OC_TIME_ABSENCE`~~ | — | **superseded — read live, §4** |
 | `CALENDAR` | INT-005 | `OC_TIME_CALENDAR` (HOLIDAY) | `PER_CALENDAR_EVENTS` | monthly |
 | `SHIFTS` | INT-004 | `OC_TIME_CALENDAR` (SHIFT) | `HTS_SHIFTS_VL` | monthly |
 | `WORK_PATTERNS` | INT-004 | `OC_TIME_CALENDAR` (pattern ref) | `HTS_WORK_PATTERNS_VL` | monthly |
@@ -49,10 +53,11 @@ all behave identically.
 **Two ordering rules that are constraints, not preferences:**
 
 ```
-WORKERS -> PROJECTS -> TASKS -> ALLOCATIONS -> ABSENCES
+WORKERS -> PROJECTS -> TASKS -> ALLOCATIONS
 ```
 `OC_TIME_ALLOCATION` has FKs to both project and worker, `OC_TIME_TASK` to
-project. Load allocations first and every row fails.
+project. Load allocations first and every row fails. (`ABSENCES` used to be last
+in this chain; it is now read live — §4.)
 
 MasterSync must finish **before** `POST jobs/populate/:periodId`
 (MonthlyPopulation), which builds `OC_TS_WEEK`/`OC_TS_ENTRY` from the cache. Run
@@ -80,6 +85,7 @@ extract.
 
 | Data | Method / path | Why not BIP |
 |---|---|---|
+| **Absences, per person per date** | `GET /hcmRestApi/.../absences?q=personNumber=… AND date range` | **the decision of 05-Aug-2026 — see §4.** A nightly extract cannot answer "on leave on this date" for a date it did not cover |
 | Absence plan balance | `GET /hcmRestApi/.../planBalances` | balance is computed by Absence Mgmt, not a table read; needed to validate a leave entry |
 | Expenditure types | `GET /fscmRestApi/.../expenditureTypes` | also extractable; REST is fine for a 262-row list |
 | Financial (chargeable) tasks | `GET /fscmRestApi/.../projectFinancialTasks` | second opinion on the chargeable-task gap, §3.5 |
@@ -95,14 +101,30 @@ extract.
 `/fscmRestApi/resources/11.13.18.05/`. Auth: Basic or OAuth 2.0, server-side
 only (NFR-005).
 
-### 2.3 Not REST at all — ESS processes
+### 2.3 Sending cost to Project Costing — REST, then one ESS step
 
-The hand-off to Payroll and Costing is **process-driven, not a REST push**:
+**Corrected.** An earlier version of this section said costing could only be
+reached by a scheduled transfer process. `doc/Unprocessed_Project_Costs_REST_API.md`
+shows otherwise: the **Unprocessed Project Costs** resource accepts a third-party
+cost directly.
 
-- Payroll: *Load Time Card Batches* / *Transfer Time Cards from Time and Labor to Payroll* → `PAY_ELEMENT_ENTRIES_F`
-- Costing: *Transfer Time to Projects* → *Import and Process Cost Transactions* → `PJC_TXN_XFACE_ALL` → `PJC_EXP_ITEMS_ALL` + `PJC_COST_DIST_LINES_ALL`
+```
+POST /fscmRestApi/resources/11.13.18.05/unprocessedProjectCosts
+```
 
-If OIC owns scheduling, these are ESS submissions, not endpoints.
+One row per approved entry; POET travels in the
+`ProjectStandardCostCollectionFlexfields` child block
+(`_PROJECT_ID_Display`, `_TASK_ID_Display`, `_EXPENDITURE_TYPE_ID_Display`,
+`_ORGANIZATION_ID_Display`, `_EXPENDITURE_ITEM_DATE`). Required fields are
+`BusinessUnitId`, `ExpenditureBatch`, `OriginalTransactionReference` and
+`Quantity`. `OriginalTransactionReference` carries **our entry id** and is the
+idempotency key.
+
+Only the conversion step remains ESS: Fusion's *Import Costs* program turns
+unprocessed costs into project costs. Rejections are readable with
+`GET …?q=StatusCode='R'&expand=Errors`.
+
+**Payroll is out of scope** — no `elementEntries` write, no transfer process.
 
 ---
 
@@ -206,11 +228,35 @@ and inspect its `OC_TIME_SYNC_JOB` row before leaving it unattended.
 
 ---
 
-## 4. Known open defect
+## 4. Absence is read live, per person, per date
 
-**Synced absences do not render correctly on the timesheet screen.** Raised
-05-Aug-2026, deferred, not yet diagnosed. Check the cheap explanation first: the
-reference pod returns **one** absence row because its absence data stops at
-2025-11-26, so an empty leave row on an AUG-2026 sheet may be correct data rather
-than a display fault. Re-run `ABSENCES` with an earlier `--effective-date` before
-assuming the UI is at fault.
+**Decided 05-Aug-2026.** Absence comes from Fusion for **that person and those
+dates**, queried as the screen loads — not from the synced `OC_TIME_ABSENCE` copy.
+
+This replaces an earlier entry here that recorded "synced absences do not render
+correctly" as a deferred UI defect. That framing was wrong. The fault is the
+*source*, not the rendering: a scheduled extract cannot answer "is this person on
+leave on this date" for a date the extract did not cover, and the reference pod
+demonstrates it — `ABSENCES` returns **one** row because that pod's absence data
+stops at 2025-11-26. Time spent on the grid bindings would have found nothing wrong
+with the grid.
+
+```
+GET /hcmRestApi/resources/11.13.18.05/absences
+    ?q=personNumber={employeeId} AND startDate<={weekEnd} AND endDate>={weekStart}
+```
+
+**It still lands as entry rows.** Leave hours feed the week total, the leave-loss
+calculation (RULE-009) and the accrual figures, so the live result is written as
+`OC_TS_ENTRY` rows with `IS_LEAVE='Y'` rather than drawn as a display-only overlay —
+an overlay would leave all three short while looking correct on screen.
+
+**Open, and now a functional question rather than a bug:** an entry requires a
+project, so a leave row must attach to one of the person's allocations. Someone with
+no active allocation has nowhere to hang it and the row is dropped silently. Needs a
+rule — the organization project, the last allocation held, or reported as an
+exception.
+
+**Diagnostic note for later:** absence display problems are to be investigated by
+checking what the source returned for that person and that date, before looking at
+the screen.

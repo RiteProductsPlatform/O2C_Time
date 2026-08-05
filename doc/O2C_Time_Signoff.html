@@ -273,10 +273,11 @@
           </tr>
           <tr>
             <td><code>INT-006</code></td>
-            <td><strong>Absences</strong></td>
-            <td><code>GET /hcmRestApi/&hellip;/absences</code></td>
+            <td><strong>Absences</strong><br /><span class="why">for the person, for the dates on screen</span></td>
+            <td><code>GET /hcmRestApi/&hellip;/absences</code><br /><span class="why">filtered by person and by the date range of the week or month being viewed</span></td>
             <td>Approved absence per person per date, with type and duration.
-              <span class="why"><b>Why:</b> leave appears on the timesheet as read-only hours so the week reconciles to standard hours, and absence on a billable allocation is what triggers leave-loss. Read live because leave is booked continuously and a stale answer shows the wrong reason for a short week.</span></td>
+              <span class="why"><b>Why:</b> leave appears on the timesheet as read-only hours so the week reconciles to standard hours, and absence on a billable allocation is what triggers leave-loss.
+              <b>This must be live, and the query must be keyed on the person and the date.</b> A scheduled extract cannot answer &ldquo;is this person on leave on this date&rdquo; for a date it did not cover, and leave is booked continuously &mdash; so a synced answer is wrong for exactly the days a timesheet is about. Absence display problems are to be diagnosed by checking what the source returned for that person and that date, not by inspecting the grid.</span></td>
           </tr>
         </tbody>
       </table>
@@ -370,13 +371,24 @@
     </div>
 
     <h4>Pass 2 &mdash; approved absences</h4>
-    <p>Approved absences in the period are written as read-only leave rows at their
-    own duration, against a common <code>LEAVE</code> task, marked
-    <code>IS_LEAVE = 'Y'</code>. Allocation percentage is not applied &mdash; leave
-    is whole. The row is attached to one of the person's active allocations because
-    an entry requires a project.
-    <strong>An employee with no active allocation gets no leave row, and nothing
-    reports it</strong> &mdash; an open item.</p>
+    <p>Approved absences are written as read-only leave rows at their own duration,
+    against a common <code>LEAVE</code> task, marked <code>IS_LEAVE = 'Y'</code>.
+    Allocation percentage is not applied &mdash; leave is whole.</p>
+    <p><strong>The absence is read live from Fusion for that person and those
+    dates</strong> (&sect;2.1), not from a synced copy. The leave row is still written
+    into the timesheet rather than merely displayed, because leave hours feed the week
+    total, the leave-loss calculation and the accrual figures &mdash; a display-only
+    overlay would leave all three short.</p>
+    <div class="note">
+      <strong>Two consequences to confirm.</strong>
+      <strong>(a)</strong> An entry requires a project, so a leave row has to be
+      attached to one of the person's allocations. An employee with <em>no</em> active
+      allocation therefore has nowhere to hang their leave, and today nothing reports
+      that &mdash; it is silent. <strong>(b)</strong> Reading at page load means the
+      leave shown is as at that moment; an absence approved after the month was
+      confirmed is a retro adjustment like any other change, not a silent
+      re-write of a closed month.
+    </div>
 
     <h4>When it runs</h4>
     <div class="table-wrap">
@@ -607,7 +619,7 @@
           <tr><td>7</td><td>Only 48 of 424 projects are marked to track time &mdash; confirm intended</td><td>Fusion data</td></tr>
           <tr><td>8</td><td>Projects with no chargeable WBS task (15 projects, 42 allocations) &mdash; nothing to prepopulate against</td><td>Fusion data</td></tr>
           <tr><td>9</td><td>Concurrent 100% allocations seeding 16h/day &mdash; correct in Fusion, or cap in the module?</td><td>functional decision</td></tr>
-          <tr><td>10</td><td>Employee with no allocation gets no leave row, silently</td><td>build</td></tr>
+          <tr><td>10</td><td>Where leave hangs for an employee with <strong>no active allocation</strong> &mdash; an entry needs a project and they have none, so their leave is silently dropped. Needs a rule: an organization project, the last allocation held, or reported as an exception.</td><td>functional decision</td></tr>
           <tr><td>11</td><td>Whether a <em>Defaulted</em> week may be confirmed to accrual &mdash; currently blocked; advance closure is the stated exception</td><td>functional decision</td></tr>
           <tr><td>12</td><td>Keep <em>Defaulted</em> / <em>Overridden</em> as both status and flag, or collapse?</td><td>functional decision</td></tr>
           <tr><td>13</td><td>Period auto-close has no job</td><td>build</td></tr>
