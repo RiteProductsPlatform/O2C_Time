@@ -142,6 +142,35 @@
     h2 { page-break-after: avoid; }
     table, .card, .note { page-break-inside: avoid; }
   }
+
+  /* Flow charts drawn as tables, so the Word conversion gets editable boxes
+     rather than an image it cannot produce. Borders are suppressed on the
+     wrapper and applied to the boxes themselves. */
+  table.flow { border-collapse: separate; border-spacing: 6px 0; }
+  table.flow td { border: none; padding: 0; vertical-align: middle; }
+  table.flow td.box {
+    border: 1px solid var(--rule); border-radius: 4px;
+    padding: 0.5rem 0.7rem; font-size: 0.8rem; line-height: 1.45;
+    text-align: center; background: var(--surface);
+  }
+  table.flow td.arrow {
+    text-align: center; color: var(--ink-faint); font-size: 1rem;
+    padding: 0.25rem 0; letter-spacing: 0.1em;
+  }
+  table.flow td.src  { background: #e6f2ff; border-color: #3b82c4; color: #0b3d66; }
+  table.flow td.use  { background: #fff4e6; border-color: #e08e0b; color: #7a4a00; }
+  table.flow td.good { background: #e9f9ee; border-color: #2e9e5b; color: #0d5a2e; }
+  table.flow td.bad  { background: #fdecef; border-color: #b3352c; color: #8a2f23; }
+  table.flow td.gate { background: #fff4e6; border-color: #e08e0b; color: #7a4a00; font-weight: 650; }
+  table.flow td.off  { background: #f3f4f5; border-color: #9aa2ab; color: #6b727a; }
+  @media (prefers-color-scheme: dark) {
+    table.flow td.src  { background:#12212e; border-color:#3b82c4; color:#a9cdf0; }
+    table.flow td.use  { background:#2a2113; border-color:#e08e0b; color:#e8c188; }
+    table.flow td.good { background:#12291d; border-color:#2e9e5b; color:#8fd8ae; }
+    table.flow td.bad  { background:#2a1614; border-color:#b3352c; color:#e6a79e; }
+    table.flow td.gate { background:#2a2113; border-color:#e08e0b; color:#e8c188; }
+    table.flow td.off  { background:#1b2129; border-color:#6b727a; color:#9aa2ab; }
+  }
 </style>
 </head>
 <body>
@@ -740,11 +769,109 @@
     </div>
 
     <h2><span class="num">7</span>End-to-end flow</h2>
-    <p class="lede">The drawn flowchart is
-    <code>doc/Time_Module_Architecture.html</code> &mdash; one chart covering all three
-    stages, with pan, zoom and SVG/PNG export. What follows is the same flow stated
-    precisely, because a diagram cannot show every transition unambiguously and a review
-    needs to be able to check each one.</p>
+    <p class="lede">Three charts, then the same flow stated precisely &mdash; a chart
+    cannot show every transition unambiguously and a review has to be able to check each
+    one. Larger versions, with pan, zoom and SVG/PNG export, are in
+    <code>doc/Time_Module_Architecture.html</code>.</p>
+
+
+    <h4>Flow 1 &mdash; inbound: what is read, and what it feeds</h4>
+    <div class="table-wrap">
+      <table class="flow">
+        <tbody>
+          <tr>
+            <td class="box src" colspan="3"><strong>ORACLE FUSION</strong><br />read live at the moment the screen needs it &mdash; no scheduled sync, no staged copy</td>
+          </tr>
+          <tr><td class="arrow">&#8595;</td><td class="arrow">&#8595;</td><td class="arrow">&#8595;</td></tr>
+          <tr>
+            <td class="box src">Projects the person may charge<br />WBS tasks + chargeable / billable<br />Expenditure type &amp; organization</td>
+            <td class="box src">Allocation % and dates<br />Work schedule &amp; shift pattern<br />Calendar by location + events<br />Rate</td>
+            <td class="box src">Absence &mdash; <strong>this person,<br />these dates</strong></td>
+          </tr>
+          <tr><td class="arrow">&#8595;</td><td class="arrow">&#8595;</td><td class="arrow">&#8595;</td></tr>
+          <tr>
+            <td class="box use"><strong>Pickers</strong><br />and the <strong>POET snapshot</strong><br />written onto each entry at save</td>
+            <td class="box use"><strong>Prepopulate the month</strong><br />std hours/day &times; allocation %<br />quarter-rounded &middot; non-working days skipped<br /><strong>one</strong> line on the first chargeable task</td>
+            <td class="box use"><strong>Leave rows</strong><br />own duration &middot; IS_LEAVE = Y<br />read-only</td>
+          </tr>
+          <tr><td class="arrow" colspan="3">&#8595;</td></tr>
+          <tr>
+            <td class="box" colspan="3">The week exists, at <strong>Not yet submitted</strong></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h4>Lifecycle &mdash; the week, from entry to a confirmed month</h4>
+    <p class="why">The path most weeks take, left to right. Every other transition is
+    in 7.2 &mdash; including the two loops back, which a single line cannot show.</p>
+    <div class="table-wrap">
+      <table class="flow">
+        <tbody>
+          <tr>
+            <td class="box">Not yet<br />submitted</td>
+            <td class="arrow">&#8594;</td>
+            <td class="box">Submitted</td>
+            <td class="arrow">&#8594;</td>
+            <td class="box good">Approved</td>
+            <td class="arrow">&#8594;</td>
+            <td class="box gate">Month<br />confirmed</td>
+          </tr>
+          <tr>
+            <td class="arrow">&#8595;</td><td></td>
+            <td class="arrow">&#8595;</td><td></td>
+            <td class="arrow">&#8595;</td><td></td><td></td>
+          </tr>
+          <tr>
+            <td class="box bad">Defaulted<br /><span style="font-size:0.72rem">weekly cut-off<br />LOCKS the week</span></td>
+            <td></td>
+            <td class="box bad">Rejected<br /><span style="font-size:0.72rem">back with the employee<br />days reset to Pending</span></td>
+            <td></td>
+            <td class="box good">Overridden<br />and approved<br /><span style="font-size:0.72rem">manager changed the hours</span></td>
+            <td></td><td></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="why">Flags run alongside all of this and are not stages &mdash; a week
+    carries any number at once. See 3.3.</p>
+
+    <h4>Flow 2 &mdash; outbound: what leaves, at which grain, in which order</h4>
+    <div class="table-wrap">
+      <table class="flow">
+        <tbody>
+          <tr>
+            <td class="box gate" colspan="3"><strong>MONTH CONFIRMED</strong><br />RULE-020 &mdash; every week approved &middot; OC_TS_MONTH_CONFIRM</td>
+          </tr>
+          <tr><td class="arrow">&#8595;</td><td class="arrow">&#8595;</td><td class="arrow">&#8595;</td></tr>
+          <tr>
+            <td class="box good"><strong>PROJECT COSTING</strong><br />POST unprocessedProjectCosts<br /><strong>one row per approved entry</strong><br />POET in the flexfield block<br />IS_LEAVE = Y excluded</td>
+            <td class="box good"><strong>ACCRUAL &mdash; SUMMARY</strong><br />one row per employee &times; project-month<br />billable / non-billable / leave hours<br />PUSH_STATE READY or BLOCKED</td>
+            <td class="box off"><strong>NOT SENT</strong><br />OTL push &mdash; on hold<br />Payroll &mdash; out of scope<br />Absence &mdash; nothing written back</td>
+          </tr>
+          <tr>
+            <td class="arrow">&#8595;</td>
+            <td class="arrow">&#8595;</td>
+            <td></td>
+          </tr>
+          <tr>
+            <td class="box"><em>Import Costs</em> (ESS, in Fusion)<br />then read rejections back<br />StatusCode = 'R'</td>
+            <td class="box good"><strong>ACCRUAL &mdash; TIMESHEET LINES</strong><br />the day rows for that employee<br /><strong>after</strong> the summary &mdash; they attach<br />to the id it returns</td>
+            <td></td>
+          </tr>
+          <tr>
+            <td class="arrow">&#8595;</td>
+            <td class="arrow">&#8595;</td>
+            <td></td>
+          </tr>
+          <tr>
+            <td class="box">OTL_STATUS</td>
+            <td class="box">ACCRUAL_STATUS &middot; PARTNER_STATUS</td>
+            <td></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
 
     <h3>7.1 Inbound &mdash; what is fetched, and what it is used for</h3>
     <div class="table-wrap">
