@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Custom Time Module — Architecture &amp; Data Flow</title>
+<title>O2C Time Module — Architecture &amp; Data Flow</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; }
   html { -webkit-text-size-adjust: 100%; }
@@ -194,8 +194,8 @@
 <div class="wrap">
   <header>
     <span class="eyebrow">Oracle Fusion · build spec</span>
-    <h1>Custom Time Module — architecture and data flow</h1>
-    <p class="standfirst">Replacement for Oracle Time and Labor (OTL). Master data is read in, time is captured and validated against schedule and attribute rules, then routed by time consumer set to payroll, project costing, and absence management.</p>
+    <h1>O2C Time Module — architecture and data flow</h1>
+    <p class="standfirst">Replacement for Oracle Time and Labor (OTL). Project, POET, allocation and absence data is read <strong>live from Fusion as the screen loads</strong>; workers and the calendar arrive on a scheduled BIP sync. Time is prepopulated from allocation, captured, validated against 22 database rules, approved day‑ or week‑wise, and the confirmed month is posted to Project Costing as unprocessed costs. <strong>Payroll is out of scope.</strong></p>
     <hr />
   </header>
 
@@ -215,58 +215,67 @@
 <pre class="mermaid" id="src">
 flowchart TD
 
-  subgraph INPUTS["INPUTS  (Master &amp; Reference Data - mostly GET)"]
+  subgraph LIVE["READ LIVE FROM FUSION  (on page load, per user)"]
     direction TB
-    POET["POET Structure&lt;br/&gt;Project / Task / Expenditure Org / Expenditure Type&lt;br/&gt;GET projects, projectPlans, expenditureTypes"]
-    PRES["Project Resources&lt;br/&gt;GET projectLaborResources"]
-    PTASK["Project Tasks&lt;br/&gt;GET projectPlans (tasks)"]
-    PALLOC["Project Allocation / Assignments&lt;br/&gt;GET projectResourceAssignments"]
-    PCOST["Project Resource Cost / Rates&lt;br/&gt;GET rateSchedules"]
-    SHIFT["Employee Shift / Work Pattern / Schedule&lt;br/&gt;GET personAssignmentLaborSchedules, workSchedules"]
-    CAL["Calendar &amp; Holidays&lt;br/&gt;GET calendarEvents / work schedule exceptions"]
-    ABS["Absence Records (default)&lt;br/&gt;GET absences, planbalances"]
+    LPROJ["Projects the person may charge&lt;br/&gt;GET projectLaborResources, projects"]
+    LTASK["WBS tasks + chargeable flag&lt;br/&gt;GET projects/{id}/child/Tasks, projectFinancialTasks"]
+    LPOET["POET completion&lt;br/&gt;GET expenditureTypes  &amp;middot;  expenditure org from the assignment"]
+    LALLOC["Allocation / assignment %&lt;br/&gt;GET projectResourceAssignments, personAssignmentLaborSchedules"]
+    LABS["Absences&lt;br/&gt;GET absences"]
   end
 
-  subgraph HUB["CUSTOM TIME MODULE  (replaces OTL)"]
+  subgraph SYNC["SYNCED BY OIC  (BIP runReport, scheduled)"]
     direction TB
-    CAP["1. CAPTURE&lt;br/&gt;Time card entry&lt;br/&gt;POST timeRecordEventRequests"]
-    VAL["2. VALIDATE&lt;br/&gt;Time attribute bridge:&lt;br/&gt;Payroll Time Type / Expenditure Type / Absence Type&lt;br/&gt;schedule + rules check"]
-    APP["3. APPROVE&lt;br/&gt;Manager approval workflow"]
-    ROUTE["4. ROUTE (Time Consumer Sets)&lt;br/&gt;Decide destinations by attribute"]
-    CAP --> VAL --> APP --> ROUTE
+    SWORK["Workers, manager hierarchy, std hours&lt;br/&gt;daily"]
+    SCAL["Calendar, holidays, shifts, work patterns&lt;br/&gt;monthly"]
+    SREF["Expenditure-type reference&lt;br/&gt;on change"]
   end
 
-  subgraph OUT["OUTPUTS  (Downstream Consumers - process/ESS driven)"]
+  subgraph HUB["O2C TIME MODULE  (ATP schema O2C_TIME + ORDS + VBCS)"]
     direction TB
-    PAY["PAYROLL Consumer&lt;br/&gt;Time -> Payroll&lt;br/&gt;element entries (elementEntries)&lt;br/&gt;via ESS transfer process"]
-    PJC["PROJECT COSTING Consumer&lt;br/&gt;Approved time -> Project Costs&lt;br/&gt;expenditure items (projectExpenditureItems)&lt;br/&gt;via Import/ESS (no direct POST projectCosts)"]
-    ABSC["ABSENCE MANAGEMENT Consumer&lt;br/&gt;Absence time -> Absence records / plan balances"]
+    PREP["0. PREPOPULATE&lt;br/&gt;std hours per day &amp;times; allocation %&lt;br/&gt;absences as read-only leave rows"]
+    CAP["1. CAPTURE&lt;br/&gt;employee edits the week&lt;br/&gt;POET snapshot written onto each entry"]
+    VAL["2. VALIDATE&lt;br/&gt;22 rules in OC_TIME_PKG&lt;br/&gt;quarter-hour, 24h/day, cut-offs, leave is system-owned"]
+    APP["3. APPROVE&lt;br/&gt;day / week / month&lt;br/&gt;reject with reason + remarks, undo a decision"]
+    CONF["4. CONFIRM THE MONTH&lt;br/&gt;RULE-020 all weeks approved&lt;br/&gt;OC_TS_MONTH_CONFIRM"]
+    PREP --> CAP --> VAL --> APP --> CONF
   end
 
-  POET --> CAP
-  PRES --> CAP
-  PTASK --> CAP
-  PALLOC --> CAP
-  PCOST --> VAL
-  SHIFT --> VAL
-  CAL --> VAL
-  ABS --> VAL
+  subgraph OUT["OUTPUTS"]
+    direction TB
+    PJC["PROJECT COSTING&lt;br/&gt;POST unprocessedProjectCosts&lt;br/&gt;one row per approved entry, POET in the flexfield&lt;br/&gt;then Import Costs (ESS) in Fusion"]
+    ACC["O2C ACCRUAL&lt;br/&gt;XX_O2C_TIMESHEET_ACCRUAL_IF&lt;br/&gt;consumer pulls; push built but dormant"]
+    PAYX["PAYROLL&lt;br/&gt;OUT OF SCOPE"]
+  end
 
-  ROUTE -->|Payroll Time Type| PAY
-  ROUTE -->|Expenditure Type| PJC
-  ROUTE -->|Absence Type| ABSC
+  LPROJ --> CAP
+  LTASK --> CAP
+  LPOET --> CAP
+  LALLOC --> PREP
+  LABS --> PREP
+  SWORK --> PREP
+  SCAL --> PREP
+  SREF --> VAL
 
-  DB[("Physical Tables&lt;br/&gt;HCM: HWM_TM_REC*, ANC_PER_ABS_ENTRIES, PAY_*&lt;br/&gt;PPM: PJF_*, PJC_*, PJO_*")]
+  CONF -->|approved hours, IS_LEAVE = N| PJC
+  CONF -->|month totals| ACC
+  CONF -.-|not sent| PAYX
+
+  DB[("OC_TS_WEEK / OC_TS_ENTRY / OC_TS_APPROVAL&lt;br/&gt;OC_TS_MONTH_CONFIRM / OC_TS_AUDIT&lt;br/&gt;master cache: OC_TIME_WORKER, _CALENDAR")]
   HUB -.persists.-> DB
 
-  classDef inp fill:#e6f2ff,stroke:#3b82c4,color:#0b3d66;
+  classDef live fill:#e6f2ff,stroke:#3b82c4,color:#0b3d66;
+  classDef sync fill:#eef0f6,stroke:#6b74a8,color:#2c3266;
   classDef hub fill:#fff4e6,stroke:#e08e0b,color:#7a4a00;
   classDef out fill:#e9f9ee,stroke:#2e9e5b,color:#0d5a2e;
+  classDef xout fill:#f3f4f5,stroke:#9aa2ab,color:#6b727a,stroke-dasharray:4 3;
   classDef store fill:#f0f0f0,stroke:#888,color:#333;
 
-  class POET,PRES,PTASK,PALLOC,PCOST,SHIFT,CAL,ABS inp;
-  class CAP,VAL,APP,ROUTE hub;
-  class PAY,PJC,ABSC out;
+  class LPROJ,LTASK,LPOET,LALLOC,LABS live;
+  class SWORK,SCAL,SREF sync;
+  class PREP,CAP,VAL,APP,CONF hub;
+  class PJC,ACC out;
+  class PAYX xout;
   class DB store;
 </pre>
   </div>
@@ -275,100 +284,143 @@ flowchart TD
     <h2>Reading the diagram</h2>
     <div class="legend">
       <div>
-        <span class="band"><span class="swatch" style="background:#e6f2ff;border-color:#3b82c4"></span>Inputs</span>
-        <p><strong>Read-only master and reference data.</strong> POET structure, resources, rates, work schedules, calendars, and existing absences — all pulled with GET before or during entry.</p>
+        <span class="band"><span class="swatch" style="background:#e6f2ff;border-color:#3b82c4"></span>Live from Fusion</span>
+        <p><strong>Fetched as the page loads, per user.</strong> Projects, WBS tasks, POET, allocation and absences. Nothing is staged first, so a project assigned this morning is selectable this morning. If the pod is unreachable the pickers are unavailable &mdash; the grid and saving are not.</p>
+      </div>
+      <div>
+        <span class="band"><span class="swatch" style="background:#eef0f6;border-color:#6b74a8"></span>Synced by OIC</span>
+        <p><strong>Bulk reference data, on a schedule.</strong> BIP <code>runReport</code> over SOAP, loaded through ORDS. Workers daily; calendar, holidays, shifts and work patterns monthly. These are set-based reads that the batch jobs walk for every employee at once, which is what live per-row calls cannot do.</p>
       </div>
       <div>
         <span class="band"><span class="swatch" style="background:#fff4e6;border-color:#e08e0b"></span>Time module</span>
-        <p><strong>The hub that replaces OTL.</strong> Capture, validate, approve, route — a real sequence, so the stages are numbered. Validation is where the time attribute bridge resolves each entry's type.</p>
+        <p><strong>Prepopulate, capture, validate, approve, confirm.</strong> A real sequence, so the stages are numbered from zero &mdash; the month exists before anyone opens it. Every rule lives in <code>OC_TIME_PKG</code>, not in the page, so a caller hitting ORDS directly meets the identical refusal.</p>
       </div>
       <div>
         <span class="band"><span class="swatch" style="background:#e9f9ee;border-color:#2e9e5b"></span>Outputs</span>
-        <p><strong>Downstream consumers, process driven.</strong> Nothing is posted straight into costing; transfers run through ESS or import processes after approval.</p>
+        <p><strong>Project Costing by REST, accrual by interface table.</strong> Approved non&#8209;leave hours are posted one row per entry to <code>unprocessedProjectCosts</code>; Fusion&rsquo;s Import Costs process turns them into project costs.</p>
+      </div>
+      <div>
+        <span class="band"><span class="swatch" style="background:#f3f4f5;border-color:#9aa2ab"></span>Out of scope</span>
+        <p><strong>Payroll.</strong> Drawn, dashed and unconnected on purpose: it is a delivered OTL consumer that this module deliberately does not feed. Nothing is written to <code>elementEntries</code> and no payroll reference data is read.</p>
       </div>
       <div>
         <span class="band"><span class="swatch" style="background:#f0f0f0;border-color:#888"></span>Storage</span>
-        <p><strong>Physical tables behind the flow.</strong> Dashed edge — the hub persists here as a side effect, not as a routed destination.</p>
+        <p><strong>The module&rsquo;s own tables.</strong> <code>OC_TS_ENTRY</code> is the grain &mdash; one row per week &times; project &times; task &times; day &times; entry type. Dashed edge: the hub persists here as a side effect, not as a routed destination.</p>
       </div>
     </div>
   </section>
 
   <section>
-    <h2>Routing rules</h2>
+    <h2>What leaves the module</h2>
     <div class="table-wrap">
       <table>
         <thead>
-          <tr><th scope="col">Attribute on the entry</th><th scope="col">Consumer</th><th scope="col">Lands as</th><th scope="col">Mechanism</th></tr>
+          <tr><th scope="col">Destination</th><th scope="col">Trigger</th><th scope="col">Mechanism</th><th scope="col">Status column</th></tr>
         </thead>
         <tbody>
-          <tr><td>Payroll Time Type</td><td>Payroll</td><td><code>elementEntries</code></td><td>ESS transfer process</td></tr>
-          <tr><td>Expenditure Type</td><td>Project Costing</td><td><code>projectExpenditureItems</code></td><td>Import / ESS — no direct <code>POST projectCosts</code></td></tr>
-          <tr><td>Absence Type</td><td>Absence Management</td><td>Absence records, plan balances</td><td>Absence entry update</td></tr>
+          <tr>
+            <td>Oracle Project Costing</td>
+            <td>Month confirmed (RULE&#8209;020: every week approved)</td>
+            <td><code>POST unprocessedProjectCosts</code> &mdash; one row per approved entry, POET in <code>ProjectStandardCostCollectionFlexfields</code>; then <em>Import Costs</em> in Fusion</td>
+            <td><code>OTL_STATUS</code></td>
+          </tr>
+          <tr>
+            <td>O2C accrual</td>
+            <td>Same confirm</td>
+            <td>Rows written to <code>XX_O2C_TIMESHEET_ACCRUAL_IF</code>; the consumer pulls. A direct push exists and is deliberately dormant.</td>
+            <td><code>ACCRUAL_STATUS</code>, <code>PARTNER_STATUS</code></td>
+          </tr>
+          <tr>
+            <td>Absence Management</td>
+            <td>&mdash;</td>
+            <td>Nothing is written back. Absences originate there and already reach OTL, so the costing post filters <code>IS_LEAVE = 'Y'</code> out rather than double&#8209;counting them.</td>
+            <td>&mdash;</td>
+          </tr>
+          <tr>
+            <td>Global Payroll</td>
+            <td>&mdash;</td>
+            <td><strong>Out of scope.</strong> No <code>elementEntries</code> write, no payroll time type resolved, no payroll reference read.</td>
+            <td>&mdash;</td>
+          </tr>
         </tbody>
       </table>
     </div>
+    <p style="margin-top:0.75rem;color:var(--ink-soft);font-size:0.85rem">
+      The three status columns are separate on purpose: the destinations fail
+      independently, and collapsing them loses which one needs attention.
+    </p>
   </section>
 
   <details>
     <summary>Mermaid source</summary>
-    <pre class="source" id="raw">%% Oracle Fusion Custom Time Module - Architecture / Data Flow
-%% Replacement for OTL (Oracle Time and Labor)
+    <pre class="source" id="raw">%% O2C Time Module - architecture / data flow
+%% Replaces OTL. Payroll is out of scope.
 
 flowchart TD
 
-  subgraph INPUTS["INPUTS  (Master &amp; Reference Data - mostly GET)"]
+  subgraph LIVE["READ LIVE FROM FUSION  (on page load, per user)"]
     direction TB
-    POET["POET Structure&lt;br/&gt;Project / Task / Expenditure Org / Expenditure Type&lt;br/&gt;GET projects, projectPlans, expenditureTypes"]
-    PRES["Project Resources&lt;br/&gt;GET projectLaborResources"]
-    PTASK["Project Tasks&lt;br/&gt;GET projectPlans (tasks)"]
-    PALLOC["Project Allocation / Assignments&lt;br/&gt;GET projectResourceAssignments"]
-    PCOST["Project Resource Cost / Rates&lt;br/&gt;GET rateSchedules"]
-    SHIFT["Employee Shift / Work Pattern / Schedule&lt;br/&gt;GET personAssignmentLaborSchedules, workSchedules"]
-    CAL["Calendar &amp; Holidays&lt;br/&gt;GET calendarEvents / work schedule exceptions"]
-    ABS["Absence Records (default)&lt;br/&gt;GET absences, planbalances"]
+    LPROJ["Projects the person may charge&lt;br/&gt;GET projectLaborResources, projects"]
+    LTASK["WBS tasks + chargeable flag&lt;br/&gt;GET projects/{id}/child/Tasks, projectFinancialTasks"]
+    LPOET["POET completion&lt;br/&gt;GET expenditureTypes  &amp;middot;  expenditure org from the assignment"]
+    LALLOC["Allocation / assignment %&lt;br/&gt;GET projectResourceAssignments, personAssignmentLaborSchedules"]
+    LABS["Absences&lt;br/&gt;GET absences"]
   end
 
-  subgraph HUB["CUSTOM TIME MODULE  (replaces OTL)"]
+  subgraph SYNC["SYNCED BY OIC  (BIP runReport, scheduled)"]
     direction TB
-    CAP["1. CAPTURE&lt;br/&gt;Time card entry&lt;br/&gt;POST timeRecordEventRequests"]
-    VAL["2. VALIDATE&lt;br/&gt;Time attribute bridge:&lt;br/&gt;Payroll Time Type / Expenditure Type / Absence Type&lt;br/&gt;schedule + rules check"]
-    APP["3. APPROVE&lt;br/&gt;Manager approval workflow"]
-    ROUTE["4. ROUTE (Time Consumer Sets)&lt;br/&gt;Decide destinations by attribute"]
-    CAP --&gt; VAL --&gt; APP --&gt; ROUTE
+    SWORK["Workers, manager hierarchy, std hours&lt;br/&gt;daily"]
+    SCAL["Calendar, holidays, shifts, work patterns&lt;br/&gt;monthly"]
+    SREF["Expenditure-type reference&lt;br/&gt;on change"]
   end
 
-  subgraph OUT["OUTPUTS  (Downstream Consumers - process/ESS driven)"]
+  subgraph HUB["O2C TIME MODULE  (ATP schema O2C_TIME + ORDS + VBCS)"]
     direction TB
-    PAY["PAYROLL Consumer&lt;br/&gt;Time -&gt; Payroll&lt;br/&gt;element entries (elementEntries)&lt;br/&gt;via ESS transfer process"]
-    PJC["PROJECT COSTING Consumer&lt;br/&gt;Approved time -&gt; Project Costs&lt;br/&gt;expenditure items (projectExpenditureItems)&lt;br/&gt;via Import/ESS (no direct POST projectCosts)"]
-    ABSC["ABSENCE MANAGEMENT Consumer&lt;br/&gt;Absence time -&gt; Absence records / plan balances"]
+    PREP["0. PREPOPULATE&lt;br/&gt;std hours per day &amp;times; allocation %&lt;br/&gt;absences as read-only leave rows"]
+    CAP["1. CAPTURE&lt;br/&gt;employee edits the week&lt;br/&gt;POET snapshot written onto each entry"]
+    VAL["2. VALIDATE&lt;br/&gt;22 rules in OC_TIME_PKG&lt;br/&gt;quarter-hour, 24h/day, cut-offs, leave is system-owned"]
+    APP["3. APPROVE&lt;br/&gt;day / week / month&lt;br/&gt;reject with reason + remarks, undo a decision"]
+    CONF["4. CONFIRM THE MONTH&lt;br/&gt;RULE-020 all weeks approved&lt;br/&gt;OC_TS_MONTH_CONFIRM"]
+    PREP --> CAP --> VAL --> APP --> CONF
   end
 
-  POET --&gt; CAP
-  PRES --&gt; CAP
-  PTASK --&gt; CAP
-  PALLOC --&gt; CAP
-  PCOST --&gt; VAL
-  SHIFT --&gt; VAL
-  CAL --&gt; VAL
-  ABS --&gt; VAL
+  subgraph OUT["OUTPUTS"]
+    direction TB
+    PJC["PROJECT COSTING&lt;br/&gt;POST unprocessedProjectCosts&lt;br/&gt;one row per approved entry, POET in the flexfield&lt;br/&gt;then Import Costs (ESS) in Fusion"]
+    ACC["O2C ACCRUAL&lt;br/&gt;XX_O2C_TIMESHEET_ACCRUAL_IF&lt;br/&gt;consumer pulls; push built but dormant"]
+    PAYX["PAYROLL&lt;br/&gt;OUT OF SCOPE"]
+  end
 
-  ROUTE --&gt;|Payroll Time Type| PAY
-  ROUTE --&gt;|Expenditure Type| PJC
-  ROUTE --&gt;|Absence Type| ABSC
+  LPROJ --> CAP
+  LTASK --> CAP
+  LPOET --> CAP
+  LALLOC --> PREP
+  LABS --> PREP
+  SWORK --> PREP
+  SCAL --> PREP
+  SREF --> VAL
 
-  DB[("Physical Tables&lt;br/&gt;HCM: HWM_TM_REC*, ANC_PER_ABS_ENTRIES, PAY_*&lt;br/&gt;PPM: PJF_*, PJC_*, PJO_*")]
-  HUB -.persists.-&gt; DB
+  CONF -->|approved hours, IS_LEAVE = N| PJC
+  CONF -->|month totals| ACC
+  CONF -.-|not sent| PAYX
 
-  classDef inp fill:#e6f2ff,stroke:#3b82c4,color:#0b3d66;
+  DB[("OC_TS_WEEK / OC_TS_ENTRY / OC_TS_APPROVAL&lt;br/&gt;OC_TS_MONTH_CONFIRM / OC_TS_AUDIT&lt;br/&gt;master cache: OC_TIME_WORKER, _CALENDAR")]
+  HUB -.persists.-> DB
+
+  classDef live fill:#e6f2ff,stroke:#3b82c4,color:#0b3d66;
+  classDef sync fill:#eef0f6,stroke:#6b74a8,color:#2c3266;
   classDef hub fill:#fff4e6,stroke:#e08e0b,color:#7a4a00;
   classDef out fill:#e9f9ee,stroke:#2e9e5b,color:#0d5a2e;
+  classDef xout fill:#f3f4f5,stroke:#9aa2ab,color:#6b727a,stroke-dasharray:4 3;
   classDef store fill:#f0f0f0,stroke:#888,color:#333;
 
-  class POET,PRES,PTASK,PALLOC,PCOST,SHIFT,CAL,ABS inp;
-  class CAP,VAL,APP,ROUTE hub;
-  class PAY,PJC,ABSC out;
-  class DB store;</pre>
+  class LPROJ,LTASK,LPOET,LALLOC,LABS live;
+  class SWORK,SCAL,SREF sync;
+  class PREP,CAP,VAL,APP,CONF hub;
+  class PJC,ACC out;
+  class PAYX xout;
+  class DB store;
+</pre>
   </details>
 
   <footer>Rendered from <code>Time_Module_Architecture.mmd</code>. Node fills come from the diagram's own <code>classDef</code> blocks, so the diagram panel keeps a light ground in both themes. Single self-contained file — no network needed.</footer>
