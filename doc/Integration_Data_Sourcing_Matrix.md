@@ -212,13 +212,11 @@ Every job is a PL/SQL function exposed as a POST endpoint for OIC to call:
 | `POST oc/time/admin/jobs/defaulting/:periodId` | `run_weekly_defaulting` |
 | `POST oc/time/admin/jobs/delivery-defaulting/:periodId` | `run_delivery_defaulting` |
 | `POST oc/time/admin/jobs/accrual/:periodId` | `run_accrual_top_up` |
-| `POST oc/time/approval/salaryhold/run/:periodId` | `run_salary_stopping` |
 | `POST oc/time/admin/sync/retry/:failedId` | one failed row |
 
-`run_salary_stopping` filters `DEFAULTED_BY='EMPLOYEE'`, which only
-`run_weekly_defaulting` sets — so it must run **after** weekly defaulting for the
-same period or it holds nobody. Delivery defaulting writes `'MANAGER'` and
-deliberately never triggers a hold.
+**Salary hold is out of scope for now** — the endpoint and job still exist in the
+schema but nothing should call them. `DEFAULTED_BY` is still written, because it
+records whose deadline passed, but nothing downstream acts on it.
 
 **Period auto-close (RA-009) has no endpoint at all** — if OIC owns scheduling,
 that job still has to be written.

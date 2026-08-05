@@ -251,12 +251,12 @@ flowchart TD
     OVR(["Overridden and approved"])
 
     NYS -->|"submit&lt;br/&gt;+ Late submission if past cut-off"| SUB
-    NYS -->|"WEEKLY cut-off job&lt;br/&gt;+ Defaulted / EMPLOYEE&lt;br/&gt;LOCKS &middot; holds salary"| DEF
+    NYS -->|"WEEKLY cut-off job&lt;br/&gt;+ Defaulted / EMPLOYEE&lt;br/&gt;LOCKS the week"| DEF
     SUB -->|"approve"| APP
     SUB -->|"reject - reason mandatory"| REJ
     SUB -->|"employee revokes&lt;br/&gt;Late submission kept"| NYS
     SUB -->|"override hours + approve&lt;br/&gt;+ Overridden"| OVR
-    SUB -->|"DELIVERY cut-off job&lt;br/&gt;+ Defaulted / MANAGER&lt;br/&gt;no lock &middot; no salary hold"| DEF
+    SUB -->|"DELIVERY cut-off job&lt;br/&gt;+ Defaulted / MANAGER&lt;br/&gt;no lock"| DEF
     REJ -->|"correct &amp; resubmit&lt;br/&gt;days back to Pending"| SUB
     DEF -->|"manager approves&lt;br/&gt;Defaulted flag KEPT"| APP
     APP -->|"manager undoes decision"| SUB
@@ -485,12 +485,12 @@ flowchart TD
     OVR(["Overridden and approved"])
 
     NYS -->|"submit&lt;br/&gt;+ Late submission if past cut-off"| SUB
-    NYS -->|"WEEKLY cut-off job&lt;br/&gt;+ Defaulted / EMPLOYEE&lt;br/&gt;LOCKS &middot; holds salary"| DEF
+    NYS -->|"WEEKLY cut-off job&lt;br/&gt;+ Defaulted / EMPLOYEE&lt;br/&gt;LOCKS the week"| DEF
     SUB -->|"approve"| APP
     SUB -->|"reject - reason mandatory"| REJ
     SUB -->|"employee revokes&lt;br/&gt;Late submission kept"| NYS
     SUB -->|"override hours + approve&lt;br/&gt;+ Overridden"| OVR
-    SUB -->|"DELIVERY cut-off job&lt;br/&gt;+ Defaulted / MANAGER&lt;br/&gt;no lock &middot; no salary hold"| DEF
+    SUB -->|"DELIVERY cut-off job&lt;br/&gt;+ Defaulted / MANAGER&lt;br/&gt;no lock"| DEF
     REJ -->|"correct &amp; resubmit&lt;br/&gt;days back to Pending"| SUB
     DEF -->|"manager approves&lt;br/&gt;Defaulted flag KEPT"| APP
     APP -->|"manager undoes decision"| SUB

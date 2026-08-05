@@ -190,7 +190,6 @@
           <li><strong>Manager override</strong> of hours with the employee&rsquo;s original value retained.</li>
           <li><strong>Retro adjustments</strong> on a closed month, as a matched reversal and re-entry.</li>
           <li><strong>Cut-off enforcement</strong> &mdash; weekly (employee) and delivery (manager), with automatic defaulting at each.</li>
-          <li><strong>Salary-stop signal</strong> for employees who missed the weekly cut-off.</li>
           <li><strong>Leave-loss / cover</strong> identification for absence on billable allocation.</li>
           <li><strong>Month confirmation</strong> to the O2C accrual interface.</li>
           <li><strong>Post to Oracle Project Costing</strong> via <code>unprocessedProjectCosts</code> (&sect;4).</li>
@@ -201,7 +200,8 @@
       <div class="card card-out">
         <h3><span class="pill pill-out">Out of scope</span></h3>
         <ul>
-          <li><strong>Payroll &mdash; entirely out of scope.</strong> No hours are transferred to Global Payroll, nothing is written to <code>elementEntries</code>, no Payroll Time Type is resolved and no payroll reference data is read. The salary-stop signal above is a <em>flag for the payroll team to act on</em>, not a payroll transaction.</li>
+          <li><strong>Payroll &mdash; entirely out of scope.</strong> No hours are transferred to Global Payroll, nothing is written to <code>elementEntries</code>, no Payroll Time Type is resolved and no payroll reference data is read.</li>
+          <li><strong>Salary hold &mdash; removed from scope for now.</strong> The module does not signal, hold or release anyone&rsquo;s pay. A week that missed the weekly cut-off is still marked <em>Defaulted</em> and locked, and <code>DEFAULTED_BY</code> still records whether the employee or the manager missed it &mdash; but nothing downstream follows from that.</li>
           <li><strong>Daily and monthly scheduled sync &mdash; out of scope.</strong> There is no batch extract and no staged copy of Fusion data. Everything is fetched when a screen needs it. The existing extract feature is being removed (&sect;2.3).</li>
           <li><strong>Invoice generation and revenue calculation.</strong></li>
           <li><strong>Writing to Project Costing beyond the unprocessed-cost post</strong> &mdash; costing, burdening and accounting stay Oracle&rsquo;s.</li>
@@ -409,9 +409,8 @@
       </table>
     </div>
     <p class="why">The two cut-off runs are the only remaining scheduled work, and they
-    process time already captured rather than fetching reference data. <strong>Order
-    matters:</strong> the salary-stop job must run after weekly defaulting, because it
-    acts only on weeks that job marked.</p>
+    process time already captured rather than fetching reference data. They are independent of each
+    other and of any other job.</p>
 
     <h3>3.2 Status</h3>
     <p>A record is in exactly <strong>one</strong> status at a time, at each grain.</p>
@@ -470,10 +469,11 @@
             <td>the two cut-off runs</td>
             <td>Hours were filled in by a cut-off run rather than by a person.
               <code>DEFAULTED_BY</code> distinguishes <code>EMPLOYEE</code> &mdash;
-              missed the weekly cut-off, holds salary, and <strong>locks the week against
-              further employee edits</strong> &mdash; from <code>MANAGER</code>, missed
-              the delivery cut-off, which never holds salary and never locks. The lock is
-              a property of this flag, not a flag of its own.</td>
+              missed the weekly cut-off, which <strong>locks the week against further
+              employee edits</strong> &mdash; from <code>MANAGER</code>, missed the
+              delivery cut-off, which does not lock. The lock is a property of this flag,
+              not a flag of its own. The distinction is kept because it records
+              <em>whose</em> deadline passed, which the audit needs regardless.</td>
           </tr>
           <tr>
             <td><strong>Late submission</strong></td>
@@ -776,12 +776,12 @@
         <thead><tr><th>From</th><th>Event</th><th>To</th><th>Flag effect</th></tr></thead>
         <tbody>
           <tr><td>Not yet submitted</td><td>Employee submits</td><td><strong>Submitted</strong></td><td>+ <em>Late submission</em> if after the weekly cut-off</td></tr>
-          <tr><td>Not yet submitted</td><td><strong>Weekly cut-off job</strong> &mdash; never submitted</td><td><strong>Defaulted</strong></td><td>+ <em>Defaulted</em>, <code>DEFAULTED_BY = EMPLOYEE</code>; <strong>locks the week</strong>; holds salary</td></tr>
+          <tr><td>Not yet submitted</td><td><strong>Weekly cut-off job</strong> &mdash; never submitted</td><td><strong>Defaulted</strong></td><td>+ <em>Defaulted</em>, <code>DEFAULTED_BY = EMPLOYEE</code>; <strong>locks the week</strong></td></tr>
           <tr><td>Submitted</td><td>Manager approves</td><td><strong>Approved</strong></td><td>&mdash;</td></tr>
           <tr><td>Submitted</td><td>Manager rejects &mdash; reason mandatory</td><td><strong>Rejected</strong></td><td>&mdash;</td></tr>
           <tr><td>Submitted</td><td>Employee revokes their own submission</td><td><strong>Not yet submitted</strong></td><td><em>Late submission</em> retained &mdash; it did happen</td></tr>
           <tr><td>Submitted</td><td>Manager overrides the hours and approves</td><td><strong>Overridden and approved</strong></td><td>+ <em>Overridden &amp; approved</em>; original value kept in the audit trail</td></tr>
-          <tr><td>Submitted</td><td><strong>Delivery cut-off job</strong> &mdash; manager never decided</td><td><strong>Defaulted</strong></td><td>+ <em>Defaulted</em>, <code>DEFAULTED_BY = MANAGER</code>; <strong>no lock</strong>; never holds salary</td></tr>
+          <tr><td>Submitted</td><td><strong>Delivery cut-off job</strong> &mdash; manager never decided</td><td><strong>Defaulted</strong></td><td>+ <em>Defaulted</em>, <code>DEFAULTED_BY = MANAGER</code>; <strong>no lock</strong></td></tr>
           <tr><td>Rejected</td><td>Employee corrects and resubmits</td><td><strong>Submitted</strong></td><td>day statuses reset to Pending; + <em>Late submission</em> if now past the cut-off</td></tr>
           <tr><td>Defaulted</td><td>Manager approves</td><td><strong>Approved</strong></td><td><em>Defaulted</em> flag <strong>kept</strong> &mdash; it happened</td></tr>
           <tr><td>Approved</td><td>Manager undoes the decision</td><td><strong>Submitted</strong></td><td>&mdash;</td></tr>
