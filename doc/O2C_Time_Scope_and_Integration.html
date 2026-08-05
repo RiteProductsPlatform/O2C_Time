@@ -738,29 +738,6 @@
       because the rule requires a value that nothing sets.
     </div>
 
-    <h3>6.2 Conditions in Fusion that block time entry</h3>
-    <p class="why">Measured on the reference pod, 01&ndash;02 Aug 2026. These are data to
-    correct rather than defects in the module &mdash; but each one stops somebody
-    entering or costing time, and each has to be clear for the projects chosen as test
-    data above.</p>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Condition</th><th>Measured</th><th>Effect</th></tr></thead>
-        <tbody>
-          <tr><td>Workers with no expenditure organization</td><td>1,229 of 5,988</td><td>POET cannot resolve, so nothing can be costed for them</td></tr>
-          <tr><td>Projects with no project manager</td><td>237 of 424</td><td>approval has no routing target</td></tr>
-          <tr><td>Projects marked to track time</td><td>only 48 of 424</td><td>the rest are invisible to time entry &mdash; confirm intended</td></tr>
-          <tr><td>Projects with no chargeable WBS task</td><td>15 projects, 42 allocations</td><td>nothing to prepopulate or charge against</td></tr>
-          <tr><td>Projects with a revenue model set</td><td><strong>none</strong></td><td>leave-loss can never fire &mdash; see the blocker above</td></tr>
-        </tbody>
-      </table>
-    </div>
-    <p class="why">A useful test project therefore needs all five clear at once: a
-    manager, track-time enabled, at least one chargeable WBS task, an allocated resource
-    whose expenditure organization is set, and a revenue model. That combination is
-    scarcer than any single figure above suggests, which is why choosing the projects
-    deliberately matters more than the counts.</p>
-
     <hr />
     <p class="why" style="font-size:0.8rem">
       Supporting detail: <code>doc/Integration_Data_Sourcing_Matrix.md</code> &middot;
