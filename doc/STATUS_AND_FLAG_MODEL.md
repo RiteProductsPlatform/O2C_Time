@@ -1,5 +1,17 @@
 # O2C Time — Status & Flag Model (revision 2)
 
+> **Superseded, 05-Aug-2026.** The status and flag model has been simplified since
+> this was written. There is now **one set of six statuses** used at every level —
+> Not yet submitted, Submitted, Approved, Rejected, Defaulted, Overridden and
+> approved — with no separate scheme for a day, a week or a month. **`Closed` has
+> been removed** (month confirmation is an event, recorded in
+> `OC_TS_MONTH_CONFIRM`, not a status), and **salary hold is out of scope for now**.
+> Status and flags are now shown in a single diagram.
+>
+> Current model: **`doc/O2C_Time_Scope_and_Integration.html`** §3.2, §3.3 and §7,
+> or its Word copy. This file is kept for the reasoning behind the earlier revision.
+
+
 > For sign-off before code changes. Supersedes the 9-status / 8-flag model in
 > `O2C_Timesheet_Requirements_Metadata_COMPLETE.xlsx` (Data_Dictionaries).
 >

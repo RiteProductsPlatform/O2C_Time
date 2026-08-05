@@ -1,7 +1,22 @@
 # O2C Time — what comes from where
 
-Consolidated sourcing matrix: which Fusion data arrives by **BIP extract on a
-schedule (OIC)**, which must be **REST**, and what is still missing.
+**Superseded in part, 05-Aug-2026.** This started as a matrix of what arrives by
+scheduled BIP extract and what needs REST. That split no longer holds:
+**the scheduled-sync design has been dropped.** Everything is now read from Fusion
+at the moment a screen needs it — by REST where a REST resource answers the
+question, and by a **direct BIP `runReport` call** where it does not. A report
+called live is still a live read; what is being removed is
+extract-to-a-table-and-read-it-later.
+
+`doc/O2C_Time_Scope_and_Integration.html` (and its Word copy) is the current
+statement of scope and integration. **Read that first.** This file remains useful
+for three things it still gets right:
+
+- **§1** — the inventory of what each extract pulls and from which Fusion tables.
+  Those SQL sources are still the right sources; only the *delivery mechanism*
+  changes. Treat the cadence column as history, not intent.
+- **§2** — the REST resource catalogue, which is unaffected.
+- **§3** — the gaps, which are unaffected and still need answering.
 
 Compiled 05-Aug-2026 from `doc/Oracle_Fusion_Time_Module_REST_APIs*.md`,
 `doc/Oracle_Fusion_BIP_Data_Extraction_APIs.md`,
@@ -13,17 +28,18 @@ not inferred.
 
 ---
 
-## 1. BIP extracts — bulk, scheduled by OIC
+## 1. What each extract pulls — the inventory, not the schedule
 
 Eleven extracts exist in `integration/bip/extracts.py` and all eleven have been
 run against a pod. **`integration/bip/README.md` documents only eight** — the
 three schedule extracts are missing from its table. Corrected here.
 
-`ABSENCES` is struck through: it still exists and still runs, but it is no longer
-the source the module reads — absence is fetched live per person per date (§4). Ten
-extracts feed the cache.
+**The cadence column below is history.** It records what the scheduled design
+intended before that design was dropped. The value of this table now is the
+**Fusion sources** column: whichever way the data is fetched, those are the objects
+it comes from, and they were each verified against a pod.
 
-| Extract | INT | Target | Fusion sources | Suggested cadence |
+| Extract | INT | Target *(as built)* | Fusion sources *(still correct)* | Cadence *(superseded)* |
 |---|---|---|---|---|
 | `WORKERS` | INT-001 | `OC_TIME_WORKER` | `PER_ALL_PEOPLE_F`, `PER_PERSON_NAMES_F`, `PER_ALL_ASSIGNMENTS_M`, `PER_EMAIL_ADDRESSES`, `PER_PERIODS_OF_SERVICE`, `PER_ASSIGNMENT_SUPERVISORS_F`, `HR_LOCATIONS_ALL_F`, `HR_ALL_ORGANIZATION_UNITS_F_VL` | **daily** |
 | `PROJECTS` | INT-002 | `OC_TIME_PROJECT` | `PJF_PROJECTS_ALL_B/_TL`, `PJF_PROJECT_TYPES_TL`, `PJF_PROJECT_PARTIES`, `HZ_PARTIES`, `PJT_PROJECT_ROLES_VL` | monthly |
