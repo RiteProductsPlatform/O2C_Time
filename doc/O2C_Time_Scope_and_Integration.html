@@ -441,46 +441,48 @@
     process time already captured rather than fetching reference data. They are independent of each
     other and of any other job.</p>
 
-    <h3>3.2 Status</h3>
-    <p>A record is in exactly <strong>one</strong> status at a time, at each grain.</p>
+    <h3>3.2 Status &mdash; one set, one flow</h3>
+    <p><strong>Six statuses, and the same six everywhere.</strong> There is not a
+    separate scheme for a day, a week and a month &mdash; whichever you are looking at,
+    it is in exactly one of these.</p>
 
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Grain</th><th>Table &middot; column</th><th>Values</th></tr></thead>
+        <thead><tr><th>Status</th><th>Means</th></tr></thead>
         <tbody>
-          <tr>
-            <td><strong>Week</strong> (the main one)</td>
-            <td><code>OC_TS_WEEK.WEEK_STATUS</code></td>
-            <td>Not yet submitted &middot; Submitted &middot; Approved &middot; Rejected &middot; Defaulted &middot; Overridden and approved <em>(6)</em></td>
-          </tr>
-          <tr>
-            <td><strong>Day</strong></td>
-            <td><code>OC_TS_ENTRY.DAY_STATUS</code></td>
-            <td>Pending &middot; Approved &middot; Rejected <em>(3)</em></td>
-          </tr>
-          <tr>
-            <td><strong>Project-month</strong></td>
-            <td><code>OC_TS_MONTH_CONFIRM.CONFIRM_TYPE</code></td>
-            <td>Normal &middot; Advance closure &middot; Reopened <em>(3)</em></td>
-          </tr>
-          <tr>
-            <td>Retro adjustment</td>
-            <td><code>OC_TS_ADJUSTMENT.STATUS</code></td>
-            <td>Awaiting Approval &middot; Approved &middot; Rejected &middot; Cancelled <em>(4)</em></td>
-          </tr>
+          <tr><td><strong>Not yet submitted</strong></td><td>with the employee; still theirs to change</td></tr>
+          <tr><td><strong>Submitted</strong></td><td>with the manager, awaiting a decision; frozen to the employee</td></tr>
+          <tr><td><strong>Approved</strong></td><td>decided and accepted</td></tr>
+          <tr><td><strong>Rejected</strong></td><td>sent back with a reason; with the employee again</td></tr>
+          <tr><td><strong>Defaulted</strong></td><td>a cut-off filled it in because nobody did</td></tr>
+          <tr><td><strong>Overridden and approved</strong></td><td>the manager changed the hours and accepted them</td></tr>
         </tbody>
       </table>
     </div>
 
+    <p class="why">Not every value can occur at every level, and that is the only
+    difference worth knowing: a <strong>single day</strong> only ever reaches
+    <em>Submitted</em>, <em>Approved</em> or <em>Rejected</em>, because a day is not
+    something an employee submits or a cut-off defaults on its own. Approving a day uses
+    the same transition as approving a week, so the flow in 7.2 covers both.</p>
+
     <div class="note">
-      <strong>&ldquo;Closed&rdquo; is removed.</strong> The week model ends at
-      <em>Approved</em>. Confirming a month previously moved every approved week to a
-      seventh status, <em>Closed</em>; it no longer does. The month-level confirmation is
-      a fact about the <em>month</em> and is recorded in
-      <code>OC_TS_MONTH_CONFIRM</code>, which is where anything needing to know
-      &ldquo;has this month gone out&rdquo; should look. This is a build change, not only
-      a documentation one: the status is still permitted by a database constraint and is
-      still written by the confirm step, and both need amending.
+      <strong>Month confirmation is not a seventh status.</strong> Confirming a month is
+      an event, recorded once in <code>OC_TS_MONTH_CONFIRM</code> together with how it was
+      confirmed &mdash; normally, as an advance closure, or after being reopened. It leaves
+      the weeks <em>Approved</em>. Anything needing to know whether a month has gone out
+      should ask that table, not read it off a status.
+      <br /><br />
+      <strong>&ldquo;Closed&rdquo; is gone.</strong> The model ends at <em>Approved</em>.
+      This is a build change as well as a documentation one &mdash; the value is still
+      permitted by a database constraint and still written by the confirm step, and both
+      need amending (open item 7).
+      <br /><br />
+      <strong>The schema still holds these separately.</strong> There are distinct columns
+      for the week, the day, the month and a retro adjustment, each with its own permitted
+      values, and the adjustment&rsquo;s list is worded differently again. Presenting one
+      common set is right for reading and reviewing; making the <em>schema</em> agree with
+      it is a separate change &mdash; open item 21.
     </div>
 
     <h3>3.3 Flags</h3>
@@ -564,8 +566,8 @@
       <table>
         <thead><tr><th>Table</th><th>Holds</th></tr></thead>
         <tbody>
-          <tr><td><code>OC_TS_WEEK</code></td><td>the week status, all six flags, <code>DEFAULTED_BY</code>, <code>LOCKED_FLAG</code>, submit and approve stamps, reject reason and remarks</td></tr>
-          <tr><td><code>OC_TS_ENTRY</code></td><td><code>DAY_STATUS</code>; <code>ENTRY_TYPE</code> (Actual &middot; Default &middot; Reversal &middot; Adjustment), which the reversal and adjustment flags are derived from; <code>IS_LEAVE</code>; <code>SOURCE</code>; the POET as charged</td></tr>
+          <tr><td><code>OC_TS_WEEK</code></td><td>the status at week level, all six flags, <code>DEFAULTED_BY</code>, <code>LOCKED_FLAG</code>, submit and approve stamps, reject reason and remarks</td></tr>
+          <tr><td><code>OC_TS_ENTRY</code></td><td>the status at day level, from the same set as 3.2; <code>ENTRY_TYPE</code> (Actual &middot; Default &middot; Reversal &middot; Adjustment), which the reversal and adjustment flags are derived from; <code>IS_LEAVE</code>; <code>SOURCE</code>; the POET as charged</td></tr>
           <tr><td><code>OC_TS_APPROVAL</code></td><td>the decision trail &mdash; one row per event: Submit &middot; Resubmit &middot; Approve &middot; Reject &middot; Override &middot; AdvanceApprove &middot; Confirm &middot; Default &middot; Release &middot; Revoke, with actor, granularity and timestamp</td></tr>
           <tr><td><code>OC_TS_AUDIT</code></td><td>value changes with the before-image &mdash; Override &middot; Adjustment &middot; Reversal &middot; ManagerEdit &middot; Import &middot; DefaultCorrection</td></tr>
           <tr><td><code>OC_TS_MONTH_CONFIRM</code></td><td>the project-month confirmation and the outbound statuses in 3.5</td></tr>
@@ -729,8 +731,9 @@
           <tr><td>16</td><td>Session token strengthening before production</td><td>build &mdash; one line and a grant</td></tr>
           <tr><td>17</td><td><strong>Where <code>REVENUE_MODEL</code> and <code>LEAVE_LOSS_FLAG</code> come from</strong> &mdash; neither is read from Fusion and both are null today, so leave-loss cannot fire for any project (&sect;6.1)</td><td>functional decision</td></tr>
           <tr><td>18</td><td>Test data prepared for <strong>each revenue model</strong> &mdash; T&amp;M, FCP with and without leave loss, Milestone (&sect;6) <em>&mdash; agreed, functional team owns this</em></td><td>functional team &mdash; <strong>agreed</strong></td></tr>
-          <tr><td>19</td><td><strong>Structure of the accrual staging table</strong> &mdash; summary, complete timesheet employee-wise and adjustments, in our schema for accrual to pull (&sect;3.5, &sect;7.4). Being defined on the accrual side, <em>work in progress</em>.</td><td>accrual team &mdash; then build</td></tr>
+          <tr><td>19</td><td><strong>Structure of the accrual staging table</strong> &mdash; summary, complete timesheet employee-wise and adjustments, in our schema for accrual to pull (&sect;3.5, &sect;7.3). Being defined on the accrual side, <em>work in progress</em>.</td><td>accrual team &mdash; then build</td></tr>
           <tr><td>20</td><td><strong>One accrual interface or two?</strong> The existing interface is already a day-wise pull carrying adjustments, so <code>ACCRUAL_STATUS</code> and <code>PARTNER_STATUS</code> may be tracking the same hand-off. Decide before the structure is fixed (&sect;3.5).</td><td>functional + accrual team</td></tr>
+          <tr><td>21</td><td><strong>Make the schema match the single status set</strong> &mdash; the week, day, month and retro-adjustment statuses are separate columns with different permitted values today (&sect;3.2)</td><td>build</td></tr>
         </tbody>
       </table>
     </div>
@@ -831,9 +834,11 @@
       </table>
     </div>
 
-    <h4>Lifecycle &mdash; the week, from entry to a confirmed month</h4>
-    <p class="why">The path most weeks take, left to right. Every other transition is
-    in 7.2 &mdash; including the two loops back, which a single line cannot show.</p>
+    <h4>Lifecycle &mdash; from entry to a confirmed month</h4>
+    <p class="why">The path most records take, left to right &mdash; and the same six
+    statuses apply whether you are looking at a day, a week or a month. Every other
+    transition is in 7.2, including the two loops back, which a single line cannot
+    show.</p>
     <div class="table-wrap">
       <table class="flow">
         <tbody>
@@ -862,8 +867,8 @@
         </tbody>
       </table>
     </div>
-    <p class="why">Flags run alongside all of this and are not stages &mdash; a week
-    carries any number at once. See 3.3.</p>
+    <p class="why">Flags run alongside all of this and are not stages &mdash; any number
+    apply at once. See 3.3. Month confirmation is an event, not a seventh status.</p>
 
     <h4>Flow 2 &mdash; outbound: what leaves, at which grain, in which order</h4>
     <div class="table-wrap">
@@ -924,9 +929,9 @@
     <strong>validate</strong> in the database &rarr; the week enters the lifecycle below at
     <em>Not yet submitted</em>.</p>
 
-    <h3>7.2 Week status &mdash; every transition</h3>
-    <p>Six statuses, one at a time. Flags accumulate separately and are shown in the last
-    column.</p>
+    <h3>7.2 Status &mdash; every transition</h3>
+    <p>Six statuses, one at a time, the same set at every level. Flags accumulate
+    separately and are shown in the last column.</p>
     <div class="table-wrap">
       <table>
         <thead><tr><th>From</th><th>Event</th><th>To</th><th>Flag effect</th></tr></thead>
@@ -956,19 +961,14 @@
       again.
     </div>
 
-    <h3>7.3 Day status</h3>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>From</th><th>Event</th><th>To</th></tr></thead>
-        <tbody>
-          <tr><td>Pending</td><td>Manager approves the day</td><td><strong>Approved</strong> &mdash; when every day is approved the week closes to Approved</td></tr>
-          <tr><td>Pending</td><td>Manager rejects the day</td><td><strong>Rejected</strong> &mdash; any rejected day puts the whole week back with the employee</td></tr>
-          <tr><td>Approved <em>or</em> Rejected</td><td>Manager undoes the decision</td><td><strong>Pending</strong> &mdash; the week status is then recomputed from the days that remain</td></tr>
-        </tbody>
-      </table>
-    </div>
+    <p class="why"><strong>The same transitions serve a single day.</strong> Approving,
+    rejecting or undoing one date uses the rows above &mdash; there is no separate day
+    scheme. Two consequences follow from the day and the week sharing them: when every day
+    is approved the week becomes <em>Approved</em>, and any rejected day makes the week
+    <em>Rejected</em> and sends it back. Undoing a day decision recomputes the week from
+    the days that remain.</p>
 
-    <h3>7.4 Outbound &mdash; order and grain</h3>
+    <h3>7.3 Outbound &mdash; order and grain</h3>
     <p>Month confirmation is the single trigger. The two live destinations take different
     grains, and the accrual pair has an order that is not optional.</p>
     <div class="table-wrap">

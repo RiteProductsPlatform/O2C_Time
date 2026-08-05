@@ -209,9 +209,8 @@
     <p class="standfirst">Three charts, separated because they answer different
     questions. <strong>Flow 1</strong> is inbound &mdash; everything read live from Fusion
     as a screen loads. <strong>Flow 2</strong> is outbound &mdash; what leaves once a month
-    is confirmed, at which grain and in which order. Between them, the status lifecycle,
-    with <strong>statuses only</strong>; the flags are a table, because they are not stages
-    of anything. <strong>Payroll is out of scope, the OTL push is on hold, and salary hold
+    is confirmed, at which grain and in which order. Between them, one status set
+    used at every level; the flags are a table, because they are not stages of anything. <strong>Payroll is out of scope, the OTL push is on hold, and salary hold
     is removed for now.</strong></p>
     <hr />
   </header>
@@ -282,13 +281,13 @@ flowchart LR
     </div>
   </div>
   <div class="dgm">
-    <div class="dgm-head"><span class="dgm-n">Lifecycle</span><span class="dgm-t">Status only - week, day, month</span></div>
-    <p class="dgm-sub">Statuses exclusively. A record is in exactly one at a time, and every edge carries the event that moves it. Flags are not here on purpose - see the table below.</p>
+    <div class="dgm-head"><span class="dgm-n">Lifecycle</span><span class="dgm-t">Status &mdash; one set, every level</span></div>
+    <p class="dgm-sub">Six statuses and the same six everywhere &mdash; there is no separate scheme for a day, a week or a month. A record is in exactly one at a time and every edge carries the event that moves it. Month confirmation is an event rather than a status. Flags are not here on purpose &mdash; see the table below.</p>
     <div class="diagram" id="pane-status" data-name="Time_Module_status">
 <pre class="mermaid">
 flowchart TD
 
-  subgraph WEEK["WEEK STATUS - OC_TS_WEEK.WEEK_STATUS - exactly one at a time"]
+  subgraph WEEK["STATUS - ONE SET, EVERY LEVEL - exactly one at a time&lt;br/&gt;a single day uses the same statuses and the same transitions"]
     direction TB
     NYS(["Not yet submitted"])
     SUB(["Submitted"])
@@ -310,21 +309,8 @@ flowchart TD
     REJ -->|"manager undoes the decision"| SUB
   end
 
-  subgraph DAYS["DAY STATUS - OC_TS_ENTRY.DAY_STATUS"]
-    direction LR
-    D1(["Pending"])
-    D2(["Approved"])
-    D3(["Rejected"])
-    D1 -->|"approve day"| D2
-    D1 -->|"reject day"| D3
-    D2 -->|"undo"| D1
-    D3 -->|"undo"| D1
-  end
-
-  CONF{"MONTH CONFIRM&lt;br/&gt;RULE-020 - every week approved&lt;br/&gt;week status UNCHANGED&lt;br/&gt;recorded in OC_TS_MONTH_CONFIRM"}
-
-  D2 -.->|"every day approved&lt;br/&gt;closes the week"| APP
-  D3 -.->|"any rejected day&lt;br/&gt;sends the week back"| REJ
+  CONF{"MONTH CONFIRM - an event, not a status&lt;br/&gt;RULE-020 - every week approved&lt;br/&gt;status UNCHANGED&lt;br/&gt;recorded in OC_TS_MONTH_CONFIRM"}
+  NOTE["Day and week share the transitions&lt;br/&gt;every day approved -&gt; the week is Approved&lt;br/&gt;any day rejected -&gt; the week is Rejected&lt;br/&gt;undo recomputes the week from the days left"]
 
   APP --> CONF
   OVR --> CONF
@@ -334,10 +320,12 @@ flowchart TD
   classDef good fill:#e9f9ee,stroke:#2e9e5b,color:#0d5a2e;
   classDef bad  fill:#fdecef,stroke:#b3352c,color:#8a2f23;
   classDef gate fill:#fff4e6,stroke:#e08e0b,color:#7a4a00;
-  class NYS,SUB,D1 open;
-  class APP,OVR,D2 good;
-  class REJ,DEF,D3 bad;
+  class NYS,SUB open;
+  class APP,OVR good;
+  class REJ,DEF bad;
   class CONF gate;
+  classDef note fill:#fdf6e9,stroke:#d9a53c,color:#7a5a12;
+  class NOTE note;
 </pre>
     </div>
   </div>
@@ -459,6 +447,8 @@ flowchart LR
   classDef xout fill:#f3f4f5,stroke:#9aa2ab,color:#6b727a,stroke-dasharray:4 3;
   classDef trk  fill:#eef0f6,stroke:#6b74a8,color:#2c3266;
   class CONF gate;
+  classDef note fill:#fdf6e9,stroke:#d9a53c,color:#7a5a12;
+  class NOTE note;
   class C1,C2,C3,C4,C5,S1,S2 good;
   class X1,X2,X3 xout;
   class T1,T2,T3 trk;
@@ -515,7 +505,7 @@ flowchart LR
     <p style="font-family:var(--mono);font-size:0.75rem;color:var(--accent);margin:1rem 0 0.25rem">Lifecycle &mdash; Status only - week, day, month</p>
     <pre class="source">flowchart TD
 
-  subgraph WEEK["WEEK STATUS - OC_TS_WEEK.WEEK_STATUS - exactly one at a time"]
+  subgraph WEEK["STATUS - ONE SET, EVERY LEVEL - exactly one at a time&lt;br/&gt;a single day uses the same statuses and the same transitions"]
     direction TB
     NYS(["Not yet submitted"])
     SUB(["Submitted"])
@@ -537,21 +527,8 @@ flowchart LR
     REJ -->|"manager undoes the decision"| SUB
   end
 
-  subgraph DAYS["DAY STATUS - OC_TS_ENTRY.DAY_STATUS"]
-    direction LR
-    D1(["Pending"])
-    D2(["Approved"])
-    D3(["Rejected"])
-    D1 -->|"approve day"| D2
-    D1 -->|"reject day"| D3
-    D2 -->|"undo"| D1
-    D3 -->|"undo"| D1
-  end
-
-  CONF{"MONTH CONFIRM&lt;br/&gt;RULE-020 - every week approved&lt;br/&gt;week status UNCHANGED&lt;br/&gt;recorded in OC_TS_MONTH_CONFIRM"}
-
-  D2 -.->|"every day approved&lt;br/&gt;closes the week"| APP
-  D3 -.->|"any rejected day&lt;br/&gt;sends the week back"| REJ
+  CONF{"MONTH CONFIRM - an event, not a status&lt;br/&gt;RULE-020 - every week approved&lt;br/&gt;status UNCHANGED&lt;br/&gt;recorded in OC_TS_MONTH_CONFIRM"}
+  NOTE["Day and week share the transitions&lt;br/&gt;every day approved -&gt; the week is Approved&lt;br/&gt;any day rejected -&gt; the week is Rejected&lt;br/&gt;undo recomputes the week from the days left"]
 
   APP --> CONF
   OVR --> CONF
@@ -561,10 +538,12 @@ flowchart LR
   classDef good fill:#e9f9ee,stroke:#2e9e5b,color:#0d5a2e;
   classDef bad  fill:#fdecef,stroke:#b3352c,color:#8a2f23;
   classDef gate fill:#fff4e6,stroke:#e08e0b,color:#7a4a00;
-  class NYS,SUB,D1 open;
-  class APP,OVR,D2 good;
-  class REJ,DEF,D3 bad;
-  class CONF gate;</pre>
+  class NYS,SUB open;
+  class APP,OVR good;
+  class REJ,DEF bad;
+  class CONF gate;
+  classDef note fill:#fdf6e9,stroke:#d9a53c,color:#7a5a12;
+  class NOTE note;</pre>
     <p style="font-family:var(--mono);font-size:0.75rem;color:var(--accent);margin:1rem 0 0.25rem">Flow 2 &mdash; Outbound integration</p>
     <pre class="source">flowchart LR
 
@@ -612,6 +591,8 @@ flowchart LR
   classDef xout fill:#f3f4f5,stroke:#9aa2ab,color:#6b727a,stroke-dasharray:4 3;
   classDef trk  fill:#eef0f6,stroke:#6b74a8,color:#2c3266;
   class CONF gate;
+  classDef note fill:#fdf6e9,stroke:#d9a53c,color:#7a5a12;
+  class NOTE note;
   class C1,C2,C3,C4,C5,S1,S2 good;
   class X1,X2,X3 xout;
   class T1,T2,T3 trk;</pre>
