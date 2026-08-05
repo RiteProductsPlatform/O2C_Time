@@ -460,11 +460,10 @@
       </table>
     </div>
 
-    <p class="why">Not every value can occur at every level, and that is the only
-    difference worth knowing: a <strong>single day</strong> only ever reaches
-    <em>Submitted</em>, <em>Approved</em> or <em>Rejected</em>, because a day is not
-    something an employee submits or a cut-off defaults on its own. Approving a day uses
-    the same transition as approving a week, so the flow in 7.2 covers both.</p>
+    <p class="why">The same six describe a single date, a week, or a whole month &mdash;
+    the transitions do not change with the level. Approving one date and approving a week
+    are the same transition applied to a different amount of the timesheet, which is why
+    there is one flow in 7.2 rather than three.</p>
 
     <div class="note">
       <strong>Month confirmation is not a seventh status.</strong> Confirming a month is
@@ -487,8 +486,8 @@
 
     <h3>3.3 Flags</h3>
     <p>A flag is <strong>not</strong> a status. Status is where the record has got to; a
-    flag records something that happened on the way and stays true afterwards. A week
-    carries any number of flags at once, all held on <code>OC_TS_WEEK</code>.</p>
+    flag records something that happened on the way and stays true afterwards. Any number
+    apply at once, and a record is never <em>in</em> a flag.</p>
 
     <div class="table-wrap">
       <table>
@@ -522,7 +521,7 @@
             <td><strong>Overridden &amp; approved</strong></td>
             <td><code>OVERRIDDEN_FLAG</code></td>
             <td>manager override</td>
-            <td>A manager changed the hours and approved them. The employee&rsquo;s original value is retained in the audit trail. Also a week <em>status</em> &mdash; see 3.4.</td>
+            <td>A manager changed the hours and approved them. The employee&rsquo;s original value is retained in the audit trail. Also a <em>status</em> &mdash; see 3.4.</td>
           </tr>
           <tr>
             <td><strong>Reversal</strong></td>
@@ -539,8 +538,9 @@
         </tbody>
       </table>
     </div>
-    <p class="why">Six flags. There is no separate &ldquo;Locked&rdquo; flag &mdash;
-    locking is what <em>Defaulted by employee</em> does.</p>
+    <p class="why">Six flags, and the diagram in 7 shows which event raises each.
+    There is no separate &ldquo;Locked&rdquo; flag &mdash; locking is what a submitter-side
+    <em>Defaulted</em> does.</p>
 
     <h3>3.4 How status and flag relate</h3>
     <ol>
@@ -548,11 +548,10 @@
         <code>Submitted</code> + <em>Late submission</em> + <em>Adjustment</em>
         simultaneously.</li>
       <li><strong>Two values are both.</strong> <em>Defaulted</em> and
-        <em>Overridden and approved</em> appear as a week <strong>status</strong> and as a
-        <strong>flag</strong>. The status says what the week is now; the flag says it
-        happened at all and survives a later transition &mdash; a defaulted week that a
-        manager then approves becomes <code>Approved</code> while the defaulted flag
-        stays set.
+        <em>Overridden and approved</em> appear as a <strong>status</strong> and as a
+        <strong>flag</strong>. The status says what it is now; the flag says it happened
+        at all and survives a later transition &mdash; something defaulted and then
+        approved reads <code>Approved</code> with the defaulted flag still set.
         <span class="why">Whether to keep this duplication is an open item.</span></li>
       <li><strong>Precedence, when only one label can be shown.</strong> The accrual
         interface and the chips on screen must pick one. Most specific first:
@@ -561,13 +560,13 @@
         &rarr; none.</span></li>
     </ol>
 
-    <h4>Where each is maintained</h4>
+    <h4>Where it is stored</h4>
     <div class="table-wrap">
       <table>
         <thead><tr><th>Table</th><th>Holds</th></tr></thead>
         <tbody>
-          <tr><td><code>OC_TS_WEEK</code></td><td>the status at week level, all six flags, <code>DEFAULTED_BY</code>, <code>LOCKED_FLAG</code>, submit and approve stamps, reject reason and remarks</td></tr>
-          <tr><td><code>OC_TS_ENTRY</code></td><td>the status at day level, from the same set as 3.2; <code>ENTRY_TYPE</code> (Actual &middot; Default &middot; Reversal &middot; Adjustment), which the reversal and adjustment flags are derived from; <code>IS_LEAVE</code>; <code>SOURCE</code>; the POET as charged</td></tr>
+          <tr><td><code>OC_TS_WEEK</code></td><td>status and all six flags for a week, <code>DEFAULTED_BY</code>, <code>LOCKED_FLAG</code>, submit and approve stamps, reject reason and remarks</td></tr>
+          <tr><td><code>OC_TS_ENTRY</code></td><td>status for a single date, from the same set; <code>ENTRY_TYPE</code> (Actual &middot; Default &middot; Reversal &middot; Adjustment), which the reversal and adjustment flags are derived from; <code>IS_LEAVE</code>; <code>SOURCE</code>; the POET as charged</td></tr>
           <tr><td><code>OC_TS_APPROVAL</code></td><td>the decision trail &mdash; one row per event: Submit &middot; Resubmit &middot; Approve &middot; Reject &middot; Override &middot; AdvanceApprove &middot; Confirm &middot; Default &middot; Release &middot; Revoke, with actor, granularity and timestamp</td></tr>
           <tr><td><code>OC_TS_AUDIT</code></td><td>value changes with the before-image &mdash; Override &middot; Adjustment &middot; Reversal &middot; ManagerEdit &middot; Import &middot; DefaultCorrection</td></tr>
           <tr><td><code>OC_TS_MONTH_CONFIRM</code></td><td>the project-month confirmation and the outbound statuses in 3.5</td></tr>
@@ -683,7 +682,7 @@
     <h3>4.2 What is <em>not</em> sent</h3>
     <ul>
       <li><strong>Leave.</strong> Rows marked <code>IS_LEAVE = 'Y'</code> are excluded. Absences originate in Absence Management, which already reaches costing &mdash; posting them here would double-count.</li>
-      <li><strong>Unapproved hours.</strong> Only entries whose day status is Approved, in a month that has been confirmed.</li>
+      <li><strong>Unapproved hours.</strong> Only entries whose status is Approved, in a month that has been confirmed.</li>
       <li><strong>Cost and bill rates.</strong> We send quantity; Oracle applies rates and burdening.</li>
       <li><strong>Anything to payroll,</strong> per &sect;1.</li>
     </ul>
@@ -719,7 +718,7 @@
           <tr><td>4</td><td><strong>Fusion availability</strong> &mdash; with no cache, a pod outage stops a timesheet being opened. Acceptable? (&sect;2.3b)</td><td>business decision</td></tr>
           <tr><td>5</td><td>Where a leave row attaches for an employee with <strong>no active allocation</strong> &mdash; today dropped silently (&sect;3.1)</td><td>functional decision</td></tr>
           <tr><td>6</td><td>Concurrent 100% allocations on two projects seed 16h/day, uncapped until the 24-hour day rule &mdash; correct in Fusion, or cap in the module?</td><td>functional decision</td></tr>
-          <tr><td>7</td><td>Remove <em>Closed</em> from the week status &mdash; the database constraint and the confirm step both still use it (&sect;3.2)</td><td>build</td></tr>
+          <tr><td>7</td><td>Remove <em>Closed</em> from the status set &mdash; the database constraint and the confirm step both still use it (&sect;3.2)</td><td>build</td></tr>
           <tr><td>8</td><td>Keep <em>Defaulted</em> / <em>Overridden</em> as both status and flag, or collapse?</td><td>functional decision</td></tr>
           <tr><td>9</td><td>Third-party <strong>transaction source</strong> registered in Fusion, and the <code>ExpenditureBatch</code> naming agreed</td><td>Fusion configuration</td></tr>
           <tr><td>10</td><td>Expenditure type per project confirmed &mdash; this pod has no per-task transaction controls, so one configured value applies to everything</td><td>functional decision</td></tr>
@@ -834,11 +833,11 @@
       </table>
     </div>
 
-    <h4>Lifecycle &mdash; from entry to a confirmed month</h4>
-    <p class="why">The path most records take, left to right &mdash; and the same six
-    statuses apply whether you are looking at a day, a week or a month. Every other
-    transition is in 7.2, including the two loops back, which a single line cannot
-    show.</p>
+    <h4>Lifecycle &mdash; status and the flags each event raises</h4>
+    <p class="why">One set of six statuses for everything &mdash; there is no separate
+    scheme for a day, a week or a month. Flags are shown against the event that raises
+    them, because a flag is what an event leaves behind, not a place the record sits. Every
+    transition is listed in 7.2.</p>
     <div class="table-wrap">
       <table class="flow">
         <tbody>
@@ -849,7 +848,12 @@
             <td class="arrow">&#8594;</td>
             <td class="box good">Approved</td>
             <td class="arrow">&#8594;</td>
-            <td class="box gate">Month<br />confirmed</td>
+            <td class="box gate">Confirmed<br /><span style="font-size:0.72rem">an event, not a status</span></td>
+          </tr>
+          <tr>
+            <td class="arrow"><span style="font-size:0.7rem">submit</span></td><td></td>
+            <td class="arrow"><span style="font-size:0.7rem">approve</span></td><td></td>
+            <td class="arrow"><span style="font-size:0.7rem">all approved</span></td><td></td><td></td>
           </tr>
           <tr>
             <td class="arrow">&#8595;</td><td></td>
@@ -857,18 +861,22 @@
             <td class="arrow">&#8595;</td><td></td><td></td>
           </tr>
           <tr>
-            <td class="box bad">Defaulted<br /><span style="font-size:0.72rem">weekly cut-off<br />LOCKS the week</span></td>
+            <td class="box bad">Defaulted<br /><span style="font-size:0.72rem">cut-off filled it in<br /><strong>+ Defaulted</strong></span></td>
             <td></td>
-            <td class="box bad">Rejected<br /><span style="font-size:0.72rem">back with the employee<br />days reset to Pending</span></td>
+            <td class="box bad">Rejected<br /><span style="font-size:0.72rem">reason required<br />back to the submitter</span></td>
             <td></td>
-            <td class="box good">Overridden<br />and approved<br /><span style="font-size:0.72rem">manager changed the hours</span></td>
+            <td class="box good">Overridden and<br />approved<br /><span style="font-size:0.72rem"><strong>+ Overridden</strong></span></td>
             <td></td><td></td>
           </tr>
         </tbody>
       </table>
     </div>
-    <p class="why">Flags run alongside all of this and are not stages &mdash; any number
-    apply at once. See 3.3. Month confirmation is an event, not a seventh status.</p>
+    <p class="why"><strong>The flags each event raises:</strong> submitting late raises
+    <em>Late submission</em>; a cut-off raises <em>Defaulted</em> and, if it was the
+    submitter&rsquo;s deadline, locks further edits; overriding raises <em>Overridden &amp;
+    approved</em>; closing ahead of the cut-off raises <em>Advance closure</em>.
+    <em>Reversal</em> and <em>Adjustment</em> are derived from the entries rather than
+    raised by a transition. Detail in 3.3.</p>
 
     <h4>Flow 2 &mdash; outbound: what leaves, at which grain, in which order</h4>
     <div class="table-wrap">
@@ -943,19 +951,19 @@
           <tr><td>Submitted</td><td>Employee revokes their own submission</td><td><strong>Not yet submitted</strong></td><td><em>Late submission</em> retained &mdash; it did happen</td></tr>
           <tr><td>Submitted</td><td>Manager overrides the hours and approves</td><td><strong>Overridden and approved</strong></td><td>+ <em>Overridden &amp; approved</em>; original value kept in the audit trail</td></tr>
           <tr><td>Submitted</td><td><strong>Delivery cut-off job</strong> &mdash; manager never decided</td><td><strong>Defaulted</strong></td><td>+ <em>Defaulted</em>, <code>DEFAULTED_BY = MANAGER</code>; <strong>no lock</strong></td></tr>
-          <tr><td>Rejected</td><td>Employee corrects and resubmits</td><td><strong>Submitted</strong></td><td>day statuses reset to Pending; + <em>Late submission</em> if now past the cut-off</td></tr>
+          <tr><td>Rejected</td><td>Employee corrects and resubmits</td><td><strong>Submitted</strong></td><td>every date in it goes back to awaiting a decision; + <em>Late submission</em> if now past the cut-off</td></tr>
           <tr><td>Defaulted</td><td>Manager approves</td><td><strong>Approved</strong></td><td><em>Defaulted</em> flag <strong>kept</strong> &mdash; it happened</td></tr>
           <tr><td>Approved</td><td>Manager undoes the decision</td><td><strong>Submitted</strong></td><td>&mdash;</td></tr>
           <tr><td>Rejected</td><td>Manager undoes the decision</td><td><strong>Submitted</strong></td><td>&mdash;</td></tr>
-          <tr><td>Approved <em>or</em> Overridden and approved</td><td>Month confirmed &mdash; RULE-020, every week approved</td><td>week status <strong>unchanged</strong>; the month is recorded in <code>OC_TS_MONTH_CONFIRM</code></td><td>+ <em>Advance closure</em> if closed ahead of the cut-off</td></tr>
+          <tr><td>Approved <em>or</em> Overridden and approved</td><td>Month confirmed &mdash; RULE-020, every week approved</td><td>status <strong>unchanged</strong>; the month is recorded in <code>OC_TS_MONTH_CONFIRM</code></td><td>+ <em>Advance closure</em> if closed ahead of the cut-off</td></tr>
         </tbody>
       </table>
     </div>
     <div class="note">
       <strong>Two transitions are easy to miss and both matter.</strong>
-      <em>Rejected &rarr; Submitted</em> is the correct-and-resubmit loop, and it resets
-      every day to Pending &mdash; without that reset the manager could not act on the
-      week again. <em>Approved &rarr; Submitted</em> is a manager undoing their own
+      <em>Rejected &rarr; Submitted</em> is the correct-and-resubmit loop, and it puts
+      every date back to awaiting a decision &mdash; without that reset the approver could
+      not act on it again. <em>Approved &rarr; Submitted</em> is a manager undoing their own
       decision; it deliberately returns to <em>Submitted</em> and never to <em>Not yet
       submitted</em>, because the employee did submit and must not be made to send it
       again.

@@ -281,116 +281,104 @@ flowchart LR
     </div>
   </div>
   <div class="dgm">
-    <div class="dgm-head"><span class="dgm-n">Lifecycle</span><span class="dgm-t">Status &mdash; one set, every level</span></div>
-    <p class="dgm-sub">Six statuses and the same six everywhere &mdash; there is no separate scheme for a day, a week or a month. A record is in exactly one at a time and every edge carries the event that moves it. Month confirmation is an event rather than a status. Flags are not here on purpose &mdash; see the table below.</p>
+    <div class="dgm-head"><span class="dgm-n">Lifecycle</span><span class="dgm-t">Status and flags &mdash; one diagram</span></div>
+    <p class="dgm-sub">Everything in one chart. Six statuses, applying to whatever you are looking at &mdash; there is no separate scheme for a day, a week or a month. A record is in exactly one status at a time; the <strong>flags</strong> sit on the edges that raise them, because a flag is something an event leaves behind rather than a place the record sits.</p>
     <div class="diagram" id="pane-status" data-name="Time_Module_status">
 <pre class="mermaid">
-flowchart TD
+flowchart LR
 
-  subgraph WEEK["STATUS - ONE SET, EVERY LEVEL - exactly one at a time&lt;br/&gt;a single day uses the same statuses and the same transitions"]
-    direction TB
-    NYS(["Not yet submitted"])
-    SUB(["Submitted"])
-    APP(["Approved"])
-    REJ(["Rejected"])
-    DEF(["Defaulted"])
-    OVR(["Overridden and approved"])
+  NYS(["Not yet submitted"])
+  SUB(["Submitted"])
+  REJ(["Rejected"])
+  DEF(["Defaulted"])
+  APP(["Approved"])
+  OVR(["Overridden and approved"])
+  CONF{"Confirmed&lt;br/&gt;an event, not a status"}
 
-    NYS -->|"employee submits"| SUB
-    NYS -->|"WEEKLY cut-off job&lt;br/&gt;never submitted &middot; LOCKS the week"| DEF
-    SUB -->|"manager approves"| APP
-    SUB -->|"manager rejects&lt;br/&gt;reason mandatory"| REJ
-    SUB -->|"employee revokes"| NYS
-    SUB -->|"manager overrides hours&lt;br/&gt;and approves"| OVR
-    SUB -->|"DELIVERY cut-off job&lt;br/&gt;manager never decided &middot; no lock"| DEF
-    REJ -->|"correct &amp; resubmit&lt;br/&gt;days reset to Pending"| SUB
-    DEF -->|"manager approves"| APP
-    APP -->|"manager undoes the decision"| SUB
-    REJ -->|"manager undoes the decision"| SUB
-  end
-
-  CONF{"MONTH CONFIRM - an event, not a status&lt;br/&gt;RULE-020 - every week approved&lt;br/&gt;status UNCHANGED&lt;br/&gt;recorded in OC_TS_MONTH_CONFIRM"}
-  NOTE["Day and week share the transitions&lt;br/&gt;every day approved -&gt; the week is Approved&lt;br/&gt;any day rejected -&gt; the week is Rejected&lt;br/&gt;undo recomputes the week from the days left"]
-
-  APP --> CONF
+  NYS -->|"submit&lt;br/&gt;+ Late submission if past the cut-off"| SUB
+  NYS -->|"cut-off missed, hours filled in&lt;br/&gt;+ Defaulted &middot; locks further edits"| DEF
+  SUB -->|"approve"| APP
+  SUB -->|"reject - reason required"| REJ
+  SUB -->|"revoke"| NYS
+  SUB -->|"override the hours and approve&lt;br/&gt;+ Overridden"| OVR
+  SUB -->|"approver missed the cut-off&lt;br/&gt;+ Defaulted &middot; no lock"| DEF
+  REJ -->|"correct and resubmit"| SUB
+  DEF -->|"approve&lt;br/&gt;Defaulted flag kept"| APP
+  APP -->|"undo the decision"| SUB
+  REJ -->|"undo the decision"| SUB
+  APP -->|"all approved&lt;br/&gt;+ Advance closure if closed early"| CONF
   OVR --> CONF
-  DEF -.->|"BLOCKED unless advance closure"| CONF
+
+  F["The two remaining flags are DERIVED, not raised by a transition&lt;br/&gt;Reversal - a negative entry exists&lt;br/&gt;Adjustment - a retro adjustment entry exists"]
 
   classDef open fill:#eef0f6,stroke:#6b74a8,color:#2c3266;
   classDef good fill:#e9f9ee,stroke:#2e9e5b,color:#0d5a2e;
   classDef bad  fill:#fdecef,stroke:#b3352c,color:#8a2f23;
   classDef gate fill:#fff4e6,stroke:#e08e0b,color:#7a4a00;
+  classDef note fill:#fdf6e9,stroke:#d9a53c,color:#7a5a12;
   class NYS,SUB open;
   class APP,OVR good;
   class REJ,DEF bad;
   class CONF gate;
-  classDef note fill:#fdf6e9,stroke:#d9a53c,color:#7a5a12;
-  class NOTE note;
+  class F note;
 </pre>
     </div>
   </div>
   <section>
-    <h2>Flags &mdash; deliberately not a diagram</h2>
+    <h2>Flags &mdash; the detail behind the labels on the edges</h2>
     <p style="color:var(--ink-soft);max-width:52rem">
-      A flag is not a station on the path. Several apply at once, they survive later
-      transitions, and none of them is a state the week can be <em>in</em> &mdash; which is
-      exactly why drawing them as nodes beside the statuses made the earlier chart
-      misleading. All six live on <code>OC_TS_WEEK</code>.
+      The diagram above already shows which event raises which flag. This is the same six
+      with the part a chart cannot carry: whether they ever clear. Mostly they do not
+      &mdash; that is the point of a flag. Any number apply at once, and none of them is a
+      status, so a record is never <em>in</em> a flag.
     </p>
     <div class="table-wrap">
       <table>
         <thead>
-          <tr><th scope="col">Flag</th><th scope="col">Column</th><th scope="col">Set when</th><th scope="col">Cleared</th></tr>
+          <tr><th scope="col">Flag</th><th scope="col">Raised when</th><th scope="col">Cleared</th></tr>
         </thead>
         <tbody>
           <tr>
             <td>Defaulted</td>
-            <td><code>DEFAULTED_FLAG</code> + <code>DEFAULTED_BY</code> + <code>LOCKED_FLAG</code></td>
-            <td>either cut-off job fills the hours. <code>DEFAULTED_BY</code> records whose deadline passed &mdash; <code>EMPLOYEE</code> also locks the week, <code>MANAGER</code> does not.</td>
-            <td>never &mdash; kept even after a manager approves the week</td>
+            <td>a cut-off filled the hours in. A companion value records whose deadline passed: the submitter&rsquo;s, which also locks further edits, or the approver&rsquo;s, which does not.</td>
+            <td>never &mdash; kept even after it is later approved</td>
           </tr>
           <tr>
             <td>Late submission</td>
-            <td><code>LATE_SUBMISSION_FLAG</code></td>
-            <td>the week is submitted after the weekly cut-off</td>
+            <td>submitted after the cut-off</td>
             <td>never &mdash; revoking or resubmitting does not un-happen it</td>
           </tr>
           <tr>
             <td>Advance closure</td>
-            <td><code>ADVANCE_CLOSURE_FLAG</code></td>
-            <td>a future month is approved ahead of its cut-off</td>
+            <td>closed ahead of its cut-off</td>
             <td>never</td>
           </tr>
           <tr>
             <td>Overridden &amp; approved</td>
-            <td><code>OVERRIDDEN_FLAG</code></td>
-            <td>a manager changes the hours and approves them; the original is kept in the audit trail</td>
+            <td>an approver changed the hours and accepted them; the original is kept in the audit trail</td>
             <td>never</td>
           </tr>
           <tr>
             <td>Reversal</td>
-            <td><code>HAS_REVERSAL_FLAG</code></td>
-            <td>derived &mdash; the week contains a negative reversal entry</td>
-            <td>recomputed from the entries, so it follows them</td>
+            <td>derived &mdash; a negative entry exists</td>
+            <td>follows the entries, recomputed</td>
           </tr>
           <tr>
             <td>Adjustment</td>
-            <td><code>HAS_ADJUSTMENT_FLAG</code></td>
-            <td>derived &mdash; the week contains a retro adjustment entry</td>
-            <td>recomputed from the entries</td>
+            <td>derived &mdash; a retro adjustment entry exists</td>
+            <td>follows the entries, recomputed</td>
           </tr>
         </tbody>
       </table>
     </div>
     <p style="color:var(--ink-soft);font-size:0.85rem;max-width:52rem">
-      <strong>Two values are both a status and a flag.</strong> <em>Defaulted</em> and
-      <em>Overridden and approved</em> appear in the lifecycle above <em>and</em> in this
-      table. The status says what the week is now; the flag says it happened at all. A
-      defaulted week a manager then approves is <em>Approved</em> with the defaulted flag
-      still set.
+      <strong>Two names appear as both a status and a flag.</strong> <em>Defaulted</em> and
+      <em>Overridden and approved</em> are in the diagram as statuses and here as flags. The
+      status says what it is now; the flag says it happened at all &mdash; something
+      defaulted and then approved reads <em>Approved</em> with the defaulted flag still set.
     </p>
     <p style="color:var(--ink-soft);font-size:0.85rem;max-width:52rem">
-      <strong>Where only one label fits</strong> &mdash; the accrual interface, a chip on
+      <strong>Where only one label fits</strong> &mdash; the accrual hand-off, a chip on
       screen &mdash; precedence runs most specific first: entry is a Reversal, entry is an
       Adjustment, Advance closure, Overridden &amp; approved, Defaulted, Late submission,
       none.
@@ -503,47 +491,42 @@ flowchart LR
   class U1,U2,U3,U4,U5 use;
   class N1 note;</pre>
     <p style="font-family:var(--mono);font-size:0.75rem;color:var(--accent);margin:1rem 0 0.25rem">Lifecycle &mdash; Status only - week, day, month</p>
-    <pre class="source">flowchart TD
+    <pre class="source">flowchart LR
 
-  subgraph WEEK["STATUS - ONE SET, EVERY LEVEL - exactly one at a time&lt;br/&gt;a single day uses the same statuses and the same transitions"]
-    direction TB
-    NYS(["Not yet submitted"])
-    SUB(["Submitted"])
-    APP(["Approved"])
-    REJ(["Rejected"])
-    DEF(["Defaulted"])
-    OVR(["Overridden and approved"])
+  NYS(["Not yet submitted"])
+  SUB(["Submitted"])
+  REJ(["Rejected"])
+  DEF(["Defaulted"])
+  APP(["Approved"])
+  OVR(["Overridden and approved"])
+  CONF{"Confirmed&lt;br/&gt;an event, not a status"}
 
-    NYS -->|"employee submits"| SUB
-    NYS -->|"WEEKLY cut-off job&lt;br/&gt;never submitted &middot; LOCKS the week"| DEF
-    SUB -->|"manager approves"| APP
-    SUB -->|"manager rejects&lt;br/&gt;reason mandatory"| REJ
-    SUB -->|"employee revokes"| NYS
-    SUB -->|"manager overrides hours&lt;br/&gt;and approves"| OVR
-    SUB -->|"DELIVERY cut-off job&lt;br/&gt;manager never decided &middot; no lock"| DEF
-    REJ -->|"correct &amp; resubmit&lt;br/&gt;days reset to Pending"| SUB
-    DEF -->|"manager approves"| APP
-    APP -->|"manager undoes the decision"| SUB
-    REJ -->|"manager undoes the decision"| SUB
-  end
-
-  CONF{"MONTH CONFIRM - an event, not a status&lt;br/&gt;RULE-020 - every week approved&lt;br/&gt;status UNCHANGED&lt;br/&gt;recorded in OC_TS_MONTH_CONFIRM"}
-  NOTE["Day and week share the transitions&lt;br/&gt;every day approved -&gt; the week is Approved&lt;br/&gt;any day rejected -&gt; the week is Rejected&lt;br/&gt;undo recomputes the week from the days left"]
-
-  APP --> CONF
+  NYS -->|"submit&lt;br/&gt;+ Late submission if past the cut-off"| SUB
+  NYS -->|"cut-off missed, hours filled in&lt;br/&gt;+ Defaulted &middot; locks further edits"| DEF
+  SUB -->|"approve"| APP
+  SUB -->|"reject - reason required"| REJ
+  SUB -->|"revoke"| NYS
+  SUB -->|"override the hours and approve&lt;br/&gt;+ Overridden"| OVR
+  SUB -->|"approver missed the cut-off&lt;br/&gt;+ Defaulted &middot; no lock"| DEF
+  REJ -->|"correct and resubmit"| SUB
+  DEF -->|"approve&lt;br/&gt;Defaulted flag kept"| APP
+  APP -->|"undo the decision"| SUB
+  REJ -->|"undo the decision"| SUB
+  APP -->|"all approved&lt;br/&gt;+ Advance closure if closed early"| CONF
   OVR --> CONF
-  DEF -.->|"BLOCKED unless advance closure"| CONF
+
+  F["The two remaining flags are DERIVED, not raised by a transition&lt;br/&gt;Reversal - a negative entry exists&lt;br/&gt;Adjustment - a retro adjustment entry exists"]
 
   classDef open fill:#eef0f6,stroke:#6b74a8,color:#2c3266;
   classDef good fill:#e9f9ee,stroke:#2e9e5b,color:#0d5a2e;
   classDef bad  fill:#fdecef,stroke:#b3352c,color:#8a2f23;
   classDef gate fill:#fff4e6,stroke:#e08e0b,color:#7a4a00;
+  classDef note fill:#fdf6e9,stroke:#d9a53c,color:#7a5a12;
   class NYS,SUB open;
   class APP,OVR good;
   class REJ,DEF bad;
   class CONF gate;
-  classDef note fill:#fdf6e9,stroke:#d9a53c,color:#7a5a12;
-  class NOTE note;</pre>
+  class F note;</pre>
     <p style="font-family:var(--mono);font-size:0.75rem;color:var(--accent);margin:1rem 0 0.25rem">Flow 2 &mdash; Outbound integration</p>
     <pre class="source">flowchart LR
 
