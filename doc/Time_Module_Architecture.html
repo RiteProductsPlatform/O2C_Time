@@ -195,7 +195,7 @@
   <header>
     <span class="eyebrow">Oracle Fusion · build spec</span>
     <h1>O2C Time Module — architecture and data flow</h1>
-    <p class="standfirst">Replacement for Oracle Time and Labor (OTL). Project, POET, allocation and absence data is read <strong>live from Fusion as the screen loads</strong>; workers and the calendar arrive on a scheduled BIP sync. Time is prepopulated from allocation, captured, validated against 22 database rules, approved day‑ or week‑wise, and the confirmed month is posted to Project Costing as unprocessed costs. <strong>Payroll is out of scope.</strong></p>
+    <p class="standfirst">End to end, in one chart: everything read <strong>live from Fusion</strong> as a screen loads, prepopulation and capture, the week and day status lifecycle with the flags that accumulate alongside it, month confirmation, and the two outbound paths &mdash; Project Costing per entry, and accrual as a summary plus its timesheet lines. <strong>Payroll is out of scope; the OTL push is on hold.</strong></p>
     <hr />
   </header>
 
@@ -215,68 +215,132 @@
 <pre class="mermaid" id="src">
 flowchart TD
 
-  subgraph LIVE["READ LIVE FROM FUSION  (on page load, per user)"]
+  %% ─────────────── 1. INBOUND ───────────────
+  subgraph IN["1 &middot; INBOUND - read LIVE from Fusion as the screen loads"]
     direction TB
-    LPROJ["Projects the person may charge&lt;br/&gt;GET projectLaborResources, projects"]
-    LTASK["WBS tasks + chargeable flag&lt;br/&gt;GET projects/{id}/child/Tasks, projectFinancialTasks"]
-    LPOET["POET completion&lt;br/&gt;GET expenditureTypes  &amp;middot;  expenditure org from the assignment"]
-    LALLOC["Allocation / assignment %&lt;br/&gt;GET projectResourceAssignments, personAssignmentLaborSchedules"]
-    LABS["Absences&lt;br/&gt;GET absences"]
+    I1["Projects the person may charge&lt;br/&gt;GET projectLaborResources, projects"]
+    I2["WBS tasks + chargeable / billable&lt;br/&gt;GET projects/id/child/Tasks, projectFinancialTasks"]
+    I3["POET completion&lt;br/&gt;GET expenditureTypes&lt;br/&gt;expenditure org from the assignment"]
+    I4["Allocation %&lt;br/&gt;GET projectResourceAssignments&lt;br/&gt;personAssignmentLaborSchedules"]
+    I5["Rate&lt;br/&gt;GET rateSchedules"]
+    I6["Work schedule + shift pattern&lt;br/&gt;workforceScheduleDefinitions / Shifts&lt;br/&gt;BIP runReport where REST cannot answer"]
+    I7["Calendar by location + events&lt;br/&gt;BIP runReport"]
+    I8["Absence - for THIS person, THESE dates&lt;br/&gt;GET absences"]
   end
 
-  subgraph SYNC["SYNCED BY OIC  (BIP runReport, scheduled)"]
+  %% ─────────────── 2. PREPOPULATE + CAPTURE ───────────────
+  subgraph MOD["2 &middot; CAPTURE"]
     direction TB
-    SWORK["Workers, manager hierarchy, std hours&lt;br/&gt;daily"]
-    SCAL["Calendar, holidays, shifts, work patterns&lt;br/&gt;monthly"]
-    SREF["Expenditure-type reference&lt;br/&gt;on change"]
+    P0["PREPOPULATE on opening the month&lt;br/&gt;std hours/day &times; allocation %, quarter-rounded&lt;br/&gt;first chargeable WBS task, one line&lt;br/&gt;non-working days skipped"]
+    P1["LEAVE rows from absence&lt;br/&gt;own duration, IS_LEAVE = Y, read-only"]
+    P2["EMPLOYEE EDITS&lt;br/&gt;POET snapshot written onto each entry"]
+    P3["VALIDATE - 22 rules in OC_TIME_PKG&lt;br/&gt;quarter-hour, 24h/day, cut-offs&lt;br/&gt;leave is system-owned"]
+    P0 --> P2
+    P1 --> P2
+    P2 --> P3
   end
 
-  subgraph HUB["O2C TIME MODULE  (ATP schema O2C_TIME + ORDS + VBCS)"]
+  %% ─────────────── 3. WEEK STATUS LIFECYCLE ───────────────
+  subgraph LIFE["3 &middot; WEEK STATUS - one status at a time, flags accumulate"]
     direction TB
-    PREP["0. PREPOPULATE&lt;br/&gt;std hours per day &amp;times; allocation %&lt;br/&gt;absences as read-only leave rows"]
-    CAP["1. CAPTURE&lt;br/&gt;employee edits the week&lt;br/&gt;POET snapshot written onto each entry"]
-    VAL["2. VALIDATE&lt;br/&gt;22 rules in OC_TIME_PKG&lt;br/&gt;quarter-hour, 24h/day, cut-offs, leave is system-owned"]
-    APP["3. APPROVE&lt;br/&gt;day / week / month&lt;br/&gt;reject with reason + remarks, undo a decision"]
-    CONF["4. CONFIRM THE MONTH&lt;br/&gt;RULE-020 all weeks approved&lt;br/&gt;OC_TS_MONTH_CONFIRM"]
-    PREP --> CAP --> VAL --> APP --> CONF
+    NYS(["Not yet submitted"])
+    SUB(["Submitted"])
+    APP(["Approved"])
+    REJ(["Rejected"])
+    DEF(["Defaulted"])
+    OVR(["Overridden and approved"])
+
+    NYS -->|"submit&lt;br/&gt;+ Late submission if past cut-off"| SUB
+    NYS -->|"WEEKLY cut-off job&lt;br/&gt;+ Defaulted / EMPLOYEE&lt;br/&gt;LOCKS &middot; holds salary"| DEF
+    SUB -->|"approve"| APP
+    SUB -->|"reject - reason mandatory"| REJ
+    SUB -->|"employee revokes&lt;br/&gt;Late submission kept"| NYS
+    SUB -->|"override hours + approve&lt;br/&gt;+ Overridden"| OVR
+    SUB -->|"DELIVERY cut-off job&lt;br/&gt;+ Defaulted / MANAGER&lt;br/&gt;no lock &middot; no salary hold"| DEF
+    REJ -->|"correct &amp; resubmit&lt;br/&gt;days back to Pending"| SUB
+    DEF -->|"manager approves&lt;br/&gt;Defaulted flag KEPT"| APP
+    APP -->|"manager undoes decision"| SUB
+    REJ -->|"manager undoes decision"| SUB
   end
 
-  subgraph OUT["OUTPUTS"]
+  subgraph FLAGS["FLAGS - not statuses; several at once, all on OC_TS_WEEK"]
     direction TB
-    PJC["PROJECT COSTING&lt;br/&gt;POST unprocessedProjectCosts&lt;br/&gt;one row per approved entry, POET in the flexfield&lt;br/&gt;then Import Costs (ESS) in Fusion"]
-    ACC["O2C ACCRUAL&lt;br/&gt;XX_O2C_TIMESHEET_ACCRUAL_IF&lt;br/&gt;consumer pulls; push built but dormant"]
-    PAYX["PAYROLL&lt;br/&gt;OUT OF SCOPE"]
+    F1["Defaulted&lt;br/&gt;+ DEFAULTED_BY + LOCKED_FLAG"]
+    F2["Late submission&lt;br/&gt;never cleared"]
+    F3["Advance closure"]
+    F4["Overridden &amp; approved"]
+    F5["Reversal - derived from entry type"]
+    F6["Adjustment - derived from entry type"]
   end
 
-  LPROJ --> CAP
-  LTASK --> CAP
-  LPOET --> CAP
-  LALLOC --> PREP
-  LABS --> PREP
-  SWORK --> PREP
-  SCAL --> PREP
-  SREF --> VAL
+  %% ─────────────── 4. DAY STATUS ───────────────
+  subgraph DAY["DAY STATUS - OC_TS_ENTRY"]
+    direction LR
+    D1(["Pending"]) -->|"approve day"| D2(["Approved"])
+    D1 -->|"reject day"| D3(["Rejected"])
+    D2 -->|"undo"| D1
+    D3 -->|"undo"| D1
+  end
 
-  CONF -->|approved hours, IS_LEAVE = N| PJC
-  CONF -->|month totals| ACC
-  CONF -.-|not sent| PAYX
+  %% ─────────────── 5. MONTH CONFIRM ───────────────
+  CONF{"MONTH CONFIRM&lt;br/&gt;RULE-020 - every week approved&lt;br/&gt;OC_TS_MONTH_CONFIRM&lt;br/&gt;Normal / Advance closure / Reopened"}
 
-  DB[("OC_TS_WEEK / OC_TS_ENTRY / OC_TS_APPROVAL&lt;br/&gt;OC_TS_MONTH_CONFIRM / OC_TS_AUDIT&lt;br/&gt;master cache: OC_TIME_WORKER, _CALENDAR")]
-  HUB -.persists.-> DB
+  %% ─────────────── 6. OUTBOUND ───────────────
+  subgraph OUT["6 &middot; OUTBOUND"]
+    direction TB
+    O1["PROJECT COSTING&lt;br/&gt;POST unprocessedProjectCosts&lt;br/&gt;ONE ROW PER APPROVED ENTRY&lt;br/&gt;POET in the flexfield block&lt;br/&gt;IS_LEAVE = Y excluded&lt;br/&gt;then Import Costs in Fusion&lt;br/&gt;OTL_STATUS"]
+    O2["ACCRUAL - SUMMARY&lt;br/&gt;one row per employee &times; project-month&lt;br/&gt;billable / non-billable / leave hours&lt;br/&gt;PUSH_STATE READY or BLOCKED&lt;br/&gt;ACCRUAL_STATUS"]
+    O3["ACCRUAL - TIMESHEET LINES&lt;br/&gt;the day rows for that employee&lt;br/&gt;sent once the summary returns its id&lt;br/&gt;PARTNER_STATUS"]
+    O4["OTL push&lt;br/&gt;ON HOLD - nothing sent&lt;br/&gt;independence from OTL under discussion"]
+    O5["PAYROLL&lt;br/&gt;OUT OF SCOPE"]
+    O2 --> O3
+  end
+
+  %% ─────────────── wiring ───────────────
+  I1 --> P2
+  I2 --> P2
+  I3 --> P2
+  I4 --> P0
+  I5 --> P0
+  I6 --> P0
+  I7 --> P0
+  I8 --> P1
+
+  P3 --> NYS
+  DAY -.-|"all days approved&lt;br/&gt;closes the week"| APP
+
+  APP --> CONF
+  OVR --> CONF
+  DEF -.-|"blocked unless advance closure"| CONF
+
+  CONF --> O1
+  CONF --> O2
+  CONF -.-|"held"| O4
+  CONF -.-|"never"| O5
+
+  DB[("OC_TS_WEEK &middot; OC_TS_ENTRY &middot; OC_TS_APPROVAL&lt;br/&gt;OC_TS_AUDIT &middot; OC_TS_MONTH_CONFIRM&lt;br/&gt;XX_O2C_TIMESHEET_ACCRUAL_IF")]
+  MOD -.persists.-> DB
+  LIFE -.persists.-> DB
 
   classDef live fill:#e6f2ff,stroke:#3b82c4,color:#0b3d66;
-  classDef sync fill:#eef0f6,stroke:#6b74a8,color:#2c3266;
-  classDef hub fill:#fff4e6,stroke:#e08e0b,color:#7a4a00;
-  classDef out fill:#e9f9ee,stroke:#2e9e5b,color:#0d5a2e;
+  classDef cap  fill:#fff4e6,stroke:#e08e0b,color:#7a4a00;
+  classDef st   fill:#eef0f6,stroke:#6b74a8,color:#2c3266;
+  classDef good fill:#e9f9ee,stroke:#2e9e5b,color:#0d5a2e;
+  classDef bad  fill:#fdecef,stroke:#b3352c,color:#8a2f23;
+  classDef flag fill:#fdf6e9,stroke:#d9a53c,color:#7a5a12;
   classDef xout fill:#f3f4f5,stroke:#9aa2ab,color:#6b727a,stroke-dasharray:4 3;
   classDef store fill:#f0f0f0,stroke:#888,color:#333;
 
-  class LPROJ,LTASK,LPOET,LALLOC,LABS live;
-  class SWORK,SCAL,SREF sync;
-  class PREP,CAP,VAL,APP,CONF hub;
-  class PJC,ACC out;
-  class PAYX xout;
+  class I1,I2,I3,I4,I5,I6,I7,I8 live;
+  class P0,P1,P2,P3 cap;
+  class NYS,SUB,D1 st;
+  class APP,OVR,D2 good;
+  class REJ,DEF,D3 bad;
+  class F1,F2,F3,F4,F5,F6 flag;
+  class O1,O2,O3 good;
+  class O4,O5 xout;
   class DB store;
+  class CONF cap;
 </pre>
   </div>
 
@@ -284,142 +348,233 @@ flowchart TD
     <h2>Reading the diagram</h2>
     <div class="legend">
       <div>
-        <span class="band"><span class="swatch" style="background:#e6f2ff;border-color:#3b82c4"></span>Live from Fusion</span>
-        <p><strong>Fetched as the page loads, per user.</strong> Projects, WBS tasks, POET, allocation and absences. Nothing is staged first, so a project assigned this morning is selectable this morning. If the pod is unreachable the pickers are unavailable &mdash; the grid and saving are not.</p>
+        <span class="band"><span class="swatch" style="background:#e6f2ff;border-color:#3b82c4"></span>1 &middot; Inbound, all live</span>
+        <p><strong>Fetched when the screen needs it, per user.</strong> Project, task, POET,
+        allocation, rate, work schedule, shift pattern, calendar by location and absence.
+        There is no scheduled sync and no staged copy. REST where a resource answers the
+        question; a direct BIP <code>runReport</code> where it does not &mdash; a report
+        called live is still a live read.</p>
       </div>
       <div>
-        <span class="band"><span class="swatch" style="background:#eef0f6;border-color:#6b74a8"></span>Synced by OIC</span>
-        <p><strong>Bulk reference data, on a schedule.</strong> BIP <code>runReport</code> over SOAP, loaded through ORDS. Workers daily; calendar, holidays, shifts and work patterns monthly. These are set-based reads that the batch jobs walk for every employee at once, which is what live per-row calls cannot do.</p>
+        <span class="band"><span class="swatch" style="background:#fff4e6;border-color:#e08e0b"></span>2 &middot; Capture</span>
+        <p><strong>Prepopulate, then edit, then validate.</strong> Opening a month seeds
+        it: standard hours &times; allocation percentage, quarter-rounded, onto the first
+        chargeable task &mdash; <em>one</em> line, not one per task. Absence arrives as
+        read-only leave. Every rule is enforced in the database, so a caller reaching ORDS
+        directly meets the identical refusal.</p>
       </div>
       <div>
-        <span class="band"><span class="swatch" style="background:#fff4e6;border-color:#e08e0b"></span>Time module</span>
-        <p><strong>Prepopulate, capture, validate, approve, confirm.</strong> A real sequence, so the stages are numbered from zero &mdash; the month exists before anyone opens it. Every rule lives in <code>OC_TIME_PKG</code>, not in the page, so a caller hitting ORDS directly meets the identical refusal.</p>
+        <span class="band"><span class="swatch" style="background:#eef0f6;border-color:#6b74a8"></span>3 &middot; Status</span>
+        <p><strong>One status at a time.</strong> Six for the week, three for the day. Read
+        the edge labels &mdash; they carry the event and the flag it sets. Two edges are
+        worth finding: <em>Rejected &rarr; Submitted</em> is the correct-and-resubmit loop,
+        and <em>Approved &rarr; Submitted</em> is a manager undoing their own decision.</p>
       </div>
       <div>
-        <span class="band"><span class="swatch" style="background:#e9f9ee;border-color:#2e9e5b"></span>Outputs</span>
-        <p><strong>Project Costing by REST, accrual by interface table.</strong> Approved non&#8209;leave hours are posted one row per entry to <code>unprocessedProjectCosts</code>; Fusion&rsquo;s Import Costs process turns them into project costs.</p>
+        <span class="band"><span class="swatch" style="background:#fdf6e9;border-color:#d9a53c"></span>Flags</span>
+        <p><strong>Not statuses, and not exclusive.</strong> A week carries any number at
+        once and they survive later transitions &mdash; a defaulted week that is then
+        approved becomes <em>Approved</em> while the defaulted flag stays set. Drawn to the
+        side deliberately: they are not stations on the path.</p>
       </div>
       <div>
-        <span class="band"><span class="swatch" style="background:#f3f4f5;border-color:#9aa2ab"></span>Out of scope</span>
-        <p><strong>Payroll.</strong> Drawn, dashed and unconnected on purpose: it is a delivered OTL consumer that this module deliberately does not feed. Nothing is written to <code>elementEntries</code> and no payroll reference data is read.</p>
+        <span class="band"><span class="swatch" style="background:#e9f9ee;border-color:#2e9e5b"></span>6 &middot; Outbound</span>
+        <p><strong>Two live destinations, at different grains.</strong> Project Costing
+        takes <em>one row per approved entry</em>. Accrual takes a <em>summary per employee
+        per project-month</em>, then the timesheet lines for that employee once the summary
+        returns its id &mdash; so the order matters.</p>
       </div>
       <div>
-        <span class="band"><span class="swatch" style="background:#f0f0f0;border-color:#888"></span>Storage</span>
-        <p><strong>The module&rsquo;s own tables.</strong> <code>OC_TS_ENTRY</code> is the grain &mdash; one row per week &times; project &times; task &times; day &times; entry type. Dashed edge: the hub persists here as a side effect, not as a routed destination.</p>
+        <span class="band"><span class="swatch" style="background:#f3f4f5;border-color:#9aa2ab"></span>Not sent</span>
+        <p><strong>Dashed and unconnected on purpose.</strong> Payroll is out of scope
+        entirely. The OTL push exists in the design but is on hold pending the decision on
+        independence from OTL &mdash; and because costing does not route through OTL, time
+        still reaches Project Costing while that is open.</p>
       </div>
     </div>
   </section>
 
   <section>
-    <h2>What leaves the module</h2>
+    <h2>What leaves the module, and at what grain</h2>
     <div class="table-wrap">
       <table>
         <thead>
-          <tr><th scope="col">Destination</th><th scope="col">Trigger</th><th scope="col">Mechanism</th><th scope="col">Status column</th></tr>
+          <tr><th scope="col">Destination</th><th scope="col">Grain</th><th scope="col">Mechanism</th><th scope="col">Status column</th></tr>
         </thead>
         <tbody>
           <tr>
             <td>Oracle Project Costing</td>
-            <td>Month confirmed (RULE&#8209;020: every week approved)</td>
-            <td><code>POST unprocessedProjectCosts</code> &mdash; one row per approved entry, POET in <code>ProjectStandardCostCollectionFlexfields</code>; then <em>Import Costs</em> in Fusion</td>
+            <td>One row per <strong>approved entry</strong>. <code>IS_LEAVE = 'Y'</code> excluded.</td>
+            <td><code>POST unprocessedProjectCosts</code>, POET in <code>ProjectStandardCostCollectionFlexfields</code>, our entry id as <code>OriginalTransactionReference</code>; then <em>Import Costs</em> in Fusion</td>
             <td><code>OTL_STATUS</code></td>
           </tr>
           <tr>
-            <td>O2C accrual</td>
-            <td>Same confirm</td>
-            <td>Rows written to <code>XX_O2C_TIMESHEET_ACCRUAL_IF</code>; the consumer pulls. A direct push exists and is deliberately dormant.</td>
-            <td><code>ACCRUAL_STATUS</code>, <code>PARTNER_STATUS</code></td>
+            <td>Accrual &mdash; summary</td>
+            <td>One row per <strong>employee &times; project-month</strong>, with billable, non-billable and leave hours</td>
+            <td>Interface table for the consumer to pull. <code>PUSH_STATE</code> is READY or BLOCKED &mdash; a month that cannot be handed over is returned rather than filtered out, so it is visible.</td>
+            <td><code>ACCRUAL_STATUS</code></td>
+          </tr>
+          <tr>
+            <td>Accrual &mdash; timesheet lines</td>
+            <td>The <strong>day rows</strong> for one employee</td>
+            <td>Sent after the summary, because they attach to the id it returns. Built and deliberately dormant &mdash; nothing is written to the main application yet.</td>
+            <td><code>PARTNER_STATUS</code></td>
           </tr>
           <tr>
             <td>Absence Management</td>
             <td>&mdash;</td>
-            <td>Nothing is written back. Absences originate there and already reach OTL, so the costing post filters <code>IS_LEAVE = 'Y'</code> out rather than double&#8209;counting them.</td>
+            <td>Nothing written back. Absence originates there and already reaches costing, which is why the costing post excludes leave rather than double-counting them.</td>
             <td>&mdash;</td>
           </tr>
           <tr>
             <td>Global Payroll</td>
             <td>&mdash;</td>
-            <td><strong>Out of scope.</strong> No <code>elementEntries</code> write, no payroll time type resolved, no payroll reference read.</td>
+            <td><strong>Out of scope.</strong></td>
             <td>&mdash;</td>
           </tr>
         </tbody>
       </table>
     </div>
     <p style="margin-top:0.75rem;color:var(--ink-soft);font-size:0.85rem">
-      The three status columns are separate on purpose: the destinations fail
-      independently, and collapsing them loses which one needs attention.
+      The status columns are separate because the destinations fail independently;
+      one combined column would lose which of them needs attention.
     </p>
   </section>
 
   <details>
     <summary>Mermaid source</summary>
-    <pre class="source" id="raw">%% O2C Time Module - architecture / data flow
-%% Replaces OTL. Payroll is out of scope.
+    <pre class="source" id="raw">%% O2C Time Module - end-to-end flow
+%% 1 inbound (all live) | 2-5 capture, status, flags, month confirm | 6 outbound
+%% Payroll is out of scope. OTL push is on hold.
 
 flowchart TD
 
-  subgraph LIVE["READ LIVE FROM FUSION  (on page load, per user)"]
+  %% ─────────────── 1. INBOUND ───────────────
+  subgraph IN["1 &middot; INBOUND - read LIVE from Fusion as the screen loads"]
     direction TB
-    LPROJ["Projects the person may charge&lt;br/&gt;GET projectLaborResources, projects"]
-    LTASK["WBS tasks + chargeable flag&lt;br/&gt;GET projects/{id}/child/Tasks, projectFinancialTasks"]
-    LPOET["POET completion&lt;br/&gt;GET expenditureTypes  &amp;middot;  expenditure org from the assignment"]
-    LALLOC["Allocation / assignment %&lt;br/&gt;GET projectResourceAssignments, personAssignmentLaborSchedules"]
-    LABS["Absences&lt;br/&gt;GET absences"]
+    I1["Projects the person may charge&lt;br/&gt;GET projectLaborResources, projects"]
+    I2["WBS tasks + chargeable / billable&lt;br/&gt;GET projects/id/child/Tasks, projectFinancialTasks"]
+    I3["POET completion&lt;br/&gt;GET expenditureTypes&lt;br/&gt;expenditure org from the assignment"]
+    I4["Allocation %&lt;br/&gt;GET projectResourceAssignments&lt;br/&gt;personAssignmentLaborSchedules"]
+    I5["Rate&lt;br/&gt;GET rateSchedules"]
+    I6["Work schedule + shift pattern&lt;br/&gt;workforceScheduleDefinitions / Shifts&lt;br/&gt;BIP runReport where REST cannot answer"]
+    I7["Calendar by location + events&lt;br/&gt;BIP runReport"]
+    I8["Absence - for THIS person, THESE dates&lt;br/&gt;GET absences"]
   end
 
-  subgraph SYNC["SYNCED BY OIC  (BIP runReport, scheduled)"]
+  %% ─────────────── 2. PREPOPULATE + CAPTURE ───────────────
+  subgraph MOD["2 &middot; CAPTURE"]
     direction TB
-    SWORK["Workers, manager hierarchy, std hours&lt;br/&gt;daily"]
-    SCAL["Calendar, holidays, shifts, work patterns&lt;br/&gt;monthly"]
-    SREF["Expenditure-type reference&lt;br/&gt;on change"]
+    P0["PREPOPULATE on opening the month&lt;br/&gt;std hours/day &times; allocation %, quarter-rounded&lt;br/&gt;first chargeable WBS task, one line&lt;br/&gt;non-working days skipped"]
+    P1["LEAVE rows from absence&lt;br/&gt;own duration, IS_LEAVE = Y, read-only"]
+    P2["EMPLOYEE EDITS&lt;br/&gt;POET snapshot written onto each entry"]
+    P3["VALIDATE - 22 rules in OC_TIME_PKG&lt;br/&gt;quarter-hour, 24h/day, cut-offs&lt;br/&gt;leave is system-owned"]
+    P0 --> P2
+    P1 --> P2
+    P2 --> P3
   end
 
-  subgraph HUB["O2C TIME MODULE  (ATP schema O2C_TIME + ORDS + VBCS)"]
+  %% ─────────────── 3. WEEK STATUS LIFECYCLE ───────────────
+  subgraph LIFE["3 &middot; WEEK STATUS - one status at a time, flags accumulate"]
     direction TB
-    PREP["0. PREPOPULATE&lt;br/&gt;std hours per day &amp;times; allocation %&lt;br/&gt;absences as read-only leave rows"]
-    CAP["1. CAPTURE&lt;br/&gt;employee edits the week&lt;br/&gt;POET snapshot written onto each entry"]
-    VAL["2. VALIDATE&lt;br/&gt;22 rules in OC_TIME_PKG&lt;br/&gt;quarter-hour, 24h/day, cut-offs, leave is system-owned"]
-    APP["3. APPROVE&lt;br/&gt;day / week / month&lt;br/&gt;reject with reason + remarks, undo a decision"]
-    CONF["4. CONFIRM THE MONTH&lt;br/&gt;RULE-020 all weeks approved&lt;br/&gt;OC_TS_MONTH_CONFIRM"]
-    PREP --> CAP --> VAL --> APP --> CONF
+    NYS(["Not yet submitted"])
+    SUB(["Submitted"])
+    APP(["Approved"])
+    REJ(["Rejected"])
+    DEF(["Defaulted"])
+    OVR(["Overridden and approved"])
+
+    NYS -->|"submit&lt;br/&gt;+ Late submission if past cut-off"| SUB
+    NYS -->|"WEEKLY cut-off job&lt;br/&gt;+ Defaulted / EMPLOYEE&lt;br/&gt;LOCKS &middot; holds salary"| DEF
+    SUB -->|"approve"| APP
+    SUB -->|"reject - reason mandatory"| REJ
+    SUB -->|"employee revokes&lt;br/&gt;Late submission kept"| NYS
+    SUB -->|"override hours + approve&lt;br/&gt;+ Overridden"| OVR
+    SUB -->|"DELIVERY cut-off job&lt;br/&gt;+ Defaulted / MANAGER&lt;br/&gt;no lock &middot; no salary hold"| DEF
+    REJ -->|"correct &amp; resubmit&lt;br/&gt;days back to Pending"| SUB
+    DEF -->|"manager approves&lt;br/&gt;Defaulted flag KEPT"| APP
+    APP -->|"manager undoes decision"| SUB
+    REJ -->|"manager undoes decision"| SUB
   end
 
-  subgraph OUT["OUTPUTS"]
+  subgraph FLAGS["FLAGS - not statuses; several at once, all on OC_TS_WEEK"]
     direction TB
-    PJC["PROJECT COSTING&lt;br/&gt;POST unprocessedProjectCosts&lt;br/&gt;one row per approved entry, POET in the flexfield&lt;br/&gt;then Import Costs (ESS) in Fusion"]
-    ACC["O2C ACCRUAL&lt;br/&gt;XX_O2C_TIMESHEET_ACCRUAL_IF&lt;br/&gt;consumer pulls; push built but dormant"]
-    PAYX["PAYROLL&lt;br/&gt;OUT OF SCOPE"]
+    F1["Defaulted&lt;br/&gt;+ DEFAULTED_BY + LOCKED_FLAG"]
+    F2["Late submission&lt;br/&gt;never cleared"]
+    F3["Advance closure"]
+    F4["Overridden &amp; approved"]
+    F5["Reversal - derived from entry type"]
+    F6["Adjustment - derived from entry type"]
   end
 
-  LPROJ --> CAP
-  LTASK --> CAP
-  LPOET --> CAP
-  LALLOC --> PREP
-  LABS --> PREP
-  SWORK --> PREP
-  SCAL --> PREP
-  SREF --> VAL
+  %% ─────────────── 4. DAY STATUS ───────────────
+  subgraph DAY["DAY STATUS - OC_TS_ENTRY"]
+    direction LR
+    D1(["Pending"]) -->|"approve day"| D2(["Approved"])
+    D1 -->|"reject day"| D3(["Rejected"])
+    D2 -->|"undo"| D1
+    D3 -->|"undo"| D1
+  end
 
-  CONF -->|approved hours, IS_LEAVE = N| PJC
-  CONF -->|month totals| ACC
-  CONF -.-|not sent| PAYX
+  %% ─────────────── 5. MONTH CONFIRM ───────────────
+  CONF{"MONTH CONFIRM&lt;br/&gt;RULE-020 - every week approved&lt;br/&gt;OC_TS_MONTH_CONFIRM&lt;br/&gt;Normal / Advance closure / Reopened"}
 
-  DB[("OC_TS_WEEK / OC_TS_ENTRY / OC_TS_APPROVAL&lt;br/&gt;OC_TS_MONTH_CONFIRM / OC_TS_AUDIT&lt;br/&gt;master cache: OC_TIME_WORKER, _CALENDAR")]
-  HUB -.persists.-> DB
+  %% ─────────────── 6. OUTBOUND ───────────────
+  subgraph OUT["6 &middot; OUTBOUND"]
+    direction TB
+    O1["PROJECT COSTING&lt;br/&gt;POST unprocessedProjectCosts&lt;br/&gt;ONE ROW PER APPROVED ENTRY&lt;br/&gt;POET in the flexfield block&lt;br/&gt;IS_LEAVE = Y excluded&lt;br/&gt;then Import Costs in Fusion&lt;br/&gt;OTL_STATUS"]
+    O2["ACCRUAL - SUMMARY&lt;br/&gt;one row per employee &times; project-month&lt;br/&gt;billable / non-billable / leave hours&lt;br/&gt;PUSH_STATE READY or BLOCKED&lt;br/&gt;ACCRUAL_STATUS"]
+    O3["ACCRUAL - TIMESHEET LINES&lt;br/&gt;the day rows for that employee&lt;br/&gt;sent once the summary returns its id&lt;br/&gt;PARTNER_STATUS"]
+    O4["OTL push&lt;br/&gt;ON HOLD - nothing sent&lt;br/&gt;independence from OTL under discussion"]
+    O5["PAYROLL&lt;br/&gt;OUT OF SCOPE"]
+    O2 --> O3
+  end
+
+  %% ─────────────── wiring ───────────────
+  I1 --> P2
+  I2 --> P2
+  I3 --> P2
+  I4 --> P0
+  I5 --> P0
+  I6 --> P0
+  I7 --> P0
+  I8 --> P1
+
+  P3 --> NYS
+  DAY -.-|"all days approved&lt;br/&gt;closes the week"| APP
+
+  APP --> CONF
+  OVR --> CONF
+  DEF -.-|"blocked unless advance closure"| CONF
+
+  CONF --> O1
+  CONF --> O2
+  CONF -.-|"held"| O4
+  CONF -.-|"never"| O5
+
+  DB[("OC_TS_WEEK &middot; OC_TS_ENTRY &middot; OC_TS_APPROVAL&lt;br/&gt;OC_TS_AUDIT &middot; OC_TS_MONTH_CONFIRM&lt;br/&gt;XX_O2C_TIMESHEET_ACCRUAL_IF")]
+  MOD -.persists.-> DB
+  LIFE -.persists.-> DB
 
   classDef live fill:#e6f2ff,stroke:#3b82c4,color:#0b3d66;
-  classDef sync fill:#eef0f6,stroke:#6b74a8,color:#2c3266;
-  classDef hub fill:#fff4e6,stroke:#e08e0b,color:#7a4a00;
-  classDef out fill:#e9f9ee,stroke:#2e9e5b,color:#0d5a2e;
+  classDef cap  fill:#fff4e6,stroke:#e08e0b,color:#7a4a00;
+  classDef st   fill:#eef0f6,stroke:#6b74a8,color:#2c3266;
+  classDef good fill:#e9f9ee,stroke:#2e9e5b,color:#0d5a2e;
+  classDef bad  fill:#fdecef,stroke:#b3352c,color:#8a2f23;
+  classDef flag fill:#fdf6e9,stroke:#d9a53c,color:#7a5a12;
   classDef xout fill:#f3f4f5,stroke:#9aa2ab,color:#6b727a,stroke-dasharray:4 3;
   classDef store fill:#f0f0f0,stroke:#888,color:#333;
 
-  class LPROJ,LTASK,LPOET,LALLOC,LABS live;
-  class SWORK,SCAL,SREF sync;
-  class PREP,CAP,VAL,APP,CONF hub;
-  class PJC,ACC out;
-  class PAYX xout;
+  class I1,I2,I3,I4,I5,I6,I7,I8 live;
+  class P0,P1,P2,P3 cap;
+  class NYS,SUB,D1 st;
+  class APP,OVR,D2 good;
+  class REJ,DEF,D3 bad;
+  class F1,F2,F3,F4,F5,F6 flag;
+  class O1,O2,O3 good;
+  class O4,O5 xout;
   class DB store;
+  class CONF cap;
 </pre>
   </details>
 

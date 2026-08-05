@@ -160,8 +160,9 @@
       <h1>Scope and integration</h1>
       <p class="standfirst">What the module does, what it deliberately does not do,
       every piece of data fetched live from Oracle Fusion as a screen loads, how time
-      is prepopulated, the complete status and flag model, and exactly what is posted
-      back to Oracle Project Costing.</p>
+      is prepopulated, the complete status and flag model, exactly what is posted
+      back to Oracle Project Costing, and the end-to-end flow with every status
+      transition.</p>
       <div class="meta">
         <span>Version 2.0</span>
         <span>Prepared 05-Aug-2026</span>
@@ -737,6 +738,123 @@
       Until one is chosen, <strong>leave-loss cannot fire for any project</strong>,
       because the rule requires a value that nothing sets.
     </div>
+
+    <h2><span class="num">7</span>End-to-end flow</h2>
+    <p class="lede">The drawn flowchart is
+    <code>doc/Time_Module_Architecture.html</code> &mdash; one chart covering all three
+    stages, with pan, zoom and SVG/PNG export. What follows is the same flow stated
+    precisely, because a diagram cannot show every transition unambiguously and a review
+    needs to be able to check each one.</p>
+
+    <h3>7.1 Inbound &mdash; what is fetched, and what it is used for</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Step</th><th>Fetched live from Fusion</th><th>Used for</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>Projects the person may charge to</td><td>the Project picker; the project manager is the approval route</td></tr>
+          <tr><td>2</td><td>WBS tasks, chargeable and billable flags</td><td>the Task picker; billability of the entry</td></tr>
+          <tr><td>3</td><td>Expenditure type; expenditure organization from the assignment</td><td>completes POET so the cost can be posted at all</td></tr>
+          <tr><td>4</td><td>Allocation percentage and dates</td><td>the multiplier for prepopulation; the &ldquo;My allocation&rdquo; panel; whose time a manager sees</td></tr>
+          <tr><td>5</td><td>Rate schedule</td><td>valuing hours for the accrual figure &mdash; not sent to Costing</td></tr>
+          <tr><td>6</td><td>Work schedule and shift pattern</td><td>the Shift row; standard hours per day, which every seeded figure depends on</td></tr>
+          <tr><td>7</td><td>Calendar by location, calendar events</td><td>which days are non-working, per person &mdash; a holiday in one location is a working day in another</td></tr>
+          <tr><td>8</td><td>Absence for that person, those dates</td><td>read-only leave rows; the trigger for leave-loss on FCP</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="why">Then: <strong>prepopulate</strong> (standard hours &times; allocation
+    percentage, quarter-rounded, one line on the first chargeable task) &rarr;
+    <strong>employee edits</strong>, with the resolved POET written onto each entry &rarr;
+    <strong>validate</strong> in the database &rarr; the week enters the lifecycle below at
+    <em>Not yet submitted</em>.</p>
+
+    <h3>7.2 Week status &mdash; every transition</h3>
+    <p>Six statuses, one at a time. Flags accumulate separately and are shown in the last
+    column.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>From</th><th>Event</th><th>To</th><th>Flag effect</th></tr></thead>
+        <tbody>
+          <tr><td>Not yet submitted</td><td>Employee submits</td><td><strong>Submitted</strong></td><td>+ <em>Late submission</em> if after the weekly cut-off</td></tr>
+          <tr><td>Not yet submitted</td><td><strong>Weekly cut-off job</strong> &mdash; never submitted</td><td><strong>Defaulted</strong></td><td>+ <em>Defaulted</em>, <code>DEFAULTED_BY = EMPLOYEE</code>; <strong>locks the week</strong>; holds salary</td></tr>
+          <tr><td>Submitted</td><td>Manager approves</td><td><strong>Approved</strong></td><td>&mdash;</td></tr>
+          <tr><td>Submitted</td><td>Manager rejects &mdash; reason mandatory</td><td><strong>Rejected</strong></td><td>&mdash;</td></tr>
+          <tr><td>Submitted</td><td>Employee revokes their own submission</td><td><strong>Not yet submitted</strong></td><td><em>Late submission</em> retained &mdash; it did happen</td></tr>
+          <tr><td>Submitted</td><td>Manager overrides the hours and approves</td><td><strong>Overridden and approved</strong></td><td>+ <em>Overridden &amp; approved</em>; original value kept in the audit trail</td></tr>
+          <tr><td>Submitted</td><td><strong>Delivery cut-off job</strong> &mdash; manager never decided</td><td><strong>Defaulted</strong></td><td>+ <em>Defaulted</em>, <code>DEFAULTED_BY = MANAGER</code>; <strong>no lock</strong>; never holds salary</td></tr>
+          <tr><td>Rejected</td><td>Employee corrects and resubmits</td><td><strong>Submitted</strong></td><td>day statuses reset to Pending; + <em>Late submission</em> if now past the cut-off</td></tr>
+          <tr><td>Defaulted</td><td>Manager approves</td><td><strong>Approved</strong></td><td><em>Defaulted</em> flag <strong>kept</strong> &mdash; it happened</td></tr>
+          <tr><td>Approved</td><td>Manager undoes the decision</td><td><strong>Submitted</strong></td><td>&mdash;</td></tr>
+          <tr><td>Rejected</td><td>Manager undoes the decision</td><td><strong>Submitted</strong></td><td>&mdash;</td></tr>
+          <tr><td>Approved <em>or</em> Overridden and approved</td><td>Month confirmed &mdash; RULE-020, every week approved</td><td>week status <strong>unchanged</strong>; the month is recorded in <code>OC_TS_MONTH_CONFIRM</code></td><td>+ <em>Advance closure</em> if closed ahead of the cut-off</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note">
+      <strong>Two transitions are easy to miss and both matter.</strong>
+      <em>Rejected &rarr; Submitted</em> is the correct-and-resubmit loop, and it resets
+      every day to Pending &mdash; without that reset the manager could not act on the
+      week again. <em>Approved &rarr; Submitted</em> is a manager undoing their own
+      decision; it deliberately returns to <em>Submitted</em> and never to <em>Not yet
+      submitted</em>, because the employee did submit and must not be made to send it
+      again.
+    </div>
+
+    <h3>7.3 Day status</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>From</th><th>Event</th><th>To</th></tr></thead>
+        <tbody>
+          <tr><td>Pending</td><td>Manager approves the day</td><td><strong>Approved</strong> &mdash; when every day is approved the week closes to Approved</td></tr>
+          <tr><td>Pending</td><td>Manager rejects the day</td><td><strong>Rejected</strong> &mdash; any rejected day puts the whole week back with the employee</td></tr>
+          <tr><td>Approved <em>or</em> Rejected</td><td>Manager undoes the decision</td><td><strong>Pending</strong> &mdash; the week status is then recomputed from the days that remain</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>7.4 Outbound &mdash; order and grain</h3>
+    <p>Month confirmation is the single trigger. The two live destinations take different
+    grains, and the accrual pair has an order that is not optional.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>#</th><th>Destination</th><th>Grain</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>1</td>
+            <td><strong>Project Costing</strong><br /><code>POST unprocessedProjectCosts</code></td>
+            <td>one row per <strong>approved entry</strong></td>
+            <td>POET in the flexfield block; our entry id as <code>OriginalTransactionReference</code>, which is the idempotency key. <code>IS_LEAVE = 'Y'</code> excluded. Fusion&rsquo;s <em>Import Costs</em> then converts them.</td>
+          </tr>
+          <tr>
+            <td>2</td>
+            <td><strong>Accrual &mdash; summary</strong></td>
+            <td>one row per <strong>employee &times; project-month</strong></td>
+            <td>Billable, non-billable and leave hours. <code>PUSH_STATE</code> is READY or BLOCKED &mdash; a month that cannot be handed over is returned rather than filtered out, so it is visible instead of missing.</td>
+          </tr>
+          <tr>
+            <td>3</td>
+            <td><strong>Accrual &mdash; timesheet lines</strong></td>
+            <td>the <strong>day rows</strong> for one employee</td>
+            <td><strong>Must follow the summary</strong>, because the lines attach to the id it returns. Built and deliberately dormant &mdash; nothing is written to the main application yet.</td>
+          </tr>
+          <tr>
+            <td>&mdash;</td>
+            <td>OTL push</td>
+            <td>&mdash;</td>
+            <td><strong>On hold</strong>, nothing sent. Costing does not route through OTL, so time still reaches Project Costing while the independence decision is open.</td>
+          </tr>
+          <tr>
+            <td>&mdash;</td>
+            <td>Payroll</td>
+            <td>&mdash;</td>
+            <td><strong>Out of scope.</strong></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="why">A <em>Defaulted</em> week currently blocks confirmation, because
+    RULE-020 requires every week to be approved. Advance closure is the stated exception
+    &mdash; open item 11.</p>
 
     <hr />
     <p class="why" style="font-size:0.8rem">
