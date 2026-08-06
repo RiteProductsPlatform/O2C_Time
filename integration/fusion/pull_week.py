@@ -25,10 +25,17 @@ were wrong, so they are recorded:
   * projectResourceAssignmentDetails     404
   * personAssignmentLaborSchedules       403 - not entitled for this account
 
-  Task-level resource assignment IS reachable, but only as a child of the task
-  and only through the href Fusion returns:
-      projects/{id}/child/Tasks -> links[name=LaborResourceAssignments].href
-  Constructing that path by hand returns 404. Follow the link.
+  Task-level resource assignment is NOT on the task. projects/{id}/child/Tasks
+  /{tid}/child/LaborResourceAssignments answers 200 with count 0 even when the
+  Manage Financial Project Plan screen plainly shows resources on that task, and
+  TaskQuantity comes back null even when the screen shows planned hours. The
+  financial project resource and the financial PLAN are different subject areas.
+
+  It lives here:
+      financialProjectPlans?q=ProjectId={id}
+        -> links[name=ResourceAssignments].href
+  which returns TaskId, TaskNumber, TaskName, ResourceName, PlanningStartDate
+  and PlanningFinishDate - the rows the Manage Resources dialog shows.
 
 Read-only. GET only. Credentials come from integration/bip/.env and are never
 printed or logged.
@@ -194,24 +201,35 @@ def main():
     # neither, so they drop out here too.
     print('TASKS   * = selectable on a timesheet (billable AND chargeable)')
     st, tasks = fx.items(FSCM + '/projects/%s/child/Tasks' % pid, {'limit': 200})
+
+    # Task-level assignment comes from the PLAN, not the task. One call for the
+    # whole project rather than one per task - the task child is always empty.
+    plan_by_task = {}
+    _, plans = fx.items(FSCM + '/financialProjectPlans',
+                        {'q': 'ProjectId=%s' % pid, 'limit': 5})
+    for pl in plans:
+        href = child_href(pl, 'ResourceAssignments')
+        if not href:
+            continue
+        _, ras = fx.items(href, {'limit': 500})
+        for r in ras:
+            plan_by_task.setdefault(str(r.get('TaskId')), []).append(r)
+
     chargeable = []
     task_assign = 0
     for t in tasks:
         ch = bool(t.get('ChargeableFlag')) and bool(t.get('BillableFlag'))
         if ch:
             chargeable.append(t)
-        href = child_href(t, 'LaborResourceAssignments')
-        assigns = []
-        if href:
-            _, assigns = fx.items(href, {'limit': 50})
-            task_assign += len(assigns)
+        assigns = plan_by_task.get(str(t.get('TaskId')), [])
+        task_assign += len(assigns)
         print('  %s %-9s %-28s chargeable=%-5s billable=%-5s assigned=%d' % (
             '*' if ch else ' ', t.get('TaskNumber'), str(t.get('TaskName'))[:28],
             bool(t.get('ChargeableFlag')), bool(t.get('BillableFlag')), len(assigns)))
         for x in assigns:
-            print('           -> %s  %s' % (
-                x.get('ResourceName') or x.get('PersonName') or x.get('ResourceId'),
-                x.get('PlannedEffort') or ''))
+            print('             -> %-24s %s .. %s  %s' % (
+                x.get('ResourceName'), str(x.get('PlanningStartDate'))[:10],
+                str(x.get('PlanningFinishDate'))[:10], x.get('UnitOfMeasure') or ''))
 
     # 4 ── POET ------------------------------------------------------------
     line()
