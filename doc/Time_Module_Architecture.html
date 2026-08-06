@@ -269,84 +269,61 @@ flowchart TD
   </div>
   <div class="dgm">
     <div class="dgm-head"><span class="dgm-n">Actors</span><span class="dgm-t">Who does what, and which flag it raises</span></div>
-    <p class="dgm-sub">The same lifecycle seen by actor rather than by state &mdash; employee,
-    manager, the cut-off jobs that act with no actor at all, and the retro-adjustment path
-    after a month has closed. Every action carries the flag it raises, so the question
-    &ldquo;where does this flag come from&rdquo; is answered on the chart.</p>
+    <p class="dgm-sub">The lifecycle by actor rather than by state. Statuses sit on the arrows, flags in brackets, and <strong>Defaulted has an origin on both sides</strong> &mdash; the employee who never submitted, and the submitted week nobody decided, which is exactly the distinction <code>DEFAULTED_BY</code> records. The two thick arrows are the normal run and both are flagless. <em>Reversal</em> and <em>Adjustment</em> are not here: they are derived from the entries after a month closes, not raised by any action on this chart &mdash; see &sect;8 of the scope document.</p>
     <div class="diagram" id="pane-actors" data-name="Time_Module_actors">
 <pre class="mermaid">
 flowchart TD
 
-  subgraph EMP["EMPLOYEE / CONTRACTOR"]
-    direction TB
-    E(["Employee / Contractor"])
-    SAVE(["Save&lt;br/&gt;&lt;small&gt;draft &middot; no flag&lt;/small&gt;"])
-    SUB(["Submit&lt;br/&gt;&lt;small&gt;+ Late submission if past cut-off&lt;/small&gt;"])
-    WD1(["WithDraw&lt;br/&gt;&lt;small&gt;+ Revoked&lt;/small&gt;"])
-    E --> SAVE
-    E --> SUB
-    SUB --> WD1
-    WD1 --> E
-  end
+  EMP["Employee / Contractor"]
+  SAVE(["Save"])
+  SUB(["Submit"])
+  WD1(["WithDraw"])
 
-  subgraph MGR["MANAGER"]
-    direction TB
-    M(["Manager"])
-    APR(["Approved&lt;br/&gt;&lt;small&gt;no flag&lt;/small&gt;"])
-    COR(["Correct&lt;br/&gt;&lt;small&gt;+ Overridden&lt;br/&gt;original kept in audit&lt;/small&gt;"])
-    REJ(["Reject&lt;br/&gt;&lt;small&gt;reason required&lt;/small&gt;"])
-    WD2(["WithDraw&lt;br/&gt;&lt;small&gt;undo the decision&lt;br/&gt;+ Revoked&lt;/small&gt;"])
-    M --> APR
-    M --> COR
-    M --> REJ
-    COR --> APR
-    APR --> WD2
-    WD2 --> M
-  end
+  DEF(["Defaulted&lt;br/&gt;( + Defaulted )&lt;br/&gt;EMPLOYEE missed it = LOCKED&lt;br/&gt;MANAGER missed it = not locked"])
 
-  subgraph AUTO["NO ACTOR - the cut-off jobs"]
-    direction TB
-    CUT1(["Weekly cut-off&lt;br/&gt;&lt;small&gt;nobody submitted&lt;br/&gt;+ Defaulted / EMPLOYEE &middot; LOCKS&lt;/small&gt;"])
-    CUT2(["Delivery cut-off&lt;br/&gt;&lt;small&gt;nobody decided&lt;br/&gt;+ Defaulted / MANAGER &middot; no lock&lt;/small&gt;"])
-    ADV(["Advance closure&lt;br/&gt;&lt;small&gt;+ Advance closure&lt;/small&gt;"])
-  end
+  MGR["Manager"]
+  WD2(["WithDraw"])
+  APR(["Approve"])
+  COR(["Correct"])
+  REJ(["Reject"])
 
-  subgraph RETRO["AFTER THE MONTH IS CLOSED"]
-    direction TB
-    ADJ(["Retro adjustment&lt;br/&gt;&lt;small&gt;RULE-019 window&lt;/small&gt;"])
-    RV(["Reversal (-) on the original day&lt;br/&gt;&lt;small&gt;+ Reversal - DERIVED&lt;/small&gt;"])
-    AJ(["Adjustment (+) on the original day&lt;br/&gt;&lt;small&gt;+ Adjustment - DERIVED&lt;/small&gt;"])
-    ADJ --> RV
-    ADJ --> AJ
-  end
+  DONE(["Approved"])
 
-  OUT{"Accrual staging&lt;br/&gt;&lt;small&gt;no approval needed&lt;/small&gt;"}
-  COST{"Project Costing&lt;br/&gt;&lt;small&gt;approved only&lt;/small&gt;"}
+  EMP -->|"Not yet submitted"| SAVE
+  EMP -->|"Not yet submitted&lt;br/&gt;or Rejected"| SUB
+  WD1 -->|"Not yet submitted&lt;br/&gt;( + Revoked )"| EMP
 
-  SUB --> M
-  REJ --> E
-  CUT1 --> M
-  CUT2 --> APR
-  ADV --> APR
-  APR --> OUT
-  APR --> COST
-  RV --> OUT
-  AJ --> OUT
+  SUB ==>|"Submitted&lt;br/&gt;( + Late submission&lt;br/&gt;only if past cut-off )"| MGR
+  SUB -->|"Submitted"| WD1
+  EMP -->|"Not yet submitted&lt;br/&gt;weekly cut-off missed"| DEF
+  SUB -->|"Submitted&lt;br/&gt;delivery cut-off missed"| DEF
+  DEF -->|"Defaulted"| MGR
 
-  classDef act  fill:#ffffff,stroke:#555,color:#222;
-  classDef blue fill:#2f6fdb,stroke:#1f4e9c,color:#ffffff;
-  classDef grn  fill:#4aa74a,stroke:#2f7a2f,color:#ffffff;
-  classDef wht  fill:#ffffff,stroke:#555,color:#222;
-  classDef red  fill:#f8d7da,stroke:#b3352c,color:#7a2018;
-  classDef auto fill:#fdf6e9,stroke:#d9a53c,color:#7a5a12;
-  classDef gate fill:#fff4e6,stroke:#e08e0b,color:#7a4a00;
-  class E,M act;
+  MGR -->|"Submitted or Defaulted"| APR
+  MGR -->|"Submitted or Defaulted"| COR
+  MGR -->|"Submitted or Defaulted"| REJ
+
+  APR ==>|"Approved"| DONE
+  COR -->|"Approved&lt;br/&gt;( + Overridden )"| DONE
+  REJ -->|"Rejected"| EMP
+  DONE -->|"Approved"| WD2
+  WD2 -->|"Submitted&lt;br/&gt;( + Revoked )"| MGR
+
+  classDef actor fill:#c8791a,stroke:#8a5210,color:#ffffff,font-weight:bold;
+  classDef mgr   fill:#7a6410,stroke:#54460b,color:#ffffff,font-weight:bold;
+  classDef blue  fill:#5aa9e6,stroke:#2f7cb8,color:#ffffff;
+  classDef grn   fill:#4aa74a,stroke:#2f7a2f,color:#ffffff;
+  classDef pur   fill:#5d4a6b,stroke:#3e3147,color:#ffffff;
+  classDef red   fill:#8b4a4a,stroke:#5f3131,color:#ffffff;
+  classDef auto  fill:#c9922e,stroke:#8a621a,color:#ffffff,font-weight:bold;
+
+  class EMP actor;
+  class MGR mgr;
   class SAVE,WD1,WD2 blue;
-  class SUB,APR,AJ grn;
-  class COR wht;
-  class REJ,RV red;
-  class CUT1,CUT2,ADV,ADJ auto;
-  class OUT,COST gate;
+  class SUB,APR,DONE grn;
+  class COR pur;
+  class REJ red;
+  class DEF auto;
 </pre>
     </div>
   </div>
@@ -541,76 +518,56 @@ flowchart TD
     <p style="font-family:var(--mono);font-size:0.75rem;color:var(--accent);margin:1rem 0 0.25rem">Actors &mdash; who does what, and which flag it raises</p>
     <pre class="source">flowchart TD
 
-  subgraph EMP["EMPLOYEE / CONTRACTOR"]
-    direction TB
-    E(["Employee / Contractor"])
-    SAVE(["Save&lt;br/&gt;&lt;small&gt;draft &middot; no flag&lt;/small&gt;"])
-    SUB(["Submit&lt;br/&gt;&lt;small&gt;+ Late submission if past cut-off&lt;/small&gt;"])
-    WD1(["WithDraw&lt;br/&gt;&lt;small&gt;+ Revoked&lt;/small&gt;"])
-    E --> SAVE
-    E --> SUB
-    SUB --> WD1
-    WD1 --> E
-  end
+  EMP["Employee / Contractor"]
+  SAVE(["Save"])
+  SUB(["Submit"])
+  WD1(["WithDraw"])
 
-  subgraph MGR["MANAGER"]
-    direction TB
-    M(["Manager"])
-    APR(["Approved&lt;br/&gt;&lt;small&gt;no flag&lt;/small&gt;"])
-    COR(["Correct&lt;br/&gt;&lt;small&gt;+ Overridden&lt;br/&gt;original kept in audit&lt;/small&gt;"])
-    REJ(["Reject&lt;br/&gt;&lt;small&gt;reason required&lt;/small&gt;"])
-    WD2(["WithDraw&lt;br/&gt;&lt;small&gt;undo the decision&lt;br/&gt;+ Revoked&lt;/small&gt;"])
-    M --> APR
-    M --> COR
-    M --> REJ
-    COR --> APR
-    APR --> WD2
-    WD2 --> M
-  end
+  DEF(["Defaulted&lt;br/&gt;( + Defaulted )&lt;br/&gt;EMPLOYEE missed it = LOCKED&lt;br/&gt;MANAGER missed it = not locked"])
 
-  subgraph AUTO["NO ACTOR - the cut-off jobs"]
-    direction TB
-    CUT1(["Weekly cut-off&lt;br/&gt;&lt;small&gt;nobody submitted&lt;br/&gt;+ Defaulted / EMPLOYEE &middot; LOCKS&lt;/small&gt;"])
-    CUT2(["Delivery cut-off&lt;br/&gt;&lt;small&gt;nobody decided&lt;br/&gt;+ Defaulted / MANAGER &middot; no lock&lt;/small&gt;"])
-    ADV(["Advance closure&lt;br/&gt;&lt;small&gt;+ Advance closure&lt;/small&gt;"])
-  end
+  MGR["Manager"]
+  WD2(["WithDraw"])
+  APR(["Approve"])
+  COR(["Correct"])
+  REJ(["Reject"])
 
-  subgraph RETRO["AFTER THE MONTH IS CLOSED"]
-    direction TB
-    ADJ(["Retro adjustment&lt;br/&gt;&lt;small&gt;RULE-019 window&lt;/small&gt;"])
-    RV(["Reversal (-) on the original day&lt;br/&gt;&lt;small&gt;+ Reversal - DERIVED&lt;/small&gt;"])
-    AJ(["Adjustment (+) on the original day&lt;br/&gt;&lt;small&gt;+ Adjustment - DERIVED&lt;/small&gt;"])
-    ADJ --> RV
-    ADJ --> AJ
-  end
+  DONE(["Approved"])
 
-  OUT{"Accrual staging&lt;br/&gt;&lt;small&gt;no approval needed&lt;/small&gt;"}
-  COST{"Project Costing&lt;br/&gt;&lt;small&gt;approved only&lt;/small&gt;"}
+  EMP -->|"Not yet submitted"| SAVE
+  EMP -->|"Not yet submitted&lt;br/&gt;or Rejected"| SUB
+  WD1 -->|"Not yet submitted&lt;br/&gt;( + Revoked )"| EMP
 
-  SUB --> M
-  REJ --> E
-  CUT1 --> M
-  CUT2 --> APR
-  ADV --> APR
-  APR --> OUT
-  APR --> COST
-  RV --> OUT
-  AJ --> OUT
+  SUB ==>|"Submitted&lt;br/&gt;( + Late submission&lt;br/&gt;only if past cut-off )"| MGR
+  SUB -->|"Submitted"| WD1
+  EMP -->|"Not yet submitted&lt;br/&gt;weekly cut-off missed"| DEF
+  SUB -->|"Submitted&lt;br/&gt;delivery cut-off missed"| DEF
+  DEF -->|"Defaulted"| MGR
 
-  classDef act  fill:#ffffff,stroke:#555,color:#222;
-  classDef blue fill:#2f6fdb,stroke:#1f4e9c,color:#ffffff;
-  classDef grn  fill:#4aa74a,stroke:#2f7a2f,color:#ffffff;
-  classDef wht  fill:#ffffff,stroke:#555,color:#222;
-  classDef red  fill:#f8d7da,stroke:#b3352c,color:#7a2018;
-  classDef auto fill:#fdf6e9,stroke:#d9a53c,color:#7a5a12;
-  classDef gate fill:#fff4e6,stroke:#e08e0b,color:#7a4a00;
-  class E,M act;
+  MGR -->|"Submitted or Defaulted"| APR
+  MGR -->|"Submitted or Defaulted"| COR
+  MGR -->|"Submitted or Defaulted"| REJ
+
+  APR ==>|"Approved"| DONE
+  COR -->|"Approved&lt;br/&gt;( + Overridden )"| DONE
+  REJ -->|"Rejected"| EMP
+  DONE -->|"Approved"| WD2
+  WD2 -->|"Submitted&lt;br/&gt;( + Revoked )"| MGR
+
+  classDef actor fill:#c8791a,stroke:#8a5210,color:#ffffff,font-weight:bold;
+  classDef mgr   fill:#7a6410,stroke:#54460b,color:#ffffff,font-weight:bold;
+  classDef blue  fill:#5aa9e6,stroke:#2f7cb8,color:#ffffff;
+  classDef grn   fill:#4aa74a,stroke:#2f7a2f,color:#ffffff;
+  classDef pur   fill:#5d4a6b,stroke:#3e3147,color:#ffffff;
+  classDef red   fill:#8b4a4a,stroke:#5f3131,color:#ffffff;
+  classDef auto  fill:#c9922e,stroke:#8a621a,color:#ffffff,font-weight:bold;
+
+  class EMP actor;
+  class MGR mgr;
   class SAVE,WD1,WD2 blue;
-  class SUB,APR,AJ grn;
-  class COR wht;
-  class REJ,RV red;
-  class CUT1,CUT2,ADV,ADJ auto;
-  class OUT,COST gate;</pre>
+  class SUB,APR,DONE grn;
+  class COR pur;
+  class REJ red;
+  class DEF auto;</pre>
     <p style="font-family:var(--mono);font-size:0.75rem;color:var(--accent);margin:1rem 0 0.25rem">Lifecycle &mdash; Status only - week, day, month</p>
     <pre class="source">flowchart TD
 
