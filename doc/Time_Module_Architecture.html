@@ -279,24 +279,22 @@ flowchart TD
   REJ(["Rejected"])
   DEF(["Defaulted"])
   APP(["Approved"])
-  OVR(["Overridden and approved"])
   CONF{"Confirmed&lt;br/&gt;an event, not a status"}
 
   NYS -->|"submit&lt;br/&gt;+ Late submission if past the cut-off"| SUB
   NYS -->|"cut-off missed, hours filled in&lt;br/&gt;+ Defaulted &middot; locks further edits"| DEF
   SUB -->|"approve"| APP
   SUB -->|"reject - reason required"| REJ
-  SUB -->|"revoke"| NYS
-  SUB -->|"override the hours and approve&lt;br/&gt;+ Overridden"| OVR
+  SUB -->|"revoke&lt;br/&gt;+ Revoked"| NYS
+  SUB -->|"override the hours and approve&lt;br/&gt;+ Overridden - a FLAG, not a state"| APP
   SUB -->|"approver missed the cut-off&lt;br/&gt;+ Defaulted &middot; no lock"| DEF
   REJ -->|"correct and resubmit"| SUB
   DEF -->|"approve&lt;br/&gt;Defaulted flag kept"| APP
-  APP -->|"undo the decision"| SUB
-  REJ -->|"undo the decision"| SUB
+  APP -->|"undo the decision&lt;br/&gt;+ Revoked"| SUB
+  REJ -->|"undo the decision&lt;br/&gt;+ Revoked"| SUB
   APP -->|"all approved&lt;br/&gt;+ Advance closure if closed early"| CONF
-  OVR --> CONF
 
-  F["The two remaining flags are DERIVED, not raised by a transition&lt;br/&gt;Reversal - a negative entry exists&lt;br/&gt;Adjustment - a retro adjustment entry exists"]
+  F["FIVE statuses. Overridden is a FLAG, never a state.&lt;br/&gt;Two flags are DERIVED, not raised by a transition:&lt;br/&gt;Reversal - a negative entry exists&lt;br/&gt;Adjustment - a retro adjustment entry exists"]
 
   classDef open fill:#eef0f6,stroke:#6b74a8,color:#2c3266;
   classDef good fill:#e9f9ee,stroke:#2e9e5b,color:#0d5a2e;
@@ -304,7 +302,7 @@ flowchart TD
   classDef gate fill:#fff4e6,stroke:#e08e0b,color:#7a4a00;
   classDef note fill:#fdf6e9,stroke:#d9a53c,color:#7a5a12;
   class NYS,SUB open;
-  class APP,OVR good;
+  class APP good;
   class REJ,DEF bad;
   class CONF gate;
   class F note;
@@ -378,11 +376,11 @@ flowchart TD
 <pre class="mermaid">
 flowchart TD
 
-  CONF{"MONTH CONFIRMED&lt;br/&gt;OC_TS_MONTH_CONFIRM&lt;br/&gt;Normal / Advance closure / Reopened"}
+  CONF{"MONTH CONFIRMED&lt;br/&gt;OC_TS_MONTH_CONFIRM&lt;br/&gt;Normal / Advance closure / Reopened&lt;br/&gt;(trigger for the accrual write is open - item 23)"}
 
   subgraph COST["PROJECT COSTING - live"]
     direction TB
-    C1["POST unprocessedProjectCosts&lt;br/&gt;ONE ROW PER APPROVED ENTRY&lt;br/&gt;IS_LEAVE = Y excluded"]
+    C1["POST unprocessedProjectCosts&lt;br/&gt;ONE ROW PER APPROVED ENTRY&lt;br/&gt;approval IS required here - a cost is&lt;br/&gt;a financial fact, an accrual is an estimate&lt;br/&gt;IS_LEAVE = Y excluded"]
     C2["POET in ProjectStandardCostCollectionFlexfields&lt;br/&gt;_PROJECT_ID &middot; _TASK_ID&lt;br/&gt;_EXPENDITURE_TYPE_ID &middot; _ORGANIZATION_ID&lt;br/&gt;_EXPENDITURE_ITEM_DATE"]
     C3["OriginalTransactionReference = our entry id&lt;br/&gt;the idempotency key"]
     C4["Import Costs - ESS, in Fusion&lt;br/&gt;unprocessed becomes project cost"]
@@ -392,7 +390,7 @@ flowchart TD
 
   subgraph ACC["ACCRUAL - staged in OUR schema, accrual PULLS"]
     direction TB
-    S1["STAGING TABLE - our schema&lt;br/&gt;filled on month confirm&lt;br/&gt;1 summary&lt;br/&gt;2 complete timesheet, employee-wise&lt;br/&gt;3 adjustments if any"]
+    S1["STAGING TABLE - our schema&lt;br/&gt;1 summary&lt;br/&gt;2 complete timesheet, employee-wise&lt;br/&gt;3 adjustments if any&lt;br/&gt;&lt;br/&gt;NO MANAGER APPROVAL NEEDED - an accrual&lt;br/&gt;covers work done, approved or not.&lt;br/&gt;The row carries the status so accrual can true up."]
     S2["ACCRUAL MODULE READS IT&lt;br/&gt;we never write into accrual's tables&lt;br/&gt;structure WIP, defined on the accrual side"]
     S1 -->|"pull, not push"| S2
   end
@@ -410,23 +408,15 @@ flowchart TD
   CONF -.->|"never"| X2
   CONF -.->|"never"| X3
 
-  T1["OTL_STATUS"]
-  T2["ACCRUAL_STATUS"]
-  T3["PARTNER_STATUS"]
-  C5 --> T1
-  S1 --> T2
-  S2 --> T3
 
   classDef gate fill:#fff4e6,stroke:#e08e0b,color:#7a4a00;
   classDef good fill:#e9f9ee,stroke:#2e9e5b,color:#0d5a2e;
   classDef xout fill:#f3f4f5,stroke:#9aa2ab,color:#6b727a,stroke-dasharray:4 3;
-  classDef trk  fill:#eef0f6,stroke:#6b74a8,color:#2c3266;
   class CONF gate;
   classDef note fill:#fdf6e9,stroke:#d9a53c,color:#7a5a12;
   class NOTE note;
   class C1,C2,C3,C4,C5,S1,S2 good;
   class X1,X2,X3 xout;
-  class T1,T2,T3 trk;
 </pre>
     </div>
   </div>
@@ -472,24 +462,22 @@ flowchart TD
   REJ(["Rejected"])
   DEF(["Defaulted"])
   APP(["Approved"])
-  OVR(["Overridden and approved"])
   CONF{"Confirmed&lt;br/&gt;an event, not a status"}
 
   NYS -->|"submit&lt;br/&gt;+ Late submission if past the cut-off"| SUB
   NYS -->|"cut-off missed, hours filled in&lt;br/&gt;+ Defaulted &middot; locks further edits"| DEF
   SUB -->|"approve"| APP
   SUB -->|"reject - reason required"| REJ
-  SUB -->|"revoke"| NYS
-  SUB -->|"override the hours and approve&lt;br/&gt;+ Overridden"| OVR
+  SUB -->|"revoke&lt;br/&gt;+ Revoked"| NYS
+  SUB -->|"override the hours and approve&lt;br/&gt;+ Overridden - a FLAG, not a state"| APP
   SUB -->|"approver missed the cut-off&lt;br/&gt;+ Defaulted &middot; no lock"| DEF
   REJ -->|"correct and resubmit"| SUB
   DEF -->|"approve&lt;br/&gt;Defaulted flag kept"| APP
-  APP -->|"undo the decision"| SUB
-  REJ -->|"undo the decision"| SUB
+  APP -->|"undo the decision&lt;br/&gt;+ Revoked"| SUB
+  REJ -->|"undo the decision&lt;br/&gt;+ Revoked"| SUB
   APP -->|"all approved&lt;br/&gt;+ Advance closure if closed early"| CONF
-  OVR --> CONF
 
-  F["The two remaining flags are DERIVED, not raised by a transition&lt;br/&gt;Reversal - a negative entry exists&lt;br/&gt;Adjustment - a retro adjustment entry exists"]
+  F["FIVE statuses. Overridden is a FLAG, never a state.&lt;br/&gt;Two flags are DERIVED, not raised by a transition:&lt;br/&gt;Reversal - a negative entry exists&lt;br/&gt;Adjustment - a retro adjustment entry exists"]
 
   classDef open fill:#eef0f6,stroke:#6b74a8,color:#2c3266;
   classDef good fill:#e9f9ee,stroke:#2e9e5b,color:#0d5a2e;
@@ -497,18 +485,18 @@ flowchart TD
   classDef gate fill:#fff4e6,stroke:#e08e0b,color:#7a4a00;
   classDef note fill:#fdf6e9,stroke:#d9a53c,color:#7a5a12;
   class NYS,SUB open;
-  class APP,OVR good;
+  class APP good;
   class REJ,DEF bad;
   class CONF gate;
   class F note;</pre>
     <p style="font-family:var(--mono);font-size:0.75rem;color:var(--accent);margin:1rem 0 0.25rem">Flow 2 &mdash; Outbound integration</p>
     <pre class="source">flowchart TD
 
-  CONF{"MONTH CONFIRMED&lt;br/&gt;OC_TS_MONTH_CONFIRM&lt;br/&gt;Normal / Advance closure / Reopened"}
+  CONF{"MONTH CONFIRMED&lt;br/&gt;OC_TS_MONTH_CONFIRM&lt;br/&gt;Normal / Advance closure / Reopened&lt;br/&gt;(trigger for the accrual write is open - item 23)"}
 
   subgraph COST["PROJECT COSTING - live"]
     direction TB
-    C1["POST unprocessedProjectCosts&lt;br/&gt;ONE ROW PER APPROVED ENTRY&lt;br/&gt;IS_LEAVE = Y excluded"]
+    C1["POST unprocessedProjectCosts&lt;br/&gt;ONE ROW PER APPROVED ENTRY&lt;br/&gt;approval IS required here - a cost is&lt;br/&gt;a financial fact, an accrual is an estimate&lt;br/&gt;IS_LEAVE = Y excluded"]
     C2["POET in ProjectStandardCostCollectionFlexfields&lt;br/&gt;_PROJECT_ID &middot; _TASK_ID&lt;br/&gt;_EXPENDITURE_TYPE_ID &middot; _ORGANIZATION_ID&lt;br/&gt;_EXPENDITURE_ITEM_DATE"]
     C3["OriginalTransactionReference = our entry id&lt;br/&gt;the idempotency key"]
     C4["Import Costs - ESS, in Fusion&lt;br/&gt;unprocessed becomes project cost"]
@@ -518,7 +506,7 @@ flowchart TD
 
   subgraph ACC["ACCRUAL - staged in OUR schema, accrual PULLS"]
     direction TB
-    S1["STAGING TABLE - our schema&lt;br/&gt;filled on month confirm&lt;br/&gt;1 summary&lt;br/&gt;2 complete timesheet, employee-wise&lt;br/&gt;3 adjustments if any"]
+    S1["STAGING TABLE - our schema&lt;br/&gt;1 summary&lt;br/&gt;2 complete timesheet, employee-wise&lt;br/&gt;3 adjustments if any&lt;br/&gt;&lt;br/&gt;NO MANAGER APPROVAL NEEDED - an accrual&lt;br/&gt;covers work done, approved or not.&lt;br/&gt;The row carries the status so accrual can true up."]
     S2["ACCRUAL MODULE READS IT&lt;br/&gt;we never write into accrual's tables&lt;br/&gt;structure WIP, defined on the accrual side"]
     S1 -->|"pull, not push"| S2
   end
@@ -536,23 +524,15 @@ flowchart TD
   CONF -.->|"never"| X2
   CONF -.->|"never"| X3
 
-  T1["OTL_STATUS"]
-  T2["ACCRUAL_STATUS"]
-  T3["PARTNER_STATUS"]
-  C5 --> T1
-  S1 --> T2
-  S2 --> T3
 
   classDef gate fill:#fff4e6,stroke:#e08e0b,color:#7a4a00;
   classDef good fill:#e9f9ee,stroke:#2e9e5b,color:#0d5a2e;
   classDef xout fill:#f3f4f5,stroke:#9aa2ab,color:#6b727a,stroke-dasharray:4 3;
-  classDef trk  fill:#eef0f6,stroke:#6b74a8,color:#2c3266;
   class CONF gate;
   classDef note fill:#fdf6e9,stroke:#d9a53c,color:#7a5a12;
   class NOTE note;
   class C1,C2,C3,C4,C5,S1,S2 good;
-  class X1,X2,X3 xout;
-  class T1,T2,T3 trk;</pre>
+  class X1,X2,X3 xout;</pre>
   </details>
 
 </div>

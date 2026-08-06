@@ -8,6 +8,14 @@
 > `OC_TS_MONTH_CONFIRM`, not a status), and **salary hold is out of scope for now**.
 > Status and flags are now shown in a single diagram.
 >
+>
+> **Further, 06-Aug-2026.** The set is now **five** statuses, not six —
+> *Overridden and approved* has been dropped: an override changes the hours, the
+> outcome is still *Approved*, and that it was overridden is recorded by the flag.
+> A **`Revoked`** flag has been added for a withdrawn submission or an undone
+> decision. And **writing to the accrual staging table no longer requires manager
+> approval** — an accrual covers work done, approved or not; the Project Costing
+> post still requires it.
 > Current model: **`doc/O2C_Time_Scope_and_Integration.html`** §3.2, §3.3 and §7,
 > or its Word copy. This file is kept for the reasoning behind the earlier revision.
 
