@@ -1,0 +1,497 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>O2C Time Module &mdash; Scenarios, statuses and flags</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  body, h1, h2, h3, h4, p, figure, table, pre, ul, ol { margin: 0; }
+
+  :root {
+    --bg: #f5f7f9;
+    --surface: #ffffff;
+    --ink: #1a2531;
+    --ink-soft: #55657a;
+    --ink-faint: #7d8b9c;
+    --rule: #dde3ea;
+    --rule-soft: #eaeef3;
+    --accent: #a85f13;
+    --in: #1f7a4d;
+    --in-bg: #e9f9ee;
+    --out: #8a2f23;
+    --out-bg: #fdecef;
+    --note-bg: #fdf6e9;
+    --note-rule: #d9a53c;
+    --sans: "Segoe UI Variable Text", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    --mono: "Cascadia Mono", Consolas, ui-monospace, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0e141a; --surface: #161e26; --ink: #e4eaf0; --ink-soft: #94a2b1;
+      --ink-faint: #7a879a; --rule: #26313d; --rule-soft: #1e2731; --accent: #dd9440;
+      --in: #4cba85; --in-bg: #12291d; --out: #d98a7e; --out-bg: #2a1614;
+      --note-bg: #241d0f; --note-rule: #8a6a24;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0e141a; --surface: #161e26; --ink: #e4eaf0; --ink-soft: #94a2b1;
+    --ink-faint: #7a879a; --rule: #26313d; --rule-soft: #1e2731; --accent: #dd9440;
+    --in: #4cba85; --in-bg: #12291d; --out: #d98a7e; --out-bg: #2a1614;
+    --note-bg: #241d0f; --note-rule: #8a6a24;
+  }
+  :root[data-theme="light"] {
+    --bg: #f5f7f9; --surface: #ffffff; --ink: #1a2531; --ink-soft: #55657a;
+    --ink-faint: #7d8b9c; --rule: #dde3ea; --rule-soft: #eaeef3; --accent: #a85f13;
+    --in: #1f7a4d; --in-bg: #e9f9ee; --out: #8a2f23; --out-bg: #fdecef;
+    --note-bg: #fdf6e9; --note-rule: #d9a53c;
+  }
+
+  body {
+    background: var(--bg); color: var(--ink);
+    font-family: var(--sans); font-size: 15px; line-height: 1.6;
+    padding: 2rem 1rem 5rem;
+  }
+  .wrap { max-width: 62rem; margin: 0 auto; }
+  .sheet {
+    background: var(--surface); border: 1px solid var(--rule);
+    border-radius: 6px; padding: 2.5rem 2.75rem;
+  }
+
+  .eyebrow {
+    font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--accent);
+  }
+  h1 { font-family: var(--serif); font-size: 2rem; line-height: 1.2; margin: 0.35rem 0 0.6rem; font-weight: 600; }
+  .standfirst { color: var(--ink-soft); font-size: 1rem; max-width: 46rem; }
+  .meta {
+    display: flex; flex-wrap: wrap; gap: 0.4rem 2rem; margin-top: 1.25rem;
+    font-size: 0.8rem; color: var(--ink-faint); font-family: var(--mono);
+  }
+  hr { border: none; border-top: 1px solid var(--rule); margin: 1.75rem 0; }
+
+  h2 {
+    font-family: var(--serif); font-size: 1.35rem; font-weight: 600;
+    margin: 2.5rem 0 0.4rem; padding-top: 1.5rem; border-top: 2px solid var(--rule);
+  }
+  h2:first-of-type { border-top: none; padding-top: 0; margin-top: 1rem; }
+  h2 .num { color: var(--accent); font-family: var(--mono); font-size: 0.9rem; margin-right: 0.5rem; }
+  h3 { font-size: 1.02rem; font-weight: 650; margin: 1.6rem 0 0.35rem; }
+  h4 { font-size: 0.88rem; font-weight: 650; margin: 1.1rem 0 0.3rem; color: var(--ink-soft); }
+  p { margin-bottom: 0.7rem; }
+  p.lede { color: var(--ink-soft); margin-bottom: 1rem; }
+  ul, ol { margin: 0 0 0.8rem 1.15rem; padding: 0; }
+  li { margin-bottom: 0.3rem; }
+  code {
+    font-family: var(--mono); font-size: 0.855em;
+    background: var(--rule-soft); padding: 0.08em 0.32em; border-radius: 3px;
+  }
+  strong { font-weight: 650; }
+
+  .table-wrap { overflow-x: auto; margin: 0.8rem 0 1rem; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
+  th, td {
+    text-align: left; vertical-align: top;
+    padding: 0.5rem 0.7rem; border-bottom: 1px solid var(--rule-soft);
+  }
+  th {
+    font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--ink-faint); border-bottom: 1px solid var(--rule); white-space: nowrap;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td code { white-space: nowrap; }
+
+  .pill {
+    display: inline-block; font-size: 0.68rem; font-family: var(--mono);
+    text-transform: uppercase; letter-spacing: 0.06em;
+    padding: 0.12em 0.5em; border-radius: 10px; white-space: nowrap;
+  }
+  .pill-in  { background: var(--in-bg);  color: var(--in); }
+  .pill-out { background: var(--out-bg); color: var(--out); }
+
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem 2rem; margin: 1rem 0; }
+  @media (max-width: 46rem) { .cols { grid-template-columns: 1fr; } }
+  .card { border: 1px solid var(--rule); border-radius: 4px; padding: 1rem 1.1rem; }
+  .card h3 { margin-top: 0; }
+  .card-in  { border-left: 3px solid var(--in); }
+  .card-out { border-left: 3px solid var(--out); }
+
+  .note {
+    background: var(--note-bg); border-left: 3px solid var(--note-rule);
+    border-radius: 3px; padding: 0.8rem 1rem; margin: 1rem 0; font-size: 0.87rem;
+  }
+  .note strong:first-child { color: var(--accent); }
+
+  .why { color: var(--ink-soft); font-size: 0.87rem; }
+  .why b { color: var(--ink); font-weight: 650; }
+
+  .toolbar { display: flex; gap: 0.5rem; margin-bottom: 1rem; align-items: center; flex-wrap: wrap; }
+  .toolbar button {
+    font: inherit; font-size: 0.8rem; padding: 0.3rem 0.7rem; cursor: pointer;
+    background: var(--surface); color: var(--ink);
+    border: 1px solid var(--rule); border-radius: 3px;
+  }
+  .toolbar button:hover { border-color: var(--accent); color: var(--accent); }
+  .toolbar .hint { font-size: 0.75rem; color: var(--ink-faint); }
+
+  @media print {
+    body { background: #fff; padding: 0; font-size: 10.5pt; }
+    .sheet { border: none; padding: 0; }
+    .toolbar { display: none; }
+    h2 { page-break-after: avoid; }
+    table, .card, .note { page-break-inside: avoid; }
+  }
+
+  /* Flow charts drawn as tables, so the Word conversion gets editable boxes
+     rather than an image it cannot produce. Borders are suppressed on the
+     wrapper and applied to the boxes themselves. */
+  table.flow { border-collapse: separate; border-spacing: 6px 0; }
+  table.flow td { border: none; padding: 0; vertical-align: middle; }
+  table.flow td.box {
+    border: 1px solid var(--rule); border-radius: 4px;
+    padding: 0.5rem 0.7rem; font-size: 0.8rem; line-height: 1.45;
+    text-align: center; background: var(--surface);
+  }
+  table.flow td.arrow {
+    text-align: center; color: var(--ink-faint); font-size: 1rem;
+    padding: 0.25rem 0; letter-spacing: 0.1em;
+  }
+  table.flow td.src  { background: #e6f2ff; border-color: #3b82c4; color: #0b3d66; }
+  table.flow td.use  { background: #fff4e6; border-color: #e08e0b; color: #7a4a00; }
+  table.flow td.good { background: #e9f9ee; border-color: #2e9e5b; color: #0d5a2e; }
+  table.flow td.bad  { background: #fdecef; border-color: #b3352c; color: #8a2f23; }
+  table.flow td.gate { background: #fff4e6; border-color: #e08e0b; color: #7a4a00; font-weight: 650; }
+  table.flow td.off  { background: #f3f4f5; border-color: #9aa2ab; color: #6b727a; }
+  @media (prefers-color-scheme: dark) {
+    table.flow td.src  { background:#12212e; border-color:#3b82c4; color:#a9cdf0; }
+    table.flow td.use  { background:#2a2113; border-color:#e08e0b; color:#e8c188; }
+    table.flow td.good { background:#12291d; border-color:#2e9e5b; color:#8fd8ae; }
+    table.flow td.bad  { background:#2a1614; border-color:#b3352c; color:#e6a79e; }
+    table.flow td.gate { background:#2a2113; border-color:#e08e0b; color:#e8c188; }
+    table.flow td.off  { background:#1b2129; border-color:#6b727a; color:#9aa2ab; }
+  }
+
+  /* Rendered diagrams. Embedded as data URIs so the file stays self-contained
+     and can be mailed as one attachment. */
+  figure.dgm-fig { margin: 1rem 0 1.4rem; text-align: center; }
+  figure.dgm-fig img { max-width: 100%; height: auto; border: 1px solid var(--rule); border-radius: 4px; background:#fff; }
+  figure.dgm-fig figcaption { color: var(--ink-soft); font-size: 0.8rem; margin-top: 0.5rem; }
+
+  /* Changes from the 06-Aug-2026 review pass, marked so they can be found.
+     Colour, not highlight: highlighting belongs to the reviewer. */
+  .chg { color: #c0392b; }
+  .chg code { color: #c0392b; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="toolbar">
+    <button type="button" id="theme">Toggle theme</button>
+    <button type="button" id="print">Print / PDF</button>
+    <span class="hint">Self-contained &mdash; safe to circulate as a file.</span>
+  </div>
+
+  <div class="sheet">
+
+    <header>
+      <span class="eyebrow">O2C &middot; Time Module &middot; for review</span>
+      <h1>Scenarios, statuses and flags</h1>
+      <p class="standfirst">Every situation the module has to cope with, with the
+      employee status, the manager status and the flags each one produces. Written
+      against the built code, not the intention &mdash; where the code does something
+      other than expected, that is recorded rather than tidied away.</p>
+      <div class="meta">
+        <span>Version 1.0</span>
+        <span>Prepared 07-Aug-2026</span>
+        <span>46 scenarios</span>
+        <span>Branch O2C_Time_Integration</span>
+      </div>
+    </header>
+
+    <hr />
+
+    <h2><span class="num">1</span>How to read this</h2>
+    <p class="lede"><strong>Two status axes, not one.</strong> The employee&rsquo;s act
+    and the manager&rsquo;s decision are independent facts, and describing them
+    separately says more than a single combined status can.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Axis</th><th>Values</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Employee status</strong></td><td>Not yet submitted &middot; Submitted</td></tr>
+          <tr><td><strong>Manager status</strong></td><td>Pending &middot; Approved &middot; Rejected</td></tr>
+          <tr><td><strong>System</strong></td><td>Defaulted &mdash; produced by a cut-off job, with no actor at all</td></tr>
+          <tr><td><strong>Flags</strong></td><td>Late submission &middot; Defaulted &middot; Overridden &middot; Revoked &middot; Advance closure &middot; Reversal &middot; Adjustment</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="why"><strong>A flag is an exception marker.</strong> The clean path
+    &mdash; submitted on time, approved on time &mdash; carries <em>no</em> flag at all.
+    Four actions always raise one (both withdraws, correct, and the cut-off jobs), one
+    raises one conditionally (submit, only when late), and three never do (approve,
+    reject, save).</p>
+
+    <h2><span class="num">2</span>Normal and late</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>#</th><th>Scenario</th><th>Employee</th><th>Manager</th><th>Flags</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>Submitted on time, approved on time</td><td>Submitted</td><td>Approved</td><td><strong>none</strong></td></tr>
+          <tr><td>2</td><td>Submitted after the weekly cut-off, then approved</td><td>Submitted</td><td>Approved</td><td>Late submission</td></tr>
+          <tr><td>3</td><td>Manager changes the hours, then approves</td><td>Submitted</td><td>Approved</td><td>Overridden &mdash; the original is kept in the audit trail</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2><span class="num">3</span>The employee never submits</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>#</th><th>Scenario</th><th>Employee</th><th>Manager</th><th>Flags / effect</th></tr></thead>
+        <tbody>
+          <tr><td>4</td><td>Weekly cut-off runs</td><td>Not yet submitted</td><td>Pending</td><td><strong>Defaulted / EMPLOYEE &middot; LOCKED</strong></td></tr>
+          <tr><td>5</td><td>&hellip; manager then approves</td><td>Not yet submitted</td><td>Approved</td><td>Defaulted <strong>retained</strong> &mdash; it happened</td></tr>
+          <tr><td>6</td><td>&hellip; manager then rejects</td><td>Not yet submitted</td><td>Rejected</td><td>Defaulted retained. <strong>But the week is locked, so the employee cannot act on the rejection</strong> &mdash; only a manager can edit it</td></tr>
+          <tr><td>7</td><td>&hellip; manager never acts</td><td>Not yet submitted</td><td>Pending</td><td>Defaulted &mdash; <strong>and it stays there. See the gap in section 11.</strong></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2><span class="num">4</span>The manager never decides</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>#</th><th>Scenario</th><th>Employee</th><th>Manager</th><th>Flags</th></tr></thead>
+        <tbody>
+          <tr><td>8</td><td>Delivery cut-off runs</td><td>Submitted</td><td>Defaulted</td><td>Defaulted / MANAGER &mdash; <strong>not</strong> locked</td></tr>
+          <tr><td>9</td><td>&hellip; manager approves later</td><td>Submitted</td><td>Approved</td><td>Defaulted retained</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2><span class="num">5</span>Rejection and the resubmit loop</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>#</th><th>Scenario</th><th>Employee</th><th>Manager</th><th>Flags / effect</th></tr></thead>
+        <tbody>
+          <tr><td>10</td><td>Manager rejects &mdash; a reason is mandatory</td><td>back with the employee</td><td>Rejected</td><td>none. Reason is Manager, Client or Absence</td></tr>
+          <tr><td>11</td><td>Employee corrects and resubmits</td><td>Submitted</td><td>Pending</td><td>+ Late submission <strong>if now past the cut-off</strong>. Every date resets to awaiting a decision</td></tr>
+          <tr><td>12</td><td>Rejected again</td><td>&mdash;</td><td>Rejected</td><td>loops on 10 and 11</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2><span class="num">6</span>Going backwards</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>#</th><th>Scenario</th><th>Employee</th><th>Manager</th><th>Flags</th></tr></thead>
+        <tbody>
+          <tr><td>13</td><td>Employee withdraws before any decision</td><td>Not yet submitted</td><td>Pending</td><td><strong>Revoked</strong>. Late submission is kept if it was already set</td></tr>
+          <tr><td>14</td><td>Manager undoes their own approval</td><td>Submitted</td><td>Pending</td><td>Revoked</td></tr>
+          <tr><td>15</td><td>Manager undoes their own rejection</td><td>Submitted</td><td>Pending</td><td>Revoked</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2><span class="num">7</span>Month level</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>#</th><th>Scenario</th><th>Employee</th><th>Manager</th><th>Flags / effect</th></tr></thead>
+        <tbody>
+          <tr><td>16</td><td>Month approved ahead of its cut-off</td><td>Submitted</td><td>Approved</td><td><strong>Advance closure</strong> &mdash; defaulted hours inside it are treated as approved</td></tr>
+          <tr><td>17</td><td>Retro adjustment inside the backdating window</td><td>unchanged</td><td><strong>dual approval</strong> &mdash; old and new project manager</td><td><strong>Reversal(&minus;)</strong> and <strong>Adjustment(+)</strong> on the original day</td></tr>
+          <tr><td>18</td><td>Retro adjustment outside the window</td><td>unchanged</td><td>refused</td><td>&mdash;</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2><span class="num">8</span>Leave, and conditions in the data</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>#</th><th>Scenario</th><th>What happens</th></tr></thead>
+        <tbody>
+          <tr><td>19</td><td>Approved absence in the week</td><td>Read-only leave row, <code>IS_LEAVE = 'Y'</code>, no employee action. <strong>Excluded from the Project Costing post</strong> because Absence Management already reaches costing</td></tr>
+          <tr><td>20</td><td>Absence, but the employee has <strong>no active allocation</strong></td><td>An entry needs a project, so the leave row is <strong>dropped silently</strong>. Needs a rule</td></tr>
+          <tr><td>21</td><td>Project has no billable + chargeable task</td><td>Nothing is prepopulated for that allocation; recorded as an exception, visible rather than silent</td></tr>
+          <tr><td>22</td><td><code>TrackTimeFlag</code> false on the team member</td><td>The project is invisible to time entry entirely</td></tr>
+          <tr><td>23</td><td>Future week</td><td>Visible, frozen</td></tr>
+          <tr><td>24</td><td>Closed period, inside the adjustment window</td><td>Read-only, but correctable by retro adjustment</td></tr>
+          <tr><td>25</td><td>Closed period, outside the window</td><td>Read-only. Correction only through the manager</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2><span class="num">9</span>Absence correction</h2>
+    <p class="lede">Absence is read live per person per date, so a <em>new</em> absence
+    appears the moment the screen reopens. Everything else about a changed absence is
+    the problem.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>#</th><th>Scenario</th><th>Employee</th><th>Manager</th><th>Effect</th></tr></thead>
+        <tbody>
+          <tr><td>26</td><td>Absence added <strong>before</strong> submit</td><td>Not yet submitted</td><td>&mdash;</td><td>Leave row appears on the next page load. Clean</td></tr>
+          <tr><td>27</td><td>Absence added <strong>after</strong> submit</td><td>Submitted &mdash; frozen</td><td>Pending</td><td>The leave row is <strong>not</strong> added. The manager approves hours that ignore the leave. Needs a reject and resubmit, or a manager override</td></tr>
+          <tr><td>28</td><td>Absence added <strong>after</strong> approval</td><td>Submitted</td><td>Approved</td><td>Retro adjustment territory</td></tr>
+          <tr><td>29</td><td><strong>Absence cancelled or shortened</strong></td><td>any</td><td>any</td><td><strong>The leave row survives.</strong> The absence merge inserts and updates but never deletes, so leave is overstated and worked hours understated</td></tr>
+          <tr><td>30</td><td>&hellip; and the employee tries to remove it</td><td>&mdash;</td><td>&mdash;</td><td><strong>They cannot.</strong> Leave is system-owned (RULE-008): the button is suppressed and the server refuses</td></tr>
+          <tr><td>31</td><td>Absence extended</td><td>any</td><td>any</td><td>The extra days appear only if population runs again</td></tr>
+          <tr><td>32</td><td>Absence corrected <strong>after the month is confirmed</strong></td><td>&mdash;</td><td>&mdash;</td><td>Leave is excluded from costing but <strong>included in accrual</strong>, so the accrual figure moves. Needs a retro adjustment <em>and</em> an accrual top-up</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note">
+      <strong>Nothing reconciles a leave row against an absence that later changed.</strong>
+      Scenario 29 is the dangerous one: it is silent, the numbers are wrong in a
+      direction nobody notices, and the person it affects has no way to correct it.
+    </div>
+
+    <h2><span class="num">10</span>Joiners, leavers and allocation change</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>#</th><th>Scenario</th><th>Effect</th></tr></thead>
+        <tbody>
+          <tr><td>33</td><td>Joiner mid-month</td><td>Seeded only from the allocation start date. Earlier days stay empty, which is correct</td></tr>
+          <tr><td>34</td><td>Leaver mid-month</td><td>The allocation ends and the worker becomes Terminated. <strong>Open: nothing prevents a week being created after the termination date</strong></td></tr>
+          <tr><td>35</td><td>Allocation percentage changes mid-month</td><td>Days already seeded keep the old figure &mdash; prepopulation never overwrites. One month can hold both rates. Right when the change is date-effective, wrong when it was a correction</td></tr>
+          <tr><td>36</td><td>Allocation percentage changes <strong>after approval</strong></td><td>The approved hours are at the old rate. A retro adjustment is the only route if they were wrong</td></tr>
+          <tr><td>37</td><td>Moves from project A to project B mid-month</td><td>Two allocations with different windows, so two grid lines. Handled</td></tr>
+          <tr><td>38</td><td>New allocation <strong>after the delivery cut-off</strong></td><td>The project appears in the picker, but the period is closed to editing &mdash; so there is no way to enter the past days except a retro adjustment</td></tr>
+          <tr><td>39</td><td><strong>The manager leaves</strong></td><td>RULE-015 has nobody to route approval to. Already live on the pod: <strong>237 of 424 projects have no project manager</strong></td></tr>
+          <tr><td>40</td><td>Terminated with an unsubmitted week</td><td>Weekly defaulting will still default it, because the status is Not yet submitted. <strong>Open: should a leaver be defaulted at all?</strong></td></tr>
+          <tr><td>41</td><td>Rehired after termination</td><td>Same employee id, a gap in service, and possibly overlapping allocations</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2><span class="num">11</span>The client does not accept the hours</h2>
+    <p class="lede">Half of this is already modelled: <strong><code>Client</code> is a
+    valid rejection reason</strong> (RULE-013), and <code>UNBILLED_REASON</code> exists
+    with a constraint that forces it whenever a row carries hours and is
+    non-billable.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>#</th><th>When the client disputes</th><th>Employee</th><th>Manager</th><th>Mechanism</th></tr></thead>
+        <tbody>
+          <tr><td>42</td><td>Before approval</td><td>Submitted</td><td>Rejected</td><td>Reject with reason <strong><code>Client</code></strong> &mdash; supported today</td></tr>
+          <tr><td>43</td><td>After approval, before the month is confirmed</td><td>Submitted</td><td>Pending</td><td>Manager undoes the decision (<em>Revoked</em>), then rejects or overrides</td></tr>
+          <tr><td>44</td><td>After confirmation, accrual and the costing post</td><td>&mdash;</td><td>&mdash;</td><td>Rejection is no longer available. Retro adjustment: <strong>Reversal(&minus;) of the billable hours and Adjustment(+) of the same hours as Non-billable with an unbilled reason.</strong> Net hours unchanged, billability changed &mdash; the person did the work</td></tr>
+          <tr><td>45</td><td>Client accepts fewer hours than logged</td><td>&mdash;</td><td>&mdash;</td><td>Only the difference becomes non-billable. Hours that were worked are never deleted</td></tr>
+          <tr><td>46</td><td>Client rejects the hours entirely</td><td>&mdash;</td><td>&mdash;</td><td>Reversal(&minus;) with no re-entry</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note">
+      <strong>A scope question to settle before 44 is built.</strong> We send quantity
+      and POET to Project Costing, and Oracle decides billability from the task&rsquo;s
+      own flag. So flipping our billable type changes <em>our</em> accrual and
+      reporting &mdash; <strong>it does not change what Oracle bills.</strong> If a
+      client rejection is also expected to reverse the Oracle-side cost, that is a
+      different integration and it is not in scope today.
+    </div>
+
+    <h2><span class="num">12</span>Adjustment driver &mdash; who caused it</h2>
+    <p class="lede">Proposed, not built. Today an adjustment records its
+    <em>shape</em> and its <em>reason text</em>, but not <strong>who drove
+    it</strong> &mdash; and that is the thing everybody downstream wants to know.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>What exists today</th><th>Values</th><th>What it tells you</th></tr></thead>
+        <tbody>
+          <tr><td><code>ADJ_KIND</code></td><td><code>RetroWBS</code> &middot; <code>DefaultCorrection</code></td><td>the shape of the adjustment</td></tr>
+          <tr><td><code>REASON</code></td><td>free text</td><td>whatever somebody typed</td></tr>
+          <tr><td><em>nothing</em></td><td>&mdash;</td><td><strong>who caused it</strong></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p><strong>Proposed:</strong> a driver on the adjustment, using the same three-value
+    shape the rejection reason already uses, so the two read consistently.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Driver</th><th>Means</th><th>Typical trigger</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Employee driven</strong></td>
+            <td>The person booked it wrongly and is correcting their own entry</td>
+            <td>Wrong task, wrong project, wrong day, hours mistyped</td>
+          </tr>
+          <tr>
+            <td><strong>Manager driven</strong></td>
+            <td>The approver changed what was booked, or corrected it after the fact</td>
+            <td>Override after the month closed; reallocating effort between tasks; correcting a defaulted week</td>
+          </tr>
+          <tr>
+            <td><strong>Client driven</strong></td>
+            <td>The client would not accept the hours as billed</td>
+            <td>Scenarios 44 to 46 &mdash; hours moved to non-billable, or reversed outright</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="why">Three reasons this earns its place rather than being another column.
+    <strong>It travels to accrual</strong> &mdash; a client-driven reversal is a
+    commercial event and an employee-driven one is a bookkeeping correction, and the
+    consumer currently cannot tell them apart. <strong>It is reportable</strong>
+    &mdash; &ldquo;how much did we write off because clients rejected it&rdquo; is a
+    question free text cannot answer. And <strong>it matches the existing rejection
+    reason</strong>, which already distinguishes Manager, Client and Absence, so the
+    module would say the same thing the same way in both places.</p>
+
+    <div class="note">
+      <strong>What it would take.</strong> One column on the adjustment with a
+      three-value check constraint; the value carried onto the interface row beside the
+      existing flag, so accrual receives it; and one field on the adjustment dialog.
+      The <em>Absence</em> value the rejection reason carries has no equivalent here
+      &mdash; an absence correction is a system event with no human driver, which is
+      itself worth deciding: either a fourth value, or left null.
+    </div>
+
+    <h2><span class="num">13</span>Three findings worth acting on</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>#</th><th>Finding</th><th>Why it matters</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>29</td>
+            <td><strong>A cancelled absence leaves its leave row behind</strong></td>
+            <td>Silent. Leave is overstated, worked hours understated, and the employee cannot correct it because leave is system-owned</td>
+          </tr>
+          <tr>
+            <td>7</td>
+            <td><strong>A never-submitted, never-approved week has no second safety net</strong></td>
+            <td>Weekly defaulting picks up only <em>Not yet submitted</em>; delivery defaulting picks up only <em>Submitted</em>. Once the weekly job sets Defaulted, the delivery job can never see it, so the week sits locked with nobody prompted</td>
+          </tr>
+          <tr>
+            <td>44</td>
+            <td><strong>No route from approved to non-billable</strong></td>
+            <td>The plumbing exists &mdash; <code>UNBILLED_REASON</code> and the constraint behind it &mdash; but there is no screen action, so a client rejection after confirmation has nowhere to go</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <hr />
+    <p class="why" style="font-size:0.8rem">
+      Companion to <code>doc/O2C_Time_Scope_and_Integration.html</code>, which carries
+      the scope, the integration and the flow diagrams. Scenario numbering is stable:
+      quote the number when raising a question about one.
+    </p>
+
+  </div>
+</div>
+
+<script>
+  (function () {
+    var root = document.documentElement;
+    document.getElementById('theme').addEventListener('click', function () {
+      var dark = root.getAttribute('data-theme') === 'dark'
+        || (!root.hasAttribute('data-theme')
+            && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      root.setAttribute('data-theme', dark ? 'light' : 'dark');
+    });
+    document.getElementById('print').addEventListener('click', function () { window.print(); });
+  })();
+</script>
+</body>
+</html>
