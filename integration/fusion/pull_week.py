@@ -25,17 +25,29 @@ were wrong, so they are recorded:
   * projectResourceAssignmentDetails     404
   * personAssignmentLaborSchedules       403 - not entitled for this account
 
-  Task-level resource assignment is NOT on the task. projects/{id}/child/Tasks
-  /{tid}/child/LaborResourceAssignments answers 200 with count 0 even when the
-  Manage Financial Project Plan screen plainly shows resources on that task, and
-  TaskQuantity comes back null even when the screen shows planned hours. The
-  financial project resource and the financial PLAN are different subject areas.
+  Task-level resource assignment has TWO sources here, and which one is filled
+  depends on how the resource was added. Both are read; the richer one wins.
 
-  It lives here:
-      financialProjectPlans?q=ProjectId={id}
-        -> links[name=ResourceAssignments].href
-  which returns TaskId, TaskNumber, TaskName, ResourceName, PlanningStartDate
-  and PlanningFinishDate - the rows the Manage Resources dialog shows.
+  1  projects/{id}/child/Tasks?expand=LaborResourceAssignments
+     The better source: LaborResourceId, LaborResourceEmail, LaborResourceName,
+     ResourceAllocationPercent, LaborPrimaryResource, and the cost and bill
+     amounts. 65 rows across 8 projects on this pod, so the resource works -
+     but it is EMPTY for project 444.
+
+     Read it with ?expand= on the collection. Addressing one task directly needs
+     the composite TasksUniqID from the links href; the plain numeric TaskId
+     returns 404, and the composite href returns 200 with count 0 where there is
+     nothing, which is easy to misread as a broken call.
+
+  2  financialProjectPlans?q=ProjectId={id} -> links[ResourceAssignments].href
+     Planning elements: TaskId, TaskNumber, ResourceName, PlanningStartDate,
+     PlanningFinishDate. No resource id, no percentage. This is where 444's
+     assignments are, so the Manage Resources dialog on the plan screen writes
+     here rather than to (1).
+
+  Prefer (1) when it has rows - it carries the id needed to match a worker and
+  the percentage needed to prepopulate. Fall back to (2), which identifies the
+  person only by display name.
 
 Read-only. GET only. Credentials come from integration/bip/.env and are never
 printed or logged.
@@ -202,18 +214,36 @@ def main():
     print('TASKS   * = selectable on a timesheet (billable AND chargeable)')
     st, tasks = fx.items(FSCM + '/projects/%s/child/Tasks' % pid, {'limit': 200})
 
-    # Task-level assignment comes from the PLAN, not the task. One call for the
-    # whole project rather than one per task - the task child is always empty.
+    # Source 1: the task's own labour assignments, pulled inline with expand.
+    # Richer - carries the resource id, email and allocation percentage.
+    lra_by_task, source = {}, None
+    _, exp = fx.items(FSCM + '/projects/%s/child/Tasks' % pid,
+                      {'limit': 200, 'expand': 'LaborResourceAssignments'})
+    for t in exp:
+        ra = t.get('LaborResourceAssignments')
+        rows = ra.get('items', []) if isinstance(ra, dict) else (ra or [])
+        if rows:
+            lra_by_task[str(t.get('TaskId'))] = rows
+    if lra_by_task:
+        source = 'Tasks/LaborResourceAssignments'
+
+    # Source 2: the plan's resource assignments. Where the Manage Resources
+    # dialog writes. Name only - no id, no percentage.
     plan_by_task = {}
-    _, plans = fx.items(FSCM + '/financialProjectPlans',
-                        {'q': 'ProjectId=%s' % pid, 'limit': 5})
-    for pl in plans:
-        href = child_href(pl, 'ResourceAssignments')
-        if not href:
-            continue
-        _, ras = fx.items(href, {'limit': 500})
-        for r in ras:
-            plan_by_task.setdefault(str(r.get('TaskId')), []).append(r)
+    if not lra_by_task:
+        _, plans = fx.items(FSCM + '/financialProjectPlans',
+                            {'q': 'ProjectId=%s' % pid, 'limit': 5})
+        for pl in plans:
+            href = child_href(pl, 'ResourceAssignments')
+            if not href:
+                continue
+            _, ras = fx.items(href, {'limit': 500})
+            for r in ras:
+                plan_by_task.setdefault(str(r.get('TaskId')), []).append(r)
+        if plan_by_task:
+            source = 'financialProjectPlans/ResourceAssignments (no ids)'
+    if source:
+        print('  assignments from: %s' % source)
 
     chargeable = []
     task_assign = 0
@@ -221,15 +251,23 @@ def main():
         ch = bool(t.get('ChargeableFlag')) and bool(t.get('BillableFlag'))
         if ch:
             chargeable.append(t)
-        assigns = plan_by_task.get(str(t.get('TaskId')), [])
+        tid = str(t.get('TaskId'))
+        assigns = lra_by_task.get(tid) or plan_by_task.get(tid, [])
         task_assign += len(assigns)
         print('  %s %-9s %-28s chargeable=%-5s billable=%-5s assigned=%d' % (
             '*' if ch else ' ', t.get('TaskNumber'), str(t.get('TaskName'))[:28],
             bool(t.get('ChargeableFlag')), bool(t.get('BillableFlag')), len(assigns)))
         for x in assigns:
-            print('             -> %-24s %s .. %s  %s' % (
-                x.get('ResourceName'), str(x.get('PlanningStartDate'))[:10],
-                str(x.get('PlanningFinishDate'))[:10], x.get('UnitOfMeasure') or ''))
+            who = x.get('LaborResourceName') or x.get('ResourceName')
+            rid = x.get('LaborResourceId')
+            pct = x.get('ResourceAllocationPercent')
+            if rid:
+                print('             -> %-22s id=%-16s alloc=%s%%  %s' % (
+                    who, rid, pct, x.get('LaborResourceEmail') or ''))
+            else:
+                print('             -> %-22s %s .. %s  (no id - plan source)' % (
+                    who, str(x.get('PlanningStartDate'))[:10],
+                    str(x.get('PlanningFinishDate'))[:10]))
 
     # 4 ── POET ------------------------------------------------------------
     line()
