@@ -360,7 +360,14 @@ SELECT t.task_id,
  WHERE t.task_type       = 'WBS'
    AND t.status          = 'Active'
    AND t.selectable_flag = 'Y'
+   -- Both flags, decided 06-Aug-2026. Chargeable alone let a task through that
+   -- Fusion does not consider billable work - on project 444 that is the Leave
+   -- task, which is chargeable but not billable and is system-owned anyway
+   -- (RULE-008). A task an employee may pick must be both.
    AND t.chargeable_flag = 'Y'
+   -- BILLABLE_TYPE, not a flag: this module has no BILLABLE_FLAG column. Fusion
+   -- returns BillableFlag true/false and the sync lands it here as the word.
+   AND t.billable_type   = 'Billable'
    AND (p.time_entry_enabled = 'Y' OR p.project_type = 'Organization')
 UNION ALL
 -- Common non-billable tasks, replicated across every active project

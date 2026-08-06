@@ -709,7 +709,11 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
                    WHERE project_id = a.project_id
                      AND task_type  = 'WBS'
                      AND status     = 'Active'
+                     -- Same pair as the LOV. Seeding a line onto a task the
+                     -- employee cannot then select in the picker would be a
+                     -- grid they can see and not change.
                      AND chargeable_flag = 'Y'
+                     AND billable_type   = 'Billable'
                    ORDER BY sort_order, task_id)
            WHERE ROWNUM = 1;
         EXCEPTION WHEN NO_DATA_FOUND THEN

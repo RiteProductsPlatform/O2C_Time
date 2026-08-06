@@ -188,12 +188,16 @@ def main():
 
     # 3 ── tasks, and who is assigned to each ------------------------------
     line()
-    print('TASKS  (chargeable ones are what a timesheet line can point at)')
+    # A timesheet line may point only at a task that is BOTH billable and
+    # chargeable (decided 06-Aug-2026). Chargeable alone lets Leave through -
+    # chargeable, not billable, and system-owned - and parents of the WBS are
+    # neither, so they drop out here too.
+    print('TASKS   * = selectable on a timesheet (billable AND chargeable)')
     st, tasks = fx.items(FSCM + '/projects/%s/child/Tasks' % pid, {'limit': 200})
     chargeable = []
     task_assign = 0
     for t in tasks:
-        ch = bool(t.get('ChargeableFlag'))
+        ch = bool(t.get('ChargeableFlag')) and bool(t.get('BillableFlag'))
         if ch:
             chargeable.append(t)
         href = child_href(t, 'LaborResourceAssignments')
@@ -201,9 +205,9 @@ def main():
         if href:
             _, assigns = fx.items(href, {'limit': 50})
             task_assign += len(assigns)
-        print('  %-8s %-30s chargeable=%-5s billable=%-5s assigned=%d' % (
-            t.get('TaskNumber'), str(t.get('TaskName'))[:30], ch,
-            bool(t.get('BillableFlag')), len(assigns)))
+        print('  %s %-9s %-28s chargeable=%-5s billable=%-5s assigned=%d' % (
+            '*' if ch else ' ', t.get('TaskNumber'), str(t.get('TaskName'))[:28],
+            bool(t.get('ChargeableFlag')), bool(t.get('BillableFlag')), len(assigns)))
         for x in assigns:
             print('           -> %s  %s' % (
                 x.get('ResourceName') or x.get('PersonName') or x.get('ResourceId'),
@@ -215,7 +219,8 @@ def main():
     print('  P  project            %s' % p.get('ProjectNumber'))
     print('  O  expenditure org    %s' % (p.get('ProjectOrganizationName') or
                                           '(from the person\'s assignment)'))
-    print('  T  chargeable tasks   %d of %d' % (len(chargeable), len(tasks)))
+    print('  T  selectable tasks   %d of %d  (billable AND chargeable)' % (
+        len(chargeable), len(tasks)))
     st, et = fx.items(FSCM + '/expenditureTypes', {'limit': 200})
     hours = [e for e in et if (e.get('UnitOfMeasure') or '').upper() in ('HOURS', 'HRS')]
     print('  E  expenditure types  %d total%s' % (
@@ -248,7 +253,7 @@ def main():
     if not team:
         print('  nothing - no team member on the project')
     elif not chargeable:
-        print('  nothing - no chargeable task to charge against')
+        print('  nothing - no task is both billable and chargeable')
     elif task_assign == 0:
         print('  One line per person, on the FIRST chargeable task (%s %s),' % (
             chargeable[0].get('TaskNumber'), chargeable[0].get('TaskName')))
@@ -265,7 +270,7 @@ def main():
     if not team:
         blockers.append('no team member')
     if not chargeable:
-        blockers.append('no chargeable task')
+        blockers.append('no billable+chargeable task')
     if team and not any(t.get('TrackTimeFlag') for t in team):
         blockers.append('TrackTimeFlag false for every team member')
     if blockers:
