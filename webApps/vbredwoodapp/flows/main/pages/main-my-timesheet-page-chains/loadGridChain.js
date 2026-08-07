@@ -65,7 +65,41 @@ define([
           const periodOk = $application.variables.periodEditable === 'Y';
           const stateOk  = ['Not yet submitted', 'Rejected']
                              .indexOf(week.week_status) !== -1;
-          $page.variables.editable = periodOk && stateOk && week.locked_flag !== 'Y';
+
+          // RULE-004: a week that has not started cannot be filled. The server
+          // has always enforced this - save_entry and submit_week both go
+          // through assert_editable, which raises -20004 - but the grid never
+          // tested it, so the screen offered enterable cells, an active Save
+          // and an active Submit for a week every one of those calls would
+          // refuse. The existing Future notice is about the PERIOD: August can
+          // be open while the week beginning the 10th is still ahead, which is
+          // exactly the case that failed.
+          //
+          // Mirrors week_start_of() in the package: the Monday, clipped to the
+          // first of the month, because a week straddling the boundary starts
+          // on the 1st here too.
+          const now   = new Date();
+          const dow   = (now.getDay() + 6) % 7;                    // Mon = 0
+          const mon   = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dow);
+          const first = new Date(now.getFullYear(), now.getMonth(), 1);
+          const ref   = mon > first ? mon : first;
+          const pad   = (n) => (n < 10 ? '0' : '') + n;
+          const refIso = ref.getFullYear() + '-' + pad(ref.getMonth() + 1)
+                       + '-' + pad(ref.getDate());
+          // ISO dates compare correctly as strings, so no parsing is needed.
+          const futureWeek = String(week.week_start || '').substring(0, 10) > refIso;
+
+          $page.variables.editable =
+            periodOk && stateOk && week.locked_flag !== 'Y' && !futureWeek;
+
+          // Why it is read-only, so the screen can say so instead of leaving the
+          // user to discover it by pressing a button that fails.
+          $page.variables.lockedReason =
+              futureWeek                ? 'future'
+            : week.locked_flag === 'Y'  ? 'locked'
+            : !periodOk                 ? 'period'
+            : !stateOk                  ? week.week_status
+            : '';
 
           $application.variables.selectedWeekId = weekId;
         }

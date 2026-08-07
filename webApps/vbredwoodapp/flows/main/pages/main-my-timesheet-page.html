@@ -137,6 +137,25 @@
          (doc/O2C_Timesheet_Module.html) lists every month in the picker with a
          status chip rather than hiding the ones that cannot be typed into.
          Without a notice, a read-only grid just looks broken. -->
+    <!-- A future WEEK inside an open month. Distinct from the notice below,
+         which is about the whole period: August can be open while the week
+         beginning the 10th has not started. Without this the grid rendered
+         enterable cells and an active Submit for a week the server refuses with
+         -20004, so the only way to find out was to press the button. -->
+    <oj-bind-if test="[[ $variables.lockedReason === 'future' ]]">
+      <div class="oj-sm-padding-3x rw-notice" role="status">
+        <oj-bind-text value="[[$application.translations.appBundle.my_timesheet_week_not_started]]"></oj-bind-text>
+      </div>
+    </oj-bind-if>
+
+    <!-- Locked by the weekly cut-off. The employee cannot edit it; a manager
+         can. Saying which is the difference between a dead end and a next step. -->
+    <oj-bind-if test="[[ $variables.lockedReason === 'locked' ]]">
+      <div class="oj-sm-padding-3x rw-notice" role="status">
+        <oj-bind-text value="[[$application.translations.appBundle.my_timesheet_week_locked]]"></oj-bind-text>
+      </div>
+    </oj-bind-if>
+
     <oj-bind-if test="[[ $variables.periodState === 'Future' ]]">
       <div class="oj-sm-padding-3x rw-notice" role="status">
         <oj-bind-text value="[[$application.translations.appBundle.my_timesheet_this_month_has_not_started_yet_values_are_sh]]"></oj-bind-text>

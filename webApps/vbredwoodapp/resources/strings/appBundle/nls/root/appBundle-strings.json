@@ -1256,5 +1256,7 @@
   "my_timesheet_reject_remarks_label": "Remarks:",
   "my_timesheet_approval_workflow": "Approval workflow",
   "my_timesheet_approval_workflow_sub": "Every submission, approval and rejection on this week.",
-  "my_timesheet_no_activity_yet": "Nothing has happened on this week yet."
+  "my_timesheet_no_activity_yet": "Nothing has happened on this week yet.",
+  "my_timesheet_week_not_started": "This week has not started yet, so it cannot be filled in. The hours below are the expected pattern from your allocation. Come back on Monday and the week opens for entry.",
+  "my_timesheet_week_locked": "This week was completed by the weekly cut-off and is locked, so it can no longer be edited here. Ask your manager to correct it or to unlock it."
 }

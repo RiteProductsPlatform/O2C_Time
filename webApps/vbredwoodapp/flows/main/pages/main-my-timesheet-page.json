@@ -65,6 +65,11 @@
       "input": "none",
       "description": "RULE-004 / RULE-007. False freezes the grid; a future month is visible but read-only (SC-02)."
     },
+    "lockedReason": {
+      "type": "string",
+      "defaultValue": "",
+      "input": "none"
+    },
     "locked": {
       "type": "boolean",
       "defaultValue": false,

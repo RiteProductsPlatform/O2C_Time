@@ -79,20 +79,27 @@ define([
           const saved = (resp.body && typeof resp.body.saved === 'number')
             ? resp.body.saved : null;
 
-          if (saved === 0 && cells.length > 0) {
+          // A count of zero is never a success, so it must never be phrased as
+          // one. "0 entries saved" told the user nothing about why - and the
+          // usual why is a rule refusal the server already explained in the
+          // body, which is worth repeating here rather than discarding.
+          if (saved === 0) {
             await Actions.fireNotificationEvent(context, {
               summary: 'Nothing was saved',
-              message: 'The server accepted the request but stored none of the '
-                     + cells.length + ' changed cells. Your hours are still on '
-                     + 'screen — please report this rather than retyping them.',
+              message: (resp.body && resp.body.error)
+                ? resp.body.error
+                : 'The server stored none of the ' + cells.length + ' changed '
+                  + 'cells and gave no reason. Your hours are still on screen — '
+                  + 'please report this rather than retyping them.',
               severity: 'error',
               type: 'error',
               displayMode: 'transient',
             });
           } else {
+            const n = (saved === null ? cells.length : saved);
             await Actions.fireNotificationEvent(context, {
               summary: 'Draft saved',
-              message: (saved === null ? cells.length : saved) + ' entries saved.',
+              message: n + (n === 1 ? ' entry saved.' : ' entries saved.'),
               severity: 'confirmation',
               type: 'confirmation',
               displayMode: 'transient',
