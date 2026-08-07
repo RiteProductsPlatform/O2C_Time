@@ -714,7 +714,16 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
                      -- grid they can see and not change.
                      AND chargeable_flag = 'Y'
                      AND billable_type   = 'Billable'
-                   ORDER BY sort_order, task_id)
+                   -- task_code, not task_id. SORT_ORDER is never populated - the
+                   -- extract does not carry it and the sync does not set it - so
+                   -- every task sits at the default 100 and the tie-break decided
+                   -- the answer. task_id is the local identity column, so "the
+                   -- first chargeable task" actually meant "whichever row the
+                   -- sync happened to insert first". On project 444 that was
+                   -- Leave; on another project it was Development. Ordering by
+                   -- the WBS number makes it the first task in the BREAKDOWN,
+                   -- and matches how V_OC_TS_TASK_LOV already orders.
+                   ORDER BY sort_order, task_code, task_id)
            WHERE ROWNUM = 1;
         EXCEPTION WHEN NO_DATA_FOUND THEN
           fail_record(v_job, 'ALLOCATION',
