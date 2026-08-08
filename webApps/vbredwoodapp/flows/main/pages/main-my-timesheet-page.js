@@ -323,6 +323,95 @@ define([], () => {
       if (open) { dlg.open(); } else { dlg.close(); }
     }
 
+
+    /**
+     * Fusion absence records -> the INT-006 rows POST sync/absence expects.
+     *
+     * Three conversions, and each one has already cost time:
+     *
+     *  SPAN -> DAYS. Fusion returns one record per absence, not per day; the
+     *  timesheet is a cell per day. The span is expanded, and clipped to the
+     *  week, so a leave running past Sunday contributes only its own days here.
+     *
+     *  DAYS -> HOURS. `duration` is in DAYS — the Fusion screen shows "1 Days".
+     *  OC_TS_ENTRY holds hours, so it is days x the worker's standard day. The
+     *  division is by the absence's OWN length, not by the visible part, or a
+     *  leave straddling the week inflates every day inside it.
+     *
+     *  CASE. Fusion says 'APPROVED'; populate_month filters on exactly
+     *  'Approved'. Send the wrong case and the absence caches perfectly well
+     *  and then never becomes a row — it fails silently at the last step, which
+     *  is the worst place for it to fail.
+     */
+    absenceToRows(items, employeeId, from, to, stdHoursPerDay) {
+      const std = Number(stdHoursPerDay) || 8;
+      const lo = new Date(from + 'T00:00:00');
+      const hi = new Date(to + 'T00:00:00');
+      const out = [];
+
+      (items || []).forEach((x) => {
+        const s = new Date(String(x.startDate).substring(0, 10) + 'T00:00:00');
+        const e = new Date(String(x.endDate).substring(0, 10) + 'T00:00:00');
+        if (isNaN(s) || isNaN(e)) { return; }
+
+        const whole = Math.round((e - s) / 86400000) + 1;
+        const days = Number(x.duration) || whole;
+        const perDay = whole ? days / whole : 0;
+
+        const start = s > lo ? s : lo;
+        const end = e < hi ? e : hi;
+
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+          out.push({
+            EMPLOYEE_ID: employeeId,
+            ABSENCE_DATE: d.toISOString().substring(0, 10),
+            ABSENCE_TYPE: x.absenceType || 'Leave',
+            // CHK_OC_TABS_HRS caps the column at 24
+            DURATION_HOURS: Math.round(Math.min(perDay * std, 24) * 100) / 100,
+            APPROVAL_STATUS:
+              String(x.approvalStatusCd).toUpperCase() === 'APPROVED'
+                ? 'Approved' : 'Pending',
+          });
+        }
+      });
+
+      return out;
+    }
+
+
+    /**
+     * Why the live absence read failed, in terms of who can fix it.
+     *
+     * Each status needs a different person, so each gets its own sentence
+     * rather than "the call failed" — the same reasoning as the Fusion probe on
+     * PAGE-012, and the reason that probe was worth building.
+     */
+    absenceDiagnosis(status) {
+      if (status === 401) {
+        return 'Fusion refused the credentials, so leave could not be read. '
+             + 'The backend sign-in needs re-entering in VB Studio.';
+      }
+      if (status === 403) {
+        return 'Fusion accepted the sign-in but the service account is not '
+             + 'entitled to absence data. This needs a role in Fusion.';
+      }
+      if (status === 404) {
+        return 'The absence resource was not found on this Fusion pod — the '
+             + 'REST path or version in services/fa_hcm/service.json is wrong.';
+      }
+      if (status === 400) {
+        return 'Fusion rejected the absence query. Almost always the filter '
+             + 'syntax: the separator must be " AND ", not ";".';
+      }
+      if (!status) {
+        return 'Fusion could not be reached, so the leave shown may be out of '
+             + 'date. Your hours are unaffected. If this persists, the fa '
+             + 'backend may be configured but not published.';
+      }
+      return 'Leave could not be read from Fusion (' + status + '). The hours '
+           + 'below are unaffected.';
+    }
+
   }
 
   return PageModule;

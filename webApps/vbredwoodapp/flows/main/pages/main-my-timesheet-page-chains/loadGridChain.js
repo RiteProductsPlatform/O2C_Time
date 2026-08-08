@@ -104,6 +104,16 @@ define([
           $application.variables.selectedWeekId = weekId;
         }
 
+        // ── Leave, read live from Fusion (RULE-008) ────────────
+        // BEFORE the grid, not after. This chain writes the Leave rows through
+        // ORDS, so fetching the grid first would render the week without any
+        // leave applied after it and only pick it up on the next visit.
+        //
+        // Awaited, and deliberately never allowed to reject: it warns and
+        // returns on every failure path, so an unreachable pod delays the week
+        // opening but does not stop it (open point S-04).
+        await Actions.callChain(context, { chain: 'refreshAbsenceChain' });
+
         // ── Shift + standard hours per day (RULE-011) ──────────
         const shiftResp = await Actions.callRest(context, {
           endpoint: 'oc_time/getShiftRow',

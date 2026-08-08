@@ -313,6 +313,18 @@
       "input": "none",
       "description": "Dialog visibility and in-flight guards."
     },
+    "absenceState": {
+      "type": "string",
+      "defaultValue": "",
+      "input": "none",
+      "description": "Outcome of the live Fusion leave read for the open week: running | ok | none | fail. Held separately from busy because a failure here must not stop the week opening — the hours are still correct, only the leave beside them may be stale (open point S-04)."
+    },
+    "fusionPersonId": {
+      "type": "number",
+      "defaultValue": null,
+      "input": "none",
+      "description": "Fusion PersonId for the signed-in worker, resolved once from PersonNumber and cached for the session. /absences is keyed on this and returns 200 with zero items for a PersonNumber, which reads exactly like 'no leave'. Only needed because OC_TIME_WORKER does not store it — open point S-12."
+    },
     "showAllocation": {
       "type": "boolean",
       "defaultValue": false,

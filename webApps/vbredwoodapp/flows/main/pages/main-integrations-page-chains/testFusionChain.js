@@ -36,7 +36,9 @@ define([
 
       try {
         const resp = await Actions.callRest(context, {
-          endpoint: 'fa_hcm/probeWorkers',
+          // getWorkers with no q is the probe: one worker, two fields. The same
+          // operation resolves PersonNumber -> PersonId when q is supplied.
+          endpoint: 'fa_hcm/getWorkers',
           uriParams: { limit: 1, onlyData: true, fields: 'PersonNumber,PersonId' },
         });
 
