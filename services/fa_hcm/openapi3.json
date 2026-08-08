@@ -22,6 +22,9 @@
     "/workers": {
       "get": {
         "operationId": "getWorkers",
+        "x-vb": {
+          "actionHint": "getMany"
+        },
         "summary": "Worker lookup, and the connection probe. Called with no q it asks for a single worker and nothing else — the cheapest call that still proves auth, routing and payload shape. Called with q it resolves PersonNumber to the PersonId that /absences requires.",
         "parameters": [
           {
@@ -87,6 +90,9 @@
     "/absences": {
       "get": {
         "operationId": "getAbsences",
+        "x-vb": {
+          "actionHint": "getMany"
+        },
         "summary": "Approved and scheduled absences for one person over a date window. This is the one input read live per person per date rather than prepopulated, because leave is system-owned by Absence Management (RULE-008) and can be applied, changed or cancelled after a timesheet has already been built.",
         "parameters": [
           {
