@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>O2C Time — open points</title>
+<style>
+  :root { --ink:#1d2733; --soft:#55657a; --accent:#a85f13; --rule:#dde3ea; --wash:#f7f8fa; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:#eef1f5; color:var(--ink);
+         font:15px/1.6 "Segoe UI", system-ui, -apple-system, sans-serif; }
+  .sheet { max-width:1080px; margin:32px auto; background:#fff; padding:52px 60px 64px;
+           box-shadow:0 2px 18px rgba(20,32,48,.10); }
+  header { border-bottom:2px solid var(--rule); padding-bottom:20px; margin-bottom:30px; }
+  .eyebrow { font-size:11px; letter-spacing:.14em; text-transform:uppercase;
+             color:var(--accent); font-weight:700; margin:0 0 6px; }
+  h1 { font-size:31px; line-height:1.2; margin:0 0 12px; font-weight:650; }
+  .standfirst { font-size:16px; color:var(--soft); margin:0 0 14px; max-width:74ch; }
+  .meta span { font-size:12px; color:var(--soft); margin-right:18px; }
+  h2 { font-size:20px; margin:38px 0 6px; padding-top:16px; border-top:1px solid var(--rule);
+       font-weight:650; }
+  h2:first-of-type { border-top:none; padding-top:0; }
+  .lede { color:var(--soft); margin:0 0 16px; max-width:80ch; }
+  p { max-width:82ch; }
+  table { border-collapse:collapse; width:100%; margin:14px 0 20px; font-size:13.5px; }
+  th { background:var(--wash); text-align:left; font-weight:650; }
+  th, td { border:1px solid var(--rule); padding:7px 10px; vertical-align:top; }
+  th:first-child, td:first-child { width:74px; white-space:nowrap; font-variant-numeric:tabular-nums; }
+  code { font:12.5px/1.4 Consolas, "Cascadia Mono", monospace; background:var(--wash);
+         padding:1px 4px; border-radius:3px; }
+  .note { border-left:4px solid #d9a53c; background:#fdf8ee; padding:12px 16px;
+          margin:16px 0; font-size:14px; }
+  .note p { margin:0; }
+</style>
+</head>
+<body>
+<div class="sheet">
+
+<header>
+  <p class="eyebrow">O2C Timesheet Module</p>
+  <h1>Open points</h1>
+  <p class="standfirst">Everything still undecided, in one list. Merges the 27 open
+  items from the scope and integration document with everything new from the BRD
+  walkthrough and the annotated scenario sheet.</p>
+  <p class="meta">
+    <span>08 August 2026</span>
+    <span>58 open points</span>
+    <span>12 block the flag matrix</span>
+  </p>
+</header>
+
+<p><strong>How to read the numbering.</strong> <code>S-nn</code> is carried from the
+scope document and keeps the same number there, so the two can be read side by
+side. <code>N-nn</code> is new — from the BRD walkthrough transcript or from your
+annotations on <em>Time Scenarios and status.xlsx</em>.</p>
+
+<div class="note">
+<p>The BRD walkthrough asks for exactly one deliverable before more code: the
+finished flag matrix, reviewed. <em>"Your biggest mistakes will come only in the
+flags. Your flags are going to be used for integration and everything runs based
+on it. The whole testing will be based on flags. All other programs you can
+fix."</em> Section A is what that matrix cannot be filled in without.</p>
+</div>
+
+<h2>A. Blocks the flag matrix — take these first</h2>
+<p class="lede">These twelve decide what goes in the matrix's columns.</p>
+<table>
+<tr><th>#</th><th>Point</th><th>Owner</th></tr>
+<tr><td>N-01</td><td><strong>Is <em>Default Approved</em> a status, a flag, or <em>Defaulted</em> plus a flag?</strong> Your two sheets do it differently. Today nothing approves a defaulted week — <code>run_delivery_defaulting</code> sets the status and stops.</td><td>functional</td></tr>
+<tr><td>N-02</td><td><strong>Add <em>Late Approval</em>?</strong> Today a manager approving after the delivery cut-off looks identical to one approving on time.</td><td>functional</td></tr>
+<tr><td>N-03</td><td><strong>Add <em>Revoked</em> as a week flag?</strong> The three revoke procedures exist and write audit rows, but nothing on the week records that it happened. Your scenario 28.</td><td>functional</td></tr>
+<tr><td>N-04</td><td><strong>Can a week be defaulted by <em>both</em> parties?</strong> Your scenario 8 says yes, and says we will need to know why later. <code>DEFAULTED_BY</code> is a single value with a two-value check constraint and physically cannot hold both.</td><td>functional</td></tr>
+<tr><td>N-05</td><td><strong>The post-cut-off flag</strong> the BRD asks for by name — <em>"an indicator that it was done beyond the cut-off"</em>. Not built under any name. Decides the shape of the accrual hand-over.</td><td>functional + accrual</td></tr>
+<tr><td>N-06</td><td><strong>Adjustment driver</strong> — Client / Employee / Manager / System. Your proposal; the BRD lists the same drivers. Confirm the value set.</td><td>functional</td></tr>
+<tr><td>S-07</td><td><strong>Remove <em>Closed</em> from the status set.</strong> You removed it from the model; the database constraint and <code>confirm_month</code> still use it.</td><td>build, after N-01</td></tr>
+<tr><td>S-08</td><td><strong>Keep <em>Defaulted</em> as both status and flag, or collapse?</strong> <em>Overridden</em> settled 06-Aug — flag only.</td><td>functional</td></tr>
+<tr><td>N-07</td><td><strong>Month-level status and flag</strong> for your scenarios 16–18 — <em>"not sure what status to keep here"</em>. Depends on N-01.</td><td>functional</td></tr>
+<tr><td>N-08</td><td><strong>Does accrual need manager approval?</strong> You decided it does not. RULE-020 and the BRD both say it does — <em>"there is a very specific approval that we will consider for month-end close, which is what will flow into the accrual model."</em> Nothing has been changed on the strength of the decision. <strong>Conflict.</strong></td><td>functional</td></tr>
+<tr><td>S-11</td><td><strong>May a <em>Defaulted</em> week be confirmed?</strong> Currently blocked; advance closure is the stated exception. Overlaps N-01.</td><td>functional</td></tr>
+<tr><td>S-23</td><td><strong>What triggers the accrual write</strong>, now that approval does not — at month confirmation, on a schedule, or continuously as time is entered?</td><td>functional + accrual</td></tr>
+</table>
+
+<h2>B. Scope — four features the BRD names as required</h2>
+<p class="lede">The walkthrough calls these "the four extras" and treats them as in
+scope. Each needs a yes, a no, or a stated deferral the sponsor has seen.</p>
+<table>
+<tr><th>#</th><th>Point</th><th>State today</th></tr>
+<tr><td>N-09</td><td><strong>Contractor unbilled hours → specific exception approval.</strong> <em>"I am paying a contractor for 100 hours, it means 100 hours of money you are collecting."</em></td><td>dropped from the flag model on 30-Jul-2026</td></tr>
+<tr><td>N-10</td><td><strong>Salary hold, and its employee correction screen.</strong> You asked for the concept to be removed from the scope document; the BRD names it as a required feature with a screen we have not built.</td><td>procedures built, screen not, concept descoped</td></tr>
+<tr><td>N-11</td><td><strong>Client timesheet attachment screen</strong> — per project per month, overlays the approved <em>or defaulted</em> sheet, multiple attachments, explicitly <strong>not</strong> in the main sheet and <strong>not</strong> in the app.</td><td><code>OC_TS_CLIENT_DOC</code> exists, screen does not</td></tr>
+<tr><td>N-12</td><td><strong>Employee mobile app.</strong> The BRD assumes it from day one and hangs the no-excuse defaulting argument on it — <em>"because they are giving you an app, you better go submit."</em></td><td>phase 2</td></tr>
+</table>
+
+<h2>C. Rules that need a decision before they can be coded</h2>
+<table>
+<tr><th>#</th><th>Point</th><th>State today</th></tr>
+<tr><td>N-13</td><td><strong>Withdraw only before the weekly cut-off</strong> — your note. <code>revoke_week</code> allows it whenever the status is Submitted and the period is Open; there is no cut-off test.</td><td>needs the test</td></tr>
+<tr><td>N-14</td><td><strong>No weekly cut-off for manager approval</strong> — recommended, and the BRD agrees: the delivery cut-off is the manager's only hard one, and approval cadence is a preference. Confirm and close your scenario 10.</td><td>recommendation, unconfirmed</td></tr>
+<tr><td>N-15</td><td><strong>Absence correction</strong> — inside the delivery cut-off it reflects directly, past it flows as an adjustment. Your principle, and the BRD lists late absence as a post-cut-off driver. Needs its own rule id.</td><td>not implemented</td></tr>
+<tr><td>N-16</td><td><strong>Scenario 21 — auto-revoke or notify only?</strong> Recommend notify. Auto-revoke destroys the employee's evidence that they submitted on time, and then defaulting penalises them for it.</td><td>not implemented</td></tr>
+<tr><td>N-17</td><td><strong>Leave-loss coverage exclusions</strong> — <em>"any form of absence other than long leaves, maternity and ELOP will not be considered."</em> No exclusion by absence type today.</td><td><code>assign_cover</code> built without it</td></tr>
+<tr><td>N-18</td><td><strong>Cover person constraints</strong> — must not be absent that day, and must not already be covering someone else that day. <em>"I can't be working for two people."</em></td><td>not enforced</td></tr>
+<tr><td>N-19</td><td><strong>Unbilled reason list</strong> — the BRD says 4–5 values chosen at entry. <code>save_entry</code> accepts a reason; there is no dictionary behind it. Ours, or Fusion's?</td><td>no LOV</td></tr>
+<tr><td>S-02</td><td><strong>Task-level spread of prepopulated hours</strong> — one line, or divided across chargeable tasks? Your original question.</td><td>one line</td></tr>
+<tr><td>S-06</td><td><strong>Concurrent 100% allocations on two projects</strong> seed 16h/day, uncapped until the 24-hour rule. Correct in Fusion, or cap in the module?</td><td>uncapped</td></tr>
+<tr><td>S-05</td><td><strong>Where a leave row attaches</strong> for an employee with no active allocation.</td><td>dropped silently</td></tr>
+<tr><td>S-13</td><td><strong>"Time Card Required" eligibility</strong> read and enforced?</td><td>not read</td></tr>
+</table>
+
+<h2>D. Population and scheduling — the BRD against "everything live"</h2>
+<table>
+<tr><th>#</th><th>Point</th></tr>
+<tr><td>N-20</td><td><strong>Does prepopulation stay a scheduled job?</strong> The BRD requires it — monthly on the 28th or 29th for the whole of the next month, plus a delta job several times a day. It cannot be live: the sheet must exist before the employee opens it, and the accrual month must be complete for people who never log in. Recommended reconciliation — keep both jobs, but have them read Fusion <strong>live at run time</strong> instead of from a cache. Master-data <em>sync</em> stays removed, which the BRD supports.</td></tr>
+<tr><td>N-21</td><td><strong>Per-country run timing.</strong> <em>"If you ran this program at 8 in the night in India, US data may not even be inside — you might have to run it 2 or 3 times."</em> Both population jobs and both defaulting jobs run once against <code>SYSDATE</code> with no time-zone awareness. <code>OC_TIME_PERIOD</code> is already keyed by payroll country, so the model supports it.</td></tr>
+<tr><td>N-22</td><td><strong>Missing delta triggers</strong> — termination reversals, deputations and transfers. <code>populate_daily</code> handles allocation change, project and WBS moves, and new hires; not those three.</td></tr>
+<tr><td>N-23</td><td><strong>Advance close: flag, or date range?</strong> Ours is one Y/N flag. The BRD describes a control table with an explicit start and end date — <em>"1st to 30th June normally; this month I want to start from the 28th."</em></td></tr>
+<tr><td>S-04</td><td><strong>Fusion availability</strong> — with no cache, a pod outage stops a timesheet being opened. Acceptable?</td></tr>
+<tr><td>S-22</td><td><strong>Where the live Fusion call is made from</strong> — the page through the server-side proxy, or the database. Decides how much rule enforcement can stay in the database; the database option needs a privilege grant that has not been proven on this pod.</td></tr>
+<tr><td>S-03</td><td><strong>Does worker identity stay local</strong> now the extract is removed? Sign-in cannot wait on Fusion, and the finance administrator is not a worker in HCM.</td></tr>
+<tr><td>S-12</td><td><strong>Fusion PersonId / AssignmentNumber available to the module</strong> — needed for any absence or OTL call keyed on the person.</td></tr>
+<tr><td>S-15</td><td><strong>Period auto-close has no job.</strong></td></tr>
+</table>
+
+<h2>E. Accrual hand-over — theirs to define, ours to build</h2>
+<table>
+<tr><th>#</th><th>Point</th></tr>
+<tr><td>S-19</td><td><strong>Structure of the accrual staging table</strong> — summary, employee-wise complete timesheet, and adjustments, in our schema for them to pull. Being defined on the accrual side.</td></tr>
+<tr><td>S-20</td><td><strong>One accrual interface or two?</strong> The existing interface is already a day-wise pull carrying adjustments, so the accrual status and partner status columns may be tracking the same hand-off.</td></tr>
+<tr><td>S-24</td><td><strong>Which month a retro adjustment accrues to.</strong> The module records the source period and the posting period on the adjustment and puts <strong>neither</strong> on the interface row, so the consumer has to infer it. Both are needed: source drives the revenue period, post drives which pull takes it. The BRD's worked example is exactly this case.</td></tr>
+<tr><td>S-25</td><td><strong>The staging row must carry the status of the hours</strong> — without it accrual cannot tell provisional from final, or true up once approval arrives.</td></tr>
+<tr><td>N-24</td><td><strong>A view over our tables, or the interface table?</strong> The BRD leans hard to a view — <em>"fundamentally you don't have to do an extraction; all you need to do is create a view based on the table he is already using"</em> — which supports the built pull path over the dormant push. Their call.</td></tr>
+<tr><td>N-25</td><td><strong>Is the grain "employee by day: working hours, unbilled hours, absence" as three separate measures?</strong> That is what the BRD says we owe them. Our interface carries the split; nobody on their side has confirmed the shape.</td></tr>
+<tr><td>S-01</td><td><strong>Independence from OTL</strong> — decide. The OTL push is on hold meanwhile.</td></tr>
+</table>
+
+<h2>F. Fusion configuration — not ours</h2>
+<table>
+<tr><th>#</th><th>Point</th></tr>
+<tr><td>S-09</td><td>Third-party transaction source registered in Fusion, and the expenditure batch naming agreed.</td></tr>
+<tr><td>S-10</td><td>Expenditure type per project confirmed — this pod has no per-task transaction controls, so one configured value applies to everything.</td></tr>
+<tr><td>S-17</td><td>Where the revenue model and leave-loss flag come from. Neither is read from Fusion and both are null today, so <strong>leave loss cannot fire for any project</strong>.</td></tr>
+<tr><td>S-18</td><td>Test data per revenue model — T&amp;M, FCP with and without leave loss, Milestone. Functional team owns this, agreed.</td></tr>
+</table>
+
+<h2>G. Build items already identified — no decision needed, just scheduling</h2>
+<table>
+<tr><th>#</th><th>Item</th><th>Why it matters</th></tr>
+<tr><td>N-26</td><td><strong>The entry unique key needs the adjustment id.</strong> One reversal row per cell today, so a second correction on the same day overwrites the first — 8h then 4h then 5h nets to 45 instead of 40. A data-model change: cheap now, expensive after go-live.</td><td>correctness</td></tr>
+<tr><td>N-27</td><td><strong>Source period, post period, post-cut-off flag and driver onto the accrual interface</strong>, and key the pull on the post period. This is S-24 and S-25 as one change.</td><td>the double-count</td></tr>
+<tr><td>N-28</td><td><strong>Prior-month adjustment queue for managers.</strong> <em>"The manager will go to the next month, will see the data and approve it again for those corrections."</em> The dual approval exists; nothing surfaces the reversal in the current month's queue.</td><td>BRD requirement</td></tr>
+<tr><td>N-29</td><td><strong><code>approve_week</code> approves every entry in the week with no project filter</strong> — a manager who owns one of an employee's two projects approves both. Unrelated to the flag work, but it corrupts exactly the data N-27 protects.</td><td>defect</td></tr>
+<tr><td>S-21</td><td>Make the schema match the single status set — week, day, month and retro-adjustment statuses are separate columns with different permitted values.</td><td>consistency</td></tr>
+<tr><td>S-14</td><td>Rejected-cost read-back so a failed post is visible.</td><td>operability</td></tr>
+<tr><td>S-26</td><td>Re-confirming a month marks the confirmation pending again while rows the consumer has already taken stay marked processed.</td><td>minor</td></tr>
+<tr><td>S-27</td><td>Nothing enforces that a post-accrual change goes through an adjustment — the duplicate guard tests existence, not value, so a direct change after accrual would never reach the consumer.</td><td>correctness</td></tr>
+<tr><td>S-16</td><td>Session token strengthening before production — one line and a grant.</td><td>security debt</td></tr>
+</table>
+
+<h2>H. Inputs we are waiting on</h2>
+<table>
+<tr><th>#</th><th>Item</th></tr>
+<tr><td>N-30</td><td><strong>The cut-off "handling" document</strong> the BRD promises — <em>"a separate document that we'll give you called handling… we'll tell you what the different cut-offs are, how you handle them for various reasons, especially for accrual."</em> Not in <code>doc/</code>. Would answer most of section A.</td></tr>
+<tr><td>N-31</td><td><strong>The control table walkthrough</strong> — <em>"the control table has already been designed, we will give you all that as a walk through."</em> Not in <code>doc/</code>. Answers N-23 directly.</td></tr>
+<tr><td>S-19</td><td>The accrual staging structure, as above — same dependency, different team.</td></tr>
+</table>
+
+</div>
+</body>
+</html>
