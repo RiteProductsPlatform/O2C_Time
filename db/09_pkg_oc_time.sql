@@ -583,8 +583,15 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
   -- may exceed 100% but a day cannot exceed 24 hours.
   PROCEDURE validate_day(p_ts_week_id IN NUMBER, p_entry_date IN DATE) IS
     v_total NUMBER;
+    v_leave NUMBER;
+    v_work  NUMBER;
+    v_std   NUMBER;
   BEGIN
-    SELECT NVL(SUM(hours),0) INTO v_total
+    SELECT NVL(SUM(hours),0),
+           NVL(SUM(CASE WHEN is_leave = 'Y' THEN hours END),0),
+           NVL(SUM(CASE WHEN is_leave = 'N' THEN hours END),0),
+           NVL(MAX(standard_hours),0)
+      INTO v_total, v_leave, v_work, v_std
       FROM oc_ts_entry
      WHERE ts_week_id = p_ts_week_id
        AND entry_date = TRUNC(p_entry_date)
@@ -592,6 +599,25 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
 
     IF v_total > 24 THEN
       RAISE_APPLICATION_ERROR(-20003, 'Cannot enter more than 24 hours in a day.');
+    END IF;
+
+    -- RULE-008: a day wholly taken by leave carries no worked hours.
+    --
+    -- Without this the grid happily held 8h of work beside 8h of leave on the
+    -- same date -- 16 hours against a standard of 8 -- and the manager approved
+    -- hours for a day the person was provably absent in HCM. The 24-hour rule
+    -- above does not catch it: 16 is under 24.
+    --
+    -- FULL day only. A half-day absence leaves the rest genuinely workable, and
+    -- refusing it would send someone to their manager to record hours they did
+    -- work. Zero standard hours is a weekend or holiday, where there is no
+    -- standard to reach, so any leave takes the day.
+    IF v_leave > 0 AND v_work > 0
+       AND (v_std <= 0 OR v_leave >= v_std) THEN
+      RAISE_APPLICATION_ERROR(-20002,
+        'This day is full-day leave from HR Absence, so no hours can be booked '
+        || 'against it. If the leave is wrong, correct it in Absence '
+        || 'Management and the timesheet will follow.');
     END IF;
   END validate_day;
 
@@ -811,6 +837,33 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
                       ab.absence_hours, 'Actual', 'Y', ab.absence_type,
                       'Prepopulated', p_actor);
         v_upserted := v_upserted + 1;
+
+        -- RULE-008: a full day of leave takes the whole day, so the work this
+        -- job seeded from the allocation has to come back off.
+        --
+        -- The allocation loop above runs FIRST and knows nothing about absence,
+        -- so it has already written a standard day against every active
+        -- project. Left alone that produced 8h of work beside 8h of leave on
+        -- the same date -- observed on RI2824, 07-Aug-2026, a 16-hour Friday
+        -- against a standard of 8 -- and validate_day would then refuse every
+        -- later save on that day, making it unsavable rather than merely wrong.
+        --
+        -- Only rows this job created ('Prepopulated') are touched. Hours the
+        -- employee or a manager typed are theirs; if they conflict with a new
+        -- absence that is a correction for a person to make, not for a
+        -- scheduled job to silently erase.
+        UPDATE oc_ts_entry e
+           SET e.hours = 0, e.updated_by = p_actor
+         WHERE e.ts_week_id = v_week
+           AND e.entry_date = ab.absence_date
+           AND e.is_leave   = 'N'
+           AND e.entry_type IN ('Actual','Default')
+           AND e.source     = 'Prepopulated'
+           AND e.hours      > 0
+           AND ab.absence_hours >= NVL((SELECT MAX(s.standard_hours)
+                                          FROM oc_ts_entry s
+                                         WHERE s.ts_week_id = v_week
+                                           AND s.entry_date = ab.absence_date), 0);
       END LOOP;
     EXCEPTION WHEN NO_DATA_FOUND THEN
       fail_record(v_job, 'TASK', 'COMMON/LEAVE', NULL,

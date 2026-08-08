@@ -316,14 +316,26 @@
                              oj-button's inner element may keep its own tab stop
                              regardless of tabindex here, and this pattern is
                              already proven in the shell's hamburger. -->
+                        <!-- Read-only is per CELL, not per week (09-Aug-2026).
+                             The leave line is never typed into (RULE-008), and a
+                             day that is entirely leave takes no hours at all —
+                             otherwise the grid shows 8h of work beside 8h of
+                             leave and totals 16 against a standard of 8. -->
                         <oj-input-text class="rw-hr-box"
                           :aria-label="[[ $page.functions.hoursLabel(cell.data.entryDate) ]]"
+                          :title="[[ $page.functions.cellTitle($variables.editable,
+                                       $variables.gridRows, $variables.dayHeaders,
+                                       line.data, cell.data.dayIndex) ]]"
                           value="[[ $page.functions.hoursAt(line.data, cell.data.dayIndex) ]]"
-                          readonly="[[ !$variables.editable ]]"
+                          readonly="[[ $page.functions.cellReadonly($variables.editable,
+                                         $variables.gridRows, $variables.dayHeaders,
+                                         line.data, cell.data.dayIndex) ]]"
                           on-value-changed="[[ $listeners.cellChanged ]]"
                           on-keydown="[[ $listeners.cellKey ]]">
                         </oj-input-text>
-                        <oj-bind-if test="[[ $variables.editable ]]">
+                        <oj-bind-if test="[[ !$page.functions.cellReadonly($variables.editable,
+                                               $variables.gridRows, $variables.dayHeaders,
+                                               line.data, cell.data.dayIndex) ]]">
                           <span class="rw-hr-arr">
                             <button type="button" tabindex="-1" class="rw-hr-step"
                                     title="+15 min" aria-hidden="true"

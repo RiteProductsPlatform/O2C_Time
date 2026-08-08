@@ -325,6 +325,87 @@ define([], () => {
 
 
     /**
+     * Leave hours booked on one day, summed across every line.
+     *
+     * Across lines, not just the leave line, because leave is attached to
+     * whichever project populate_month picked and there is nothing stopping a
+     * second absence type landing on another project the same day.
+     */
+    leaveHoursOnDay(rows, dayIndex) {
+      let h = 0;
+      (rows || []).forEach((r) => {
+        if (r && r.isLeave === 'Y') { h += Number(r['d' + dayIndex]) || 0; }
+      });
+      return Math.round(h * 100) / 100;
+    }
+
+
+    /**
+     * Is this whole day taken by leave?
+     *
+     * Full day only. A half-day absence leaves the rest of the day genuinely
+     * workable, and locking it would force the employee to a manager to record
+     * hours they really did work.
+     *
+     * Zero standard hours means a weekend or a holiday, where there is no
+     * standard to reach — any leave at all takes the day.
+     */
+    isFullLeaveDay(rows, headers, dayIndex) {
+      const leave = this.leaveHoursOnDay(rows, dayIndex);
+      if (!leave) { return false; }
+      const std = Number(((headers || [])[dayIndex] || {}).standardHours) || 0;
+      return std > 0 ? leave >= std : true;
+    }
+
+
+    /**
+     * Whether one day cell is read-only, and why.
+     *
+     * Three reasons, deliberately separate — the week-level flag alone was the
+     * only test until 09-Aug-2026, which left two holes:
+     *
+     *   1. the week is not the employee's to edit at all (RULE-004/006/007)
+     *   2. this is the LEAVE line. Leave is owned by Absence Management and is
+     *      never entered here (RULE-008). The remove button was already
+     *      suppressed for it; the hours box was not, so leave could be typed
+     *      over even though the server would refuse it.
+     *   3. the day is fully taken by leave. Otherwise the sheet happily shows
+     *      8h of work beside 8h of leave on the same day -- 16h against a
+     *      standard of 8 -- and the manager approves hours for a day the person
+     *      was provably absent.
+     *
+     * Computed from gridRows rather than cached in a variable: gridRows is
+     * assigned in three places and a derived copy would drift out of step with
+     * one of them.
+     */
+    cellReadonly(editable, rows, headers, row, dayIndex) {
+      if (!editable) { return true; }
+      if (row && row.isLeave === 'Y') { return true; }
+      return this.isFullLeaveDay(rows, headers, dayIndex);
+    }
+
+
+    /**
+     * Why a cell is locked, for the tooltip.
+     *
+     * A disabled box with no explanation makes people think the page is broken.
+     * The module's rule is that the UI explains a refusal rather than just
+     * enacting it.
+     */
+    cellTitle(editable, rows, headers, row, dayIndex) {
+      if (!editable) { return ''; }
+      if (row && row.isLeave === 'Y') {
+        return 'Leave comes from HR Absence and cannot be edited here.';
+      }
+      if (this.isFullLeaveDay(rows, headers, dayIndex)) {
+        return 'This day is full-day leave from HR Absence, so no hours can be '
+             + 'booked against it.';
+      }
+      return '';
+    }
+
+
+    /**
      * Fusion absence records -> the INT-006 rows POST sync/absence expects.
      *
      * Three conversions, and each one has already cost time:
