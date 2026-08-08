@@ -52,7 +52,15 @@
       "servers": [
         {
           "url": "https://fa-etao-dev20-saasfademo1.ds-fa.oraclepdemos.com",
-          "description": "Fusion SaaS pod (dev20 / saasfademo1)"
+          "description": "Fusion SaaS pod (dev20 / saasfademo1)",
+          "x-vb": {
+            "authentication": {
+              "authenticated": {
+                "type": "basic",
+                "credentials": "vb_d28acf0e-73bb-4cfa-aec6-0ef764e4d68f"
+              }
+            }
+          }
         }
       ],
       "backends": {
