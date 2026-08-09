@@ -46,10 +46,32 @@
 -- RA-002: p_auto_rest_auth FALSE plus anonymous access is acceptable in lower
 -- environments only. Harden to https + API key / OAuth2 before PROD.
 --==============================================================
+--==============================================================
+-- RUNNING THIS IN SQL DEVELOPER — use install_time_ALL.sql instead
+--==============================================================
+-- The @@ includes below are resolved by SQL*Plus relative to this file. SQL
+-- Developer only does the same when the script has been OPENED FROM A FILE and
+-- run with F5 (Run Script) — and it does not quote the path it builds, so a
+-- directory containing a space breaks the include. This repository lives under
+-- "OneDrive - RITE/O2C/Time Module/...", which has two. The failure is quiet:
+-- the includes are skipped, the run reports success, and nothing is created.
+--
+-- db/install_time_ALL.sql is this file with all 18 scripts expanded inline. It
+-- has no includes, so it runs the same opened, pasted, or through SQLcl, on any
+-- path. Regenerate it with `python db/build_install_all.py` after changing the
+-- install order or any script in it.
+--
+-- Either way: F5 (Run Script), never Ctrl+Enter — Run Statement executes a
+-- single statement and will look like it worked.
+--==============================================================
 SET DEFINE OFF
 SET SERVEROUTPUT ON SIZE UNLIMITED
 SET ECHO OFF
 SET FEEDBACK ON
+-- Stops at the first real failure rather than leaving a half-built schema. In
+-- SQL Developer this also disconnects the worksheet, which looks alarming and
+-- is not damage: reconnect, read the last error, fix it, re-run. Every script
+-- is idempotent, so re-running is the intended way to recover.
 WHENEVER SQLERROR EXIT FAILURE ROLLBACK
 
 PROMPT
