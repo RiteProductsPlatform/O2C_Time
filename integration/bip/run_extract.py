@@ -98,7 +98,8 @@ def cmd_deploy(args) -> int:
         xdm = c.build_data_model(ex["sql"], ex["columns"],
                                  description="O2C Time %s (%s -> %s)"
                                  % (ex["name"], ex["integration"], ex["target"]),
-                                 defaults={"P_EFFECTIVE_DATE": args.effective_date})
+                                 defaults={"P_EFFECTIVE_DATE": args.effective_date,
+                                           "P_LAST_SYNC": args.since})
         try:
             c.upload_data_model(path, xdm)
             print("  deployed  %-12s -> %s" % (ex["name"], path))
@@ -108,7 +109,8 @@ def cmd_deploy(args) -> int:
     return rc
 
 
-def _run_one(c: BipClient, ex: Dict, eff: str, chunked: bool) -> List[Dict[str, str]]:
+def _run_one(c: BipClient, ex: Dict, eff: str, chunked: bool,
+             since: str = "1900-01-01") -> List[Dict[str, str]]:
     """
     Push the current SQL, then run it.
 
@@ -128,14 +130,21 @@ def _run_one(c: BipClient, ex: Dict, eff: str, chunked: bool) -> List[Dict[str, 
     SQL on the pod is somebody else's, so say so rather than let it pass.
     """
     path = model_path(ex["name"])
-    params = {"P_EFFECTIVE_DATE": eff} if ":P_EFFECTIVE_DATE" in ex["sql"] else None
+    params = {}
+    if ":P_EFFECTIVE_DATE" in ex["sql"]:
+        params["P_EFFECTIVE_DATE"] = eff
+    # Always sent when the model declares it. Omitting a declared bind is
+    # the silent-zero-rows failure the module docstring warns about.
+    if ":P_LAST_SYNC" in ex["sql"]:
+        params["P_LAST_SYNC"] = since
+    params = params or None
 
     try:
         xdm = c.build_data_model(
             ex["sql"], ex["columns"],
             description="O2C Time %s (%s -> %s)"
                         % (ex["name"], ex["integration"], ex["target"]),
-            defaults={"P_EFFECTIVE_DATE": eff})
+            defaults={"P_EFFECTIVE_DATE": eff, "P_LAST_SYNC": since})
         c.upload_data_model(path, xdm)
     except BipError as exc:
         if not c.object_exists(path):
@@ -157,7 +166,19 @@ def cmd_validate(args) -> int:
     for ex in _selected(args.validate):
         path = model_path(ex["name"])
         try:
-            sql = ex["sql"].replace(":P_EFFECTIVE_DATE", "'%s'" % eff)
+            # EVERY bind must be inlined, not just the one we remember. This
+            # inlined P_EFFECTIVE_DATE only, so when P_LAST_SYNC was added the
+            # probe still carried an unbound :P_LAST_SYNC -> NULL ->
+            # GREATEST(...) > NULL is never true -> all eleven extracts reported
+            # "ok, 0 rows". Exactly the silent-zero the module docstring warns
+            # about, reproduced by the tool meant to catch it.
+            sql = (ex["sql"].replace(":P_EFFECTIVE_DATE", "'%s'" % eff)
+                            .replace(":P_LAST_SYNC", "'%s'" % args.since))
+            left = [b for b in ("P_EFFECTIVE_DATE", "P_LAST_SYNC")
+                    if ":" + b in sql]
+            if left:
+                raise BipError("bind(s) not inlined for the probe: %s — the "
+                               "count would be meaningless" % ", ".join(left))
             probe = "SELECT COUNT(*) AS N FROM (%s)" % sql
             n = c.query(probe, ["N"], path=CATALOG_FOLDER + "/_validate.xdm")
             count = n[0]["N"] if n else "?"
@@ -181,7 +202,7 @@ def cmd_run(args) -> int:
     for ex in _selected(args.run):
         t0 = time.time()
         try:
-            rows = _run_one(c, ex, eff, args.chunked)
+            rows = _run_one(c, ex, eff, args.chunked, args.since)
         except BipError as exc:
             print("  FAILED  %-12s %s" % (ex["name"], str(exc)[:160]))
             rc = 1
@@ -248,7 +269,7 @@ def cmd_load(args) -> int:
 
         ex = BY_NAME[name]
         try:
-            rows = _run_one(c, ex, eff, args.chunked)
+            rows = _run_one(c, ex, eff, args.chunked, args.since)
         except BipError as exc:
             print("  FAILED  %-12s extract: %s" % (name, str(exc)[:120]))
             rc = 1
@@ -349,6 +370,11 @@ def main(argv=None) -> int:
     g.add_argument("--load", nargs="?", const="ALL", metavar="NAMES",
                    help="run AND post into the ORDS cache (the full inbound path)")
     ap.add_argument("--out", default="./extracts", help="CSV output directory")
+    ap.add_argument("--since", default="1900-01-01", metavar="YYYY-MM-DD",
+                    help="incremental cut-off (:P_LAST_SYNC). The default "
+                         "1900-01-01 means a FULL REFRESH, which is what the "
+                         "monthly run wants. The daily run passes the last "
+                         "successful run's timestamp.")
     ap.add_argument("--effective-date", default=date.today().isoformat(),
                     help="AS OF date for the effective-dated joins (YYYY-MM-DD)")
     ap.add_argument("--chunked", action="store_true",

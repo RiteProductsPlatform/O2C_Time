@@ -1,8 +1,10 @@
 # BIP data models and queries — O2C Timesheet inbound sync
 
-Generated from `integration/bip/extracts.py` on 09-Aug-2026. Everything here is what the code actually sends, not a transcription.
+Generated from `integration/bip/extracts.py` on 09-Aug-2026. This is what the code sends, not a transcription.
 
-**Catalog folder:** `/Custom/O2C_TIME`  ·  **Naming:** `O2C_<ENTITY>.xdm`  ·  **Bind:** `:P_EFFECTIVE_DATE` (`YYYY-MM-DD`), auto-declared by `build_data_model`
+**Catalog folder:** `/Custom/O2C_TIME`  ·  **Naming:** `O2C_<ENTITY>.xdm`
+
+**Binds:** `:P_EFFECTIVE_DATE` — the as-of date.  `:P_LAST_SYNC` — the incremental cut-off; `1900-01-01` (the declared default) means a full refresh, so monthly and daily share one model.
 
 | # | Extract | Data model | Target | In scheduled sync |
 |---|---|---|---|---|
@@ -26,9 +28,8 @@ Generated from `integration/bip/extracts.py` on 09-Aug-2026. Everything here is 
 |---|---|
 | Data model | `/Custom/O2C_TIME/O2C_WORKERS.xdm` |
 | Target table | `OC_TIME_WORKER` |
-| Integration id | INT-001 |
 | Natural key | `EMPLOYEE_ID` |
-| Binds | `:P_EFFECTIVE_DATE` |
+| Binds | `:P_EFFECTIVE_DATE`, `:P_LAST_SYNC` |
 | Loader endpoint | POST /oc/time/admin/sync/worker |
 | Columns (12) | `EMPLOYEE_ID`, `EMPLOYEE_NAME`, `EMAIL`, `WORKER_TYPE`, `BASE_COUNTRY`, `STD_HOURS_PER_DAY`, `MANAGER_EMP_ID`, `LEGAL_EMPLOYER`, `EXPENDITURE_ORG`, `HIRE_DATE`, `TERMINATION_DATE`, `STATUS` |
 
@@ -113,6 +114,25 @@ SELECT papf.person_number                                AS employee_id,
     ON mgr.person_id = sup.manager_id
    AND TO_DATE(:P_EFFECTIVE_DATE,'YYYY-MM-DD') BETWEEN mgr.effective_start_date AND mgr.effective_end_date
  WHERE TO_DATE(:P_EFFECTIVE_DATE,'YYYY-MM-DD') BETWEEN papf.effective_start_date AND papf.effective_end_date
+   AND GREATEST(
+           NVL(papf.last_update_date, DATE '1900-01-01'),
+           NVL(papf.effective_start_date, DATE '1900-01-01'),
+           NVL(paam.last_update_date, DATE '1900-01-01'),
+           NVL(paam.effective_start_date, DATE '1900-01-01'),
+           NVL(ppnf.last_update_date, DATE '1900-01-01'),
+           NVL(ppnf.effective_start_date, DATE '1900-01-01'),
+           NVL(pea.last_update_date, DATE '1900-01-01'),
+           NVL(pos.last_update_date, DATE '1900-01-01'),
+           NVL(loc.last_update_date, DATE '1900-01-01'),
+           NVL(loc.effective_start_date, DATE '1900-01-01'),
+           NVL(org.last_update_date, DATE '1900-01-01'),
+           NVL(org.effective_start_date, DATE '1900-01-01'),
+           NVL(expo.last_update_date, DATE '1900-01-01'),
+           NVL(expo.effective_start_date, DATE '1900-01-01'),
+           NVL(sup.last_update_date, DATE '1900-01-01'),
+           NVL(sup.effective_start_date, DATE '1900-01-01'),
+           NVL(mgr.last_update_date, DATE '1900-01-01'),
+           NVL(mgr.effective_start_date, DATE '1900-01-01')) > TO_DATE(:P_LAST_SYNC,'YYYY-MM-DD')
 ```
 
 ---
@@ -123,9 +143,8 @@ SELECT papf.person_number                                AS employee_id,
 |---|---|
 | Data model | `/Custom/O2C_TIME/O2C_PROJECTS.xdm` |
 | Target table | `OC_TIME_PROJECT` |
-| Integration id | INT-002 |
 | Natural key | `PROJECT_NUMBER` |
-| Binds | `:P_EFFECTIVE_DATE` |
+| Binds | `:P_EFFECTIVE_DATE`, `:P_LAST_SYNC` |
 | Loader endpoint | POST /oc/time/admin/sync/project |
 | Columns (11) | `PROJECT_ID`, `PROJECT_NUMBER`, `PROJECT_NAME`, `PROJECT_TYPE`, `CUSTOMER_NAME`, `PROJECT_STATUS`, `START_DATE`, `END_DATE`, `ORGANIZATION`, `PROJECT_MANAGER_ID`, `TIME_ENTRY_ENABLED` |
 
@@ -222,6 +241,14 @@ SELECT p.project_id                            AS project_id,
                            WHERE mp.project_id = sp.project_id
                              AND mp.project_party_type = 'IN'
                              AND mr.name = 'Project Manager'))
+   AND GREATEST(
+           NVL(p.last_update_date, DATE '1900-01-01'),
+           NVL(ptl.last_update_date, DATE '1900-01-01'),
+           NVL(pt.last_update_date, DATE '1900-01-01'),
+           NVL(org.last_update_date, DATE '1900-01-01'),
+           NVL(org.effective_start_date, DATE '1900-01-01'),
+           NVL(cpp.last_update_date, DATE '1900-01-01'),
+           NVL(cust.last_update_date, DATE '1900-01-01')) > TO_DATE(:P_LAST_SYNC,'YYYY-MM-DD')
 ```
 
 ---
@@ -232,9 +259,8 @@ SELECT p.project_id                            AS project_id,
 |---|---|
 | Data model | `/Custom/O2C_TIME/O2C_TASKS.xdm` |
 | Target table | `OC_TIME_TASK` |
-| Integration id | INT-002 |
 | Natural key | `TASK_ID` |
-| Binds | `:P_EFFECTIVE_DATE` |
+| Binds | `:P_EFFECTIVE_DATE`, `:P_LAST_SYNC` |
 | Loader endpoint | POST /oc/time/admin/sync/task |
 | Columns (12) | `TASK_ID`, `PROJECT_ID`, `PROJECT_NUMBER`, `TASK_NUMBER`, `TASK_NAME`, `CHARGEABLE_FLAG`, `BILLABLE_FLAG`, `WBS_LEVEL`, `PARENT_TASK_ID`, `START_DATE`, `END_DATE`, `EXPENDITURE_TYPE` |
 
@@ -295,6 +321,10 @@ SELECT e.proj_element_id                        AS task_id,
                            WHERE mp.project_id = sp.project_id
                              AND mp.project_party_type = 'IN'
                              AND mr.name = 'Project Manager'))
+   AND GREATEST(
+           NVL(e.last_update_date, DATE '1900-01-01'),
+           NVL(etl.last_update_date, DATE '1900-01-01'),
+           NVL(p.last_update_date, DATE '1900-01-01')) > TO_DATE(:P_LAST_SYNC,'YYYY-MM-DD')
 ```
 
 ---
@@ -305,9 +335,8 @@ SELECT e.proj_element_id                        AS task_id,
 |---|---|
 | Data model | `/Custom/O2C_TIME/O2C_ALLOCATIONS.xdm` |
 | Target table | `OC_TIME_ALLOCATION` |
-| Integration id | INT-003 |
 | Natural key | `PROJECT_ID`, `EMPLOYEE_ID` |
-| Binds | `:P_EFFECTIVE_DATE` |
+| Binds | `:P_EFFECTIVE_DATE`, `:P_LAST_SYNC` |
 | Loader endpoint | POST /oc/time/admin/sync/allocation |
 | Columns (9) | `PROJECT_ID`, `PROJECT_NUMBER`, `EMPLOYEE_ID`, `START_DATE`, `END_DATE`, `ALLOC_PCT`, `CAP_HOURS`, `TRACK_TIME_FLAG`, `STATUS` |
 
@@ -378,6 +407,11 @@ SELECT pp.project_id                                   AS project_id,
                              AND mp.project_party_type = 'IN'
                              AND mr.name = 'Project Manager'))
 
+   AND GREATEST(
+           NVL(pp.last_update_date, DATE '1900-01-01'),
+           NVL(prj.last_update_date, DATE '1900-01-01'),
+           NVL(papf.last_update_date, DATE '1900-01-01'),
+           NVL(papf.effective_start_date, DATE '1900-01-01')) > TO_DATE(:P_LAST_SYNC,'YYYY-MM-DD')
  GROUP BY pp.project_id, prj.segment1, papf.person_number
 ```
 
@@ -389,9 +423,8 @@ SELECT pp.project_id                                   AS project_id,
 |---|---|
 | Data model | `/Custom/O2C_TIME/O2C_ABSENCES.xdm` |
 | Target table | `OC_TIME_ABSENCE` |
-| Integration id | INT-006 |
 | Natural key | `EMPLOYEE_ID`, `ABSENCE_DATE`, `ABSENCE_TYPE` |
-| Binds | `:P_EFFECTIVE_DATE` |
+| Binds | `:P_EFFECTIVE_DATE`, `:P_LAST_SYNC` |
 | Loader endpoint | POST /oc/time/admin/sync/absence  (live per person now) |
 | Columns (6) | `EMPLOYEE_ID`, `ABSENCE_DATE`, `ABSENCE_TYPE`, `DURATION_HOURS`, `APPROVAL_STATUS`, `ABSENCE_STATUS` |
 
@@ -415,6 +448,12 @@ SELECT papf.person_number                    AS employee_id,
  WHERE e.approval_status_cd = 'APPROVED'
    AND d.absence_date >= ADD_MONTHS(TO_DATE(:P_EFFECTIVE_DATE,'YYYY-MM-DD'), -12)
    AND d.absence_date <  ADD_MONTHS(TO_DATE(:P_EFFECTIVE_DATE,'YYYY-MM-DD'),   3)
+   AND GREATEST(
+           NVL(e.last_update_date, DATE '1900-01-01'),
+           NVL(d.last_update_date, DATE '1900-01-01'),
+           NVL(papf.last_update_date, DATE '1900-01-01'),
+           NVL(papf.effective_start_date, DATE '1900-01-01'),
+           NVL(t.last_update_date, DATE '1900-01-01')) > TO_DATE(:P_LAST_SYNC,'YYYY-MM-DD')
 ```
 
 ---
@@ -425,9 +464,8 @@ SELECT papf.person_number                    AS employee_id,
 |---|---|
 | Data model | `/Custom/O2C_TIME/O2C_CALENDAR.xdm` |
 | Target table | `OC_TIME_CALENDAR` |
-| Integration id | INT-004 / INT-005 |
 | Natural key | `LAYER`, `SCOPE_KEY`, `CALENDAR_DATE` |
-| Binds | `:P_EFFECTIVE_DATE` |
+| Binds | `:P_EFFECTIVE_DATE`, `:P_LAST_SYNC` |
 | Loader endpoint | POST /oc/time/admin/calendar/sync/CORPORATE |
 | Columns (7) | `LAYER`, `SCOPE_KEY`, `CALENDAR_DATE`, `IS_WORKING_DAY`, `HOLIDAY_NAME`, `SHIFT_CODE`, `STANDARD_HOURS` |
 
@@ -449,6 +487,8 @@ SELECT 'CORPORATE'                                       AS layer,
    AND TRUNC(ce.start_date_time) + lvl.n <= TRUNC(ce.end_date_time)
    AND TRUNC(ce.start_date_time) + lvl.n >= ADD_MONTHS(TO_DATE(:P_EFFECTIVE_DATE,'YYYY-MM-DD'), -3)
    AND TRUNC(ce.start_date_time) + lvl.n <  ADD_MONTHS(TO_DATE(:P_EFFECTIVE_DATE,'YYYY-MM-DD'), 12)
+   AND GREATEST(
+           NVL(ce.last_update_date, DATE '1900-01-01')) > TO_DATE(:P_LAST_SYNC,'YYYY-MM-DD')
 ```
 
 ---
@@ -459,10 +499,9 @@ SELECT 'CORPORATE'                                       AS layer,
 |---|---|
 | Data model | `/Custom/O2C_TIME/O2C_SHIFTS.xdm` |
 | Target table | `OC_TIME_CALENDAR (SHIFT layer)` |
-| Integration id | INT-004 |
 | Natural key | `SHIFT_CODE` |
-| Binds | none |
-| Loader endpoint | reference only - feeds the SHIFT layer |
+| Binds | `:P_LAST_SYNC` |
+| Loader endpoint | reference only |
 | Columns (6) | `SHIFT_CODE`, `SHIFT_NAME`, `WORK_DURATION`, `BREAK_DURATION`, `SHIFT_CATEGORY`, `ACTIVE_FLAG` |
 
 ```sql
@@ -475,6 +514,8 @@ SELECT s.shift_code      AS shift_code,
        s.shift_category  AS shift_category,
        s.active_flag     AS active_flag
   FROM hts_shifts_vl s
+ WHERE GREATEST(
+           NVL(s.last_update_date, DATE '1900-01-01')) > TO_DATE(:P_LAST_SYNC,'YYYY-MM-DD')
 ```
 
 ---
@@ -485,10 +526,9 @@ SELECT s.shift_code      AS shift_code,
 |---|---|
 | Data model | `/Custom/O2C_TIME/O2C_WORK_PATTERNS.xdm` |
 | Target table | `OC_TIME_CALENDAR (pattern reference)` |
-| Integration id | INT-004 |
 | Natural key | `WORK_PATTERN_ID`, `DAY_INDEX` |
-| Binds | none |
-| Loader endpoint | reference only - feeds the SHIFT layer |
+| Binds | `:P_LAST_SYNC` |
+| Loader endpoint | reference only |
 | Columns (9) | `WORK_PATTERN_ID`, `WORK_PATTERN_NAME`, `REPEAT_CYCLE`, `REPEAT_NUM`, `DAY_INDEX`, `SHIFT_ID`, `SHIFT_NAME`, `DURATION`, `BREAK_DURATION` |
 
 ```sql
@@ -510,6 +550,10 @@ SELECT wp.work_pattern_id      AS work_pattern_id,
   LEFT JOIN hts_shifts_vl sh
     ON sh.shift_id = wps.shift_id
  WHERE NVL(wp.template_flag,'N') = 'N'
+   AND GREATEST(
+           NVL(wp.last_update_date, DATE '1900-01-01'),
+           NVL(wps.last_update_date, DATE '1900-01-01'),
+           NVL(sh.last_update_date, DATE '1900-01-01')) > TO_DATE(:P_LAST_SYNC,'YYYY-MM-DD')
 ```
 
 ---
@@ -520,10 +564,9 @@ SELECT wp.work_pattern_id      AS work_pattern_id,
 |---|---|
 | Data model | `/Custom/O2C_TIME/O2C_WORK_SCHEDULES.xdm` |
 | Target table | `OC_TIME_CALENDAR (schedule assignment)` |
-| Integration id | INT-004 |
 | Natural key | `EMPLOYEE_ID`, `SCHEDULE_ID`, `START_DATE` |
-| Binds | `:P_EFFECTIVE_DATE` |
-| Loader endpoint | reference only - feeds the SHIFT layer |
+| Binds | `:P_EFFECTIVE_DATE`, `:P_LAST_SYNC` |
+| Loader endpoint | reference only |
 | Columns (6) | `EMPLOYEE_ID`, `SCHEDULE_ID`, `RESOURCE_TYPE`, `START_DATE`, `END_DATE`, `PRIMARY_FLAG` |
 
 ```sql
@@ -553,6 +596,12 @@ SELECT papf.person_number                       AS employee_id,
    AND TO_DATE(:P_EFFECTIVE_DATE,'YYYY-MM-DD') BETWEEN papf.effective_start_date AND papf.effective_end_date
  WHERE sa.resource_type = 'ASSIGN'
    AND NVL(sa.end_date, TO_DATE(:P_EFFECTIVE_DATE,'YYYY-MM-DD')) >= ADD_MONTHS(TO_DATE(:P_EFFECTIVE_DATE,'YYYY-MM-DD'), -12)
+   AND GREATEST(
+           NVL(sa.last_update_date, DATE '1900-01-01'),
+           NVL(paam.last_update_date, DATE '1900-01-01'),
+           NVL(paam.effective_start_date, DATE '1900-01-01'),
+           NVL(papf.last_update_date, DATE '1900-01-01'),
+           NVL(papf.effective_start_date, DATE '1900-01-01')) > TO_DATE(:P_LAST_SYNC,'YYYY-MM-DD')
 ```
 
 ---
@@ -563,9 +612,8 @@ SELECT papf.person_number                       AS employee_id,
 |---|---|
 | Data model | `/Custom/O2C_TIME/O2C_WORKER_SHIFTS.xdm` |
 | Target table | `OC_TIME_CALENDAR (SHIFT layer)` |
-| Integration id | INT-004 |
 | Natural key | `EMPLOYEE_ID`, `CALENDAR_DATE` |
-| Binds | `:P_EFFECTIVE_DATE` |
+| Binds | `:P_EFFECTIVE_DATE`, `:P_LAST_SYNC` |
 | Loader endpoint | POST /oc/time/admin/calendar/sync/SHIFT |
 | Columns (7) | `LAYER`, `EMPLOYEE_ID`, `CALENDAR_DATE`, `IS_WORKING_DAY`, `SHIFT_CODE`, `SHIFT_NAME`, `STANDARD_HOURS` |
 
@@ -590,6 +638,10 @@ SELECT 'SHIFT'                                     AS layer,
    AND ss.ref_date BETWEEN papf.effective_start_date AND papf.effective_end_date
  WHERE ss.ref_date >= ADD_MONTHS(TO_DATE(:P_EFFECTIVE_DATE,'YYYY-MM-DD'), -3)
    AND ss.ref_date <  ADD_MONTHS(TO_DATE(:P_EFFECTIVE_DATE,'YYYY-MM-DD'),  3)
+   AND GREATEST(
+           NVL(ss.last_update_date, DATE '1900-01-01'),
+           NVL(papf.last_update_date, DATE '1900-01-01'),
+           NVL(papf.effective_start_date, DATE '1900-01-01')) > TO_DATE(:P_LAST_SYNC,'YYYY-MM-DD')
  GROUP BY papf.person_number, ss.ref_date
 ```
 
@@ -601,10 +653,9 @@ SELECT 'SHIFT'                                     AS layer,
 |---|---|
 | Data model | `/Custom/O2C_TIME/O2C_EXP_TYPES.xdm` |
 | Target table | `(reference — the legal values for DEFAULT_EXPENDITURE_TYPE)` |
-| Integration id | INT-002 |
 | Natural key | `EXPENDITURE_TYPE_ID` |
-| Binds | `:P_EFFECTIVE_DATE` |
-| Loader endpoint | reference only - legal values for EXPENDITURE_TYPE |
+| Binds | `:P_EFFECTIVE_DATE`, `:P_LAST_SYNC` |
+| Loader endpoint | reference only |
 | Columns (6) | `EXPENDITURE_TYPE_ID`, `EXPENDITURE_TYPE_NAME`, `EXPENDITURE_CATEGORY_ID`, `UNIT_OF_MEASURE`, `START_DATE`, `END_DATE` |
 
 ```sql
@@ -628,4 +679,7 @@ SELECT etb.expenditure_type_id                      AS expenditure_type_id,
     ON ettl.expenditure_type_id = etb.expenditure_type_id
    AND ettl.language = USERENV('LANG')
  WHERE NVL(etb.end_date_active, TO_DATE(:P_EFFECTIVE_DATE,'YYYY-MM-DD')) >= TO_DATE(:P_EFFECTIVE_DATE,'YYYY-MM-DD')
+   AND GREATEST(
+           NVL(etb.last_update_date, DATE '1900-01-01'),
+           NVL(ettl.last_update_date, DATE '1900-01-01')) > TO_DATE(:P_LAST_SYNC,'YYYY-MM-DD')
 ```

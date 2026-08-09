@@ -607,3 +607,111 @@ BY_NAME = {e["name"]: e for e in ALL_EXTRACTS}
 # The ones proven against a pod. --run ALL uses this, so an unverified extract
 # cannot quietly join the monthly MasterSync and write a column nobody checked.
 VERIFIED = [e for e in ALL_EXTRACTS if e.get("verified", True)]
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# INCREMENTAL SYNC — :P_LAST_SYNC
+# ═════════════════════════════════════════════════════════════════════════
+#
+# Added 09-Aug-2026 so the daily job can fetch only what moved. Every extract
+# above is an AS-OF snapshot keyed on :P_EFFECTIVE_DATE; this adds a second,
+# independent filter for WHEN THE ROW LAST CHANGED.
+#
+# ONE MODEL, TWO MODES. Pass '1900-01-01' (the declared default) and the
+# predicate is satisfied by everything, so the monthly run is a full refresh
+# through exactly the same data model the daily run uses. There is no second
+# report to keep in step.
+#
+# WHY IT IS NOT JUST last_update_date > :P_LAST_SYNC
+#
+#   1. EFFECTIVE-DATED ROWS CHANGE WITHOUT BEING UPDATED, and this is the trap
+#      that makes a naive delta lose data permanently. A termination effective
+#      31-Aug entered in June carries LAST_UPDATE_DATE of June. A delta run on
+#      1-Sep asking for "changed since 31-Aug" does not select it, so the worker
+#      stays Active in our cache for ever and no error is ever raised.
+#
+#      So EFFECTIVE_START_DATE is folded into the same GREATEST. The as-of
+#      predicates already restrict every row to the one current on
+#      :P_EFFECTIVE_DATE, so a row whose EFFECTIVE_START_DATE is later than
+#      :P_LAST_SYNC is precisely one that came into effect during the window.
+#
+#   2. A ROW IS A JOIN, NOT A TABLE. A worker row is ten tables wide. Filtering
+#      on the driving table alone misses an email change, a manager change or a
+#      location change -- silently, because the row simply is not returned.
+#      Every alias that contributes a column is listed.
+#
+# WHAT IT STILL CANNOT DO: see a DELETE. Nothing in a delta can, and the loaders
+# only MERGE, so a project team membership removed in Fusion stays in our cache.
+# The monthly full refresh does not fix that either -- it re-asserts what exists
+# and never removes what does not. Reconciliation is a separate problem; do not
+# read "full refresh" as "self-correcting" for deletes.
+LAST_SYNC = "TO_DATE(:P_LAST_SYNC,'YYYY-MM-DD')"
+
+# alias -> is this alias effective-dated IN THIS QUERY (does it contribute an
+# EFFECTIVE_START_DATE that can move a row in or out of the as-of window)?
+DELTA_ALIASES = {
+    "WORKERS":        {"papf": 1, "paam": 1, "ppnf": 1, "pea": 0, "pos": 0,
+                       "loc": 1, "org": 1, "expo": 1, "sup": 1, "mgr": 1},
+    "PROJECTS":       {"p": 0, "ptl": 0, "pt": 0, "org": 1, "cpp": 0, "cust": 0},
+    "TASKS":          {"e": 0, "etl": 0, "p": 0},
+    "ALLOCATIONS":    {"pp": 0, "prj": 0, "papf": 1},
+    "ABSENCES":       {"e": 0, "d": 0, "papf": 1, "t": 0},
+    "CALENDAR":       {"ce": 0},
+    "SHIFTS":         {"s": 0},
+    "WORK_PATTERNS":  {"wp": 0, "wps": 0, "sh": 0},
+    "WORK_SCHEDULES": {"sa": 0, "paam": 1, "papf": 1},
+    "WORKER_SHIFTS":  {"ss": 0, "papf": 1},
+    "EXP_TYPES":      {"etb": 0, "ettl": 0},
+}
+
+# How the predicate attaches. Blind appending is wrong for three of the eleven:
+# ALLOCATIONS and WORKER_SHIFTS end in GROUP BY, and SHIFTS has no WHERE at all.
+#   "and"    - the SQL ends inside its WHERE clause
+#   "where"  - there is no WHERE; open one
+#   "before" - insert ahead of the trailing clause named in DELTA_BEFORE
+DELTA_MODE = {
+    "ALLOCATIONS": "before", "WORKER_SHIFTS": "before", "SHIFTS": "where",
+}
+DELTA_BEFORE = {"ALLOCATIONS": "GROUP BY", "WORKER_SHIFTS": "GROUP BY"}
+
+_EPOCH = "DATE '1900-01-01'"
+
+
+def _delta_predicate(aliases):
+    """GREATEST over every alias's change stamps, compared to :P_LAST_SYNC."""
+    parts = []
+    for a, is_effective_dated in aliases.items():
+        parts.append("NVL(%s.last_update_date, %s)" % (a, _EPOCH))
+        if is_effective_dated:
+            parts.append("NVL(%s.effective_start_date, %s)" % (a, _EPOCH))
+    return ("GREATEST(\n           " + ",\n           ".join(parts)
+            + ") > " + LAST_SYNC)
+
+
+def _attach_delta(ex):
+    name, sql = ex["name"], ex["sql"].rstrip()
+    aliases = DELTA_ALIASES.get(name)
+    if not aliases:
+        return sql
+    pred = _delta_predicate(aliases)
+    mode = DELTA_MODE.get(name, "and")
+
+    if mode == "and":
+        return sql + "\n   AND " + pred + "\n"
+    if mode == "where":
+        return sql + "\n WHERE " + pred + "\n"
+
+    # "before": split at the LAST occurrence of the trailing clause, so the
+    # predicate lands in the WHERE and not after an aggregate.
+    kw = DELTA_BEFORE[name]
+    i = sql.upper().rfind("\n" + " " * (len(sql) - len(sql.lstrip())) + kw)
+    if i < 0:
+        i = sql.upper().rfind(kw)
+        i = sql.rfind("\n", 0, i)
+    if i < 0:
+        raise AssertionError("%s: cannot find %s to insert before" % (name, kw))
+    return sql[:i] + "\n   AND " + pred + sql[i:] + "\n"
+
+
+for _ex in ALL_EXTRACTS:
+    _ex["sql"] = _attach_delta(_ex)
