@@ -305,6 +305,15 @@ BEGIN
         v_actor  VARCHAR2(100);
         v_trace  VARCHAR2(64);
         v_done   NUMBER := 0;
+        -- Per-employee outcome. A bulk action must not be all-or-nothing:
+        -- selecting the whole team when the manager is a member of it raised
+        -- RULE-015 on their own row, aborted the loop, rolled back and returned
+        -- approved:0 -- so nine perfectly approvable months were refused
+        -- because of the tenth. Same principle the sync handlers already use:
+        -- a bad row is recorded, it does not abort the chunk.
+        v_skip   NUMBER := 0;
+        v_err    VARCHAR2(500);
+        v_detail VARCHAR2(3000);
       BEGIN
         SELECT proj, per, aeid, NVL(act,'VBCS_USER'), tr
           INTO v_proj, v_period, v_aeid, v_actor, v_trace
@@ -317,18 +326,45 @@ BEGIN
 
         FOR e IN (SELECT emp FROM JSON_TABLE(v_body, '$.employees[*]'
                                 COLUMNS (emp VARCHAR2(50) PATH '$'))) LOOP
-          oc_time_pkg.approve_employee_month(
-            p_project_id   => v_proj,
-            p_period_id    => v_period,
-            p_employee_id  => e.emp,
-            p_actor_emp_id => v_aeid,
-            p_actor        => v_actor,
-            p_trace_id     => v_trace);
-          v_done := v_done + 1;
+          BEGIN
+            oc_time_pkg.approve_employee_month(
+              p_project_id   => v_proj,
+              p_period_id    => v_period,
+              p_employee_id  => e.emp,
+              p_actor_emp_id => v_aeid,
+              p_actor        => v_actor,
+              p_trace_id     => v_trace);
+            v_done := v_done + 1;
+          EXCEPTION WHEN OTHERS THEN
+            v_skip := v_skip + 1;
+            -- SUBSTR is not cosmetic. SQLERRM can exceed the declared length,
+            -- and ORA-06502 raised INSIDE this handler would escape the inner
+            -- block to the outer one, roll everything back and return
+            -- approved:0 -- reinstating the exact bug this loop exists to fix.
+            v_err  := SUBSTR(REPLACE(REPLACE(SQLERRM,
+                        'ORA-'||LTRIM(TO_CHAR(ABS(SQLCODE)))||': ',''),'"','\"'),
+                        1, 400);
+            -- Name the employee. "A manager's own time is approved by their
+            -- reporting manager" is useless in a batch of ten without it.
+            IF LENGTH(v_detail) IS NULL OR LENGTH(v_detail) < 2400 THEN
+              v_detail := v_detail
+                       || CASE WHEN v_detail IS NULL THEN '' ELSE ', ' END
+                       || e.emp || ': ' || RTRIM(v_err, CHR(10));
+            END IF;
+          END;
         END LOOP;
+
+        -- Committed even when some were skipped: the ones that worked are real
+        -- decisions and throwing them away helps nobody.
         COMMIT;
-        :status_code := 200;
-        HTP.P('{"approved":' || v_done || '}');
+
+        -- 400 only when nothing at all went through. A partial success is a
+        -- success with a caveat, and the UI needs the successes to refresh.
+        :status_code := CASE WHEN v_done = 0 AND v_skip > 0 THEN 400 ELSE 200 END;
+        HTP.P('{"approved":' || v_done ||
+              ',"skipped":' || v_skip ||
+              CASE WHEN v_detail IS NULL THEN ''
+                   ELSE ',"error":"' || v_detail || '"' END || '}');
       EXCEPTION WHEN OTHERS THEN
         ROLLBACK;
         :status_code := CASE WHEN SQLCODE BETWEEN -20025 AND -20001 THEN 400 ELSE 500 END;
@@ -365,6 +401,12 @@ BEGIN
         v_actor   VARCHAR2(100);
         v_trace   VARCHAR2(64);
         v_done    NUMBER := 0;
+        -- Same isolation as approve/month: one refused employee must not undo
+        -- the rest of the batch. RULE-015 applies to a rejection too, so a
+        -- manager rejecting their whole team hit exactly the same wall.
+        v_skip    NUMBER := 0;
+        v_err     VARCHAR2(500);
+        v_detail  VARCHAR2(3000);
       BEGIN
         SELECT proj, per, rsn, rmk, aeid, NVL(act,'VBCS_USER'), tr
           INTO v_proj, v_period, v_reason, v_remarks, v_aeid, v_actor, v_trace
@@ -379,20 +421,37 @@ BEGIN
 
         FOR e IN (SELECT emp FROM JSON_TABLE(v_body, '$.employees[*]'
                                 COLUMNS (emp VARCHAR2(50) PATH '$'))) LOOP
-          oc_time_pkg.reject_employee_month(
-            p_project_id   => v_proj,
-            p_period_id    => v_period,
-            p_employee_id  => e.emp,
-            p_reason       => v_reason,
-            p_remarks      => v_remarks,
-            p_actor_emp_id => v_aeid,
-            p_actor        => v_actor,
-            p_trace_id     => v_trace);
-          v_done := v_done + 1;
+          BEGIN
+            oc_time_pkg.reject_employee_month(
+              p_project_id   => v_proj,
+              p_period_id    => v_period,
+              p_employee_id  => e.emp,
+              p_reason       => v_reason,
+              p_remarks      => v_remarks,
+              p_actor_emp_id => v_aeid,
+              p_actor        => v_actor,
+              p_trace_id     => v_trace);
+            v_done := v_done + 1;
+          EXCEPTION WHEN OTHERS THEN
+            v_skip := v_skip + 1;
+            -- SUBSTR guards the handler itself: an ORA-06502 raised here would
+            -- escape to the outer block and roll the batch back.
+            v_err  := SUBSTR(REPLACE(REPLACE(SQLERRM,
+                        'ORA-'||LTRIM(TO_CHAR(ABS(SQLCODE)))||': ',''),'"','\"'),
+                        1, 400);
+            IF LENGTH(v_detail) IS NULL OR LENGTH(v_detail) < 2400 THEN
+              v_detail := v_detail
+                       || CASE WHEN v_detail IS NULL THEN '' ELSE ', ' END
+                       || e.emp || ': ' || RTRIM(v_err, CHR(10));
+            END IF;
+          END;
         END LOOP;
         COMMIT;
-        :status_code := 200;
-        HTP.P('{"rejected":' || v_done || '}');
+        :status_code := CASE WHEN v_done = 0 AND v_skip > 0 THEN 400 ELSE 200 END;
+        HTP.P('{"rejected":' || v_done ||
+              ',"skipped":' || v_skip ||
+              CASE WHEN v_detail IS NULL THEN ''
+                   ELSE ',"error":"' || v_detail || '"' END || '}');
       EXCEPTION WHEN OTHERS THEN
         ROLLBACK;
         :status_code := CASE WHEN SQLCODE BETWEEN -20025 AND -20001 THEN 400 ELSE 500 END;

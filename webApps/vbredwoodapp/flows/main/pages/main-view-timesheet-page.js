@@ -24,10 +24,23 @@ define([], () => {
      * pointless approvals and would make an approve-all look like it partly
      * failed when the server no-ops rows that were already done.
      */
-    selectAllEmployees(page) {
+    /**
+     * Tick every row this manager can actually approve.
+     *
+     * Excludes the acting manager's own row. RULE-015 sends their time to their
+     * reporting manager, so offering it here only produces a refusal — and a
+     * manager who books time to their own project is in their own team list,
+     * which is the normal case, not an edge one. Before this, "Select all
+     * pending" reliably included a row that could never succeed.
+     *
+     * The row stays selectable by hand: the rule is worth showing to someone
+     * who deliberately tries it, rather than hidden behind a disabled checkbox.
+     */
+    selectAllEmployees(page, actorEmpId) {
       if (!page) { return; }
       page.selectedKeys = (page.employees || [])
         .filter((e) => e.monthStatus !== 'Approved')
+        .filter((e) => !actorEmpId || e.employeeId !== actorEmpId)
         .map((e) => e.employeeId);
     }
 

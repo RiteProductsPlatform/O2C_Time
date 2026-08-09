@@ -16,8 +16,11 @@ define([
   class selectAllPendingChain extends ActionChain {
 
     async run(context) {
-      const { $page } = context;
-      $page.functions.selectAllEmployees($page.variables);
+      const { $page, $application } = context;
+      // The acting manager, not the signed-in user: ACT-011 lets a manager act
+      // for another, and it is the ACTOR whose own row RULE-015 will refuse.
+      $page.functions.selectAllEmployees(
+        $page.variables, $application.variables.actingManagerId);
     }
   }
 

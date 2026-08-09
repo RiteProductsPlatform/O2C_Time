@@ -12,12 +12,21 @@ define([
   /**
    * Approves the ticked employees' month in one call.
    *
-   * The ids go as a JSON array so the whole selection is one transaction — a
-   * partially applied bulk approve would leave the manager unsure what actually
-   * happened, and would make the RULE-020 confirm gate flicker.
+   * NO LONGER ALL-OR-NOTHING, and the reasoning it replaces is worth keeping.
+   * This used to send the selection as one transaction, on the grounds that a
+   * partial apply would leave the manager unsure what happened. That assumed
+   * the failure was exceptional. It is not: a manager who books time to their
+   * own project appears in their own team list, RULE-015 refuses their row, and
+   * the whole batch rolled back — nine approvable months lost to the tenth,
+   * reported only as approved:0. "Select all pending" was therefore broken for
+   * every manager who is a member of their own project, which is most of them.
    *
-   * RULE-015 is enforced server-side: if the manager is on their own project the
-   * call is refused with that rule's message rather than silently skipping them.
+   * The server now isolates each employee and reports who was skipped and why.
+   * The original worry is answered better this way: the manager is told exactly
+   * which rows did not go through, instead of being told nothing went through.
+   *
+   * RULE-015 is still enforced server-side and is never silently swallowed —
+   * a skipped row is always named.
    */
   class approveSelectedChain extends ActionChain {
 
@@ -54,20 +63,30 @@ define([
         });
 
         if (resp.ok) {
-          const n = (resp.body && resp.body.approved) || selected.length;
+          const b = (resp.body) || {};
+          const n = b.approved || 0;
+          const skipped = b.skipped || 0;
+
+          // Partial success is a warning, not a tick. Showing "9 approved" in
+          // confirmation green while one was silently refused is how a month
+          // gets confirmed with a hole in it.
           await Actions.fireNotificationEvent(context, {
-            summary: 'Approved',
-            message: n + (n === 1 ? ' employee approved.' : ' employees approved.'),
-            severity: 'confirmation',
-            type: 'confirmation',
+            summary: skipped ? 'Approved, with exceptions' : 'Approved',
+            message: n + (n === 1 ? ' employee approved' : ' employees approved')
+                     + (skipped
+                        ? '. ' + skipped + (skipped === 1 ? ' was' : ' were')
+                          + ' not: ' + (b.error || 'see the rule message.')
+                        : '.'),
+            severity: skipped ? 'warning' : 'confirmation',
+            type: skipped ? 'warning' : 'confirmation',
             displayMode: 'transient',
           });
           await Actions.callChain(context, { chain: 'loadSummaryChain' });
           return;
         }
 
-        // A 400 names the rule, e.g. "A manager's own time is approved by their
-        // reporting manager."
+        // A 400 now means NOTHING went through — every selected row was
+        // refused. The message names each one and the rule that refused it.
         await Actions.fireNotificationEvent(context, {
           summary: resp.status === 400 ? 'Nothing was approved' : 'Approve failed',
           message: $application.functions.restError(resp),
@@ -77,7 +96,7 @@ define([
         });
 
         if (resp.status === 400) {
-          // Reload: the transaction rolled back, so the screen should reflect the
+          // Reload: nothing was applied, so the screen should reflect the
           // unchanged server state rather than an optimistic guess.
           await Actions.callChain(context, { chain: 'loadSummaryChain' });
         }
