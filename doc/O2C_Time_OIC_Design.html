@@ -218,14 +218,24 @@ pod — this is what a second source would replace.</p>
 
 <table>
 <tr><th>Canonical entity</th><th>Fusion families</th><th>Verified volume</th></tr>
-<tr><td>WORKER</td><td><code>PER_*</code>, <code>HR_*</code></td><td>5,976</td></tr>
-<tr><td>PROJECT</td><td><code>PJF_*</code></td><td>423</td></tr>
-<tr><td>TASK</td><td><code>PJF_*</code></td><td>10,534</td></tr>
-<tr><td>ALLOCATION</td><td><code>PJF_*</code>, <code>PJR_*</code></td><td>1,595</td></tr>
-<tr><td>ABSENCE</td><td><code>ANC_*</code></td><td>live REST, per person per date</td></tr>
-<tr><td>CALENDAR / shifts / patterns / schedules</td><td><strong><code>HTS_*</code></strong></td><td>150 · 64 · 1,084 · 417 · 2,721</td></tr>
+<tr><td>WORKER</td><td><code>PER_*</code>, <code>HR_*</code></td><td>5,988</td></tr>
+<tr><td>PROJECT</td><td><code>PJF_*</code></td><td>47</td></tr>
+<tr><td>TASK</td><td><code>PJF_*</code></td><td>624</td></tr>
+<tr><td>ALLOCATION</td><td><code>PJF_*</code>, <code>PJR_*</code></td><td>543</td></tr>
+<tr><td>ABSENCE</td><td><code>ANC_*</code></td><td>5 in the window — read live per person per date</td></tr>
+<tr><td>CALENDAR · shifts · patterns · schedules · worker-shifts</td><td><strong><code>HTS_*</code></strong></td><td>150 · 64 · 1,084 · 417 · 2,721</td></tr>
+<tr><td>Expenditure types <em>(reference)</em></td><td><code>PJF_*</code></td><td>268</td></tr>
 <tr><td>TASK_ALLOCATION</td><td><code>projects/{id}/child/Tasks?expand=LaborResourceAssignments</code></td><td>65 across 8 projects</td></tr>
 </table>
+
+<div class="note">
+<p><strong>Project, task and allocation volumes dropped by an order of magnitude
+on purpose.</strong> Commit <code>8aab715</code> scoped the sync to projects that
+track time <em>and</em> have a manager, taking projects from 423 to 47 and tasks
+from 10,534 to 624. Anyone sizing the OIC run from the older figures will
+over-provision badly. Counts above were re-measured on the pod on 09-Aug-2026
+with <code>--validate</code>, which compiles and runs each model.</p>
+</div>
 
 <p>Two source-specific traps that belong in the manifest, not in the OIC flow, so
 they travel with the source rather than with the integration:</p>
