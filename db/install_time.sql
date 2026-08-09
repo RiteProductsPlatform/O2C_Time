@@ -196,6 +196,15 @@ PROMPT >>> 11 auth (OC_TIME_USER, OC_TIME_SESSION, hash, sign-in view)
 @@11_auth.sql
 @@12_revoke.sql
 
+-- ── Post-baseline changes, in the order they were decided ────
+-- 13 was missing from this installer until 09-Aug-2026, so a fresh schema came
+-- up still enforcing one-open-period while the running environments did not —
+-- the two would have diverged silently on the next rebuild.
+PROMPT >>> 13 several periods may be Open (RULE-017 relaxed)
+@@13_open_periods.sql
+PROMPT >>> 14 invoice annexure over the accrual hand-off
+@@14_invoice_annexure.sql
+
 -- ── REST surface ─────────────────────────────────────────────
 PROMPT >>> 12 ORDS oc.time            (employee)
 @@ords/11_ords_time.sql
