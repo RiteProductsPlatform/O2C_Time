@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>O2C Time — OIC build guide</title>
+<style>
+  :root { --ink:#1d2733; --soft:#55657a; --accent:#a85f13; --rule:#dde3ea; --wash:#f7f8fa;
+          --add:#c0562b; --ok:#2e7d4f; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:#eef1f5; color:var(--ink);
+         font:15px/1.62 "Segoe UI", system-ui, -apple-system, sans-serif; }
+  .sheet { max-width:1120px; margin:32px auto; background:#fff; padding:52px 60px 64px;
+           box-shadow:0 2px 18px rgba(20,32,48,.10); }
+  header { border-bottom:2px solid var(--rule); padding-bottom:20px; margin-bottom:30px; }
+  .eyebrow { font-size:11px; letter-spacing:.14em; text-transform:uppercase;
+             color:var(--accent); font-weight:700; margin:0 0 6px; }
+  h1 { font-size:31px; line-height:1.2; margin:0 0 12px; font-weight:650; }
+  .standfirst { font-size:16px; color:var(--soft); margin:0 0 14px; max-width:76ch; }
+  .meta span { font-size:12px; color:var(--soft); margin-right:18px; }
+  h2 { font-size:20px; margin:40px 0 6px; padding-top:16px; border-top:1px solid var(--rule);
+       font-weight:650; }
+  h3 { font-size:16px; margin:26px 0 6px; font-weight:650; }
+  h4 { font-size:14px; margin:22px 0 2px; font-weight:650; color:var(--accent); }
+  .lede { color:var(--soft); margin:0 0 16px; max-width:82ch; }
+  p { max-width:84ch; }
+  ul { max-width:84ch; }
+  li { margin:5px 0; }
+  table { border-collapse:collapse; width:100%; margin:14px 0 20px; font-size:13.4px; }
+  th { background:var(--wash); text-align:left; font-weight:650; }
+  th, td { border:1px solid var(--rule); padding:7px 10px; vertical-align:top; }
+  code { font:12.4px/1.4 Consolas,"Cascadia Mono",monospace; background:var(--wash);
+         padding:1px 4px; border-radius:3px; }
+  pre { background:#f4f6f8; border:1px solid var(--rule); border-radius:4px;
+        padding:12px 14px; overflow-x:auto; margin:6px 0 18px; }
+  pre code { font-size:11.6px; line-height:1.45; background:none; padding:0;
+             white-space:pre; }
+  .note { border-left:4px solid #d9a53c; background:#fdf8ee; padding:12px 16px;
+          margin:18px 0; font-size:14px; }
+  .note p { margin:0; max-width:none; }
+  figure { margin:22px 0 26px; text-align:center; }
+  figure img { max-width:100%; height:auto; border:1px solid var(--rule); border-radius:4px; }
+  figcaption { font-size:12.5px; color:var(--soft); font-style:italic; margin-top:8px; }
+  .add { color:var(--add); font-weight:600; }
+  .ok { color:var(--ok); }
+  tr.new td { background:#fbf7ff; }
+  .fine { font-size:12.5px; color:var(--soft); }
+</style>
+</head>
+<body>
+<div class="sheet">
+<header>
+  <p class="eyebrow">O2C Timesheet Module</p>
+  <h1>Building the OIC sync — step by step</h1>
+  <p class="standfirst">Adapting the PWP AR Invoice Headers pattern to the
+  timesheet master-data load: one monthly run and two daily runs, feeding the
+  ORDS endpoints that already exist.</p>
+  <p class="meta">
+    <span>09 August 2026</span>
+    <span>3 integrations</span>
+    <span>11 data models</span>
+    <span>verified against dev20</span>
+  </p>
+</header>
+
+<div class="note">
+<p><strong>Read section 1 before cloning anything.</strong> Three parts of the PWP
+template do not transfer, and one of them — the watermark — cannot work at all
+with these data models. Cloning first and discovering that later means unpicking
+the orchestration.</p>
+</div>
+
+<h2>1 What does not transfer from the PWP template</h2>
+
+<h3>1.1 The watermark cannot filter anything</h3>
+
+<p>PWP is a <em>changed-since</em> sync: it reads a last-sync date, passes it to
+the report, and gets back only what moved. <strong>None of the eleven timesheet
+extracts supports that.</strong> Their only bind is
+<code>:P_EFFECTIVE_DATE</code>, and it is an <em>as-of</em> date for HCM's
+effective-dated tables (<code>_F</code>/<code>_M</code>), not a change filter.
+Checked across all eleven: no <code>LAST_UPDATE_DATE</code> predicate anywhere.</p>
+
+<p>So every run returns a <strong>full snapshot as of a date</strong>. A
+watermark passed into the report would change nothing about what comes back.</p>
+
+<p><strong>Do this instead: full refresh, every run.</strong> It is not a
+compromise here —</p>
+
+<ul>
+<li>every ORDS sync endpoint is a <code>MERGE</code> on the natural key, so a
+    repeated row is an update and a re-run is free;</li>
+<li>a full refresh is <em>self-healing</em>: it repairs anything a missed delta
+    would have left stale, which an incremental sync silently cannot;</li>
+<li>the volume does not justify the complexity — all eleven extracts together
+    are about <strong>11,800 rows</strong>, measured on the pod on 09-Aug-2026.</li>
+</ul>
+
+<p>If true deltas are wanted later, the change is in
+<code>integration/bip/extracts.py</code> — add a <code>LAST_UPDATE_DATE</code>
+predicate and a <code>:P_LAST_SYNC</code> bind, then redeploy the models. Do not
+try to solve it in OIC.</p>
+
+<h3>1.2 The watermark store already exists — do not build a second one</h3>
+
+<p>PWP keeps its own <code>getLastSyncDate</code> / <code>putLastSyncDate</code>.
+This module already records every run in <code>OC_TIME_SYNC_JOB</code>: job name,
+scope, status, rows read, rows upserted, rows failed, start and finish. It is
+written by the sync endpoints themselves and exposed read-only at
+<code>GET&nbsp;/oc/time/admin/sync/status</code>.</p>
+
+<p>A second store in OIC would be a second version of the truth, and the two
+would disagree the first time a run half-failed. Drop the
+<code>getWatermark</code> and <code>updateWatermark</code> scopes; read
+<code>sync/status</code> if a run needs to know what happened last time.</p>
+
+<h3>1.3 The chunk loop is a download loop, not a paging loop</h3>
+
+<p>PWP's <code>chunkLoop</code> pages the report by row offset —
+<code>reportOffsetAssignment</code>, <code>segmentCount &gt;= RowCount</code>.
+That needs the report to take an offset parameter. <strong>Ours do not.</strong></p>
+
+<p>What BIP offers here is byte-level chunked download of one result:
+<code>downloadReportDataChunk(fileID, beginIdx, size)</code> where
+<code>beginIdx</code> and <code>size</code> are <strong>bytes, not rows</strong>.
+The report runs once; you collect its output in pieces.</p>
+
+<p>Practically: only <code>WORKERS</code> (5,988 rows) is big enough to need it.
+The other ten come back in a single response.</p>
+
+<h2>2 Before you build</h2>
+
+<table>
+<tr><th>#</th><th>Prerequisite</th><th>State</th></tr>
+<tr><td>1</td><td>All 11 data models deployed under <code>/Custom/O2C_TIME</code></td><td class="ok"><strong>done 09-Aug-2026</strong> — all 11 deploy and <code>--validate</code> returns rows</td></tr>
+<tr><td>2</td><td>Service account with <strong>BI Consumer</strong> (to run) — <em>not</em> Data Model Developer</td><td>the integration account should <strong>not</strong> be able to deploy; that is a release activity</td></tr>
+<tr><td>3</td><td>OIC connection: Fusion BIP over SOAP <code>ExternalReportWSSService</code></td><td>to create</td></tr>
+<tr><td>4</td><td>OIC connection: ORDS REST, base <code>https://&lt;host&gt;/ords/o2c_time</code></td><td>to create</td></tr>
+<tr><td>5</td><td>The contract clash in §2 of the OIC design document</td><td><strong>unresolved — settle first</strong></td></tr>
+</table>
+
+<div class="note">
+<p><strong>Prerequisite 5 is not optional.</strong> The extract side and the
+loader side disagree on four of the five main entities. Build the mappings now
+and four of them will be wrong — <code>ALLOCATION</code> worst of all, where only
+five of ten fields line up and nothing errors: the rows load and the columns are
+null.</p>
+</div>
+
+<h2>3 The child integration — build this once</h2>
+
+<p class="lede">One app-driven integration, parameterised by entity. Three
+orchestrators call it; you do not build eleven of these.</p>
+
+<p><strong>Name:</strong> <code>O2C_TIME_LOAD_ENTITY</code> &nbsp;·&nbsp;
+<strong>Trigger:</strong> app-driven (REST) &nbsp;·&nbsp;
+<strong>Inputs:</strong> <code>entity</code>, <code>effectiveDate</code>,
+<code>actor</code>, <code>traceId</code></p>
+
+<h3>3.1 Scope: resolveEntity</h3>
+<p>Map the entity name to its data model path and its loader endpoint. Keep this
+in <strong>one lookup</strong>, not scattered across the flow — it is the only
+place the two are tied together.</p>
+
+<table>
+<tr><th>entity</th><th>data model</th><th>loader endpoint</th></tr>
+<tr><td><code>WORKER</code></td><td><code>/Custom/O2C_TIME/O2C_WORKERS.xdm</code></td><td><code>POST sync/worker</code></td></tr>
+<tr><td><code>PROJECT</code></td><td><code>/Custom/O2C_TIME/O2C_PROJECTS.xdm</code></td><td><code>POST sync/project</code></td></tr>
+<tr><td><code>TASK</code></td><td><code>/Custom/O2C_TIME/O2C_TASKS.xdm</code></td><td><code>POST sync/task</code></td></tr>
+<tr><td><code>ALLOCATION</code></td><td><code>/Custom/O2C_TIME/O2C_ALLOCATIONS.xdm</code></td><td><code>POST sync/allocation</code></td></tr>
+<tr><td><code>CALENDAR</code></td><td><code>/Custom/O2C_TIME/O2C_CALENDAR.xdm</code></td><td><code>POST calendar/sync/CORPORATE</code></td></tr>
+<tr><td><code>WORKER_SHIFT</code></td><td><code>/Custom/O2C_TIME/O2C_WORKER_SHIFTS.xdm</code></td><td><code>POST calendar/sync/SHIFT</code></td></tr>
+</table>
+
+<p class="fine"><code>SHIFTS</code>, <code>WORK_PATTERNS</code>,
+<code>WORK_SCHEDULES</code> and <code>EXP_TYPES</code> are deliberately absent:
+they have no target table today, so there is nowhere to load them. Leave them as
+on-demand models for investigating a wrong shift.</p>
+
+<h3>3.2 Scope: runBipReport</h3>
+<ol>
+<li><strong>Invoke</strong> <code>runDataModel</code> on
+    <code>ExternalReportWSSService</code>, with
+    <code>reportAbsolutePath</code> = the model path,
+    <code>attributeFormat</code> = <code>xml</code>, and one parameter
+    <code>P_EFFECTIVE_DATE</code> = the input date as
+    <code>YYYY-MM-DD</code>.</li>
+<li><strong>Assign</strong> <code>extractReportBytes</code> — the response
+    carries <code>reportBytes</code> (base64) and, when the result is large,
+    <code>reportFileID</code>.</li>
+<li><strong>Switch</strong>: if <code>reportFileID</code> is present, enter the
+    download loop; otherwise go straight to staging.</li>
+<li><strong>While</strong> <code>downloadLoop</code> — invoke
+    <code>downloadReportDataChunk(fileID, beginIdx, size)</code>, append,
+    advance <code>beginIdx</code> by the bytes received, exit when a chunk comes
+    back empty. <strong>beginIdx is a byte offset.</strong></li>
+</ol>
+
+<div class="note">
+<p><strong>The bind must be declared in the data model or the report returns
+nothing.</strong> An undeclared <code>:BIND</code> in a BIP data model resolves
+to NULL with no error at all — the report simply returns zero rows, which reads
+exactly like "there is no data". Every model was generated with the parameter
+declared; if one is ever hand-edited in the BIP UI, check the parameter list
+still matches.</p>
+</div>
+
+<h3>3.3 Scope: stageAndTransform</h3>
+<p>Read the XML into a stage file. The envelope is
+<code>&lt;DATA_DS&gt;&lt;ROWSET&gt;&lt;ROW&gt;</code>, one
+<code>&lt;ROW&gt;</code> per record, element names exactly as the canonical
+column names.</p>
+<p>Map each <code>ROW</code> to the loader's row shape. <strong>Two conversions
+are mandatory</strong> and both fail silently if missed:</p>
+<ul>
+<li><strong>Dates</strong> must be <code>YYYY-MM-DD</code> strings, no time part.</li>
+<li><strong><code>APPROVAL_STATUS</code></strong> must be exactly
+    <code>Approved</code>. Fusion returns <code>APPROVED</code> in capitals;
+    <code>populate_month</code> filters on <code>'Approved'</code>. Wrong case
+    caches perfectly well and then never becomes a timesheet row — it fails at
+    the last step, which is the worst place for it to fail.</li>
+</ul>
+
+<h3>3.4 Scope: postToOrds — chunked</h3>
+<p><strong>While</strong> loop over the staged rows in batches of <strong>500</strong>:</p>
+
+<pre><code>POST /oc/time/admin/sync/{entity}
+{
+  "jobRunId": null,          // OMIT on the first chunk — the loader creates the
+                             // job and returns its id
+  "final":    "N",           // "Y" on the last chunk only
+  "actor":    "OIC_MASTER_SYNC",
+  "traceId":  "&lt;the OIC instance id&gt;",
+  "rows":     [ { ...500 rows... } ]
+}
+
+response: {"jobRunId": 47, "upserted": 500, "failed": 0}</code></pre>
+
+<ul>
+<li><strong>Capture <code>jobRunId</code> from the first response and pass it
+    back on every later chunk.</strong> Omit it and each chunk opens its own job
+    row, so a 5,988-row load reports as twelve unrelated runs.</li>
+<li><strong>Set <code>final: "Y"</code> on the last chunk.</strong> That is what
+    closes the job as <code>Success</code> or <code>Partial</code>. Miss it and
+    the job sits at <code>Running</code> for ever and the Sync Status screen
+    shows a run that never ended.</li>
+<li><strong>A bad row never aborts a chunk.</strong> It lands in
+    <code>OC_TIME_SYNC_FAILED</code> with its reason and the job closes
+    <code>Partial</code>. Treat <code>Partial</code> as a warning with a report,
+    not as a failure.</li>
+</ul>
+
+<h3>3.5 Fault handlers</h3>
+<p>Keep the PWP shape — log, then re-throw — on every scope. Two worth naming
+explicitly because they mean different things and need different people:</p>
+
+<table>
+<tr><th>What</th><th>Means</th><th>Who fixes it</th></tr>
+<tr><td><code>401</code> from BIP</td><td>credentials refused</td><td>the OIC connection</td></tr>
+<tr><td><code>403</code> from BIP</td><td>authenticated, but no BI Consumer role</td><td>Fusion security</td></tr>
+<tr><td>Report returns 0 rows</td><td>usually an undeclared bind, not empty data</td><td>the data model</td></tr>
+<tr><td><code>400</code> from ORDS</td><td>a business rule refused it; the message is the rule verbatim</td><td>read the message</td></tr>
+<tr><td><code>Partial</code> job</td><td>some rows rejected — see <code>sync/failed</code></td><td>data owner</td></tr>
+</table>
+
+<h2>4 The monthly orchestrator</h2>
+
+<p><strong>Name:</strong> <code>O2C_TIME_MASTER_MONTHLY</code> &nbsp;·&nbsp;
+<strong>Trigger:</strong> schedule, <strong>28th at 20:00 local, per payroll
+country</strong></p>
+
+<ol>
+<li><strong>Assign</strong> <code>effectiveDate</code> = the <strong>1st of next
+    month</strong>. Not today. The monthly run builds next month, so the HCM
+    as-of date must be inside next month or you populate from this month's
+    allocations.</li>
+<li><strong>Call the child, in this order</strong> — <code>WORKER</code>,
+    <code>PROJECT</code>, <code>TASK</code>, <code>ALLOCATION</code>,
+    <code>CALENDAR</code>, <code>WORKER_SHIFT</code>.</li>
+<li><strong>Invoke</strong>
+    <code>POST /oc/time/admin/jobs/populate/{periodId}</code> with an
+    <strong>empty body</strong> — no <code>employeeId</code>, which is what makes
+    it populate every allocation.</li>
+<li><strong>Logger</strong> — job ids and row counts from each child.</li>
+</ol>
+
+<div class="note">
+<p><strong>The order is not stylistic — sequence it, do not fan out.</strong>
+<code>OC_TIME_ALLOCATION</code> has foreign keys to both worker and project, so
+an allocation row whose worker has not loaded yet lands in
+<code>OC_TIME_SYNC_FAILED</code> instead of the table. Parallel branches will
+half-work and look fine.</p>
+</div>
+
+<p><strong>Passing <code>employeeId</code> in the populate call is the difference
+between one person and everybody.</strong> The operation's own schema says so:
+<em>"Omit to populate every allocation."</em> The monthly run wants everybody, so
+the body is empty — but be deliberate about it, because the same endpoint scoped
+to one person is what the timesheet page calls on every load.</p>
+
+<h2>5 The daily orchestrator</h2>
+
+<p><strong>Name:</strong> <code>O2C_TIME_MASTER_DAILY</code> &nbsp;·&nbsp;
+<strong>Trigger:</strong> schedule, <strong>twice a day per country</strong> —
+09:00 and 15:00 local is a reasonable start</p>
+
+<ol>
+<li><strong>Assign</strong> <code>effectiveDate</code> = <strong>today</strong>.</li>
+<li><strong>Call the child</strong> in the same order. Same full refresh —
+    §1.1.</li>
+<li><strong>Invoke</strong> <code>POST /oc/time/admin/jobs/daily</code>.</li>
+</ol>
+
+<p><strong>Why twice, and why per country.</strong> Straight from the BRD:
+<em>"if you ran this program at 8 in the night in India, US data may not even be
+inside — you might have to run it 2 or 3 times."</em>
+<code>OC_TIME_PERIOD</code> is already keyed by <code>PAYROLL_COUNTRY</code>, so
+the data model supports it; nothing in the module reads a time zone, so the
+split has to live in the OIC schedule.</p>
+
+<div class="note">
+<p><strong>Three change types the BRD names have no code path at all.</strong>
+<code>populate_daily</code> handles allocation change, project and WBS moves and
+new hires. <strong>Termination reversals, deputations and transfers</strong> are
+not implemented. Switch the daily schedule on today and those will silently
+never apply — the job will report success. Build them before go-live or record
+the gap explicitly.</p>
+</div>
+
+<h2>6 Testing, in the order that isolates faults</h2>
+
+<table>
+<tr><th>#</th><th>Test</th><th>Confirms</th></tr>
+<tr><td>1</td><td>Child with <code>entity=PROJECT</code>, today</td><td>the whole chain on the smallest set — 47 rows</td></tr>
+<tr><td>2</td><td><code>GET sync/status</code></td><td>one job row, <code>Success</code>, 47 read / 47 upserted</td></tr>
+<tr><td>3</td><td>Run test 1 again</td><td><strong>idempotency</strong> — still 47, not 94</td></tr>
+<tr><td>4</td><td>Child with <code>entity=WORKER</code></td><td>the chunked path — one job row, ~5,988 upserted, not twelve rows</td></tr>
+<tr><td>5</td><td>Corrupt one row's date, re-run</td><td>job closes <code>Partial</code>, the bad row is in <code>sync/failed</code>, the rest still loaded</td></tr>
+<tr><td>6</td><td>Monthly orchestrator end to end</td><td>ordering, then a populated next month</td></tr>
+<tr><td>7</td><td>Open a timesheet for next month</td><td>the actual outcome — a grid with hours in it</td></tr>
+</table>
+
+<p>Test 3 matters more than it looks. Everything downstream assumes re-running
+is free; if it is not, the recovery story in §3.5 does not hold.</p>
+
+<h2>7 Cutover checklist</h2>
+
+<ul>
+<li>Contract settled and versioned (§2 prerequisite 5)</li>
+<li>Integration account has BI Consumer, <strong>not</strong> Data Model Developer</li>
+<li>All 11 models deployed to the <em>target</em> pod — they exist on dev20 only</li>
+<li>ORDS base URL points at the target schema, not SIT</li>
+<li>Country list and run times agreed</li>
+<li>The three missing daily triggers built, or the gap accepted in writing</li>
+<li>Someone owns the <code>Partial</code> report — a failed-row queue nobody reads is the same as no validation</li>
+</ul>
+
+</div>
+</body>
+</html>
