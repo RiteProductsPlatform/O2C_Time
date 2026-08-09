@@ -68,11 +68,21 @@ define([
               limit: 1, onlyData: true, fields: 'PersonNumber,PersonId',
             },
           });
-          const found = (who.ok && who.body && who.body.items) || [];
+          // A FAILED CALL AND AN EMPTY RESULT ARE DIFFERENT THINGS, and this
+          // used to collapse them: `(who.ok && who.body.items) || []` makes a
+          // 401 indistinguishable from "no such person", so a stale backend
+          // credential was reported as "could not match RI2824 to a person in
+          // Fusion" — pointing whoever read it at HCM data when the actual
+          // fault was the password in the VB Studio backend. Same family as the
+          // "0 entries saved" message: the words have to name the real cause.
+          if (!who.ok) {
+            return this.warn(context, $page.functions.absenceDiagnosis(who.status));
+          }
+          const found = (who.body && who.body.items) || [];
           if (!found.length) {
             return this.warn(context,
-              'Could not match ' + empId + ' to a person in Fusion, so leave '
-              + 'was not refreshed. The hours below are unchanged.');
+              'Fusion answered, but no worker has employee number ' + empId
+              + '. Leave was not refreshed and the hours below are unchanged.');
           }
           personId = found[0].PersonId;
           $page.variables.fusionPersonId = personId;
