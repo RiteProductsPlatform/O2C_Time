@@ -76,7 +76,7 @@ define([
           // fault was the password in the VB Studio backend. Same family as the
           // "0 entries saved" message: the words have to name the real cause.
           if (!who.ok) {
-            return this.warn(context, $page.functions.absenceDiagnosis(who.status));
+            return this.warn(context, $page.functions.absenceDiagnosis(who.status, 'worker lookup'));
           }
           const found = (who.body && who.body.items) || [];
           if (!found.length) {
@@ -105,7 +105,7 @@ define([
 
         if (!res.ok) {
           return this.warn(context,
-            $page.functions.absenceDiagnosis(res.status));
+            $page.functions.absenceDiagnosis(res.status, 'absence read'));
         }
 
         const rows = $page.functions.absenceToRows(
@@ -169,7 +169,7 @@ define([
         // No status at all — the proxy never answered. Most often the fa
         // backend is configured in Designer but not published, so there is
         // nothing to resolve vb-catalog://backends/fa/hcm against.
-        await this.warn(context, $page.functions.absenceDiagnosis(0));
+        await this.warn(context, $page.functions.absenceDiagnosis(0, 'Fusion'));
       }
     }
 

@@ -467,21 +467,35 @@ define([], () => {
      * rather than "the call failed" — the same reasoning as the Fusion probe on
      * PAGE-012, and the reason that probe was worth building.
      */
-    absenceDiagnosis(status) {
+    absenceDiagnosis(status, call) {
+      // WHICH call failed is half the diagnosis. Three different requests share
+      // this function -- the worker lookup, the absence read, and the catch-all
+      // -- and until 09-Aug-2026 it named the absence resource for all of them,
+      // so a 404 on /workers was reported as a missing absence resource and
+      // sent the reader to the wrong line of service.json.
+      const who = call || 'Fusion';
+
       if (status === 401) {
         return 'Fusion refused the credentials, so leave could not be read. '
-             + 'The backend sign-in needs re-entering in VB Studio.';
+             + 'The backend sign-in needs re-entering in VB Studio — resetting '
+             + 'the password in Fusion does not update it.';
       }
       if (status === 403) {
         return 'Fusion accepted the sign-in but the service account is not '
-             + 'entitled to absence data. This needs a role in Fusion.';
+             + 'entitled to this data (' + who + '). This needs a role in Fusion.';
       }
       if (status === 404) {
-        return 'The absence resource was not found on this Fusion pod — the '
-             + 'REST path or version in services/fa_hcm/service.json is wrong.';
+        // Two quite different causes, and the pod is usually not the culprit:
+        // VB answers 404 for an operation it cannot resolve, which is what a
+        // published app that predates the operation looks like.
+        return 'The ' + who + ' call returned 404. Either the operation is not '
+             + 'in the published app — pull and publish in VB Studio — or the '
+             + 'path in services/fa_hcm/service.json does not match this pod. '
+             + 'Check Integrations → Test Fusion first: it uses the same '
+             + 'backend, so if that passes the backend is fine.';
       }
       if (status === 400) {
-        return 'Fusion rejected the absence query. Almost always the filter '
+        return 'Fusion rejected the ' + who + ' query. Almost always the filter '
              + 'syntax: the separator must be " AND ", not ";".';
       }
       if (!status) {
@@ -489,8 +503,8 @@ define([], () => {
              + 'date. Your hours are unaffected. If this persists, the fa '
              + 'backend may be configured but not published.';
       }
-      return 'Leave could not be read from Fusion (' + status + '). The hours '
-           + 'below are unaffected.';
+      return 'The ' + who + ' call failed (' + status + '), so leave was not '
+           + 'refreshed. The hours below are unaffected.';
     }
 
   }
