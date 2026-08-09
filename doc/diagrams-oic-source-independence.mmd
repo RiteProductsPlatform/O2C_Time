@@ -1,0 +1,16 @@
+flowchart LR
+  ORA["<b>Oracle Fusion</b>&lt;br/&gt;<i>the source today</i>&lt;br/&gt;━━━━━&lt;br/&gt;BIP report — bulk&lt;br/&gt;REST — deltas&lt;br/&gt;PER_* · HR_* · PJF_*&lt;br/&gt;ANC_* · HTS_*"]
+  OTH["<b>Other HRMS / PSA</b>&lt;br/&gt;<i>tomorrow</i>&lt;br/&gt;━━━━━&lt;br/&gt;CSV · SFTP&lt;br/&gt;REST · DB link"]
+  MAP["<b>① MAPPING MANIFEST</b>&lt;br/&gt;source column → canonical column&lt;br/&gt;━━━━━&lt;br/&gt;one declarative file per source&lt;br/&gt;<b>the only artefact a new&lt;br/&gt;source has to rewrite</b>&lt;br/&gt;no OIC flow changes"]
+  CAN["<b>② CANONICAL FORMAT</b>&lt;br/&gt;7 entities · source-independent&lt;br/&gt;━━━━━&lt;br/&gt;WORKER · PROJECT · TASK&lt;br/&gt;ALLOCATION · ABSENCE&lt;br/&gt;CALENDAR&lt;br/&gt;TASK_ALLOCATION <i>(new)</i>"]
+  ORA ==> MAP
+  OTH -.->|"swap the manifest,&lt;br/&gt;nothing downstream moves"| MAP
+  MAP ==> CAN
+  classDef src fill:#c8791a,stroke:#8a5210,color:#fff,font-weight:bold;
+  classDef alt fill:#8a6a3a,stroke:#5c4626,color:#fff;
+  classDef map fill:#7a4a8b,stroke:#523060,color:#fff;
+  classDef can fill:#2f6f8f,stroke:#1e4a60,color:#fff;
+  class ORA src;
+  class OTH alt;
+  class MAP map;
+  class CAN can;

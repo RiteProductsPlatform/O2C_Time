@@ -1,0 +1,27 @@
+flowchart LR
+  CAN["<b>② CANONICAL</b>&lt;br/&gt;7 entities&lt;br/&gt;━━━━━&lt;br/&gt;one row shape&lt;br/&gt;whatever the source"]
+  VAL{"<b>VALIDATE</b>&lt;br/&gt;key present?&lt;br/&gt;type? domain?&lt;br/&gt;FK resolvable?"}
+  REJ["<b>REJECT FILE</b>&lt;br/&gt;row + reason + source id&lt;br/&gt;━━━━━&lt;br/&gt;<b>never silently dropped</b>&lt;br/&gt;re-drivable after fix"]
+  LOAD["<b>③ LOADER</b>&lt;br/&gt;chunked · idempotent&lt;br/&gt;restartable&lt;br/&gt;━━━━━&lt;br/&gt;POST sync/worker&lt;br/&gt;project · task · allocation&lt;br/&gt;absence&lt;br/&gt;calendar/sync/:layer"]
+  TGT["<b>④ O2C_TIME CACHE</b>&lt;br/&gt;━━━━━&lt;br/&gt;OC_TIME_WORKER&lt;br/&gt;PROJECT · TASK&lt;br/&gt;ALLOCATION · ABSENCE&lt;br/&gt;CALENDAR"]
+  POP["<b>POPULATE</b>&lt;br/&gt;━━━━━&lt;br/&gt;monthly → whole&lt;br/&gt;next month&lt;br/&gt;daily → from the&lt;br/&gt;effective date"]
+  TS["<b>OC_TS_WEEK</b>&lt;br/&gt;<b>OC_TS_ENTRY</b>&lt;br/&gt;━━━━━&lt;br/&gt;the employee's grid&lt;br/&gt;every rule runs here"]
+  JOB[("<b>SYNC_JOB</b>&lt;br/&gt;<b>SYNC_FAILED</b>&lt;br/&gt;every run&lt;br/&gt;every bad row")]
+  CAN ==> VAL
+  VAL -->|"bad"| REJ
+  VAL ==>|"good"| LOAD
+  LOAD ==> TGT ==> POP ==> TS
+  LOAD -.->|"jobRunId&lt;br/&gt;final=Y"| JOB
+  REJ -.-> JOB
+  classDef can fill:#2f6f8f,stroke:#1e4a60,color:#fff;
+  classDef dec fill:#c9922e,stroke:#8a621a,color:#fff,font-weight:bold;
+  classDef warn fill:#8b4a4a,stroke:#5f3131,color:#fff;
+  classDef load fill:#4aa74a,stroke:#2f7a2f,color:#fff;
+  classDef tgt fill:#3d5a80,stroke:#26384f,color:#fff;
+  classDef ops fill:#6b6b6b,stroke:#444,color:#fff;
+  class CAN can;
+  class VAL dec;
+  class REJ warn;
+  class LOAD load;
+  class TGT,TS tgt;
+  class POP,JOB ops;

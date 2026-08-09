@@ -1,0 +1,43 @@
+flowchart TB
+
+  subgraph M["MONTHLY — 28th/29th, once per country"]
+    direction TB
+    M1(["Trigger&lt;br/&gt;28th 20:00 local"])
+    M2["Full extract&lt;br/&gt;all 7 entities&lt;br/&gt;effective date = 1st of next month"]
+    M3["Load → OC_TIME_*"]
+    M4["POST jobs/populate/:periodId&lt;br/&gt;<b>whole next month, 1st–31st</b>"]
+    M5(["Next month's grid exists&lt;br/&gt;for every allocated worker"])
+    M1 --> M2 --> M3 --> M4 --> M5
+  end
+
+  subgraph D["DAILY — 2–3× per day, per country time zone"]
+    direction TB
+    D1(["Trigger&lt;br/&gt;IST 09:00 · CET 09:00 · EST 09:00"])
+    D2["Delta extract&lt;br/&gt;changed since last watermark"]
+    D3{"What changed?"}
+    D4["allocation % · project move&lt;br/&gt;WBS move · new hire&lt;br/&gt;termination · <b>termination reversal</b>&lt;br/&gt;<b>deputation</b> · <b>transfer</b>"]
+    D5["absence applied&lt;br/&gt;cancelled · shortened"]
+    D6["Load → OC_TIME_*"]
+    D7["POST jobs/daily&lt;br/&gt;<b>from the effective date forward only</b>"]
+    D8(["Today's grid corrected&lt;br/&gt;history untouched"])
+    D1 --> D2 --> D3
+    D3 --> D4 --> D6
+    D3 --> D5 --> D6
+    D6 --> D7 --> D8
+  end
+
+  W[("WATERMARK&lt;br/&gt;per entity, per country&lt;br/&gt;last successful run")]
+  D2 -.-> W
+  D8 -.->|"advance only on success"| W
+
+  classDef mon fill:#2f6f8f,stroke:#1e4a60,color:#fff;
+  classDef day fill:#4aa74a,stroke:#2f7a2f,color:#fff;
+  classDef trig fill:#c8791a,stroke:#8a5210,color:#fff,font-weight:bold;
+  classDef dec fill:#c9922e,stroke:#8a621a,color:#fff,font-weight:bold;
+  classDef store fill:#6b6b6b,stroke:#444,color:#fff;
+
+  class M2,M3,M4 mon;
+  class D2,D4,D5,D6,D7 day;
+  class M1,M5,D1,D8 trig;
+  class D3 dec;
+  class W store;
