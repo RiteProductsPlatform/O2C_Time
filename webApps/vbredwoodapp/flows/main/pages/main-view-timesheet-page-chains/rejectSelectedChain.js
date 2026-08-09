@@ -68,11 +68,11 @@ define([
           $page.variables.rejectRemarks = '';
 
           await Actions.fireNotificationEvent(context, {
-            summary: 'Rejected',
-            message: n + (n === 1 ? ' employee' : ' employees') +
-                     ' rejected — back with them to correct and resubmit.',
-            severity: 'confirmation',
-            type: 'confirmation',
+            summary: $application.functions.countSummary(n, 0, 'rejected'),
+              message: $application.functions.countOutcome(n, 0, 'employee', 'employees',
+                         'rejected', 'They are back with the employee to correct and resubmit.'),
+              severity: $application.functions.countSeverity(n, 0),
+              type: $application.functions.countSeverity(n, 0),
             displayMode: 'transient',
           });
 

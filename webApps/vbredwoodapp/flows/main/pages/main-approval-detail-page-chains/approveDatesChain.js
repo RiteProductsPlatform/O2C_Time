@@ -57,11 +57,11 @@ define([
           $page.variables.selectedDates = [];
 
           await Actions.fireNotificationEvent(context, {
-            summary: 'Dates approved',
-            message: n + (n === 1 ? ' date approved.' : ' dates approved.') +
-                     (closed ? ' Every day is approved, so the week is closed.' : ''),
-            severity: 'confirmation',
-            type: 'confirmation',
+            summary: $application.functions.countSummary(n, 0, 'approved'),
+              message: $application.functions.countOutcome(n, 0, 'date', 'dates', 'approved',
+                         closed ? 'Every day is approved, so the week is closed.' : ''),
+              severity: $application.functions.countSeverity(n, 0),
+              type: $application.functions.countSeverity(n, 0),
             displayMode: 'transient',
           });
 

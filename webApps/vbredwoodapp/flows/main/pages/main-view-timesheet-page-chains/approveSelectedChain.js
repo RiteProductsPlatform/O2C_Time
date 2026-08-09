@@ -71,14 +71,11 @@ define([
           // confirmation green while one was silently refused is how a month
           // gets confirmed with a hole in it.
           await Actions.fireNotificationEvent(context, {
-            summary: skipped ? 'Approved, with exceptions' : 'Approved',
-            message: n + (n === 1 ? ' employee approved' : ' employees approved')
-                     + (skipped
-                        ? '. ' + skipped + (skipped === 1 ? ' was' : ' were')
-                          + ' not: ' + (b.error || 'see the rule message.')
-                        : '.'),
-            severity: skipped ? 'warning' : 'confirmation',
-            type: skipped ? 'warning' : 'confirmation',
+            summary: $application.functions.countSummary(n, skipped, 'approved'),
+            message: $application.functions.countOutcome(n, skipped, 'employee',
+                       'employees', 'approved', b.error),
+            severity: $application.functions.countSeverity(n, skipped),
+            type: $application.functions.countSeverity(n, skipped),
             displayMode: 'transient',
           });
           await Actions.callChain(context, { chain: 'loadSummaryChain' });

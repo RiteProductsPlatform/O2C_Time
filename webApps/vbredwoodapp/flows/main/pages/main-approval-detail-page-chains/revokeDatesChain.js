@@ -62,12 +62,12 @@ define([
           $page.variables.selectedDates = [];
 
           await Actions.fireNotificationEvent(context, {
-            summary: 'Decision undone',
-            message: n + (n === 1 ? ' date is' : ' dates are') +
-                     ' back to Pending.' +
-                     (status ? ' The week is now ' + status + '.' : ''),
-            severity: 'confirmation',
-            type: 'confirmation',
+            summary: $application.functions.countSummary(n, 0, 'undone'),
+              message: $application.functions.countOutcome(n, 0, 'date is', 'dates are',
+                         'back to Pending',
+                         status ? 'The week is now ' + status + '.' : ''),
+              severity: $application.functions.countSeverity(n, 0),
+              type: $application.functions.countSeverity(n, 0),
             displayMode: 'transient',
           });
 

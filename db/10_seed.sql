@@ -118,8 +118,23 @@ DECLARE
     t_row('Onboarding',     'Onboarding (non-billable)',        'Y', 10),
     t_row('Training',       'Training (non-billable)',          'Y', 20),
     t_row('Travel',         'Travel (non-billable)',            'Y', 30),
-    t_row('Client Holiday', 'Client site closed (non-billable)','Y', 40),
-    t_row('Billing Loss',   'Auto shortfall - non-editable',    'N', 50));
+    -- Code left as 'Client Holiday'. The functional owner wrote "customer
+    -- holiday" (10-Aug-2026) and that is the same bucket, but this VALUE is
+    -- what OC_TS_ENTRY.UNBILLED_REASON stores and what the matching common
+    -- task is called (RULE-002: the reason IS the task), so renaming it is a
+    -- data migration plus a task rename, not a label change. The wording is
+    -- carried in the meaning instead. Confirm before renaming the code.
+    t_row('Client Holiday', 'Customer site closed (non-billable)','Y', 40),
+    -- The fifth SELECTABLE reason, held open deliberately (functional owner,
+    -- 10-Aug-2026: "Travel, training, onboarding, customer holiday, last one is
+    -- open for future use"). Seeded rather than left absent so the screen shows
+    -- five buckets from day one and adding the real reason is a rename, not a
+    -- release.
+    t_row('Other',          'Reserved - name this before use',  'Y', 50),
+    -- NOT one of the five. Billing Loss is the automatic RULE-009 shortfall,
+    -- computed rather than chosen, which is why SELECTABLE is 'N'. Absence is
+    -- likewise not an unbilled reason - leave is its own row from HR (RULE-008).
+    t_row('Billing Loss',   'Auto shortfall - non-editable',    'N', 60));
 BEGIN
   FOR i IN 1 .. v.COUNT LOOP
     INSERT INTO oc_time_lookup (lookup_type, lookup_code, meaning, usage_note,

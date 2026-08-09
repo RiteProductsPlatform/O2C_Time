@@ -342,6 +342,68 @@ define(['oj-sp/spectra-shell/config/config'], function () {
      *
      * @return {string}
      */
+    /**
+     * Phrase the outcome of a bulk action, and never phrase zero as success.
+     *
+     * "0 employees approved." is the same defect as "0 entries saved": it is
+     * literally true, tells the reader nothing about why, and is shown in
+     * confirmation green so it reads as though something worked. It appeared on
+     * every bulk action on the module because each one built its own string
+     * from a count with no zero branch.
+     *
+     * Three outcomes, three sentences:
+     *   all through      "9 employees approved."
+     *   some refused     "8 approved. 1 was not: RI9001 - <the rule>."
+     *   none through     "Nothing was approved." + whatever the server said
+     *
+     * @param n        how many actually went through
+     * @param skipped  how many were refused (0 if the caller has no such notion)
+     * @param one      singular noun, e.g. 'employee'
+     * @param many     plural noun,   e.g. 'employees'
+     * @param verb     past participle, e.g. 'approved'
+     * @param detail   per-item reasons from the server, if any
+     */
+    countOutcome(n, skipped, one, many, verb, detail) {
+      const got = Number(n) || 0;
+      const miss = Number(skipped) || 0;
+      const tail = detail ? ' ' + detail : '';
+
+      if (got === 0) {
+        return 'Nothing was ' + verb + '.'
+             + (detail ? ' ' + detail
+                       : ' The server reported none and gave no reason —'
+                         + ' please report this rather than retrying blindly.');
+      }
+      const head = got + ' ' + (got === 1 ? one : many) + ' ' + verb;
+      if (miss > 0) {
+        return head + '. ' + miss + (miss === 1 ? ' was' : ' were')
+             + ' not:' + (detail ? ' ' + detail : ' see the rule message.');
+      }
+      return head + '.' + tail;
+    }
+
+
+    /**
+     * Severity to match countOutcome. Zero is never a confirmation, and a
+     * partial success is a warning — a green tick over "8 of 9" is how a month
+     * gets confirmed with a hole in it.
+     */
+    countSeverity(n, skipped) {
+      if (!(Number(n) || 0)) { return 'error'; }
+      return (Number(skipped) || 0) > 0 ? 'warning' : 'confirmation';
+    }
+
+
+    /**
+     * Summary line to match. Same three cases.
+     */
+    countSummary(n, skipped, doneWord) {
+      if (!(Number(n) || 0)) { return 'Nothing was ' + doneWord; }
+      return (Number(skipped) || 0) > 0
+        ? ('Partly ' + doneWord) : (doneWord.charAt(0).toUpperCase() + doneWord.slice(1));
+    }
+
+
     newTraceId() {
       return 'vb-' + Date.now().toString(36) + '-' +
              Math.floor(Math.random() * 1e6).toString(36);

@@ -65,11 +65,11 @@ define([
             $page.variables.selectedDates = [];
 
             await Actions.fireNotificationEvent(context, {
-              summary: 'Dates rejected',
-              message: n + (n === 1 ? ' date' : ' dates') +
-                       ' rejected — back with the employee.',
-              severity: 'confirmation',
-              type: 'confirmation',
+              summary: $application.functions.countSummary(n, 0, 'rejected'),
+                message: $application.functions.countOutcome(n, 0, 'date', 'dates', 'rejected',
+                           'They are back with the employee.'),
+                severity: $application.functions.countSeverity(n, 0),
+                type: $application.functions.countSeverity(n, 0),
               displayMode: 'transient',
             });
             await Actions.callChain(context, { chain: 'loadWeeksChain' });
