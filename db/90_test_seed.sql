@@ -32,6 +32,19 @@ PROMPT ============================================================
 -- Santosh managing everyone AND being managed by Navamani is what makes RULE-015
 -- testable with real data: Santosh's own timesheet must be approved by Navamani.
 --
+-- Santosh was ALSO seeded as ROLE_TIME_ADMIN, to cover "admin who is also a line
+-- manager" in one row. That combination stopped being viable on 01-Aug-2026,
+-- when the admin menu was narrowed to Setup + Operations (PER-004): the admin
+-- role removed the manager screens from the very person who had to approve
+-- PRJ-1001 and PRJ-1003, so both projects had no reachable approver and twenty
+-- workers had a line manager who could not act. The combination is now
+-- untestable BY DESIGN -- PER-004 says an admin who records time signs in with
+-- their worker account -- so the finance persona is admin@rite.digital, seeded
+-- below with no worker row, and Santosh stays a manager.
+--
+-- Navamani is still the top of the tree with no manager of their own, so their
+-- OWN month has no approver. That is a real open decision, not a seed defect.
+--
 -- EMAIL matters: the shell resolves the signed-in user by email, so these must
 -- match what your identity provider returns or nobody can sign in. Only
 -- RI2894 and RI2824 are known-good; the rest are constructed and should be
@@ -50,7 +63,18 @@ DECLARE
   v t_tab := t_tab(
     --      emp        name                            email                              type          app role                 manager
     t_w('RI9001',  'Navamani Solairajan',          'navamani.solairajan@rite.digital',  'Employee',   'ROLE_TIME_MANAGER',    NULL),
-    t_w('RI2894',  'Santosh Kumar Kanala',         'Santoshkumar.kanala@rite.digital',  'Employee',   'ROLE_TIME_ADMIN',      'RI9001'),
+    -- MANAGER, not ADMIN. This row said ROLE_TIME_ADMIN until 09-Aug-2026 and it
+    -- locked the module up, because RI2894 wears three hats: project manager of
+    -- PRJ-1001 and PRJ-1003, line manager of twenty workers, and the finance
+    -- persona. The admin menu is deliberately Setup + Operations only (PER-004),
+    -- so the admin role removed the manager screens from the one person who had
+    -- to approve those two projects -- leaving them with no reachable approver
+    -- at all, and twenty workers whose line manager could not act.
+    --
+    -- The design already separates these: admin@rite.digital is seeded below as
+    -- the COMMON ADMIN with no worker row on purpose. Use that login for the
+    -- finance screens; a worker who is also a manager stays a manager here.
+    t_w('RI2894',  'Santosh Kumar Kanala',         'Santoshkumar.kanala@rite.digital',  'Employee',   'ROLE_TIME_MANAGER',    'RI9001'),
     t_w('RI2824',  'Sam Joshuva Paul Jeevan S',    'sampaul.jeevan@rite.digital',       'Employee',   'ROLE_TIME_EMPLOYEE',   'RI2894'),
     t_w('RI2900',  'SaiSowmith Kantipudi',         'saisowmith.kantipudi@rite.digital', 'Employee',   'ROLE_TIME_EMPLOYEE',   'RI2894'),
     t_w('RI2963',  'Shaik Wajahad Ali',            'wajahad.ali@rite.digital',          'Employee',   'ROLE_TIME_EMPLOYEE',   'RI2894'),
@@ -623,8 +647,9 @@ SELECT w.employee_id, w.employee_name, w.worker_type, w.app_role,
          WHEN NOT EXISTS (SELECT 1 FROM oc_time_allocation a
                            WHERE a.employee_id = w.employee_id)
                                                            THEN 'SC-22 failed record (no alloc)'
-         WHEN w.app_role = 'ROLE_TIME_ADMIN'               THEN 'admin + line mgr of 10'
-         WHEN w.app_role = 'ROLE_TIME_MANAGER'             THEN 'RULE-015 approves the admin'
+         WHEN w.app_role = 'ROLE_TIME_ADMIN'               THEN 'admin (see admin@rite.digital)'
+         WHEN w.employee_id = 'RI2894'                     THEN 'line mgr of 10 + PM of 2'
+         WHEN w.app_role = 'ROLE_TIME_MANAGER'             THEN 'RULE-015 approves RI2894'
          ELSE 'employee'
        END AS purpose
   FROM oc_time_worker w
