@@ -251,9 +251,35 @@ PROJECTS = {
 SELECT p.project_id                            AS fusion_project_id,
        p.segment1                              AS project_number,
        ptl.name                                AS project_name,
-       pt.project_type                         AS project_type,
+       -- 'Billable', a LITERAL. OC_TIME_PROJECT.PROJECT_TYPE is not Fusion's
+       -- project type -- it is a two-value flag, CHK_OC_TPRJ_TYPE
+       -- ('Billable','Organization'), identifying ONE special project: PRJ-ORG,
+       -- the Organization (Non-Billable) project implicitly assigned to every
+       -- employee (FLD-006). PRJ-ORG is seeded by 10_seed.sql and does not
+       -- exist in Fusion, so nothing the sync brings back can ever be it.
+       --
+       -- Sending pt.project_type raw failed with ORA-12899: Fusion's values run
+       -- to 29 characters against a VARCHAR2(20). Widening the column would
+       -- have moved the failure to ORA-02290 on the CHECK, which is the more
+       -- honest error -- the value was never in the domain, only too long to
+       -- fit while being wrong.
+       'Billable'                              AS project_type,
        cust.party_name                         AS customer_name,
-       p.project_status_code                   AS status,
+       -- Mapped, not passed through. CHK_OC_TPRJ_STAT allows
+       -- ('Active','Closed','On Hold') and project_status_code is a Fusion
+       -- code -- CLOSED, PENDING_CLOSE, ON_HOLD and others. The same defect as
+       -- PROJECT_TYPE above and it would have surfaced the moment that one was
+       -- fixed.
+       --
+       -- Unknown codes fall to 'Active' deliberately: the extract already
+       -- filters to projects that track time and have a manager, so a project
+       -- reaching here is one people book against. Hiding it because its status
+       -- code is unfamiliar loses time entry; showing it does not.
+       CASE
+         WHEN UPPER(p.project_status_code) LIKE '%CLOSE%' THEN 'Closed'
+         WHEN UPPER(p.project_status_code) LIKE '%HOLD%'  THEN 'On Hold'
+         ELSE 'Active'
+       END                                     AS status,
        TO_CHAR(p.start_date,'YYYY-MM-DD')      AS project_start_date,
        TO_CHAR(p.completion_date,'YYYY-MM-DD') AS project_end_date,
        org.name                                AS organization,
@@ -406,7 +432,15 @@ ALLOCATIONS = {
 SELECT pp.project_id                                   AS fusion_project_id,
        prj.segment1                                    AS project_number,
        papf.person_number                              AS employee_id,
-       TO_CHAR(MIN(pp.start_date_active),'YYYY-MM-DD') AS start_date,
+       -- NVL, because START_DATE is NOT NULL and a project party need not have
+       -- a stated start: ORA-01400 on the whole ALLOCATIONS load. An allocation
+       -- with no start of its own began when the PROJECT did, which is both
+       -- true and useful -- populate_month tests the allocation's span against
+       -- the period, so an epoch fallback would make every such person look
+       -- allocated since 1900.
+       TO_CHAR(NVL(MIN(pp.start_date_active),
+                   NVL(MIN(prj.start_date), DATE '1900-01-01')),
+               'YYYY-MM-DD')                            AS start_date,
        TO_CHAR(MAX(pp.end_date_active),'YYYY-MM-DD')   AS end_date,
        -- NVL, because the DEFAULT cannot save this. ALLOC_PCT is NOT NULL
        -- DEFAULT 100 (02_time_master.sql:219), but a column DEFAULT applies
