@@ -88,6 +88,27 @@ WORKERS = {
 -- time-record payloads want the numeric PersonId, and deriving it needs a
 -- round trip per person. Carry both -- it costs one column on a query that
 -- already joins papf.
+-- ONE ROW PER PERSON, taken from the latest period of service.
+--
+-- Measured 10-Aug-2026: 5991 rows for 5850 people. 140 person numbers appear
+-- twice -- REHIRES. per_all_assignments_m holds one primary assignment per
+-- PERIOD OF SERVICE, and a rehired person has two; both carry primary_flag='Y'
+-- inside their own period and both satisfy the effective-date predicate, so
+-- assignment_type IN ('E','C') does not separate them:
+--
+--   person 300000049306731  hire 2009-01-27  term 2015-02-28  Terminated
+--   person 300000049306731  hire 2015-03-01  term (none)      Active
+--
+-- Two source rows matching one target row is ORA-30926, "unable to get a
+-- stable set of rows in the source tables" -- the MERGE refuses rather than
+-- pick, correctly, since it cannot know which is current. WORKERS is the
+-- parent of allocation and absence, so the whole sync stops there.
+--
+-- Deduped by window rather than by filtering on assignment_type, because the
+-- terminated-assignment codes vary by how the termination was processed and a
+-- filter that is subtly wrong DROPS PEOPLE silently. Ordering by period start
+-- is true regardless: the newest period of service is the current one, and a
+-- genuinely terminated person still has exactly one row and keeps it.
 SELECT papf.person_id                                    AS fusion_person_id,
        papf.person_number                                AS employee_id,
        ppnf.display_name                                 AS employee_name,
@@ -169,6 +190,31 @@ SELECT papf.person_id                                    AS fusion_person_id,
     ON mgr.person_id = sup.manager_id
    AND {ED} BETWEEN mgr.effective_start_date AND mgr.effective_end_date
  WHERE {ED} BETWEEN papf.effective_start_date AND papf.effective_end_date
+   -- Keep only the LATEST period of service, as a correlated NOT EXISTS
+   -- rather than a ROW_NUMBER in an outer query.
+   --
+   -- The wrapper was tried first and broke the extract: the :P_LAST_SYNC delta
+   -- predicate is APPENDED to this SQL, so it landed on the outer SELECT where
+   -- mgr, sup and expo are out of scope -- ORA-00904 "MGR"."EFFECTIVE_START_DATE".
+   -- The delta machinery requires this query stay a single flat SELECT.
+   AND NOT EXISTS (
+         SELECT 1
+           FROM per_all_assignments_m a2
+           JOIN per_periods_of_service p2
+             ON p2.period_of_service_id = a2.period_of_service_id
+          WHERE a2.person_id = papf.person_id
+            AND a2.primary_flag = 'Y'
+            AND a2.assignment_type IN ('E','C')
+            AND a2.effective_latest_change = 'Y'
+            AND {ED} BETWEEN a2.effective_start_date AND a2.effective_end_date
+            -- Strictly later period, with an id tiebreak so two periods
+            -- starting on the SAME day still leave exactly one survivor
+            -- rather than silently reintroducing the duplicate.
+            AND (NVL(p2.date_start, DATE '1900-01-01')
+                   > NVL(pos.date_start, DATE '1900-01-01')
+              OR (NVL(p2.date_start, DATE '1900-01-01')
+                   = NVL(pos.date_start, DATE '1900-01-01')
+                 AND a2.assignment_id > paam.assignment_id)))
 """.replace("{ED}", ED),
 }
 

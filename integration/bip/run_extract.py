@@ -157,12 +157,39 @@ def _run_one(c: BipClient, ex: Dict, eff: str, chunked: bool,
     return c.rows(raw)
 
 
+def _dup_keys(ex, rows):
+    """Rows whose declared key is not unique. Empty list when the key holds.
+
+    Every extract carries a "key" naming the columns the loader MERGEs on, and
+    until 10-Aug-2026 NOTHING READ IT -- it was a comment in the shape of code.
+    That is worth stating plainly: a duplicate key is not a cosmetic problem.
+    MERGE refuses two source rows matching one target row with ORA-30926,
+    "unable to get a stable set of rows in the source tables", which names
+    neither the report nor the offending values, and the feed simply stops.
+
+    Found by measuring WORKERS: 5991 rows, 5850 people, 140 rehires each
+    holding two periods of service. The extract had looked healthy since the
+    day it was written.
+    """
+    key = ex.get("key") or []
+    if not key:
+        return []
+    seen, dup = set(), []
+    for r in rows:
+        k = tuple(r.get(c, "") for c in key)
+        if k in seen:
+            dup.append(k)
+        seen.add(k)
+    return dup
+
+
 def cmd_validate(args) -> int:
     c = _client(args)
     eff = args.effective_date
     rc = 0
-    print("%-12s %-10s %8s  %s" % ("EXTRACT", "STATUS", "ROWS", "TARGET"))
-    print("-" * 66)
+    print("%-12s %-10s %8s %7s  %s"
+          % ("EXTRACT", "STATUS", "ROWS", "DUPKEYS", "TARGET"))
+    print("-" * 74)
     for ex in _selected(args.validate):
         path = model_path(ex["name"])
         try:
@@ -182,7 +209,25 @@ def cmd_validate(args) -> int:
             probe = "SELECT COUNT(*) AS N FROM (%s)" % sql
             n = c.query(probe, ["N"], path=CATALOG_FOLDER + "/_validate.xdm")
             count = n[0]["N"] if n else "?"
-            print("%-12s %-10s %8s  %s" % (ex["name"], "ok", count, ex["target"]))
+
+            # The declared key, checked in the database rather than by pulling
+            # every row back. A non-zero here means the MERGE will raise
+            # ORA-30926 and the feed will not load at all.
+            dups = "-"
+            key = ex.get("key") or []
+            if key and str(count).isdigit():
+                dprobe = ("SELECT COUNT(*) AS N FROM (SELECT DISTINCT %s FROM (%s))"
+                          % (", ".join(key), sql))
+                dn = c.query(dprobe, ["N"],
+                             path=CATALOG_FOLDER + "/_validate.xdm")
+                if dn and str(dn[0]["N"]).isdigit():
+                    dups = int(count) - int(dn[0]["N"])
+                    if dups:
+                        rc = 1
+                        dups = "%d BAD" % dups
+
+            print("%-12s %-10s %8s %7s  %s"
+                  % (ex["name"], "ok", count, dups, ex["target"]))
         except BipError as exc:
             msg = str(exc)
             ora = [t for t in msg.split() if t.startswith("ORA-")]
@@ -211,6 +256,11 @@ def cmd_run(args) -> int:
         target = os.path.join(args.out, "%s.csv" % ex["name"].lower())
         cols = ex["columns"]
         with io.open(target, "w", encoding="utf-8", newline="") as fh:
+            bad = _dup_keys(ex, rows)
+            if bad:
+                print("  %-12s WARNING  %d duplicate %s key(s); the MERGE will "
+                      "raise ORA-30926. e.g. %s"
+                      % (ex["name"], len(bad), "+".join(ex["key"]), bad[0]))
             w = csv.DictWriter(fh, fieldnames=cols, extrasaction="ignore")
             w.writeheader()
             for r in rows:
