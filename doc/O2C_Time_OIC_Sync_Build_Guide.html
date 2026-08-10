@@ -7,7 +7,9 @@
 <!--
   O2C Timesheet Module - OIC master-data sync, build guide.
   Written 11-Aug-2026. Standalone: no external CSS, fonts, scripts or images,
-  so it opens from a file:// path, an email attachment or a shared drive.
+  so it opens from a file:// path, an email attachment or a shared drive. The
+  flow diagram is hand-authored inline SVG for the same reason - it draws in
+  currentColor, so it follows the page in light and dark alike.
 
   SUPERSEDES sections 1.1 and 3 of O2C_Time_OIC_Build_Guide.html, which were
   written before the sync endpoints existed and are now wrong in ways that
@@ -137,6 +139,12 @@
   .kv dt{color:var(--ink-3)}
   .kv dd{margin:0; color:var(--ink)}
 
+  .fig{margin:0; display:flex; flex-direction:column; gap:.8rem;
+       background:var(--surface); border:1px solid var(--rule); border-radius:8px;
+       padding:1.4rem 1.4rem 1.2rem; box-shadow:var(--shadow); overflow-x:auto}
+  .fig svg{width:100%; min-width:40rem; max-width:100%; height:auto; display:block}
+  figcaption{font-size:.86rem; color:var(--ink-2); max-width:70ch; line-height:1.6}
+
   hr{border:none; border-top:1px solid var(--rule); margin:0}
   a{color:var(--signal-ink); text-underline-offset:2px}
   a:focus-visible,summary:focus-visible{outline:2px solid var(--signal); outline-offset:2px}
@@ -184,6 +192,116 @@
   <p>OIC carries no field mapping and no SQL. It knows how to read a config row, run a report, and
      hand the bytes over. Everything about which columns exist and how a row is matched lives in the
      database, next to the tables it writes.</p>
+
+  <figure class="fig">
+    <svg viewBox="0 0 900 476" role="img" xmlns="http://www.w3.org/2000/svg"
+         aria-label="One schedule reads six feed rows from ORDS, then loops them one at a time
+                     in run order: run the BIP report with two parameters, decode the base64
+                     response, post the raw XML back to ORDS, which captures the before-image and
+                     merges. After the loop it calls populate.">
+      <defs>
+        <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5"
+                markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+        </marker>
+        <marker id="ahs" viewBox="0 0 10 10" refX="9" refY="5"
+                markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--signal)"/>
+        </marker>
+      </defs>
+
+      <g font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace"
+         font-size="10.5" fill="currentColor" opacity=".55" letter-spacing=".08em">
+        <text x="6" y="46">ORACLE</text><text x="6" y="60">FUSION</text>
+        <text x="6" y="176">ORACLE</text><text x="6" y="190">INTEGRATION</text>
+        <text x="6" y="316">O2C_TIME</text><text x="6" y="330">ORDS + ATP</text>
+      </g>
+      <g stroke="currentColor" opacity=".16" stroke-dasharray="3 4">
+        <line x1="100" y1="28" x2="896" y2="28"/>
+        <line x1="100" y1="128" x2="896" y2="128"/>
+        <line x1="100" y1="272" x2="896" y2="272"/>
+        <line x1="100" y1="462" x2="896" y2="462"/>
+      </g>
+
+      <g fill="none" stroke="currentColor" stroke-width="1.4">
+        <rect x="380" y="50" width="120" height="44" rx="5"/>
+        <rect x="112" y="162" width="110" height="46" rx="5"/>
+        <rect x="246" y="162" width="110" height="46" rx="5"/>
+        <rect x="380" y="162" width="120" height="46" rx="5"/>
+        <rect x="524" y="162" width="120" height="46" rx="5"/>
+        <rect x="668" y="162" width="110" height="46" rx="5"/>
+        <rect x="246" y="300" width="110" height="44" rx="5"/>
+        <rect x="668" y="300" width="110" height="44" rx="5"/>
+        <rect x="596" y="382" width="254" height="40" rx="5" stroke-dasharray="4 3" opacity=".75"/>
+      </g>
+
+      <g font-family="ui-sans-serif,system-ui,sans-serif" font-size="12.5"
+         fill="currentColor" text-anchor="middle">
+        <text x="440" y="77">runDataModel</text>
+        <text x="167" y="190">Schedule fires</text>
+        <text x="301" y="190">For each feed</text>
+        <text x="440" y="183">Run report</text>
+        <text x="440" y="199" font-size="10.5" opacity=".6">2 parameters</text>
+        <text x="584" y="183">Decode</text>
+        <text x="584" y="199" font-size="10.5" opacity=".6">base64</text>
+        <text x="723" y="190">POST the XML</text>
+      </g>
+      <g font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace"
+         font-size="11" fill="currentColor" text-anchor="middle">
+        <text x="301" y="327">GET /sync/config</text>
+        <text x="723" y="320">POST /sync/load</text>
+        <text x="723" y="336" opacity=".65">/{reportname}</text>
+        <text x="723" y="407" font-size="10.5" opacity=".78">capture before-image &#8594; MERGE &#8594; advance lastsyncdate</text>
+      </g>
+
+      <g stroke="currentColor" stroke-width="1.4" fill="none" marker-end="url(#ah)">
+        <line x1="222" y1="185" x2="240" y2="185"/>
+        <line x1="356" y1="185" x2="374" y2="185"/>
+        <line x1="500" y1="185" x2="518" y2="185"/>
+        <line x1="644" y1="185" x2="662" y2="185"/>
+        <line x1="424" y1="162" x2="424" y2="98"/>
+        <line x1="456" y1="98"  x2="456" y2="160"/>
+        <line x1="301" y1="162" x2="301" y2="298"/>
+        <line x1="723" y1="208" x2="723" y2="298"/>
+        <line x1="723" y1="344" x2="723" y2="380"/>
+      </g>
+
+      <path d="M723,208 L723,236 L440,236 L440,210" fill="none"
+            stroke="var(--signal)" stroke-width="1.9" marker-end="url(#ahs)"/>
+
+      <g font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5"
+         fill="currentColor" opacity=".72">
+        <text x="316" y="252" text-anchor="start">6 rows, run order 10&#8230;60</text>
+        <text x="414" y="132" text-anchor="end">path + dates</text>
+        <text x="466" y="132" text-anchor="start">reportBytes</text>
+        <text x="738" y="262" text-anchor="start">raw body, application/xml</text>
+      </g>
+      <text x="581" y="256" text-anchor="middle" font-size="11" font-weight="650"
+            font-family="ui-sans-serif,system-ui,sans-serif" fill="var(--signal)">
+        next feed &#8212; one at a time, never parallel
+      </text>
+
+      <g stroke="currentColor" stroke-width="1.4" fill="none"
+         stroke-dasharray="5 4" marker-end="url(#ah)" opacity=".8">
+        <line x1="778" y1="185" x2="856" y2="185"/>
+        <line x1="856" y1="192" x2="856" y2="298"/>
+      </g>
+      <g font-family="ui-sans-serif,system-ui,sans-serif" font-size="10.5"
+         fill="currentColor" opacity=".72">
+        <text x="866" y="182" text-anchor="end">after the loop</text>
+      </g>
+      <g font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace"
+         font-size="10.5" fill="currentColor" text-anchor="end">
+        <text x="890" y="318">POST /jobs/populate/{id}</text>
+        <text x="890" y="334" opacity=".65">or /jobs/daily</text>
+      </g>
+    </svg>
+    <figcaption>The loop is the whole design: one schedule, six feeds, and a child integration
+      called once per feed. The teal edge is the constraint that is easiest to get wrong &#8212;
+      feeds run <em>one at a time in run order</em>, because <code>OC_TIME_ALLOCATION</code> has
+      foreign keys to both worker and project. Fan them out and roughly half the allocations land
+      in <code>OC_TIME_SYNC_FAILED</code> while the run still reports success.</figcaption>
+  </figure>
   <div class="flow">
     <div class="step">
       <div class="rail">001</div>
