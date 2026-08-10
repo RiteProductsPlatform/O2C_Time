@@ -38,21 +38,35 @@ BEGIN
   -- 2. WHICH version is in the database. The whole point of this file.
   --    ESCAPE '' is a zero-length escape character: ORA-06502 on every load,
   --    raised at run time, from a line that looks perfectly correct.
+  --
+  --    EVERY check below excludes comment lines. USER_SOURCE stores comments
+  --    verbatim, and 16 CONTAINS THE STRING "ESCAPE ''" in the comment
+  --    explaining why the escape was removed -- so the first version of this
+  --    file found its own bug report and called it the bug. It reported FAIL
+  --    on a healthy schema while checks 2 and 4 simultaneously reported the
+  --    fixed code was present, which is not a state that can exist.
+  --
+  --    A false FAIL merely wastes time. A false PASS is worse and the same
+  --    flaw produces it: a comment mentioning SUBSTR would satisfy the check
+  --    below on a schema running the stale procedure. Hence the filter on all
+  --    three, not just the one that misfired.
   SELECT COUNT(*) INTO v_n FROM user_source
-   WHERE name = 'OC_TIME_LOAD_XML' AND INSTR(text, 'SUBSTR(c.nm, 1, 7)') > 0;
+   WHERE name = 'OC_TIME_LOAD_XML' AND LTRIM(text) NOT LIKE '--%'
+     AND INSTR(text, 'SUBSTR(c.nm, 1, 7)') > 0;
   say('  ...and is the CURRENT source', v_n >= 1,
       CASE WHEN v_n >= 1 THEN 'has the SUBSTR guard'
            ELSE 'STALE - compiled before the ESCAPE fix. git pull, re-run 16' END);
 
   SELECT COUNT(*) INTO v_n FROM user_source
-   WHERE name = 'OC_TIME_LOAD_XML' AND INSTR(text, 'ESCAPE ''''') > 0;
+   WHERE name = 'OC_TIME_LOAD_XML' AND LTRIM(text) NOT LIKE '--%'
+     AND INSTR(text, 'ESCAPE ''''') > 0;
   say('  ...no zero-length ESCAPE', v_n = 0,
       CASE v_n WHEN 0 THEN 'clean' ELSE 'ORA-06502 WILL fire on every load' END);
 
   -- 3. The FK column must be excluded from the XML scan, or ALLOCATIONS puts
   --    Fusion's project id straight into the local foreign key.
   SELECT COUNT(*) INTO v_n FROM user_source
-   WHERE name = 'OC_TIME_LOAD_XML'
+   WHERE name = 'OC_TIME_LOAD_XML' AND LTRIM(text) NOT LIKE '--%'
      AND INSTR(text, 't.column_name <> v_fkcol') > 0;
   say('FK column excluded from scan', v_n >= 1,
       CASE WHEN v_n >= 1 THEN 'resolution cannot be bypassed'
