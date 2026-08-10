@@ -263,6 +263,9 @@ PROMPT >>> 14 ORDS oc.time.admin      (admin + accrual pull)
 PROMPT >>> 15 ORDS oc.time.auth       (login, logout, session, set-password)
 @@ords/14_ords_time_auth.sql
 
+PROMPT [n/m] ords/15_ords_time_sync.sql - the OIC surface (INT 001 / INT 002)
+@@ords/15_ords_time_sync.sql
+
 -- ── Recompile anything the DDL invalidated ───────────────────
 --
 -- Adding a column to a table marks every dependent view INVALID. Oracle
