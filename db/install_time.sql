@@ -250,6 +250,9 @@ PROMPT >>> 16 OIC sync config + the generic XML loader
 
 PROMPT [n/m] 19_sync_change_capture.sql - before-image capture + append-only
 @@19_sync_change_capture.sql
+
+PROMPT [n/m] 20_retro_reallocation.sql - retro allocation change -> Reversal/Adjustment
+@@20_retro_reallocation.sql
 -- 15 is NOT here: it creates a table the package body reads, so it runs before
 -- step 09 above. Moving it back would reintroduce nine ORA-00942s.
 
