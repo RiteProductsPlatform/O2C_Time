@@ -253,6 +253,9 @@ PROMPT [n/m] 19_sync_change_capture.sql - before-image capture + append-only
 
 PROMPT [n/m] 20_retro_reallocation.sql - retro allocation change -> Reversal/Adjustment
 @@20_retro_reallocation.sql
+
+PROMPT [n/m] 21_adjustment_lifecycle.sql - submit/approve cut-offs for adjustments
+@@21_adjustment_lifecycle.sql
 -- 15 is NOT here: it creates a table the package body reads, so it runs before
 -- step 09 above. Moving it back would reintroduce nine ORA-00942s.
 

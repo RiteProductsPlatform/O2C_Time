@@ -129,6 +129,23 @@ BEGIN
                 p_reason         => p_reason,
                 p_adj_kind       => 'RetroWBS',
                 p_actor          => p_actor);
+      -- 'Not yet submitted', not the table's 'Awaiting Approval' default.
+      --
+      -- The employee owns it first. An adjustment raised by the SYNC concerns
+      -- hours THEY logged, being moved to a project they may not know about
+      -- yet; dropping it straight into a manager's queue approves a change the
+      -- person it belongs to has never seen. 21_adjustment_lifecycle.sql
+      -- carries it on from here -- employee submits, or the delivery cut-off
+      -- submits for them, then the managers approve or the finance cut-off
+      -- approves for them.
+      --
+      -- Set here rather than by changing apply_adjustment, so 09 stays
+      -- untouched and a hand-raised adjustment from a screen keeps its
+      -- existing behaviour.
+      UPDATE oc_ts_adjustment
+         SET status = 'Not yet submitted'
+       WHERE adjustment_id = v_id;
+
       o_raised := o_raised + 1;
       o_hours  := o_hours + e.hours;
     EXCEPTION WHEN OTHERS THEN
@@ -141,7 +158,7 @@ BEGIN
 
   o_message := o_raised || ' adjustment(s) raised for ' || o_hours || ' hour(s)'
             || CASE WHEN v_err IS NULL THEN
-                 ', awaiting the old and new project managers (RA-014).'
+                 ', awaiting the employee''s submission.'
                ELSE '. AT LEAST ONE DAY WAS REFUSED: ' || v_err END;
 END oc_time_retro_realloc;
 /
