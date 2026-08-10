@@ -980,7 +980,7 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
     -- LASTSYNC_DATE came back 10-08-26. Most days that is harmless. On the 1st
     -- of a month it is not -- get_period_for_date below would resolve the WRONG
     -- MONTH and the job would populate it, quietly and successfully.
-    v_date   DATE := NVL(v_date, TRUNC(SYSDATE));
+    v_date   DATE := NVL(p_action_date, TRUNC(SYSDATE));
   BEGIN
     -- The period the action date falls in, not "the open period". With several
     -- months open at once the latter is a guess, and this job already knows the
