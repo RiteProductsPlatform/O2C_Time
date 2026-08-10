@@ -247,6 +247,9 @@ PROMPT >>> 18 OC_TIME_TASK natural key (the loader cannot merge without it)
 @@18_task_natural_key.sql
 PROMPT >>> 16 OIC sync config + the generic XML loader
 @@16_oic_sync_config.sql
+
+PROMPT [n/m] 19_sync_change_capture.sql - before-image capture + append-only
+@@19_sync_change_capture.sql
 -- 15 is NOT here: it creates a table the package body reads, so it runs before
 -- step 09 above. Moving it back would reintroduce nine ORA-00942s.
 

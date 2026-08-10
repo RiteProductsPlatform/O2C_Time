@@ -331,6 +331,11 @@ AS
   v_fkcol    VARCHAR2(30);
   v_fksql    VARCHAR2(1000);
   v_mkey     VARCHAR2(200);
+  v_capture  VARCHAR2(1)   := 'N';
+  v_keyexpr  VARCHAR2(2000);          -- the merge key, as a printable string
+  v_oldj     VARCHAR2(4000);          -- JSON_ARRAY(...) over t.<cols>
+  v_newj     VARCHAR2(4000);          -- the same over s.<cols>
+  v_cap      CLOB;
 BEGIN
   o_rows_read := 0; o_rows_merged := 0; o_status := 'Failed';
 
@@ -343,8 +348,9 @@ BEGIN
   -- because two reports can share a table -- CALENDAR and WORKER_SHIFTS both
   -- write OC_TIME_CALENDAR -- and only one of them may need a lookup.
   BEGIN
-    SELECT MAX(fk_column), MAX(fk_lookup_sql), MAX(merge_key)
-      INTO v_fkcol, v_fksql, v_mkey
+    SELECT MAX(fk_column), MAX(fk_lookup_sql), MAX(merge_key),
+           NVL(MAX(capture_changes), 'N')
+      INTO v_fkcol, v_fksql, v_mkey, v_capture
       FROM oc_time_sync_config
      WHERE UPPER(target_table) = v_tab
        AND (p_report_name IS NULL OR bip_report_name = p_report_name);
@@ -450,6 +456,7 @@ BEGIN
         RETURN;
       END IF;
       v_on := v_on || ' AND t.' || k.column_name || ' = s.' || k.column_name;
+      v_keyexpr := v_keyexpr || '||''|''||TO_CHAR(s.' || k.column_name || ')';
       v_keycols := v_keycols + 1;
     END LOOP;
   END IF;
@@ -472,6 +479,7 @@ BEGIN
   LOOP
     EXIT WHEN v_mkey IS NOT NULL;          -- declared key already applied
     v_on := v_on || ' AND t.' || k.column_name || ' = s.' || k.column_name;
+    v_keyexpr := v_keyexpr || '||''|''||TO_CHAR(s.' || k.column_name || ')';
     v_keycols := v_keycols + 1;
   END LOOP;
   IF v_set IS NULL THEN v_set := ''; END IF;
@@ -533,6 +541,76 @@ BEGIN
 
   SELECT COUNT(*) INTO o_rows_read
     FROM XMLTABLE('/DATA_DS/ROWSET/ROW' PASSING XMLTYPE(p_xml));
+
+  -- ── 4. the before-image, BEFORE the merge destroys it ──────
+  -- The MERGE below overwrites every non-key column. Once it has run, the
+  -- previous project, task, billable type and percentage are gone, and a
+  -- Reversal that must "subtract the hours from the OLD project" has nothing
+  -- left to name. There is no recovering it afterwards -- only the new value
+  -- exists -- so it is captured here or not at all.
+  --
+  -- Both sides are stored as a JSON array of {name,value}. An array rather than
+  -- an object because the reader iterates unknown keys, and a whole row rather
+  -- than one record per changed column because an adjustment needs the row as a
+  -- coherent whole. V_OC_TIME_SYNC_CHANGE_COL derives the per-column view.
+  --
+  -- LEFT JOIN, so a genuinely new row is captured as INSERT with a null
+  -- OLD_ROW: a new allocation is an addition and needs an Adjustment(+) just as
+  -- much as a moved one needs the pair.
+  --
+  -- Same transaction as the MERGE. If the merge fails, the capture rolls back
+  -- with it -- a recorded change that did not happen would be worse than none.
+  IF v_capture = 'Y' AND v_keyexpr IS NOT NULL THEN
+    FOR c IN (SELECT REGEXP_SUBSTR(LTRIM(v_ins, ','), '[^,]+', 1, LEVEL) AS nm
+                FROM dual
+             CONNECT BY LEVEL <= REGEXP_COUNT(v_ins, ','))
+    LOOP
+      v_oldj := v_oldj || ',JSON_OBJECT(''name'' VALUE ''' || c.nm ||
+                ''', ''value'' VALUE TO_CHAR(t.' || c.nm || '))';
+      v_newj := v_newj || ',JSON_OBJECT(''name'' VALUE ''' || c.nm ||
+                ''', ''value'' VALUE TO_CHAR(s.' || c.nm || '))';
+    END LOOP;
+
+    v_cap :=
+      'INSERT INTO oc_time_sync_change (report_name, target_table, row_key, '
+   || '       change_type, old_row, new_row, created_by) '
+   || 'SELECT :1, :2, SUBSTR(' || LTRIM(v_keyexpr, '|''') || ', 1, 400), '
+   || '       CASE WHEN t.ROWID IS NULL THEN ''INSERT'' ELSE ''UPDATE'' END, '
+   || '       CASE WHEN t.ROWID IS NULL THEN NULL ELSE JSON_ARRAY('
+   ||            LTRIM(v_oldj, ',') || ' RETURNING CLOB) END, '
+   || '       JSON_ARRAY(' || LTRIM(v_newj, ',') || ' RETURNING CLOB), :3 '
+   || '  FROM (SELECT ' || LTRIM(v_src, ',')
+   || '          FROM XMLTABLE(''/DATA_DS/ROWSET/ROW'' PASSING :4 COLUMNS '
+   ||                LTRIM(v_cols, ',') || ') x) s '
+   || '  LEFT JOIN ' || v_tab || ' t ON (' || LTRIM(v_on, ' AND') || ') '
+   -- Only actual differences. Re-reading an overlapping window is normal and
+   -- most rows come back identical; recording those would bury the real
+   -- changes under thousands of no-ops every single night.
+   || ' WHERE t.ROWID IS NULL '
+   || '    OR JSON_ARRAY(' || LTRIM(v_oldj, ',') || ' RETURNING CLOB) <> '
+   || '       JSON_ARRAY(' || LTRIM(v_newj, ',') || ' RETURNING CLOB)';
+
+    BEGIN
+      EXECUTE IMMEDIATE v_cap
+        USING NVL(p_report_name, v_tab), v_tab, NVL(p_actor, 'OIC'),
+              XMLTYPE(p_xml);
+    EXCEPTION WHEN OTHERS THEN
+      -- Capture must never stop a load. A sync that refuses to run because it
+      -- could not write an audit row helps nobody, but a SILENT failure to
+      -- capture is exactly what this file exists to prevent -- so it is
+      -- recorded where the other sync failures already are.
+      DECLARE
+        v_ce VARCHAR2(400) := SUBSTR(SQLERRM, 1, 400);
+      BEGIN
+        INSERT INTO oc_time_sync_failed
+               (job_run_id, entity_type, entity_key, failure_reason, failure_code)
+        VALUES (NULL, NVL(p_report_name, v_tab), 'CHANGE_CAPTURE',
+                'Before-image capture failed; the merge still ran, so the '
+             || 'previous values for this batch are NOT recoverable: ' || v_ce,
+                -1);
+      END;
+    END;
+  END IF;
 
   -- If the lookup resolves nothing at all, the parent almost certainly has not
   -- been loaded yet -- which is a RUN_ORDER problem, not a data problem, and
