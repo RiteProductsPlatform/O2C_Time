@@ -240,6 +240,8 @@ PROMPT >>> 13 several periods may be Open (RULE-017 relaxed)
 @@13_open_periods.sql
 PROMPT >>> 14 invoice annexure over the accrual hand-off
 @@14_invoice_annexure.sql
+PROMPT >>> 16 OIC sync config + the generic XML loader
+@@16_oic_sync_config.sql
 -- 15 is NOT here: it creates a table the package body reads, so it runs before
 -- step 09 above. Moving it back would reintroduce nine ORA-00942s.
 
