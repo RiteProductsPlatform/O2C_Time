@@ -76,8 +76,22 @@ PROMPT ============================================================
 -- — yesterday. Opening July without this leaves it Open and still read-only,
 -- which looks exactly like the change not having worked.
 --
--- 30-Sep-2026 is a working date for testing, not a business decision. Set it to
--- whatever the real July delivery date should be.
+-- 30-Sep-2026 IS A TESTING DATE, NOT A BUSINESS ONE, and re-running this
+-- script will impose it again.
+--
+-- The real shape (confirmed 10-Aug-2026) is different and matters, because the
+-- two cut-offs sit either side of month end:
+--
+--     payroll cut-off   25-Jul   BEFORE the month has even finished
+--     delivery cut-off  ~10-Aug  AFTER it, once managers have had a chance
+--
+-- So this UPDATE will overwrite a correctly-set July delivery cut-off with
+-- 30-Sep. The guard below only skips rows already LATER than 30-Sep, which a
+-- real 10-Aug value is not.
+--
+-- BEFORE RE-RUNNING THE INSTALLER ON AN ENVIRONMENT WITH REAL CUT-OFFS, either
+-- change the date here or comment this statement out. Everything else in the
+-- installer is idempotent; this one is opinionated.
 UPDATE oc_time_period
    SET delivery_cutoff = DATE '2026-09-30', updated_by = 'ADMIN'
  WHERE period_year = 2026 AND period_month = 7

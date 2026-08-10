@@ -2112,7 +2112,26 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
     v_job  NUMBER;
     v_read NUMBER := 0;
     v_up   NUMBER := 0;
+    -- THE LAST DATE THAT CAN LEGITIMATELY BE HELD.
+    --
+    -- The payroll cut-off lands BEFORE the month ends -- typically the 25th,
+    -- while the delivery cut-off for the same month is the 10th of the NEXT
+    -- one. Running on the 26th of July and asking "which dates were not
+    -- submitted" therefore sweeps in 26-31 July, which have not happened yet.
+    -- Holding somebody's pay for failing to submit a timesheet for next
+    -- Thursday is indefensible, and nothing downstream would have caught it:
+    -- the rows look exactly like real ones.
+    --
+    -- LEAST of the two bounds, so it is right whichever way they sit:
+    --   * never on or after the payroll cut-off itself
+    --   * never in the future, whenever the job is actually run
+    -- and TRUNC(SYSDATE) alone if the period has no payroll cut-off set.
+    v_upto DATE;
   BEGIN
+    SELECT LEAST(NVL(payroll_cutoff, TRUNC(SYSDATE)), TRUNC(SYSDATE))
+      INTO v_upto
+      FROM oc_time_period WHERE period_id = p_period_id;
+
     v_job := start_job('Salary Stopping', 'SalaryStopping',
                        p_period_id, TRUNC(SYSDATE), NULL, p_actor);
 
@@ -2147,6 +2166,10 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
                 JOIN oc_time_worker k ON k.employee_id = w.employee_id
                WHERE w.period_id = p_period_id
                  AND k.status    = 'Active'
+                 -- Only weeks that have actually started by the bound. Without
+                 -- this an employee whose only unsubmitted week is still in the
+                 -- future gets a hold header with no dates under it.
+                 AND w.week_start <= v_upto
                GROUP BY w.employee_id
               HAVING SUM(CASE WHEN w.submitted_on IS NULL THEN 1 ELSE 0 END) > 0)
     LOOP
@@ -2199,6 +2222,8 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
                WHERE wk.employee_id  = e.employee_id
                  AND wk.period_id    = p_period_id
                  AND wk.submitted_on IS NULL
+                 -- Strictly before: a day cannot be late on the day itself.
+                 AND en.entry_date   < v_upto
                GROUP BY en.ts_week_id, en.entry_date
               HAVING NVL(MAX(en.standard_hours),0) > 0) d
         CROSS JOIN (SELECT hold_id FROM oc_ts_salary_hold
@@ -2236,7 +2261,8 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
        AND NOT EXISTS (SELECT 1 FROM oc_ts_week w
                         WHERE w.employee_id  = h.employee_id
                           AND w.period_id    = h.period_id
-                          AND w.submitted_on IS NULL);
+                          AND w.submitted_on IS NULL
+                          AND w.week_start  <= v_upto);
 
     finish_job(v_job, v_read, v_up, 0);
     COMMIT;
