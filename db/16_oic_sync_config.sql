@@ -29,7 +29,11 @@ BEGIN
       BIP_REPORT_NAME  VARCHAR2(60 CHAR)  NOT NULL,
       PURPOSE          VARCHAR2(400 CHAR),
       BIP_REPORT_PATH  VARCHAR2(400 CHAR) NOT NULL,
-      TARGET_TABLE     VARCHAR2(30 CHAR)  NOT NULL,
+      -- Nullable on purpose. All eleven reports are registered here, including
+      -- the four that have nowhere to load and the one that is read live, so
+      -- the config is the complete inventory. A missing row is invisible; a
+      -- disabled row with a PURPOSE explains itself.
+      TARGET_TABLE     VARCHAR2(30 CHAR),
       -- LASTSYNC_DATE is BOTH the bookmark and the parameter: INT 002 sends it
       -- to the report as :P_LAST_SYNC and writes the new one back on success.
       -- Advanced only on Success -- a Partial must not move it, or the rows
@@ -61,6 +65,10 @@ BEGIN
         ('Ready','Running','Success','Partial','Failed')),
       CONSTRAINT chk_oc_tsc_sched  CHECK (schedule_tag IN ('Daily','Monthly','Both')),
       CONSTRAINT chk_oc_tsc_enab   CHECK (enabled_flag IN ('Y','N')),
+      -- Enabled means "INT 001 will hand this to the loader", and the loader
+      -- needs somewhere to put it. Disabled rows may have no target.
+      CONSTRAINT chk_oc_tsc_tgt    CHECK (enabled_flag = 'N'
+                                          OR target_table IS NOT NULL),
       CONSTRAINT uk_oc_tsc_name    UNIQUE (bip_report_name)
     )
   ~';
@@ -72,41 +80,83 @@ EXCEPTION WHEN OTHERS THEN
 END;
 /
 
+-- Already-installed schemas: relax TARGET_TABLE and add the guard. Separate
+-- blocks so one already being done does not skip the other.
+BEGIN
+  EXECUTE IMMEDIATE 'ALTER TABLE oc_time_sync_config MODIFY (target_table NULL)';
+EXCEPTION WHEN OTHERS THEN
+  IF SQLCODE = -1451 THEN NULL;   -- already nullable
+  ELSE RAISE; END IF;
+END;
+/
+BEGIN
+  EXECUTE IMMEDIATE q'~ALTER TABLE oc_time_sync_config ADD CONSTRAINT
+    chk_oc_tsc_tgt CHECK (enabled_flag = 'N' OR target_table IS NOT NULL)~';
+EXCEPTION WHEN OTHERS THEN
+  IF SQLCODE = -2264 THEN NULL;   -- constraint name already used
+  ELSE RAISE; END IF;
+END;
+/
+
 PROMPT ============================================================
-PROMPT [2/4] Seed the six loadable extracts
+PROMPT [2/4] Seed all eleven reports — six enabled, five off with a reason
 PROMPT ============================================================
 
--- Only the six that HAVE a target table. SHIFTS, WORK_PATTERNS, WORK_SCHEDULES
--- and EXP_TYPES are deliberately absent: they have nowhere to load, so putting
--- them in a loader's config would mean OIC calling a procedure that can only
--- fail. They stay as on-demand data models.
+-- ALL ELEVEN are registered. Six are enabled; five are off and say why in
+-- PURPOSE. Leaving them out entirely was the wrong call -- an operator counting
+-- eleven data models and six config rows has no way to tell whether the other
+-- five are deliberate or forgotten.
 DECLARE
   TYPE t_row IS RECORD (nm VARCHAR2(60), pur VARCHAR2(400),
-                        tbl VARCHAR2(30), ord NUMBER, sch VARCHAR2(10));
+                        tbl VARCHAR2(30), ord NUMBER, sch VARCHAR2(10),
+                        en VARCHAR2(1));
   TYPE t_tab IS TABLE OF t_row;
   v t_tab := t_tab(
     t_row('WORKERS',      'People, their manager, standard day and status (INT-001). '
                        || 'FIRST: everything else has a worker foreign key.',
-          'OC_TIME_WORKER',     10, 'Both'),
+          'OC_TIME_WORKER',     10, 'Both', 'Y'),
     t_row('PROJECTS',     'Projects that track time and have a manager (INT-002).',
-          'OC_TIME_PROJECT',    20, 'Both'),
+          'OC_TIME_PROJECT',    20, 'Both', 'Y'),
     t_row('TASKS',        'WBS tasks with chargeable/billable flags (INT-002).',
-          'OC_TIME_TASK',       30, 'Both'),
+          'OC_TIME_TASK',       30, 'Both', 'Y'),
     t_row('ALLOCATIONS',  'Who may charge to what, and at what percentage (INT-003). '
                        || 'Needs WORKERS and PROJECTS already loaded.',
-          'OC_TIME_ALLOCATION', 40, 'Both'),
+          'OC_TIME_ALLOCATION', 40, 'Both', 'Y'),
     t_row('CALENDAR',     'Corporate working days and holidays (INT-004/005).',
-          'OC_TIME_CALENDAR',   50, 'Monthly'),
+          'OC_TIME_CALENDAR',   50, 'Monthly', 'Y'),
     t_row('WORKER_SHIFTS','Per-person per-day shift, the SHIFT calendar layer. '
                        || 'Highest precedence, so a shift day beats a holiday.',
-          'OC_TIME_CALENDAR',   60, 'Monthly'));
+          'OC_TIME_CALENDAR',   60, 'Monthly', 'Y'),
+    -- ── registered, deliberately not scheduled ───────────────
+    t_row('ABSENCES',     'OFF: absence is read LIVE per person per date at page '
+                       || 'load, not synced (decision 09-Aug-2026). The model is '
+                       || 'kept because the leave-loss absentee list still needs '
+                       || 'a bulk read. Enable only if that decision changes.',
+          'OC_TIME_ABSENCE',    70, 'Both',    'N'),
+    t_row('SHIFTS',       'OFF: no target table. A shift dictionary (code, '
+                       || 'duration, break) with no date, so it does not fit '
+                       || 'OC_TIME_CALENDAR, which is one row per day. '
+                       || 'Diagnostic only.',
+          NULL,                 80, 'Both',    'N'),
+    t_row('WORK_PATTERNS','OFF: no target table. A pattern template keyed on '
+                       || 'day-of-cycle, not a calendar date. Fusion has already '
+                       || 'resolved it into WORKER_SHIFTS, which is what loads.',
+          NULL,                 90, 'Both',    'N'),
+    t_row('WORK_SCHEDULES','OFF: no target table. Assigns a schedule to a person '
+                       || 'for a DATE RANGE; OC_TIME_CALENDAR is per day. Useful '
+                       || 'for explaining why someone has the shift they have.',
+          NULL,                100, 'Both',    'N'),
+    t_row('EXP_TYPES',    'OFF: reference only. The legal values for expenditure '
+                       || 'type. Nothing consumes it yet -- see the POET gap: '
+                       || 'OC_TIME_TASK has no EXPENDITURE_TYPE column.',
+          NULL,                110, 'Both',    'N'));
 BEGIN
   FOR i IN 1 .. v.COUNT LOOP
     INSERT INTO oc_time_sync_config
            (bip_report_name, purpose, bip_report_path, target_table,
-            sync_mode, schedule_tag, run_order)
+            sync_mode, schedule_tag, run_order, enabled_flag)
     SELECT v(i).nm, v(i).pur, '/Custom/O2C_TIME/O2C_' || v(i).nm || '.xdm',
-           v(i).tbl, 'INCREMENTAL', v(i).sch, v(i).ord
+           v(i).tbl, 'INCREMENTAL', v(i).sch, v(i).ord, v(i).en
       FROM dual
      WHERE NOT EXISTS (SELECT 1 FROM oc_time_sync_config
                         WHERE bip_report_name = v(i).nm);
@@ -366,8 +416,11 @@ COLUMN bip_report_name FORMAT A16
 COLUMN target_table    FORMAT A22
 COLUMN bip_report_path FORMAT A40
 
-SELECT run_order, bip_report_name, target_table, schedule_tag, sync_mode
+SELECT run_order, bip_report_name, enabled_flag,
+       NVL(target_table,'(none)') AS target_table, schedule_tag, sync_mode
   FROM oc_time_sync_config
  ORDER BY run_order;
+
+PROMPT (INT 001 must filter on ENABLED_FLAG = 'Y' and ORDER BY RUN_ORDER.)
 
 PROMPT Done. INT 001 reads OC_TIME_SYNC_CONFIG; INT 002 calls OC_TIME_LOAD_XML.
