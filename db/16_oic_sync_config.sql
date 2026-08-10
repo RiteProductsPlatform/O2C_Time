@@ -663,6 +663,40 @@ BEGIN
 
   EXECUTE IMMEDIATE v_sql USING XMLTYPE(p_xml);
   o_rows_merged := SQL%ROWCOUNT;
+
+  -- ── 5. advance the bookmark, IN THIS TRANSACTION ───────────
+  -- The header of this file has always said INT 002 "writes the new one back on
+  -- success". It never did -- there was no UPDATE anywhere in this procedure.
+  -- LASTSYNC_DATE stayed null for ever, so every run passed null as
+  -- :P_LAST_SYNC, the report's NVL turned that into 1900, and every
+  -- "incremental" sync was silently a full pull. Correct results, wrong volume,
+  -- no error, and nothing in the sync status to show it.
+  --
+  -- HERE rather than in OIC. Before the COMMIT, so the bookmark and the rows it
+  -- accounts for land together: if the merge rolls back the bookmark does too.
+  -- A writeback from OIC is a second clock that cannot be transactional with
+  -- the merge, and the first partial failure separates them permanently.
+  --
+  -- TRUNC(SYSDATE), not SYSTIMESTAMP. The delta compares
+  -- GREATEST(...) > TO_DATE(:P_LAST_SYNC,'YYYY-MM-DD') -- DAY granularity -- so
+  -- stamping midnight today makes tomorrow's run re-read everything changed
+  -- today. That is deliberate: it over-reads a few rows rather than missing the
+  -- ones changed between the report running and the merge finishing. Every row
+  -- is a MERGE on the natural key, so re-reading costs nothing and a miss is
+  -- permanent.
+  UPDATE oc_time_sync_config
+     SET lastsync_date    = TRUNC(SYSDATE),
+         sync_status      = 'Success',
+         last_run_on      = SYSTIMESTAMP,
+         last_rows_read   = o_rows_read,
+         last_rows_merged = o_rows_merged,
+         last_message     = SUBSTR(NVL(o_message, '') || o_rows_merged || ' of '
+                                || o_rows_read || ' merged.', 1, 2000),
+         updated_by       = NVL(p_actor, 'OIC'),
+         updated_on       = SYSTIMESTAMP
+   WHERE UPPER(target_table) = v_tab
+     AND (p_report_name IS NULL OR bip_report_name = p_report_name);
+
   COMMIT;
 
   o_status  := 'Success';
@@ -676,6 +710,21 @@ EXCEPTION
     -- The ORA number matters to whoever reads SYNC_STATUS later, so it is kept
     -- rather than replaced with a friendly sentence.
     o_message := SUBSTR('Load into ' || v_tab || ' failed: ' || SQLERRM, 1, 2000);
+
+    -- Status and message, but NOT lastsync_date. The bookmark must not move on
+    -- a failure or the rows this run could not merge are never offered again.
+    BEGIN
+      UPDATE oc_time_sync_config
+         SET sync_status  = 'Failed',
+             last_run_on  = SYSTIMESTAMP,
+             last_message = SUBSTR(o_message, 1, 2000),
+             updated_by   = NVL(p_actor, 'OIC'),
+             updated_on   = SYSTIMESTAMP
+       WHERE UPPER(target_table) = v_tab
+         AND (p_report_name IS NULL OR bip_report_name = p_report_name);
+      COMMIT;
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END;
     -- Recorded where the other sync failures already live, so one queue shows
     -- everything rather than this path being invisible.
     BEGIN
