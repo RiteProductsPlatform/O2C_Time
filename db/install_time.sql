@@ -203,6 +203,20 @@ PROMPT >>> 07 accrual interface (XX_O2C_TIMESHEET_ACCRUAL_IF)
 PROMPT >>> 08 page views
 @@08_views.sql
 
+-- ── Tables the package body reads ────────────────────────────
+-- 15 runs HERE, ahead of its number, and the number is not the mistake.
+--
+-- OC_TIME_PKG references OC_TS_SALARY_HOLD_DAY in six procedures. Created after
+-- the package, every one of those is ORA-00942 and the body compiles INVALID --
+-- nine errors from one missing table. A recompile after step 15 fixed the full
+-- installer and fixed nothing else: running 09 on its own, which is the normal
+-- thing to do after editing the package, still failed. Ordering the dependency
+-- correctly fixes both.
+--
+-- 15 only needs 01, 03 and 05, all of which are already done by here.
+PROMPT >>> 15 salary stopping, day-wise (PROC-007 revised)
+@@15_salary_hold_days.sql
+
 -- ── Business logic ───────────────────────────────────────────
 PROMPT >>> 09 OC_TIME_PKG
 @@09_pkg_oc_time.sql
@@ -226,23 +240,8 @@ PROMPT >>> 13 several periods may be Open (RULE-017 relaxed)
 @@13_open_periods.sql
 PROMPT >>> 14 invoice annexure over the accrual hand-off
 @@14_invoice_annexure.sql
-PROMPT >>> 15 salary stopping, day-wise (PROC-007 revised)
-@@15_salary_hold_days.sql
-
--- RECOMPILE, and it is not optional on a fresh schema.
---
--- OC_TIME_PKG is created at step 09, but run_salary_stopping and the two
--- correction procedures write OC_TS_SALARY_HOLD_DAY, which does not exist until
--- step 15 above. On an existing schema the table is already there and 09
--- compiles clean; on a FIRST install the body compiles INVALID and nothing
--- afterwards would touch it, so the first call to any salary-stopping procedure
--- fails with ORA-04063 long after the installer reported success.
---
--- Recompiling here rather than renumbering keeps the file numbers in
--- chronological order, which is how every other script in this module reads.
-PROMPT >>> recompiling OC_TIME_PKG against the new table
-ALTER PACKAGE oc_time_pkg COMPILE BODY;
-SHOW ERRORS
+-- 15 is NOT here: it creates a table the package body reads, so it runs before
+-- step 09 above. Moving it back would reintroduce nine ORA-00942s.
 
 -- ── REST surface ─────────────────────────────────────────────
 PROMPT >>> 12 ORDS oc.time            (employee)

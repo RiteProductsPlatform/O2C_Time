@@ -42,6 +42,12 @@
 -- one predicate.
 --
 -- Idempotent. Depends on: time/01, time/03, time/05
+--
+-- RUNS BEFORE 09 DESPITE THE NUMBER. OC_TIME_PKG reads
+-- OC_TS_SALARY_HOLD_DAY in six procedures, so creating it after the package
+-- gives nine ORA-00942s and an INVALID body. If you are applying scripts by
+-- hand, run this one before 09_pkg_oc_time.sql -- install_time.sql already
+-- does.
 --==============================================================
 SET DEFINE OFF
 SET SERVEROUTPUT ON
