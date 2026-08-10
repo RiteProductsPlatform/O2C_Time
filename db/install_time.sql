@@ -243,6 +243,8 @@ PROMPT >>> 14 invoice annexure over the accrual hand-off
 -- 17 before 16: the loader's FK lookup reads PROJECT_NUMBER, which 17 adds.
 PROMPT >>> 17 columns the extracts send with nowhere to land
 @@17_sync_column_gaps.sql
+PROMPT >>> 18 OC_TIME_TASK natural key (the loader cannot merge without it)
+@@18_task_natural_key.sql
 PROMPT >>> 16 OIC sync config + the generic XML loader
 @@16_oic_sync_config.sql
 -- 15 is NOT here: it creates a table the package body reads, so it runs before
