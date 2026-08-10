@@ -9416,6 +9416,56 @@ END oc_time_load_xml;
 SHOW ERRORS
 
 PROMPT ============================================================
+PROMPT [3b/4] The two queue views — what INT 001 selects from
+PROMPT ============================================================
+
+-- OIC reads a view, not the table. Everything the orchestrator would otherwise
+-- have to get right in a mapper is settled here instead:
+--
+--   * ENABLED_FLAG and SCHEDULE_TAG filtered, so the disabled rows and the ones
+--     that do not belong to this schedule never reach the loop at all
+--   * ORDER BY RUN_ORDER, because OC_TIME_ALLOCATION has foreign keys to both
+--     worker and project. Out of order, allocations land in OC_TIME_SYNC_FAILED
+--     instead of the table and the run still reports success
+--   * LAST_SYNC_DATE as 'YYYY-MM-DD' TEXT. As a DATE it reaches BIP as an ISO
+--     timestamp and TO_DATE(:P_LAST_SYNC,'YYYY-MM-DD') raises ORA-01861
+--   * EFFECTIVE_DATE computed, which is why there are TWO views rather than one
+--     with a filter. It cannot be derived from the row: most rows are tagged
+--     'Both' and the answer depends on WHICH SCHEDULE IS RUNNING, not on the
+--     feed. Daily wants today; monthly wants next month.
+--
+-- ADD_MONTHS handles the December -> January rollover and month lengths. A
+-- hand-rolled equivalent in an OIC mapper is exactly where that breaks.
+
+CREATE OR REPLACE VIEW v_oc_time_sync_daily AS
+SELECT bip_report_name, bip_report_path, target_table,
+       NVL(TO_CHAR(lastsync_date, 'YYYY-MM-DD'), '')      AS last_sync_date,
+       TO_CHAR(TRUNC(SYSDATE), 'YYYY-MM-DD')              AS effective_date,
+       run_order, sync_mode, sync_status, purpose
+  FROM oc_time_sync_config
+ WHERE enabled_flag = 'Y'
+   AND schedule_tag IN ('Daily', 'Both')
+ ORDER BY run_order, bip_report_name;
+
+-- The monthly view also carries the period to populate afterwards, so the
+-- orchestrator never has to work out which OC_TIME_PERIOD row "next month" is.
+-- NULL means it does not exist yet -- a real precondition, not a data quirk:
+-- with no period row the monthly run has nothing to build.
+CREATE OR REPLACE VIEW v_oc_time_sync_monthly AS
+SELECT c.bip_report_name, c.bip_report_path, c.target_table,
+       NVL(TO_CHAR(c.lastsync_date, 'YYYY-MM-DD'), '')    AS last_sync_date,
+       TO_CHAR(ADD_MONTHS(TRUNC(SYSDATE,'MM'), 1), 'YYYY-MM-DD')
+                                                          AS effective_date,
+       (SELECT MAX(p.period_id) FROM oc_time_period p
+         WHERE p.start_date = ADD_MONTHS(TRUNC(SYSDATE,'MM'), 1))
+                                                          AS target_period_id,
+       c.run_order, c.sync_mode, c.sync_status, c.purpose
+  FROM oc_time_sync_config c
+ WHERE c.enabled_flag = 'Y'
+   AND c.schedule_tag IN ('Monthly', 'Both')
+ ORDER BY c.run_order, c.bip_report_name;
+
+PROMPT ============================================================
 PROMPT [4/4] Verification
 PROMPT ============================================================
 
