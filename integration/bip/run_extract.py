@@ -88,18 +88,37 @@ def cmd_check(args) -> int:
     return 0
 
 
+# NO STORED DEFAULT FOR EITHER DATE. Both are deployed EMPTY, on purpose.
+#
+# build_data_model stamps defaultValue into the .xdm, and this used to pass the
+# CLI values -- which means --effective-date, whose default is date.today().
+# Deploying on 10-Aug-2026 would have frozen defaultValue="2026-08-10" into all
+# eleven models. BIP substitutes a stored default whenever the caller omits the
+# parameter, so OIC -- which passes only P_LAST_SYNC -- would have got that
+# literal, and the NVL(..., TRUNC(SYSDATE)) in the SQL would never have fired.
+#
+# Correct on the day of deployment and quietly wrong forever after: every
+# effective-dated join pinned to the deploy date, so people hired since are
+# missing and changed attributes are stale, with nothing raised. It fails by
+# drifting, which is the hardest kind to notice.
+#
+# Empty is NULL to Oracle, so the SQL's own NVL defaults decide instead --
+# today for the effective date, 1900 for the delta. Those are computed per RUN
+# rather than per DEPLOY, which is the whole point. The old comment argued a
+# stored default "keeps a scheduled run sane if the caller forgets the
+# parameter"; the NVL does that better, because it cannot go stale.
+DEPLOY_DEFAULTS = {"P_EFFECTIVE_DATE": "", "P_LAST_SYNC": ""}
+
+
 def cmd_deploy(args) -> int:
     c = _client(args)
     rc = 0
     for ex in _selected(args.deploy):
         path = model_path(ex["name"])
-        # The default matters: it is what a manual run in the BIP UI uses, and
-        # it keeps a scheduled run sane if the caller forgets the parameter.
         xdm = c.build_data_model(ex["sql"], ex["columns"],
                                  description="O2C Time %s (%s -> %s)"
                                  % (ex["name"], ex["integration"], ex["target"]),
-                                 defaults={"P_EFFECTIVE_DATE": args.effective_date,
-                                           "P_LAST_SYNC": args.since})
+                                 defaults=DEPLOY_DEFAULTS)
         try:
             c.upload_data_model(path, xdm)
             print("  deployed  %-12s -> %s" % (ex["name"], path))
@@ -144,7 +163,11 @@ def _run_one(c: BipClient, ex: Dict, eff: str, chunked: bool,
             ex["sql"], ex["columns"],
             description="O2C Time %s (%s -> %s)"
                         % (ex["name"], ex["integration"], ex["target"]),
-            defaults={"P_EFFECTIVE_DATE": eff, "P_LAST_SYNC": since})
+            # Same empty defaults as --deploy. --run passes both values
+            # explicitly on the call, so the stored default is never consulted
+            # here -- but --run REDEPLOYS, and a local test run must not leave
+            # a different model behind than --deploy would.
+            defaults=DEPLOY_DEFAULTS)
         c.upload_data_model(path, xdm)
     except BipError as exc:
         if not c.object_exists(path):
