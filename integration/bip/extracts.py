@@ -528,7 +528,24 @@ SELECT s.shift_code      AS shift_code,
        s.shift_category  AS shift_category,
        s.active_flag     AS active_flag
   FROM hts_shifts_vl s
-""",
+ WHERE 1 = 1
+   -- ACCEPTED AND DELIBERATELY UNUSED, so that all eleven reports take the
+   -- SAME TWO PARAMETERS and INT 002 needs no per-report mapping. Without it
+   -- this report declares one parameter and the other nine declare two, and
+   -- OIC has to know which is which.
+   --
+   -- HTS_SHIFTS_VL is not effective-dated -- it carries last_update_date and
+   -- nothing else -- so there is no honest as-of predicate to write. Rather
+   -- than invent one, the bind is referenced where it cannot change the
+   -- result: {ED} is NVL(TO_DATE(...), TRUNC(SYSDATE)), non-null by
+   -- construction, so this is always true.
+   --
+   -- Not purely decorative. A MALFORMED P_EFFECTIVE_DATE now raises ORA-01861
+   -- here exactly as it does on the other nine, rather than being silently
+   -- ignored by these two alone -- a bad parameter fails the same way
+   -- everywhere instead of only on some reports.
+   AND {ED} IS NOT NULL
+""".replace("{ED}", ED),
 }
 
 
@@ -575,7 +592,23 @@ SELECT wp.work_pattern_id      AS work_pattern_id,
   LEFT JOIN hts_shifts_vl sh
     ON sh.shift_id = wps.shift_id
  WHERE NVL(wp.template_flag,'N') = 'N'
-""",
+   -- ACCEPTED AND DELIBERATELY UNUSED, so that all eleven reports take the
+   -- SAME TWO PARAMETERS and INT 002 needs no per-report mapping. Without it
+   -- this report declares one parameter and the other nine declare two, and
+   -- OIC has to know which is which.
+   --
+   -- HTS_WORK_PATTERNS_VL is not effective-dated -- it carries last_update_date and
+   -- nothing else -- so there is no honest as-of predicate to write. Rather
+   -- than invent one, the bind is referenced where it cannot change the
+   -- result: {ED} is NVL(TO_DATE(...), TRUNC(SYSDATE)), non-null by
+   -- construction, so this is always true.
+   --
+   -- Not purely decorative. A MALFORMED P_EFFECTIVE_DATE now raises ORA-01861
+   -- here exactly as it does on the other nine, rather than being silently
+   -- ignored by these two alone -- a bad parameter fails the same way
+   -- everywhere instead of only on some reports.
+   AND {ED} IS NOT NULL
+""".replace("{ED}", ED),
 }
 
 
@@ -781,13 +814,18 @@ DELTA_ALIASES = {
     "EXP_TYPES":      {"etb": 0, "ettl": 0},
 }
 
-# How the predicate attaches. Blind appending is wrong for three of the eleven:
-# ALLOCATIONS and WORKER_SHIFTS end in GROUP BY, and SHIFTS has no WHERE at all.
-#   "and"    - the SQL ends inside its WHERE clause
+# How the predicate attaches. Blind appending is wrong for two of the eleven:
+# ALLOCATIONS and WORKER_SHIFTS end in GROUP BY.
+#   "and"    - the SQL ends inside its WHERE clause  (the default)
 #   "where"  - there is no WHERE; open one
 #   "before" - insert ahead of the trailing clause named in DELTA_BEFORE
+#
+# SHIFTS was "where" and is now the default. It had no WHERE clause until
+# P_EFFECTIVE_DATE was added for parameter parity, which gave it "WHERE 1 = 1"
+# -- leaving the mode alone would have appended a SECOND WHERE and produced
+# ORA-00933. Whenever a WHERE is added to a base query, check this map.
 DELTA_MODE = {
-    "ALLOCATIONS": "before", "WORKER_SHIFTS": "before", "SHIFTS": "where",
+    "ALLOCATIONS": "before", "WORKER_SHIFTS": "before",
 }
 DELTA_BEFORE = {"ALLOCATIONS": "GROUP BY", "WORKER_SHIFTS": "GROUP BY"}
 

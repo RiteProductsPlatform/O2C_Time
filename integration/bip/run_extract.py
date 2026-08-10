@@ -35,6 +35,20 @@ from extracts import ALL_EXTRACTS, BY_NAME, VERIFIED
 
 CATALOG_FOLDER = "/Custom/O2C_TIME"
 
+# The scratch model --validate compiles against, MADE UNIQUE PER PROCESS.
+#
+# It was a single shared "/_validate.xdm". Two validates running at once --
+# two developers, or one person who forgot a run was still going -- upload and
+# delete the same catalog object, and the pod returns a spray of unrelated
+# failures: uploadObject HTTP 500, deleteObject HTTP 500, and worst of all a
+# probe that quietly reads the OTHER run's model and reports a number belonging
+# to a different extract. That produced a DUPKEYS of -1020: a negative
+# duplicate count, from one run's row total minus another run's distinct count.
+#
+# Nothing in the output said "concurrency". Extracts simply appeared broken,
+# and a different subset appeared broken on each run.
+VALIDATE_MODEL = "%s/_validate_%d.xdm" % (CATALOG_FOLDER, os.getpid())
+
 
 def _load_dotenv() -> None:
     """
@@ -230,7 +244,7 @@ def cmd_validate(args) -> int:
                 raise BipError("bind(s) not inlined for the probe: %s — the "
                                "count would be meaningless" % ", ".join(left))
             probe = "SELECT COUNT(*) AS N FROM (%s)" % sql
-            n = c.query(probe, ["N"], path=CATALOG_FOLDER + "/_validate.xdm")
+            n = c.query(probe, ["N"], path=VALIDATE_MODEL)
             count = n[0]["N"] if n else "?"
 
             # The declared key, checked in the database rather than by pulling
@@ -242,7 +256,7 @@ def cmd_validate(args) -> int:
                 dprobe = ("SELECT COUNT(*) AS N FROM (SELECT DISTINCT %s FROM (%s))"
                           % (", ".join(key), sql))
                 dn = c.query(dprobe, ["N"],
-                             path=CATALOG_FOLDER + "/_validate.xdm")
+                             path=VALIDATE_MODEL)
                 if dn and str(dn[0]["N"]).isdigit():
                     dups = int(count) - int(dn[0]["N"])
                     if dups:
