@@ -13645,6 +13645,35 @@ BEGIN
              bip_report_path                          AS "reportPath",
              target_table                             AS "targetTable",
              NVL(TO_CHAR(lastsync_date,'YYYY-MM-DD'), '') AS "lastSyncDate",
+             -- P_EFFECTIVE_DATE, COMPUTED HERE RATHER THAN IN THE MAPPER.
+             --
+             -- The two schedules need different as-of dates and the difference
+             -- is not cosmetic. O2C_Time_OIC_Build_Guide section 4: "Assign
+             -- effectiveDate = the 1st of next month. Not today. The monthly
+             -- run builds next month, so the HCM as-of date must be inside next
+             -- month or you populate from THIS month's allocations." The BRD
+             -- agrees -- the monthly program "populates hours for the next
+             -- month based on the allocation for the next month".
+             --
+             -- Getting it wrong builds September from August's allocations and
+             -- looks entirely normal, so it is not a mistake anyone catches by
+             -- reading the output.
+             --
+             -- In the database because ADD_MONTHS handles the December -> January
+             -- rollover and month lengths correctly, and hand-rolled date
+             -- arithmetic in an OIC mapper is exactly where that breaks. OIC
+             -- maps this field straight through to the parameter.
+             CASE WHEN :scheduleTag = 'Monthly'
+                  THEN TO_CHAR(ADD_MONTHS(TRUNC(SYSDATE,'MM'), 1), 'YYYY-MM-DD')
+                  ELSE TO_CHAR(TRUNC(SYSDATE), 'YYYY-MM-DD')
+             END                                      AS "effectiveDate",
+             -- The period the monthly orchestrator then populates, so OIC does
+             -- not have to work out which OC_TIME_PERIOD row "next month" is.
+             -- Null on the daily run, which calls jobs/daily instead.
+             CASE WHEN :scheduleTag = 'Monthly'
+                  THEN (SELECT MAX(p.period_id) FROM oc_time_period p
+                         WHERE p.start_date = ADD_MONTHS(TRUNC(SYSDATE,'MM'), 1))
+             END                                      AS "targetPeriodId",
              sync_mode                                AS "syncMode",
              schedule_tag                             AS "scheduleTag",
              run_order                                AS "runOrder",
@@ -13791,11 +13820,21 @@ PROMPT
 PROMPT   GET  .../oc/time/sync/config?scheduleTag=Daily
 PROMPT   POST .../oc/time/sync/load/WORKERS      body = the BIP XML, as-is
 PROMPT
-PROMPT INT 002 passes ONE BIP parameter, P_LAST_SYNC, from lastSyncDate above.
-PROMPT P_EFFECTIVE_DATE is NOT passed: it defaults to the Fusion database's
-PROMPT today. Feeding the last-sync date into it would read the workforce AS
-PROMPT IT STOOD on that date -- stale attributes, and anyone hired since simply
-PROMPT missing.
+PROMPT INT 002 passes BOTH BIP parameters, and both come from this response:
+PROMPT
+PROMPT   P_LAST_SYNC      <- lastSyncDate    ('' on a feed that never ran)
+PROMPT   P_EFFECTIVE_DATE <- effectiveDate   (1st of next month on Monthly,
+PROMPT                                        today on Daily)
+PROMPT
+PROMPT Do NOT feed lastSyncDate into P_EFFECTIVE_DATE. They answer different
+PROMPT questions -- "what changed since" versus "as of when" -- and sharing a
+PROMPT value reads the workforce as it stood at the last sync: stale attributes
+PROMPT and anyone hired since simply missing.
+PROMPT
+PROMPT Monthly also gets targetPeriodId, for
+PROMPT   POST /oc/time/admin/jobs/populate/{targetPeriodId}   (empty body)
+PROMPT A NULL targetPeriodId means next month has no OC_TIME_PERIOD row yet --
+PROMPT create the period before the monthly run, or it has nothing to build.
 --== END ords/15_ords_time_sync.sql ==
 
 -- ── Recompile anything the DDL invalidated ───────────────────
