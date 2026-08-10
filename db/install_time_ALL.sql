@@ -2,7 +2,7 @@
 -- install_time_ALL.sql
 --
 -- GENERATED FILE - DO NOT EDIT.
--- Produced by db/build_install_all.py from install_time.sql and the 20
+-- Produced by db/build_install_all.py from install_time.sql and the 21
 -- scripts it includes. Edit those and re-run the generator.
 --
 -- This is install_time.sql with every @@include expanded inline, so it runs
@@ -8305,6 +8305,149 @@ SELECT 'header <> sum of lines' AS check_name, h.confirm_id,
 PROMPT Done. Two views: _HDR is the cover sheet, the other is one row per person.
 --== END 14_invoice_annexure.sql ==
 
+-- 17 before 16: the loader's FK lookup reads PROJECT_NUMBER, which 17 adds.
+PROMPT >>> 17 columns the extracts send with nowhere to land
+
+--==============================================================
+-- BEGIN 17_sync_column_gaps.sql
+--==============================================================
+--==============================================================
+-- time/17_sync_column_gaps.sql
+-- O2C Timesheet Module — the columns the extracts send with nowhere to land
+--
+-- Measured against real BIP output on 10-Aug-2026: after the alias rename, six
+-- reports still emit elements that no target column matches, so the loader
+-- silently drops them. Dropping is the right default -- a report carrying an
+-- extra element must not error -- but three of these are not droppable:
+--
+--   TIME_ENTRY_ENABLED  decides whether a project is visible to time entry at
+--                       all. Without it every project looks enterable.
+--   EXPENDITURE_TYPE    POET's E. Recorded in CLAUDE.md as the reason the OTL
+--                       push cannot be built.
+--   EXPENDITURE_ORG     POET's O, same note. The costing unit the work books
+--                       to, which is NOT the legal employer.
+--
+-- The rest are added because they are already being extracted and verified, so
+-- the only thing standing between them and being useful is a column. Adding one
+-- is cheaper than re-deriving the data later.
+--
+-- ADDITIVE ONLY. Every statement is ALTER TABLE ADD, guarded on ORA-01430
+-- (column already exists), so this is safe to re-run and cannot lose data.
+--
+-- Idempotent. Depends on: time/02, time/03
+--==============================================================
+SET DEFINE OFF
+SET SERVEROUTPUT ON
+
+PROMPT ============================================================
+PROMPT [1/2] Add the missing columns
+PROMPT ============================================================
+
+DECLARE
+  TYPE t_col IS RECORD (tab VARCHAR2(30), col VARCHAR2(30), spec VARCHAR2(80));
+  TYPE t_tab IS TABLE OF t_col;
+  v_added NUMBER := 0;
+  v_skip  NUMBER := 0;
+
+  v t_tab := t_tab(
+    -- POET's O, resource-wise. Deliberately separate from LEGAL_EMPLOYER:
+    -- the employer is who employs the person, the expenditure org is the unit
+    -- that incurs the cost, and reading one for the other sends cost to the
+    -- wrong place while looking entirely plausible.
+    t_col('OC_TIME_WORKER',     'EXPENDITURE_ORG',    'VARCHAR2(240 CHAR)'),
+
+    t_col('OC_TIME_PROJECT',    'ORGANIZATION',       'VARCHAR2(240 CHAR)'),
+    -- TrackTimeFlag on the Fusion project team. A project with this unset is
+    -- INVISIBLE to time entry, so without the column the module cannot tell.
+    t_col('OC_TIME_PROJECT',    'TIME_ENTRY_ENABLED', 'CHAR(1)'),
+
+    -- Fusion's project id on the task, so the task can be tied back to its
+    -- project without a name match. The FK PROJECT_ID stays local.
+    t_col('OC_TIME_TASK',       'FUSION_PROJECT_ID',  'VARCHAR2(50 CHAR)'),
+    t_col('OC_TIME_TASK',       'PROJECT_NUMBER',     'VARCHAR2(60 CHAR)'),
+    t_col('OC_TIME_TASK',       'WBS_LEVEL',          'NUMBER(3)'),
+    t_col('OC_TIME_TASK',       'PARENT_TASK_ID',     'VARCHAR2(50 CHAR)'),
+    t_col('OC_TIME_TASK',       'START_DATE',         'DATE'),
+    t_col('OC_TIME_TASK',       'END_DATE',           'DATE'),
+    -- POET's E.
+    t_col('OC_TIME_TASK',       'EXPENDITURE_TYPE',   'VARCHAR2(80 CHAR)'),
+
+    t_col('OC_TIME_ALLOCATION', 'PROJECT_NUMBER',     'VARCHAR2(60 CHAR)'),
+    t_col('OC_TIME_ALLOCATION', 'TRACK_TIME_FLAG',    'CHAR(1)'),
+
+    -- Fusion's own absence status, distinct from APPROVAL_STATUS: the pod
+    -- returns absenceStatusCd SUBMITTED for a leave its own screen shows as
+    -- Completed, so the two are not interchangeable.
+    t_col('OC_TIME_ABSENCE',    'ABSENCE_STATUS',     'VARCHAR2(30 CHAR)'),
+
+    t_col('OC_TIME_CALENDAR',   'SHIFT_NAME',         'VARCHAR2(100 CHAR)'));
+BEGIN
+  FOR i IN 1 .. v.COUNT LOOP
+    BEGIN
+      EXECUTE IMMEDIATE 'ALTER TABLE ' || v(i).tab ||
+                        ' ADD (' || v(i).col || ' ' || v(i).spec || ')';
+      v_added := v_added + 1;
+      DBMS_OUTPUT.PUT_LINE('added   ' || RPAD(v(i).tab, 22) || v(i).col);
+    EXCEPTION WHEN OTHERS THEN
+      -- ORA-01430: column being added already exists. Anything else is real.
+      IF SQLCODE = -1430 THEN
+        v_skip := v_skip + 1;
+      ELSE
+        DBMS_OUTPUT.PUT_LINE('FAILED  ' || v(i).tab || '.' || v(i).col ||
+                             ' - ' || SUBSTR(SQLERRM, 1, 120));
+        RAISE;
+      END IF;
+    END;
+  END LOOP;
+  DBMS_OUTPUT.PUT_LINE(v_added || ' column(s) added, ' || v_skip ||
+                       ' already present.');
+END;
+/
+
+-- Domain guards, added separately so a re-run that skipped the column still
+-- gets its constraint. Y/N because that is what Fusion sends and what every
+-- other flag in this schema uses.
+BEGIN
+  EXECUTE IMMEDIATE q'~ALTER TABLE oc_time_project ADD CONSTRAINT
+    chk_oc_tp_timeentry CHECK (time_entry_enabled IN ('Y','N'))~';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE IN (-2264, -2261) THEN NULL; ELSE RAISE; END IF;
+END;
+/
+BEGIN
+  EXECUTE IMMEDIATE q'~ALTER TABLE oc_time_allocation ADD CONSTRAINT
+    chk_oc_ta_tracktime CHECK (track_time_flag IN ('Y','N'))~';
+EXCEPTION WHEN OTHERS THEN IF SQLCODE IN (-2264, -2261) THEN NULL; ELSE RAISE; END IF;
+END;
+/
+
+PROMPT ============================================================
+PROMPT [2/2] Verification — what still has nowhere to land
+PROMPT ============================================================
+
+COLUMN table_name  FORMAT A22
+COLUMN column_name FORMAT A22
+COLUMN data_type   FORMAT A16
+
+SELECT table_name, column_name, data_type
+  FROM user_tab_columns
+ WHERE (table_name, column_name) IN (
+         ('OC_TIME_WORKER','EXPENDITURE_ORG'),
+         ('OC_TIME_PROJECT','ORGANIZATION'),   ('OC_TIME_PROJECT','TIME_ENTRY_ENABLED'),
+         ('OC_TIME_TASK','FUSION_PROJECT_ID'), ('OC_TIME_TASK','PROJECT_NUMBER'),
+         ('OC_TIME_TASK','WBS_LEVEL'),         ('OC_TIME_TASK','PARENT_TASK_ID'),
+         ('OC_TIME_TASK','START_DATE'),        ('OC_TIME_TASK','END_DATE'),
+         ('OC_TIME_TASK','EXPENDITURE_TYPE'),
+         ('OC_TIME_ALLOCATION','PROJECT_NUMBER'),
+         ('OC_TIME_ALLOCATION','TRACK_TIME_FLAG'),
+         ('OC_TIME_ABSENCE','ABSENCE_STATUS'),
+         ('OC_TIME_CALENDAR','SHIFT_NAME'))
+ ORDER BY table_name, column_name;
+
+PROMPT
+PROMPT Expect 14 rows. Anything missing did not get added and the loader will
+PROMPT still drop that element without complaining.
+--== END 17_sync_column_gaps.sql ==
+
 PROMPT >>> 16 OIC sync config + the generic XML loader
 
 --==============================================================
@@ -8361,6 +8504,23 @@ BEGIN
       -- this and process serially, not fan out.
       RUN_ORDER        NUMBER(3) DEFAULT 100 NOT NULL,
       ENABLED_FLAG     CHAR(1) DEFAULT 'Y' NOT NULL,
+      -- ── foreign-key resolution ───────────────────────────────
+      -- ORDERING ALONE DOES NOT FIX A FOREIGN KEY, and conflating the two
+      -- wastes a day. Loading projects before tasks guarantees the PARENT ROW
+      -- EXISTS; it does nothing about the fact that the report sends Fusion's
+      -- project id (300000123456789) while OC_TIME_TASK.PROJECT_ID is our own
+      -- GENERATED ALWAYS identity (47). Different id spaces, so the value
+      -- matches nothing however carefully you sequence the loads.
+      --
+      -- FK_COLUMN is the local column to fill; FK_LOOKUP_SQL is a scalar
+      -- subquery that finds it from something the XML DOES carry. Both null
+      -- for entities that need no resolution.
+      --
+      -- Ordering is still required -- the lookup can only succeed once the
+      -- parent is loaded -- so the two work together rather than one replacing
+      -- the other.
+      FK_COLUMN        VARCHAR2(30 CHAR),
+      FK_LOOKUP_SQL    VARCHAR2(1000 CHAR),
       -- ── last run, for the operator ───────────────────────────
       LAST_RUN_ON      TIMESTAMP,
       LAST_ROWS_READ   NUMBER(10),
@@ -8407,6 +8567,14 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   IF SQLCODE = -2264 THEN NULL;   -- constraint name already used
   ELSE RAISE; END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE 'ALTER TABLE oc_time_sync_config ADD ' ||
+    '(fk_column VARCHAR2(30 CHAR), fk_lookup_sql VARCHAR2(1000 CHAR))';
+EXCEPTION WHEN OTHERS THEN
+  IF SQLCODE = -1430 THEN NULL; ELSE RAISE; END IF;
 END;
 /
 
@@ -8473,6 +8641,16 @@ BEGIN
      WHERE NOT EXISTS (SELECT 1 FROM oc_time_sync_config
                         WHERE bip_report_name = v(i).nm);
   END LOOP;
+  -- The two entities whose parent key arrives in the wrong id space. Both
+  -- reports already emit PROJECT_NUMBER, and 17_sync_column_gaps.sql gives it
+  -- a real column, so the loader decodes it and the lookup can read it.
+  UPDATE oc_time_sync_config
+     SET fk_column     = 'PROJECT_ID',
+         fk_lookup_sql = '(SELECT p.project_id FROM oc_time_project p '
+                      || 'WHERE p.project_number = x.PROJECT_NUMBER)'
+   WHERE bip_report_name IN ('TASKS','ALLOCATIONS')
+     AND fk_column IS NULL;
+
   COMMIT;
   DBMS_OUTPUT.PUT_LINE('Sync config seeded.');
 END;
@@ -8567,6 +8745,8 @@ AS
   v_on       VARCHAR2(1000);   -- MERGE ON clause
   v_sql      CLOB;
   v_keycols  NUMBER := 0;
+  v_fkcol    VARCHAR2(30);
+  v_fksql    VARCHAR2(1000);
 BEGIN
   o_rows_read := 0; o_rows_merged := 0; o_status := 'Failed';
 
@@ -8574,6 +8754,19 @@ BEGIN
   v_tab := UPPER(TRIM(p_table_name));
   SELECT COUNT(*) INTO v_ok
     FROM oc_time_sync_config WHERE UPPER(target_table) = v_tab;
+
+  -- The resolution rule, if this feed has one. Read by report name when given,
+  -- because two reports can share a table -- CALENDAR and WORKER_SHIFTS both
+  -- write OC_TIME_CALENDAR -- and only one of them may need a lookup.
+  BEGIN
+    SELECT MAX(fk_column), MAX(fk_lookup_sql) INTO v_fkcol, v_fksql
+      FROM oc_time_sync_config
+     WHERE UPPER(target_table) = v_tab
+       AND (p_report_name IS NULL OR bip_report_name = p_report_name)
+       AND fk_column IS NOT NULL;
+  EXCEPTION WHEN NO_DATA_FOUND THEN v_fkcol := NULL;
+  END;
+
   IF v_ok = 0 THEN
     o_message := 'Table ' || v_tab || ' is not a target in OC_TIME_SYNC_CONFIG. '
               || 'Refusing to build SQL against it.';
@@ -8622,6 +8815,17 @@ BEGIN
     v_ins  := v_ins  || ',' || c.column_name;
     v_val  := v_val  || ',s.' || c.column_name;
   END LOOP;
+
+  -- Resolve the parent key. Added to the source select and the insert, but NOT
+  -- to the XMLTABLE column list -- it is computed from the XML, not read out of
+  -- it, and reading it would take Fusion's id straight into a local FK.
+  IF v_fkcol IS NOT NULL AND v_fksql IS NOT NULL THEN
+    IF INSTR(',' || LTRIM(v_ins, ',') || ',', ',' || v_fkcol || ',') = 0 THEN
+      v_src := v_src || ',' || v_fksql || ' AS ' || v_fkcol;
+      v_ins := v_ins || ',' || v_fkcol;
+      v_val := v_val || ',s.' || v_fkcol;
+    END IF;
+  END IF;
 
   IF v_cols IS NULL THEN
     o_message := 'No column in ' || v_tab || ' matches any element in the XML. '
@@ -8682,13 +8886,36 @@ BEGIN
   SELECT COUNT(*) INTO o_rows_read
     FROM XMLTABLE('/DATA_DS/ROWSET/ROW' PASSING XMLTYPE(p_xml));
 
+  -- If the lookup resolves nothing at all, the parent almost certainly has not
+  -- been loaded yet -- which is a RUN_ORDER problem, not a data problem, and
+  -- saying so is worth far more than ORA-02291 or a table of null keys.
+  IF v_fkcol IS NOT NULL THEN
+    DECLARE
+      v_unres NUMBER;
+    BEGIN
+      EXECUTE IMMEDIATE
+        'SELECT COUNT(*) FROM (SELECT ' || v_fksql || ' AS k FROM XMLTABLE(' ||
+        '''/DATA_DS/ROWSET/ROW'' PASSING :1 COLUMNS ' || LTRIM(v_cols, ',') ||
+        ') x) WHERE k IS NULL'
+        INTO v_unres USING XMLTYPE(p_xml);
+      IF v_unres > 0 AND v_unres = o_rows_read THEN
+        o_message := 'None of the ' || o_rows_read || ' rows could resolve '
+                  || v_fkcol || '. The parent is probably not loaded yet -- '
+                  || 'check RUN_ORDER, this feed must run after its parent.';
+        RETURN;
+      ELSIF v_unres > 0 THEN
+        o_message := v_unres || ' row(s) could not resolve ' || v_fkcol || '. ';
+      END IF;
+    END;
+  END IF;
+
   EXECUTE IMMEDIATE v_sql USING XMLTYPE(p_xml);
   o_rows_merged := SQL%ROWCOUNT;
   COMMIT;
 
   o_status  := 'Success';
-  o_message := o_rows_merged || ' of ' || o_rows_read || ' row(s) merged into '
-            || v_tab || '.';
+  o_message := NVL(o_message, '') || o_rows_merged || ' of ' || o_rows_read
+            || ' row(s) merged into ' || v_tab || '.';
 
 EXCEPTION
   WHEN OTHERS THEN

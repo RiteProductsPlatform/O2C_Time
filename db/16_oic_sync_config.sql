@@ -49,6 +49,23 @@ BEGIN
       -- this and process serially, not fan out.
       RUN_ORDER        NUMBER(3) DEFAULT 100 NOT NULL,
       ENABLED_FLAG     CHAR(1) DEFAULT 'Y' NOT NULL,
+      -- ── foreign-key resolution ───────────────────────────────
+      -- ORDERING ALONE DOES NOT FIX A FOREIGN KEY, and conflating the two
+      -- wastes a day. Loading projects before tasks guarantees the PARENT ROW
+      -- EXISTS; it does nothing about the fact that the report sends Fusion's
+      -- project id (300000123456789) while OC_TIME_TASK.PROJECT_ID is our own
+      -- GENERATED ALWAYS identity (47). Different id spaces, so the value
+      -- matches nothing however carefully you sequence the loads.
+      --
+      -- FK_COLUMN is the local column to fill; FK_LOOKUP_SQL is a scalar
+      -- subquery that finds it from something the XML DOES carry. Both null
+      -- for entities that need no resolution.
+      --
+      -- Ordering is still required -- the lookup can only succeed once the
+      -- parent is loaded -- so the two work together rather than one replacing
+      -- the other.
+      FK_COLUMN        VARCHAR2(30 CHAR),
+      FK_LOOKUP_SQL    VARCHAR2(1000 CHAR),
       -- ── last run, for the operator ───────────────────────────
       LAST_RUN_ON      TIMESTAMP,
       LAST_ROWS_READ   NUMBER(10),
@@ -95,6 +112,14 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   IF SQLCODE = -2264 THEN NULL;   -- constraint name already used
   ELSE RAISE; END IF;
+END;
+/
+
+BEGIN
+  EXECUTE IMMEDIATE 'ALTER TABLE oc_time_sync_config ADD ' ||
+    '(fk_column VARCHAR2(30 CHAR), fk_lookup_sql VARCHAR2(1000 CHAR))';
+EXCEPTION WHEN OTHERS THEN
+  IF SQLCODE = -1430 THEN NULL; ELSE RAISE; END IF;
 END;
 /
 
@@ -161,6 +186,16 @@ BEGIN
      WHERE NOT EXISTS (SELECT 1 FROM oc_time_sync_config
                         WHERE bip_report_name = v(i).nm);
   END LOOP;
+  -- The two entities whose parent key arrives in the wrong id space. Both
+  -- reports already emit PROJECT_NUMBER, and 17_sync_column_gaps.sql gives it
+  -- a real column, so the loader decodes it and the lookup can read it.
+  UPDATE oc_time_sync_config
+     SET fk_column     = 'PROJECT_ID',
+         fk_lookup_sql = '(SELECT p.project_id FROM oc_time_project p '
+                      || 'WHERE p.project_number = x.PROJECT_NUMBER)'
+   WHERE bip_report_name IN ('TASKS','ALLOCATIONS')
+     AND fk_column IS NULL;
+
   COMMIT;
   DBMS_OUTPUT.PUT_LINE('Sync config seeded.');
 END;
@@ -255,6 +290,8 @@ AS
   v_on       VARCHAR2(1000);   -- MERGE ON clause
   v_sql      CLOB;
   v_keycols  NUMBER := 0;
+  v_fkcol    VARCHAR2(30);
+  v_fksql    VARCHAR2(1000);
 BEGIN
   o_rows_read := 0; o_rows_merged := 0; o_status := 'Failed';
 
@@ -262,6 +299,19 @@ BEGIN
   v_tab := UPPER(TRIM(p_table_name));
   SELECT COUNT(*) INTO v_ok
     FROM oc_time_sync_config WHERE UPPER(target_table) = v_tab;
+
+  -- The resolution rule, if this feed has one. Read by report name when given,
+  -- because two reports can share a table -- CALENDAR and WORKER_SHIFTS both
+  -- write OC_TIME_CALENDAR -- and only one of them may need a lookup.
+  BEGIN
+    SELECT MAX(fk_column), MAX(fk_lookup_sql) INTO v_fkcol, v_fksql
+      FROM oc_time_sync_config
+     WHERE UPPER(target_table) = v_tab
+       AND (p_report_name IS NULL OR bip_report_name = p_report_name)
+       AND fk_column IS NOT NULL;
+  EXCEPTION WHEN NO_DATA_FOUND THEN v_fkcol := NULL;
+  END;
+
   IF v_ok = 0 THEN
     o_message := 'Table ' || v_tab || ' is not a target in OC_TIME_SYNC_CONFIG. '
               || 'Refusing to build SQL against it.';
@@ -310,6 +360,17 @@ BEGIN
     v_ins  := v_ins  || ',' || c.column_name;
     v_val  := v_val  || ',s.' || c.column_name;
   END LOOP;
+
+  -- Resolve the parent key. Added to the source select and the insert, but NOT
+  -- to the XMLTABLE column list -- it is computed from the XML, not read out of
+  -- it, and reading it would take Fusion's id straight into a local FK.
+  IF v_fkcol IS NOT NULL AND v_fksql IS NOT NULL THEN
+    IF INSTR(',' || LTRIM(v_ins, ',') || ',', ',' || v_fkcol || ',') = 0 THEN
+      v_src := v_src || ',' || v_fksql || ' AS ' || v_fkcol;
+      v_ins := v_ins || ',' || v_fkcol;
+      v_val := v_val || ',s.' || v_fkcol;
+    END IF;
+  END IF;
 
   IF v_cols IS NULL THEN
     o_message := 'No column in ' || v_tab || ' matches any element in the XML. '
@@ -370,13 +431,36 @@ BEGIN
   SELECT COUNT(*) INTO o_rows_read
     FROM XMLTABLE('/DATA_DS/ROWSET/ROW' PASSING XMLTYPE(p_xml));
 
+  -- If the lookup resolves nothing at all, the parent almost certainly has not
+  -- been loaded yet -- which is a RUN_ORDER problem, not a data problem, and
+  -- saying so is worth far more than ORA-02291 or a table of null keys.
+  IF v_fkcol IS NOT NULL THEN
+    DECLARE
+      v_unres NUMBER;
+    BEGIN
+      EXECUTE IMMEDIATE
+        'SELECT COUNT(*) FROM (SELECT ' || v_fksql || ' AS k FROM XMLTABLE(' ||
+        '''/DATA_DS/ROWSET/ROW'' PASSING :1 COLUMNS ' || LTRIM(v_cols, ',') ||
+        ') x) WHERE k IS NULL'
+        INTO v_unres USING XMLTYPE(p_xml);
+      IF v_unres > 0 AND v_unres = o_rows_read THEN
+        o_message := 'None of the ' || o_rows_read || ' rows could resolve '
+                  || v_fkcol || '. The parent is probably not loaded yet -- '
+                  || 'check RUN_ORDER, this feed must run after its parent.';
+        RETURN;
+      ELSIF v_unres > 0 THEN
+        o_message := v_unres || ' row(s) could not resolve ' || v_fkcol || '. ';
+      END IF;
+    END;
+  END IF;
+
   EXECUTE IMMEDIATE v_sql USING XMLTYPE(p_xml);
   o_rows_merged := SQL%ROWCOUNT;
   COMMIT;
 
   o_status  := 'Success';
-  o_message := o_rows_merged || ' of ' || o_rows_read || ' row(s) merged into '
-            || v_tab || '.';
+  o_message := NVL(o_message, '') || o_rows_merged || ' of ' || o_rows_read
+            || ' row(s) merged into ' || v_tab || '.';
 
 EXCEPTION
   WHEN OTHERS THEN
