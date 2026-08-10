@@ -57,10 +57,17 @@ PROMPT ============================================================
 -- -- raises ORA-01861, "literal does not match format string". Formatting here
 -- means OIC maps the field through untouched and cannot get it wrong.
 --
--- NULL becomes an EMPTY STRING, never the text 'null'. Empty is NULL to Oracle,
--- so the report's NVL(..., DATE '1900-01-01') turns it into a full load, which
--- is exactly right for a feed that has never run. The literal word 'null' would
--- reach TO_DATE and raise ORA-01861 on the very first sync of every feed.
+-- A feed that has never run comes back as JSON null, and that is correct --
+-- but note the NVL below CANNOT produce an empty string, because in Oracle ''
+-- IS NULL. Measured on the live endpoint: "lastsyncdate": null.
+--
+-- JSON null is fine and is what OIC should map: it arrives at BIP as an unset
+-- parameter, BIP substitutes defaultValue="", and the report's
+-- NVL(..., DATE '1900-01-01') turns that into a full load, which is right for a
+-- feed that has never run. What must NEVER be emitted is the literal STRING
+-- "null", which would reach TO_DATE and raise ORA-01861 on the first sync of
+-- every feed. Quoting the column, or wrapping it in a JSON string function,
+-- would do exactly that.
 BEGIN
   ORDS.DEFINE_TEMPLATE(p_module_name => 'oc.time.sync', p_pattern => 'config');
   ORDS.DEFINE_HANDLER(
@@ -147,10 +154,6 @@ BEGIN
 DECLARE
   v_tab     VARCHAR2(30);
   v_clob    CLOB;
-  v_dest    INTEGER := 1;
-  v_src     INTEGER := 1;
-  v_lang    INTEGER := 0;
-  v_warn    INTEGER := 0;
   v_read    NUMBER;
   v_merged  NUMBER;
   v_status  VARCHAR2(20);
@@ -172,16 +175,19 @@ BEGIN
     RETURN;
   END IF;
 
-  -- The body arrives as a BLOB. CONVERTTOCLOB handles the character-set
-  -- conversion in one call and does not have the 32k ceiling that the
-  -- UTL_ family imposes -- see the OC_TIME_B64_TO_BLOB note in CLAUDE.md,
-  -- same class of problem.
-  DBMS_LOB.CREATETEMPORARY(v_clob, TRUE);
-  IF :body IS NOT NULL AND DBMS_LOB.GETLENGTH(:body) > 0 THEN
-    DBMS_LOB.CONVERTTOCLOB(v_clob, :body, DBMS_LOB.LOBMAXSIZE,
-                           v_dest, v_src, DBMS_LOB.DEFAULT_CSID,
-                           v_lang, v_warn);
-  END IF;
+  -- :body_text, NOT :body.
+  --
+  -- Measured against the live SIT endpoint 11-Aug-2026: :body arrives EMPTY for
+  -- this handler under every content type tried -- application/xml, text/xml,
+  -- text/plain, application/octet-stream. The load reported "The report
+  -- returned no XML at all" and a 422 each time, which reads like the caller
+  -- sent nothing, so the fault looks like OIC's rather than the handler's.
+  --
+  -- :body_text is ORDS's CLOB bind for a text payload and it is the right one
+  -- here anyway: BIP returns XML, XML is text, and going through a BLOB meant a
+  -- DBMS_LOB.CONVERTTOCLOB and a character-set decision that nothing needed.
+  -- The conversion is gone with it.
+  v_clob := :body_text;
 
   oc_time_load_xml(
     p_table_name  => v_tab,
@@ -206,7 +212,6 @@ BEGIN
      || ',"message":"'     || REPLACE(REPLACE(NVL(v_msg, ''), '\', '\\'), '"', '\"')
      || '"}');
 
-  DBMS_LOB.FREETEMPORARY(v_clob);
 EXCEPTION
   WHEN OTHERS THEN
     -- SQLERRM into a local first: it cannot be referenced inside a SQL
@@ -246,10 +251,15 @@ PROMPT
 PROMPT   GET  .../oc/time/sync/config?scheduleTag=Daily
 PROMPT   POST .../oc/time/sync/load/WORKERS      body = the BIP XML, as-is
 PROMPT
+PROMPT KEY NAMES ARE LOWERCASE. Measured on the live endpoint 11-Aug-2026:
+PROMPT ORDS returns reportname / reportpath / targettable / lastsyncdate /
+PROMPT effectivedate / targetperiodid -- NOT the camelCase in the SELECT above.
+PROMPT A mapper written against lastSyncDate resolves to nothing, silently.
+PROMPT
 PROMPT INT 002 passes BOTH BIP parameters, and both come from this response:
 PROMPT
-PROMPT   P_LAST_SYNC      <- lastSyncDate    ('' on a feed that never ran)
-PROMPT   P_EFFECTIVE_DATE <- effectiveDate   (1st of next month on Monthly,
+PROMPT   P_LAST_SYNC      <- lastsyncdate    (JSON null on a feed that never ran)
+PROMPT   P_EFFECTIVE_DATE <- effectivedate   (1st of next month on Monthly,
 PROMPT                                        today on Daily)
 PROMPT
 PROMPT Do NOT feed lastSyncDate into P_EFFECTIVE_DATE. They answer different
