@@ -8927,11 +8927,22 @@ EXCEPTION
     -- Recorded where the other sync failures already live, so one queue shows
     -- everything rather than this path being invisible.
     BEGIN
-      INSERT INTO oc_time_sync_failed
-             (job_run_id, entity_type, entity_key, failure_reason, failure_code)
-      VALUES (NULL, NVL(p_report_name, v_tab), v_tab,
-              SUBSTR(o_message, 1, 1000), SQLCODE);
-      COMMIT;
+      DECLARE
+        -- SQLCODE IS PL/SQL-ONLY AND CANNOT APPEAR INSIDE A SQL STATEMENT.
+        -- Used directly in the VALUES list it is ORA-00984, "column not
+        -- allowed here" -- the parser reads it as a column name. Same family as
+        -- the SQLERRM trap, and the identical mistake is already commented in
+        -- 13_ords_time_admin.sql, which is where this should have been copied
+        -- from. SQLERRM on the line above is fine: that is a PL/SQL assignment,
+        -- not a SQL statement.
+        v_code NUMBER := SQLCODE;
+      BEGIN
+        INSERT INTO oc_time_sync_failed
+               (job_run_id, entity_type, entity_key, failure_reason, failure_code)
+        VALUES (NULL, NVL(p_report_name, v_tab), v_tab,
+                SUBSTR(o_message, 1, 1000), v_code);
+        COMMIT;
+      END;
     EXCEPTION WHEN OTHERS THEN NULL;   -- never let logging mask the real error
     END;
 END oc_time_load_xml;
