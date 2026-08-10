@@ -774,7 +774,19 @@ PROMPT ============================================================
 
 CREATE OR REPLACE VIEW v_oc_time_sync_daily AS
 SELECT bip_report_name, bip_report_path, target_table,
-       NVL(TO_CHAR(lastsync_date, 'YYYY-MM-DD'), '')      AS last_sync_date,
+       -- '1900-01-01', NOT an empty string. Oracle cannot produce an empty
+       -- string: '' IS NULL, so NVL(..., '') returns NULL and the column comes
+       -- back null for every feed that has never run.
+       --
+       -- Over REST that was harmless -- JSON null, which BIP turns into its
+       -- empty default and the report's own NVL turns into a full load. The
+       -- DATABASE ADAPTER is stricter: it rejects a null in a key column
+       -- outright, and four of the six feeds are null on a fresh schema. The
+       -- whole orchestrator failed on the first row it read.
+       --
+       -- 1900-01-01 is the same value the report's NVL would have produced, so
+       -- the meaning is unchanged -- it is simply stated rather than implied.
+       NVL(TO_CHAR(lastsync_date, 'YYYY-MM-DD'), '1900-01-01') AS last_sync_date,
        TO_CHAR(TRUNC(SYSDATE), 'YYYY-MM-DD')              AS effective_date,
        run_order, sync_mode, sync_status, purpose
   FROM oc_time_sync_config
@@ -788,7 +800,8 @@ SELECT bip_report_name, bip_report_path, target_table,
 -- with no period row the monthly run has nothing to build.
 CREATE OR REPLACE VIEW v_oc_time_sync_monthly AS
 SELECT c.bip_report_name, c.bip_report_path, c.target_table,
-       NVL(TO_CHAR(c.lastsync_date, 'YYYY-MM-DD'), '')    AS last_sync_date,
+       NVL(TO_CHAR(c.lastsync_date, 'YYYY-MM-DD'), '1900-01-01')
+                                                          AS last_sync_date,
        TO_CHAR(ADD_MONTHS(TRUNC(SYSDATE,'MM'), 1), 'YYYY-MM-DD')
                                                           AS effective_date,
        (SELECT MAX(p.period_id) FROM oc_time_period p
