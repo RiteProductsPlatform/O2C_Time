@@ -231,6 +231,14 @@ BEGIN
       FROM user_tab_columns t
      WHERE t.table_name = v_tab
        AND INSTR(c_never, ',' || t.column_name || ',') = 0
+       -- GENERATED ALWAYS columns cannot be written at all (ORA-32795), and
+       -- this is not hypothetical: OC_TIME_TASK.TASK_ID and
+       -- OC_TIME_PROJECT.PROJECT_ID are local identity keys while the extracts
+       -- emit elements of the SAME NAME carrying Fusion's ids. Without this the
+       -- merge fails outright -- and if it did not, it would be silently
+       -- conflating two different id spaces. Fusion's ids belong in
+       -- FUSION_TASK_ID / FUSION_PROJECT_ID; see the alias note above.
+       AND t.identity_column = 'NO'
        AND EXISTS (
              SELECT 1
                FROM XMLTABLE('/DATA_DS/ROWSET/ROW[1]/*'
