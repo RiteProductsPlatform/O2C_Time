@@ -5084,13 +5084,25 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
     v_read   NUMBER := 0;
     v_up     NUMBER := 0;
     v_failed NUMBER := 0;
+    -- Null means "today ON THIS DATABASE", resolved here rather than by the
+    -- caller. A DEFAULT on the parameter would not do this: a default applies
+    -- only when the argument is OMITTED, and OIC's database adapter names every
+    -- parameter and sends an empty element -- an explicit NULL. Same trap that
+    -- put NULL into OC_TIME_ALLOCATION.ALLOC_PCT despite its DEFAULT 100.
+    --
+    -- It matters because OIC and the ATP are in different regions and their
+    -- dates disagree: measured 11-Aug-2026, OIC said the 11th while
+    -- LASTSYNC_DATE came back 10-08-26. Most days that is harmless. On the 1st
+    -- of a month it is not -- get_period_for_date below would resolve the WRONG
+    -- MONTH and the job would populate it, quietly and successfully.
+    v_date   DATE := NVL(v_date, TRUNC(SYSDATE));
   BEGIN
     -- The period the action date falls in, not "the open period". With several
     -- months open at once the latter is a guess, and this job already knows the
     -- exact date it is processing (RA-003).
-    v_period := get_period_for_date(p_action_date);
+    v_period := get_period_for_date(v_date);
     v_job := start_job('Daily Action-date Process', 'DailyActionDate',
-                       v_period, TRUNC(p_action_date), p_scope_key, p_actor);
+                       v_period, TRUNC(v_date), p_scope_key, p_actor);
 
     FOR w IN (SELECT DISTINCT al.employee_id
                 FROM oc_time_allocation al
@@ -5098,10 +5110,10 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
                WHERE al.status = 'Active'
                  AND (p_scope_key IS NULL
                       OR NVL(wk.deputed_country, wk.base_country) = p_scope_key)
-                 AND (TRUNC(al.updated_on) = TRUNC(p_action_date)
-                   OR TRUNC(al.created_on) = TRUNC(p_action_date)
-                   OR TRUNC(wk.updated_on) = TRUNC(p_action_date)
-                   OR TRUNC(wk.created_on) = TRUNC(p_action_date)))
+                 AND (TRUNC(al.updated_on) = TRUNC(v_date)
+                   OR TRUNC(al.created_on) = TRUNC(v_date)
+                   OR TRUNC(wk.updated_on) = TRUNC(v_date)
+                   OR TRUNC(wk.created_on) = TRUNC(v_date)))
     LOOP
       v_read := v_read + 1;
       BEGIN
