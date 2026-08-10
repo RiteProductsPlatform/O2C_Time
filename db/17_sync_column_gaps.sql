@@ -59,6 +59,15 @@ DECLARE
     -- POET's E.
     t_col('OC_TIME_TASK',       'EXPENDITURE_TYPE',   'VARCHAR2(80 CHAR)'),
 
+    -- Fusion's own project id on the allocation. OC_TIME_ALLOCATION.PROJECT_ID
+    -- is OUR identity surrogate and cannot be sent to OTL; this is what names
+    -- the project back to Fusion for the INT-007 push.
+    --
+    -- The ALLOCATIONS extract used to alias Fusion's id as PROJECT_ID -- the
+    -- local FK's own name -- so the loader took it as an ordinary column and
+    -- skipped the FK resolution that exists to prevent exactly that. Alias is
+    -- now FUSION_PROJECT_ID (extracts.py) and this is where it lands.
+    t_col('OC_TIME_ALLOCATION', 'FUSION_PROJECT_ID',  'VARCHAR2(50 CHAR)'),
     t_col('OC_TIME_ALLOCATION', 'PROJECT_NUMBER',     'VARCHAR2(60 CHAR)'),
     t_col('OC_TIME_ALLOCATION', 'TRACK_TIME_FLAG',    'CHAR(1)'),
 
@@ -124,6 +133,7 @@ SELECT table_name, column_name, data_type
          ('OC_TIME_TASK','WBS_LEVEL'),         ('OC_TIME_TASK','PARENT_TASK_ID'),
          ('OC_TIME_TASK','START_DATE'),        ('OC_TIME_TASK','END_DATE'),
          ('OC_TIME_TASK','EXPENDITURE_TYPE'),
+         ('OC_TIME_ALLOCATION','FUSION_PROJECT_ID'),
          ('OC_TIME_ALLOCATION','PROJECT_NUMBER'),
          ('OC_TIME_ALLOCATION','TRACK_TIME_FLAG'),
          ('OC_TIME_ABSENCE','ABSENCE_STATUS'),
@@ -131,5 +141,5 @@ SELECT table_name, column_name, data_type
  ORDER BY table_name, column_name;
 
 PROMPT
-PROMPT Expect 14 rows. Anything missing did not get added and the loader will
+PROMPT Expect 15 rows. Anything missing did not get added and the loader will
 PROMPT still drop that element without complaining.

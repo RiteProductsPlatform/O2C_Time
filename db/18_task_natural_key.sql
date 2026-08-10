@@ -2,32 +2,40 @@
 -- time/18_task_natural_key.sql
 -- O2C Timesheet Module — OC_TIME_TASK needs a natural key
 --
--- Found by testing the loader, which is the point of testing it: every other
--- load target has a natural unique key and OC_TIME_TASK has none.
+-- CORRECTED 10-Aug-2026. What this file first said was wrong, and the wrong
+-- version was compiled, so read this before assuming the header below.
 --
---   OC_TIME_WORKER      UK (employee_id)
---   OC_TIME_PROJECT     UK (project_number)
---   OC_TIME_ALLOCATION  UK (project_id, employee_id, start_date)
---   OC_TIME_ABSENCE     UK (employee_id, absence_date, absence_type)
---   OC_TIME_CALENDAR    UK (layer, scope_key, cal_date)
---   OC_TIME_TASK        -- nothing but the identity primary key
+-- It claimed OC_TIME_TASK had "nothing but the identity primary key". It has a
+-- natural key and always did -- 02_time_master.sql creates two:
 --
--- An identity key matches nothing in an incoming feed, so with no natural key
--- there is no way to tell "this task again" from "a new task". The loader
--- refuses rather than guess -- correctly, because the alternative is a plain
--- insert that duplicates all 624 tasks on every single sync, quietly, until
--- the task LOV is unusable.
+--   UK_OC_TTSK_WBS     (project_id, UPPER(task_code))
+--   UK_OC_TTSK_COMMON  (CASE WHEN task_type='COMMON' THEN UPPER(task_code) END)
 --
--- FUSION_TASK_ID is the key: it is Fusion's own PROJ_ELEMENT_ID, unique across
--- projects, and it is exactly what the extract now emits under that name.
--- (PROJECT_ID, TASK_CODE) would also be unique but depends on the foreign key
--- having resolved first, which makes the merge's matching depend on the merge's
--- own lookup. FUSION_TASK_ID stands on its own.
+-- Both are CREATE UNIQUE INDEX, not ALTER TABLE ADD CONSTRAINT. Oracle keeps
+-- those in USER_INDEXES and NOT in USER_CONSTRAINTS, and the loader's key
+-- discovery reads USER_CONSTRAINTS -- so it saw no key on a table that has two.
+-- POST sync/task already keys on (project, task code) and says why: "because
+-- UK_OC_TTSK_WBS is what the table actually enforces."
+--
+-- The merge key is therefore NOT this constraint. OC_TIME_SYNC_CONFIG.MERGE_KEY
+-- declares 'PROJECT_ID,TASK_CODE' for TASKS, and the loader prefers a declared
+-- key over discovery. Matching on FUSION_TASK_ID while the table enforces
+-- (project, code) is worse than having no key at all: a row that misses on the
+-- fusion id is treated as new and the insert collides, ORA-00001, mid-sync.
+--
+-- WHAT THIS FILE IS STILL FOR, and why it is kept rather than reverted:
+-- FUSION_TASK_ID genuinely is unique -- it is Fusion's PROJ_ELEMENT_ID -- and
+-- nothing enforced that. The constraint turns one specific silent corruption
+-- into an error: a task that MOVES between projects in Fusion arrives as
+-- (new project, same code), misses the merge on (project, code), and inserts.
+-- Without this it becomes a second row for one Fusion task, in two projects at
+-- once, and the task LOV shows both. With it, the sync fails and says so.
+-- Failing is the better outcome; neither is correct handling, and a task that
+-- moves project still needs a real answer.
 --
 -- NULLABLE, deliberately. The COMMON tasks -- Leave, Training, Travel and the
 -- rest, seeded by 10_seed.sql -- have no Fusion element behind them and never
--- will. Oracle's unique constraints ignore null rows, so those coexist happily
--- while every synced task is still matched exactly once.
+-- will. Oracle's unique constraints ignore null rows, so those coexist happily.
 --
 -- Idempotent. Depends on: time/02, time/17
 --==============================================================
@@ -86,14 +94,18 @@ END;
 /
 
 PROMPT ============================================================
-PROMPT [3/3] Verification — every load target now has a natural key
+PROMPT [3/3] Verification — the keys, from BOTH places they can live
 PROMPT ============================================================
+PROMPT A unique INDEX is not a unique CONSTRAINT. Listing only USER_CONSTRAINTS
+PROMPT is what hid UK_OC_TTSK_WBS in the first place, so list both.
 
 COLUMN table_name      FORMAT A22
 COLUMN constraint_name FORMAT A24
 COLUMN cols            FORMAT A44
 
-SELECT c.table_name, c.constraint_name,
+COLUMN kind FORMAT A11
+
+SELECT c.table_name, 'CONSTRAINT' AS kind, c.constraint_name AS name,
        LISTAGG(cc.column_name, ', ')
          WITHIN GROUP (ORDER BY cc.position) AS cols
   FROM user_constraints c
@@ -102,8 +114,26 @@ SELECT c.table_name, c.constraint_name,
    AND c.table_name IN ('OC_TIME_WORKER','OC_TIME_PROJECT','OC_TIME_TASK',
                         'OC_TIME_ALLOCATION','OC_TIME_ABSENCE','OC_TIME_CALENDAR')
  GROUP BY c.table_name, c.constraint_name
- ORDER BY c.table_name;
+UNION ALL
+-- The half the loader could not see. Function-based columns show as SYS_NCnnn
+-- in USER_IND_COLUMNS, so join out to USER_IND_EXPRESSIONS for the expression.
+SELECT i.table_name, 'INDEX', i.index_name,
+       LISTAGG(NVL(e.column_expression, ic.column_name), ', ')
+         WITHIN GROUP (ORDER BY ic.column_position)
+  FROM user_indexes i
+  JOIN user_ind_columns ic ON ic.index_name = i.index_name
+  LEFT JOIN user_ind_expressions e
+         ON e.index_name = ic.index_name
+        AND e.column_position = ic.column_position
+ WHERE i.uniqueness = 'UNIQUE'
+   AND i.table_name IN ('OC_TIME_WORKER','OC_TIME_PROJECT','OC_TIME_TASK',
+                        'OC_TIME_ALLOCATION','OC_TIME_ABSENCE','OC_TIME_CALENDAR')
+   AND NOT EXISTS (SELECT 1 FROM user_constraints c2
+                    WHERE c2.index_name = i.index_name)
+ GROUP BY i.table_name, i.index_name
+ ORDER BY 1, 2;
 
 PROMPT
-PROMPT Expect all six tables listed. A target missing from this list cannot be
-PROMPT merged into and the loader will refuse it by design.
+PROMPT Every row marked INDEX is a key the loader's discovery CANNOT see. If a
+PROMPT feed targets one of those tables, its config row needs MERGE_KEY set
+PROMPT explicitly -- discovery will either find nothing or find the wrong key.

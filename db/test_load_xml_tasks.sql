@@ -2,9 +2,9 @@
 -- test_load_xml_tasks.sql
 -- Prove the FOREIGN KEY RESOLUTION, which CALENDAR never exercised.
 --
--- Run 18_task_natural_key.sql FIRST. OC_TIME_TASK has no natural unique key
--- without it and the loader will refuse the merge -- correctly, because the
--- alternative is duplicating all 624 tasks on every sync.
+-- Re-run 16_oic_sync_config.sql FIRST -- it now sets MERGE_KEY, and without
+-- that the loader matches on FUSION_TASK_ID while the table enforces
+-- UK_OC_TTSK_WBS on (PROJECT_ID, UPPER(TASK_CODE)). Test 5 is that difference.
 --
 -- Paste into SQL Developer as the O2C_TIME schema owner and press F5.
 --
@@ -136,16 +136,29 @@ PROMPT === 4. a task whose project is NOT loaded =====================
 PROMPT This is the RUN_ORDER failure, and the message is the point. An
 PROMPT operator seeing ORA-02291 learns nothing; they need to be told the
 PROMPT parent has not loaded yet.
+PROMPT
+PROMPT This block first used HC2001, "a real Fusion project not in
+PROMPT OC_TIME_PROJECT". It IS in OC_TIME_PROJECT -- 423 projects are loaded
+PROMPT and only four were ever looked at -- so the lookup resolved, the merge
+PROMPT ran, and it hit ORA-00001 instead. Assert the premise now rather than
+PROMPT assuming it.
 PROMPT ==============================================================
 
 DECLARE
   v_xml CLOB; v_read NUMBER; v_merged NUMBER;
-  v_status VARCHAR2(20); v_msg VARCHAR2(2000);
+  v_status VARCHAR2(20); v_msg VARCHAR2(2000); v_exists NUMBER;
 BEGIN
-  -- HC2001 is a real Fusion project that is NOT in OC_TIME_PROJECT.
+  SELECT COUNT(*) INTO v_exists
+    FROM oc_time_project WHERE project_number = 'ZZNOTLOADED9999';
+  IF v_exists > 0 THEN
+    DBMS_OUTPUT.PUT_LINE('SKIPPED - ZZNOTLOADED9999 somehow exists, so this '
+      || 'cannot test an unresolved parent. Pick another number.');
+    RETURN;
+  END IF;
+
   v_xml :=
 '<DATA_DS><ROWSET>
-<ROW><FUSION_TASK_ID>999999999999999</FUSION_TASK_ID><FUSION_PROJECT_ID>300000166633708</FUSION_PROJECT_ID><PROJECT_NUMBER>HC2001</PROJECT_NUMBER><TASK_CODE>1.0</TASK_CODE><TASK_NAME>Orphan</TASK_NAME><CHARGEABLE_FLAG>Y</CHARGEABLE_FLAG><BILLABLE_TYPE>Billable</BILLABLE_TYPE><WBS_LEVEL>1</WBS_LEVEL><PARENT_TASK_ID></PARENT_TASK_ID><START_DATE></START_DATE><END_DATE></END_DATE><EXPENDITURE_TYPE></EXPENDITURE_TYPE></ROW>
+<ROW><FUSION_TASK_ID>999999999999999</FUSION_TASK_ID><FUSION_PROJECT_ID>300000166633708</FUSION_PROJECT_ID><PROJECT_NUMBER>ZZNOTLOADED9999</PROJECT_NUMBER><TASK_CODE>1.0</TASK_CODE><TASK_NAME>Orphan</TASK_NAME><CHARGEABLE_FLAG>Y</CHARGEABLE_FLAG><BILLABLE_TYPE>Billable</BILLABLE_TYPE><WBS_LEVEL>1</WBS_LEVEL><PARENT_TASK_ID></PARENT_TASK_ID><START_DATE></START_DATE><END_DATE></END_DATE><EXPENDITURE_TYPE></EXPENDITURE_TYPE></ROW>
 </ROWSET></DATA_DS>';
 
   oc_time_load_xml('OC_TIME_TASK', v_xml, 'TASKS', 'TASK_FK_TEST',
@@ -153,13 +166,70 @@ BEGIN
   DBMS_OUTPUT.PUT_LINE('status : ' || v_status);
   DBMS_OUTPUT.PUT_LINE('message: ' || v_msg);
   DBMS_OUTPUT.PUT_LINE('(should name PROJECT_ID and mention RUN_ORDER, and');
-  DBMS_OUTPUT.PUT_LINE(' must NOT be a raw ORA-02291)');
+  DBMS_OUTPUT.PUT_LINE(' must NOT be a raw ORA-02291 or ORA-00001)');
+END;
+/
+
+PROMPT
+PROMPT === 5. the same task under a NEW Fusion id ====================
+PROMPT The case that actually broke, so it gets its own test.
+PROMPT
+PROMPT UK_OC_TTSK_WBS on (PROJECT_ID, UPPER(TASK_CODE)) is a unique INDEX,
+PROMPT not a constraint, so it is invisible to USER_CONSTRAINTS and the
+PROMPT loader's key discovery never saw it. Given a key on FUSION_TASK_ID it
+PROMPT matched on that instead -- a DIFFERENT key from the one the table
+PROMPT enforces. A row that misses on the fusion id is treated as new, and
+PROMPT the insert then collides on (project, code) with ORA-00001.
+PROMPT
+PROMPT MERGE_KEY = 'PROJECT_ID,TASK_CODE' in the config makes the merge match
+PROMPT what the table enforces. Below, 01.01.112 arrives with a fusion id it
+PROMPT has never had before: it must UPDATE the existing row.
+PROMPT ==============================================================
+
+DECLARE
+  v_xml CLOB; v_read NUMBER; v_merged NUMBER;
+  v_status VARCHAR2(20); v_msg VARCHAR2(2000);
+  v_pid NUMBER; v_n NUMBER; v_fid VARCHAR2(50);
+BEGIN
+  SELECT project_id INTO v_pid FROM oc_time_project WHERE project_number = '444';
+
+  v_xml :=
+'<DATA_DS><ROWSET>
+<ROW><FUSION_TASK_ID>888888888888888</FUSION_TASK_ID><FUSION_PROJECT_ID>300000337787982</FUSION_PROJECT_ID><PROJECT_NUMBER>444</PROJECT_NUMBER><TASK_CODE>01.01.112</TASK_CODE><TASK_NAME>Near shore REKEYED</TASK_NAME><CHARGEABLE_FLAG>Y</CHARGEABLE_FLAG><BILLABLE_TYPE>Billable</BILLABLE_TYPE><WBS_LEVEL>3</WBS_LEVEL><PARENT_TASK_ID>300000337787998</PARENT_TASK_ID><START_DATE></START_DATE><END_DATE></END_DATE><EXPENDITURE_TYPE></EXPENDITURE_TYPE></ROW>
+</ROWSET></DATA_DS>';
+
+  oc_time_load_xml('OC_TIME_TASK', v_xml, 'TASKS', 'TASK_FK_TEST',
+                   v_read, v_merged, v_status, v_msg);
+
+  SELECT COUNT(*) INTO v_n FROM oc_time_task
+   WHERE project_id = v_pid AND UPPER(task_code) = '01.01.112';
+
+  DBMS_OUTPUT.PUT_LINE('status  : ' || v_status);
+  DBMS_OUTPUT.PUT_LINE('message : ' || v_msg);
+  DBMS_OUTPUT.PUT_LINE('rows for 01.01.112 on ' || v_pid || ' : ' || v_n
+                    || '   (must be 1 -- 2 means it inserted a duplicate,');
+  DBMS_OUTPUT.PUT_LINE('        and a Failed ORA-00001 means the merge is');
+  DBMS_OUTPUT.PUT_LINE('        still matching on FUSION_TASK_ID)');
+
+  IF v_n = 1 THEN
+    SELECT fusion_task_id INTO v_fid FROM oc_time_task
+     WHERE project_id = v_pid AND UPPER(task_code) = '01.01.112';
+    DBMS_OUTPUT.PUT_LINE('fusion  : ' || v_fid
+      || '   (must be 888888888888888 -- proves it UPDATED in place)');
+  END IF;
+
+  IF v_status = 'Success' AND v_n = 1 THEN
+    DBMS_OUTPUT.PUT_LINE('PASS - merging on the key the table enforces.');
+  ELSE
+    DBMS_OUTPUT.PUT_LINE('FAIL - see above.');
+  END IF;
 END;
 /
 
 PROMPT
 PROMPT === clean up ==================================================
 DELETE FROM oc_time_task
- WHERE fusion_task_id IN ('300000337788008','300000337787989','999999999999999');
+ WHERE fusion_task_id IN ('300000337788008','300000337787989',
+                          '999999999999999','888888888888888');
 COMMIT;
 PROMPT Test tasks removed. Run the real TASKS sync to load them properly.

@@ -76,12 +76,20 @@ WORKERS = {
     "target": "OC_TIME_WORKER",
     "integration": "INT-001",
     "key": ["EMPLOYEE_ID"],
-    "columns": ["EMPLOYEE_ID", "EMPLOYEE_NAME", "EMAIL", "WORKER_TYPE",
-                "BASE_COUNTRY", "STD_HOURS_PER_DAY", "MANAGER_EMP_ID",
-                "LEGAL_EMPLOYER", "EXPENDITURE_ORG",
+    "columns": ["FUSION_PERSON_ID", "EMPLOYEE_ID", "EMPLOYEE_NAME", "EMAIL",
+                "WORKER_TYPE", "BASE_COUNTRY", "STD_HOURS_PER_DAY",
+                "MANAGER_EMP_ID", "LEGAL_EMPLOYER", "EXPENDITURE_ORG",
                 "HIRE_DATE", "TERMINATION_DATE", "STATUS"],
     "sql": """
-SELECT papf.person_number                                AS employee_id,
+-- person_id as well as person_number. OC_TIME_WORKER.FUSION_PERSON_ID has
+-- existed since 02_time_master.sql:34 and nothing has ever written to it,
+-- because this SELECT took only the number. PersonNumber (RI2894) is a real
+-- Fusion key and several REST resources accept it, but /absences and the OTL
+-- time-record payloads want the numeric PersonId, and deriving it needs a
+-- round trip per person. Carry both -- it costs one column on a query that
+-- already joins papf.
+SELECT papf.person_id                                    AS fusion_person_id,
+       papf.person_number                                AS employee_id,
        ppnf.display_name                                 AS employee_name,
        LOWER(pea.email_address)                          AS email,
        CASE WHEN paam.system_person_type = 'CWK' THEN 'Contractor'
@@ -249,7 +257,13 @@ TASKS = {
     "name": "TASKS",
     "target": "OC_TIME_TASK",
     "integration": "INT-002",
-    "key": ["FUSION_TASK_ID"],
+    # Must be the key the MERGE matches on, not merely a unique one. The DB
+    # merges on (PROJECT_ID, TASK_CODE) -- UK_OC_TTSK_WBS. If two extract rows
+    # share a (project, code) with different Fusion ids, this check passes,
+    # and the MERGE then fails with ORA-30926 "unable to get a stable set of
+    # rows in the source tables" -- which names neither the report nor the
+    # duplicate. Catching it here says which rows, at extract time.
+    "key": ["PROJECT_NUMBER", "TASK_CODE"],
     "columns": ["FUSION_TASK_ID", "FUSION_PROJECT_ID", "PROJECT_NUMBER", "TASK_CODE",
                 "TASK_NAME", "CHARGEABLE_FLAG", "BILLABLE_TYPE",
                 "WBS_LEVEL", "PARENT_TASK_ID", "START_DATE", "END_DATE",
@@ -295,9 +309,22 @@ ALLOCATIONS = {
     "name": "ALLOCATIONS",
     "target": "OC_TIME_ALLOCATION",
     "integration": "INT-003",
-    "key": ["PROJECT_ID", "EMPLOYEE_ID"],
-    "columns": ["PROJECT_ID", "PROJECT_NUMBER", "EMPLOYEE_ID", "START_DATE",
-                "END_DATE", "ALLOC_PCT", "CAP_HOURS", "TRACK_TIME_FLAG", "STATUS"],
+    # FUSION_PROJECT_ID, never PROJECT_ID. This used to emit Fusion's project id
+    # under the alias PROJECT_ID -- the exact name of the LOCAL surrogate
+    # foreign key OC_TIME_ALLOCATION.PROJECT_ID. The loader matched the name,
+    # took it as an ordinary column, and its foreign-key resolution then found
+    # the column already populated and skipped itself. Fusion's
+    # 300000337787982 went at the local FK: ORA-02291 on a good day, and a
+    # silent attachment to the WRONG project on a bad one.
+    #
+    # TASKS never had this because it aliases to FUSION_PROJECT_ID (see below).
+    # The local id is resolved from PROJECT_NUMBER by FK_LOOKUP_SQL; the Fusion
+    # id is KEPT, in its own column, because the OTL push (INT-007) has to name
+    # the project back to Fusion and cannot do that with our 376.
+    "key": ["PROJECT_NUMBER", "EMPLOYEE_ID"],
+    "columns": ["FUSION_PROJECT_ID", "PROJECT_NUMBER", "EMPLOYEE_ID",
+                "START_DATE", "END_DATE", "ALLOC_PCT", "CAP_HOURS",
+                "TRACK_TIME_FLAG", "STATUS"],
     "sql": """
 -- One row per project x employee. Both sides need collapsing first, and
 -- skipping either produces duplicates that violate UK_OC_TAL_ASSIGN:
@@ -311,16 +338,32 @@ ALLOCATIONS = {
 --
 -- BILLABLE_PERCENT is SUMmed, not MAXed: a person can hold two concurrent
 -- assignments on one project and RULE-001 cares about their combined load.
-SELECT pp.project_id                                   AS project_id,
+SELECT pp.project_id                                   AS fusion_project_id,
        prj.segment1                                    AS project_number,
        papf.person_number                              AS employee_id,
        TO_CHAR(MIN(pp.start_date_active),'YYYY-MM-DD') AS start_date,
        TO_CHAR(MAX(pp.end_date_active),'YYYY-MM-DD')   AS end_date,
-       MAX(asg.alloc_pct)                              AS alloc_pct,
+       -- NVL, because the DEFAULT cannot save this. ALLOC_PCT is NOT NULL
+       -- DEFAULT 100 (02_time_master.sql:219), but a column DEFAULT applies
+       -- only when the INSERT OMITS the column -- the loader always names
+       -- every column and passes an explicit NULL, which is ORA-01400. The
+       -- LEFT JOIN to pjr_assignment misses for any party with no resource
+       -- assignment, which is most of them.
+       --
+       -- 100 is the right fallback: a project party with no assignment row is
+       -- on the project without a stated split, and RULE-001 should see them
+       -- at full load rather than at zero (which CHK_OC_TAL_PCT rejects too,
+       -- since it requires alloc_pct > 0).
+       NVL(MAX(asg.alloc_pct), 100)                    AS alloc_pct,
        MAX(asg.hours_per_day)                          AS cap_hours,
        MAX(pp.pjs_track_time)                          AS track_time_flag,
+       -- 'Ended', NOT 'Inactive'. CHK_OC_TAL_STATUS allows only
+       -- ('Active','Ended') -- db/02_time_master.sql:235 -- so 'Inactive'
+       -- fails ORA-02290 on every allocation whose end date has passed. The
+       -- word differs from the WORKERS feed's Active/Inactive on purpose:
+       -- these are two different column domains, not one shared vocabulary.
        CASE WHEN MAX(NVL(pp.end_date_active, DATE '4712-12-31')) >= {ED}
-            THEN 'Active' ELSE 'Inactive' END          AS status
+            THEN 'Active' ELSE 'Ended' END             AS status
   FROM pjf_project_parties pp
   JOIN pjf_projects_all_b prj
     ON prj.project_id = pp.project_id

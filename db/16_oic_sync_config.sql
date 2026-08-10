@@ -66,6 +66,21 @@ BEGIN
       -- the other.
       FK_COLUMN        VARCHAR2(30 CHAR),
       FK_LOOKUP_SQL    VARCHAR2(1000 CHAR),
+      -- The columns the MERGE matches on, comma separated. Optional: when null
+      -- the loader discovers the key from the table's primary or unique
+      -- CONSTRAINTS.
+      --
+      -- It is here because discovery cannot see everything. OC_TIME_TASK is
+      -- keyed by UK_OC_TTSK_WBS on (PROJECT_ID, UPPER(TASK_CODE)) -- a unique
+      -- INDEX, not a constraint, so it never appears in USER_CONSTRAINTS. The
+      -- loader found no key at all, and once given one on FUSION_TASK_ID it
+      -- matched on that instead, which is a DIFFERENT key from the one the
+      -- table enforces: a row can miss on the fusion id, be treated as new,
+      -- and then collide on (project, code) with ORA-00001.
+      --
+      -- POST sync/task already keys on (project, task code) for exactly this
+      -- reason. Declaring it makes the two agree instead of each guessing.
+      MERGE_KEY        VARCHAR2(200 CHAR),
       -- ── last run, for the operator ───────────────────────────
       LAST_RUN_ON      TIMESTAMP,
       LAST_ROWS_READ   NUMBER(10),
@@ -115,11 +130,29 @@ EXCEPTION WHEN OTHERS THEN
 END;
 /
 
+-- One ALTER PER COLUMN, not one ALTER adding three.
+--
+-- A combined ADD is atomic: on a schema where fk_column already exists -- which
+-- is every schema that ran the previous version of this file -- Oracle raises
+-- ORA-01430 for that one column and adds NONE of them. The guard below then
+-- swallows it, the script reports success, and MERGE_KEY silently does not
+-- exist. Every TASKS load afterwards falls back to discovery and merges on the
+-- wrong key. Per-column, each add fails or succeeds on its own.
+DECLARE
+  TYPE t_tab IS TABLE OF VARCHAR2(200);
+  v t_tab := t_tab(
+    'fk_column VARCHAR2(30 CHAR)',
+    'fk_lookup_sql VARCHAR2(1000 CHAR)',
+    'merge_key VARCHAR2(200 CHAR)');
 BEGIN
-  EXECUTE IMMEDIATE 'ALTER TABLE oc_time_sync_config ADD ' ||
-    '(fk_column VARCHAR2(30 CHAR), fk_lookup_sql VARCHAR2(1000 CHAR))';
-EXCEPTION WHEN OTHERS THEN
-  IF SQLCODE = -1430 THEN NULL; ELSE RAISE; END IF;
+  FOR i IN 1 .. v.COUNT LOOP
+    BEGIN
+      EXECUTE IMMEDIATE 'ALTER TABLE oc_time_sync_config ADD (' || v(i) || ')';
+      DBMS_OUTPUT.PUT_LINE('added   ' || v(i));
+    EXCEPTION WHEN OTHERS THEN
+      IF SQLCODE = -1430 THEN NULL; ELSE RAISE; END IF;   -- already there
+    END;
+  END LOOP;
 END;
 /
 
@@ -195,6 +228,11 @@ BEGIN
                       || 'WHERE p.project_number = x.PROJECT_NUMBER)'
    WHERE bip_report_name IN ('TASKS','ALLOCATIONS')
      AND fk_column IS NULL;
+
+  -- Match what UK_OC_TTSK_WBS enforces, not what discovery happens to find.
+  UPDATE oc_time_sync_config
+     SET merge_key = 'PROJECT_ID,TASK_CODE'
+   WHERE bip_report_name = 'TASKS' AND merge_key IS NULL;
 
   COMMIT;
   DBMS_OUTPUT.PUT_LINE('Sync config seeded.');
@@ -292,6 +330,7 @@ AS
   v_keycols  NUMBER := 0;
   v_fkcol    VARCHAR2(30);
   v_fksql    VARCHAR2(1000);
+  v_mkey     VARCHAR2(200);
 BEGIN
   o_rows_read := 0; o_rows_merged := 0; o_status := 'Failed';
 
@@ -304,11 +343,11 @@ BEGIN
   -- because two reports can share a table -- CALENDAR and WORKER_SHIFTS both
   -- write OC_TIME_CALENDAR -- and only one of them may need a lookup.
   BEGIN
-    SELECT MAX(fk_column), MAX(fk_lookup_sql) INTO v_fkcol, v_fksql
+    SELECT MAX(fk_column), MAX(fk_lookup_sql), MAX(merge_key)
+      INTO v_fkcol, v_fksql, v_mkey
       FROM oc_time_sync_config
      WHERE UPPER(target_table) = v_tab
-       AND (p_report_name IS NULL OR bip_report_name = p_report_name)
-       AND fk_column IS NOT NULL;
+       AND (p_report_name IS NULL OR bip_report_name = p_report_name);
   EXCEPTION WHEN NO_DATA_FOUND THEN v_fkcol := NULL;
   END;
 
@@ -339,6 +378,23 @@ BEGIN
        -- conflating two different id spaces. Fusion's ids belong in
        -- FUSION_TASK_ID / FUSION_PROJECT_ID; see the alias note above.
        AND t.identity_column = 'NO'
+       -- A COLUMN WE RESOLVE IS NEVER READ FROM THE XML. This is the whole
+       -- point of the lookup and it was previously defeated by its own guard.
+       --
+       -- ALLOCATIONS selects Fusion's project id as "pp.project_id AS
+       -- project_id" -- the exact name of OC_TIME_ALLOCATION.PROJECT_ID, which
+       -- is our LOCAL surrogate foreign key. Without this line the scan below
+       -- picks PROJECT_ID up as an ordinary column, and the resolution block
+       -- further down then finds it already present and SKIPS ITSELF. Fusion's
+       -- 300000337787982 goes straight into the local FK: ORA-02291 if no local
+       -- project happens to hold that number, and -- far worse -- a silent
+       -- attachment to the WRONG project if one does.
+       --
+       -- TASKS was safe only by luck: its extract aliases to FUSION_PROJECT_ID,
+       -- so PROJECT_ID was absent from the XML and the guard's condition held.
+       -- The identity_column test above exists for this same reason; it does
+       -- not cover this case because a foreign key is not an identity column.
+       AND (v_fkcol IS NULL OR t.column_name <> v_fkcol)
        AND EXISTS (
              SELECT 1
                FROM XMLTABLE('/DATA_DS/ROWSET/ROW[1]/*'
@@ -364,12 +420,14 @@ BEGIN
   -- Resolve the parent key. Added to the source select and the insert, but NOT
   -- to the XMLTABLE column list -- it is computed from the XML, not read out of
   -- it, and reading it would take Fusion's id straight into a local FK.
+  -- Unconditional. The "only if not already present" test that used to wrap
+  -- this was the bug described in the scan above: it handed control to whatever
+  -- the report happened to name its columns. The scan now excludes v_fkcol
+  -- outright, so the resolution is the ONLY thing that can populate it.
   IF v_fkcol IS NOT NULL AND v_fksql IS NOT NULL THEN
-    IF INSTR(',' || LTRIM(v_ins, ',') || ',', ',' || v_fkcol || ',') = 0 THEN
-      v_src := v_src || ',' || v_fksql || ' AS ' || v_fkcol;
-      v_ins := v_ins || ',' || v_fkcol;
-      v_val := v_val || ',s.' || v_fkcol;
-    END IF;
+    v_src := v_src || ',' || v_fksql || ' AS ' || v_fkcol;
+    v_ins := v_ins || ',' || v_fkcol;
+    v_val := v_val || ',s.' || v_fkcol;
   END IF;
 
   IF v_cols IS NULL THEN
@@ -378,7 +436,24 @@ BEGIN
     RETURN;
   END IF;
 
-  -- ── 3. the natural key, from the table itself ──────────────
+  -- ── 3. the natural key ─────────────────────────────────────
+  -- A declared MERGE_KEY wins. Discovery is the fallback, and it can only see
+  -- what is in USER_CONSTRAINTS -- a unique INDEX is invisible to it.
+  IF v_mkey IS NOT NULL THEN
+    FOR k IN (SELECT TRIM(REGEXP_SUBSTR(v_mkey, '[^,]+', 1, LEVEL)) AS column_name
+                FROM dual
+             CONNECT BY LEVEL <= REGEXP_COUNT(v_mkey, ',') + 1)
+    LOOP
+      IF INSTR(',' || LTRIM(v_ins, ',') || ',', ',' || k.column_name || ',') = 0 THEN
+        o_message := 'MERGE_KEY names ' || k.column_name || ', which is neither '
+                  || 'in the XML nor resolved. Check the config against the report.';
+        RETURN;
+      END IF;
+      v_on := v_on || ' AND t.' || k.column_name || ' = s.' || k.column_name;
+      v_keycols := v_keycols + 1;
+    END LOOP;
+  END IF;
+
   FOR k IN (
     SELECT cc.column_name
       FROM user_constraints c
@@ -395,10 +470,11 @@ BEGIN
                  ',' || cc.column_name || ',') > 0
      ORDER BY c.constraint_type, c.constraint_name, cc.position)
   LOOP
+    EXIT WHEN v_mkey IS NOT NULL;          -- declared key already applied
     v_on := v_on || ' AND t.' || k.column_name || ' = s.' || k.column_name;
     v_keycols := v_keycols + 1;
-    IF v_set IS NULL THEN v_set := ''; END IF;
   END LOOP;
+  IF v_set IS NULL THEN v_set := ''; END IF;
 
   IF v_keycols = 0 THEN
     o_message := 'No primary or unique key on ' || v_tab
@@ -408,12 +484,32 @@ BEGIN
   END IF;
 
   -- Update everything that is not part of the match.
+  --
+  -- EXCEPT that a Fusion identifier is never overwritten with nothing. Every
+  -- other column is assigned straight from the source, which is correct: a
+  -- cleared END_DATE must actually clear. A Fusion id is different in kind --
+  -- it is the only thing that can name our row back to Fusion for the OTL push
+  -- (INT-007), and Fusion never un-assigns one. So an empty element means the
+  -- report did not send it, not that the id was withdrawn.
+  --
+  -- Without the NVL, <FUSION_TASK_ID></FUSION_TASK_ID> parses to NULL and the
+  -- MERGE writes that NULL over a good id. Nothing would raise: the column is
+  -- nullable, and UK_OC_TTSK_FUSION permits any number of NULL rows because
+  -- Oracle's unique constraints ignore them. The push would simply find nothing
+  -- to send, for rows that used to be fine, with no error anywhere.
+  --
+  -- Matched on the FUSION_% naming rather than a list so a new Fusion id column
+  -- is protected the day it is added, not the day someone remembers this.
   FOR c IN (SELECT REGEXP_SUBSTR(LTRIM(v_ins, ','), '[^,]+', 1, LEVEL) AS nm
               FROM dual
            CONNECT BY LEVEL <= REGEXP_COUNT(v_ins, ','))
   LOOP
     IF INSTR(v_on, ' t.' || c.nm || ' = ') = 0 THEN
-      v_set := v_set || ',t.' || c.nm || ' = s.' || c.nm;
+      IF c.nm LIKE 'FUSION\_%' ESCAPE '' THEN
+        v_set := v_set || ',t.' || c.nm || ' = NVL(s.' || c.nm || ', t.' || c.nm || ')';
+      ELSE
+        v_set := v_set || ',t.' || c.nm || ' = s.' || c.nm;
+      END IF;
     END IF;
   END LOOP;
 
@@ -517,5 +613,20 @@ SELECT run_order, bip_report_name, enabled_flag,
  ORDER BY run_order;
 
 PROMPT (INT 001 must filter on ENABLED_FLAG = 'Y' and ORDER BY RUN_ORDER.)
+
+PROMPT
+PROMPT --- how each feed is matched -------------------------------
+COLUMN matched_on FORMAT A34
+
+-- Worth showing plainly: '(discovered)' means the loader will go looking in
+-- USER_CONSTRAINTS, which cannot see a unique INDEX. OC_TIME_TASK is keyed by
+-- one, so TASKS must read PROJECT_ID,TASK_CODE here and not '(discovered)'.
+SELECT bip_report_name,
+       NVL(target_table,'(none)')     AS target_table,
+       NVL(merge_key,'(discovered)')  AS matched_on,
+       NVL(fk_column,'-')             AS fk_column
+  FROM oc_time_sync_config
+ WHERE enabled_flag = 'Y'
+ ORDER BY run_order;
 
 PROMPT Done. INT 001 reads OC_TIME_SYNC_CONFIG; INT 002 calls OC_TIME_LOAD_XML.
