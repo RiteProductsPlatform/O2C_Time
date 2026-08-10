@@ -8624,18 +8624,25 @@ BEGIN
                 WHERE index_name = i.index_name
                 ORDER BY column_position)
     LOOP
+      -- A function-based column is stored as SYS_NCnnnnn$ and its real
+      -- expression lives only in USER_IND_EXPRESSIONS, as a LONG.
+      --
+      -- No LIKE 'SYS\_NC%' ESCAPE '\' test here, deliberately. An ordinary
+      -- column simply has no row in USER_IND_EXPRESSIONS, so NO_DATA_FOUND
+      -- already tells us everything the name test would have — the condition
+      -- was redundant, and being redundant it was pure risk: it needed a
+      -- backslash to escape the underscore (an underscore is LIKE's
+      -- single-character wildcard), the backslash was lost writing this file,
+      -- and ESCAPE '' is a zero-length escape character — ORA-06502, thrown
+      -- per row, from a block whose only job is to print a table.
       v_expr := NULL;
-      -- A function-based column is stored as SYS_NCnnnnn$; the real expression
-      -- is only in USER_IND_EXPRESSIONS, as a LONG.
-      IF ic.column_name LIKE 'SYS\_NC%' ESCAPE '' THEN
-        BEGIN
-          SELECT column_expression INTO v_expr      -- LONG -> VARCHAR2, legal here
-            FROM user_ind_expressions
-           WHERE index_name = i.index_name
-             AND column_position = ic.column_position;
-        EXCEPTION WHEN NO_DATA_FOUND THEN v_expr := NULL;
-        END;
-      END IF;
+      BEGIN
+        SELECT column_expression INTO v_expr      -- LONG -> VARCHAR2, legal here
+          FROM user_ind_expressions
+         WHERE index_name = i.index_name
+           AND column_position = ic.column_position;
+      EXCEPTION WHEN NO_DATA_FOUND THEN v_expr := NULL;   -- a plain column
+      END;
       v_cols := v_cols || ', ' || NVL(v_expr, ic.column_name);
     END LOOP;
 
@@ -9163,7 +9170,14 @@ BEGIN
            CONNECT BY LEVEL <= REGEXP_COUNT(v_ins, ','))
   LOOP
     IF INSTR(v_on, ' t.' || c.nm || ' = ') = 0 THEN
-      IF c.nm LIKE 'FUSION\_%' ESCAPE '' THEN
+      -- SUBSTR, not LIKE 'FUSION\_%' ESCAPE '\'. The underscore is LIKE's
+      -- single-character wildcard, so it needs a backslash, and a backslash in
+      -- a PL/SQL literal is fragile in ways that have nothing to do with
+      -- Oracle: it was lost in transit writing this file, leaving ESCAPE ''
+      -- -- a zero-length escape character, ORA-06502, raised on EVERY load
+      -- rather than on some unlucky column name. SUBSTR has no wildcards, no
+      -- escape and no way to be silently corrupted.
+      IF SUBSTR(c.nm, 1, 7) = 'FUSION_' THEN
         v_set := v_set || ',t.' || c.nm || ' = NVL(s.' || c.nm || ', t.' || c.nm || ')';
       ELSE
         v_set := v_set || ',t.' || c.nm || ' = s.' || c.nm;

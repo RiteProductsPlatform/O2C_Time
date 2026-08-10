@@ -505,7 +505,14 @@ BEGIN
            CONNECT BY LEVEL <= REGEXP_COUNT(v_ins, ','))
   LOOP
     IF INSTR(v_on, ' t.' || c.nm || ' = ') = 0 THEN
-      IF c.nm LIKE 'FUSION\_%' ESCAPE '' THEN
+      -- SUBSTR, not LIKE 'FUSION\_%' ESCAPE '\'. The underscore is LIKE's
+      -- single-character wildcard, so it needs a backslash, and a backslash in
+      -- a PL/SQL literal is fragile in ways that have nothing to do with
+      -- Oracle: it was lost in transit writing this file, leaving ESCAPE ''
+      -- -- a zero-length escape character, ORA-06502, raised on EVERY load
+      -- rather than on some unlucky column name. SUBSTR has no wildcards, no
+      -- escape and no way to be silently corrupted.
+      IF SUBSTR(c.nm, 1, 7) = 'FUSION_' THEN
         v_set := v_set || ',t.' || c.nm || ' = NVL(s.' || c.nm || ', t.' || c.nm || ')';
       ELSE
         v_set := v_set || ',t.' || c.nm || ' = s.' || c.nm;
