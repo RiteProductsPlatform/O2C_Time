@@ -18,6 +18,8 @@
 --   DELETE line/:tsWeekId/:projectId/:taskId     remove a line
 --   POST weeks/:id/submit                        submit for approval
 --   POST weeks/:id/revoke                        pull a submission back
+--   GET  salaryhold/mine/:employeeId            my held dates (PROC-007)
+--   POST salaryhold/day/:holdDayId/correct      correct one held date
 --   GET  allocation/:employeeId                  allocation pop-up
 --   GET  tasks/:projectId                        task LOV (WBS + common)
 --   GET  projects/:employeeId                    projects the employee may charge
@@ -386,6 +388,64 @@ BEGIN
         COMMIT;
         :status_code := 200;
         HTP.P('{"tsWeekId":' || :id || ',"weekStatus":"' || v_status || '"}');
+      EXCEPTION WHEN OTHERS THEN
+        ROLLBACK;
+        :status_code := CASE WHEN SQLCODE BETWEEN -20025 AND -20001 THEN 400 ELSE 500 END;
+        HTP.P('{"error":"' ||
+              REPLACE(REPLACE(SQLERRM,'ORA-'||LTRIM(TO_CHAR(ABS(SQLCODE)))||': ',''),'"','\"')
+              || '"}');
+      END;
+    ]');
+  COMMIT;
+END;
+/
+
+-- ── GET salaryhold/mine/:employeeId  (PROC-007, employee) ────
+-- The employee's own held dates. Their own id only: this endpoint returns
+-- somebody's pay status, so it is keyed on the person asking and never on a
+-- period alone.
+BEGIN
+  ORDS.DEFINE_TEMPLATE(p_module_name => 'oc.time',
+                       p_pattern => 'salaryhold/mine/:employeeId');
+  ORDS.DEFINE_HANDLER(
+    p_module_name => 'oc.time', p_pattern => 'salaryhold/mine/:employeeId',
+    p_method => 'GET',
+    p_source_type => ORDS.source_type_collection_feed,
+    p_source => q'[
+      SELECT hold_day_id, hold_id, employee_id, employee_name, worker_type,
+             period_id, period_name, work_date, day_name, ts_week_id,
+             expected_hours, day_status, corrected_hours, correction_reason,
+             corrected_on, approved_by, approved_on, reject_remarks,
+             salary_status, held_on, window_expires_on, days_left, window_open
+        FROM v_oc_ts_salary_hold_mine
+       WHERE employee_id = :employeeId
+       ORDER BY work_date
+    ]');
+  COMMIT;
+END;
+/
+
+-- ── POST salaryhold/day/:holdDayId/correct  (employee) ───────
+BEGIN
+  ORDS.DEFINE_TEMPLATE(p_module_name => 'oc.time',
+                       p_pattern => 'salaryhold/day/:holdDayId/correct');
+  ORDS.DEFINE_HANDLER(
+    p_module_name => 'oc.time', p_pattern => 'salaryhold/day/:holdDayId/correct',
+    p_method => 'POST',
+    p_source_type => ORDS.source_type_plsql,
+    p_source => q'[
+      DECLARE v_status VARCHAR2(20);
+      BEGIN
+        oc_time_pkg.correct_salary_hold_day(
+          p_hold_day_id => :holdDayId,
+          p_hours       => :hours,
+          p_reason      => :reason,
+          p_actor       => NVL(:actor,'VBCS_USER'));
+        SELECT day_status INTO v_status FROM oc_ts_salary_hold_day
+         WHERE hold_day_id = :holdDayId;
+        COMMIT;
+        :status_code := 200;
+        HTP.P('{"holdDayId":' || :holdDayId || ',"dayStatus":"' || v_status || '"}');
       EXCEPTION WHEN OTHERS THEN
         ROLLBACK;
         :status_code := CASE WHEN SQLCODE BETWEEN -20025 AND -20001 THEN 400 ELSE 500 END;

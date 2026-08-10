@@ -271,6 +271,25 @@ CREATE OR REPLACE PACKAGE oc_time_pkg AS
     p_remarks      IN VARCHAR2 DEFAULT NULL,
     p_actor        IN VARCHAR2 DEFAULT 'VBCS_USER');
 
+  -- The employee's own correction of one held DATE, inside the 60-day window
+  -- (CFG-012). Takes no actor_emp_id and goes through no assert_not_self: this
+  -- is somebody correcting their own record, which is the whole point of the
+  -- screen -- the manager's sign-off is the control, not the entry.
+  PROCEDURE correct_salary_hold_day(
+    p_hold_day_id IN NUMBER,
+    p_hours       IN NUMBER,
+    p_reason      IN VARCHAR2,
+    p_actor       IN VARCHAR2 DEFAULT 'VBCS_USER');
+
+  -- The manager's decision on that correction. Approve releases the day;
+  -- Reject sends it back and it stays held.
+  PROCEDURE decide_salary_hold_day(
+    p_hold_day_id  IN NUMBER,
+    p_approve      IN VARCHAR2,               -- 'Y' | 'N'
+    p_remarks      IN VARCHAR2 DEFAULT NULL,
+    p_actor_emp_id IN VARCHAR2,
+    p_actor        IN VARCHAR2 DEFAULT 'VBCS_USER');
+
   -- ── Retro adjustments (PROC-008) ───────────────────────────
   FUNCTION apply_adjustment(
     p_employee_id    IN VARCHAR2,
@@ -2000,36 +2019,39 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
     v_job := start_job('Salary Stopping', 'SalaryStopping',
                        p_period_id, TRUNC(SYSDATE), NULL, p_actor);
 
-    -- Only an EMPLOYEE-caused default holds pay (RULE-016,
-    -- TIMESHEET_FLOW.html §01). A week defaulted because the MANAGER missed the
-    -- delivery cut-off counts as still-submitted here: the employee did their
-    -- part, and "awaiting manager approval does not stop salary" is the rule
-    -- this whole job exists to implement. Reading week_status alone would hold
-    -- pay for the manager's lateness, which inverts it.
+    -- REWRITTEN 10-Aug-2026 to the functional owner's instruction: run at
+    -- PAYROLL CUT-OFF + 1 and record "the dates for which the time is not yet
+    -- submitted by the employee". Three things changed from the week-based
+    -- version, and each was explicit:
+    --
+    --   * the test is SUBMITTED_ON IS NULL, not "defaulted". A week the
+    --     employee never submitted holds pay whether or not the defaulting job
+    --     has run yet -- the payroll cut-off does not wait for it. This still
+    --     honours RULE-016 for free: a submitted week has a stamp, so a manager
+    --     who has not yet approved can never cause a hold.
+    --
+    --   * contractors are INCLUDED. Assumption RA-012 excluded them; the owner
+    --     was asked about "employees/contractors" and answered yes to all,
+    --     irrespective of grade. RA-012 is retired.
+    --
+    --   * day rows are written under the header, because the correction the
+    --     employee is given is "by date".
     FOR e IN (SELECT w.employee_id,
                      COUNT(*) AS weeks_total,
-                     SUM(CASE WHEN w.week_status = 'Defaulted'
-                               AND w.defaulted_by = 'EMPLOYEE'
+                     SUM(CASE WHEN w.submitted_on IS NULL
                               THEN 1 ELSE 0 END)                 AS weeks_def,
-                     SUM(CASE WHEN w.week_status = 'Defaulted'
-                               AND w.defaulted_by = 'EMPLOYEE'
+                     SUM(CASE WHEN w.submitted_on IS NULL
                               THEN 0 ELSE 1 END)                 AS weeks_sub,
-                     SUM(CASE WHEN w.week_status = 'Defaulted'
-                               AND w.defaulted_by = 'EMPLOYEE'
+                     SUM(CASE WHEN w.submitted_on IS NULL
                               THEN 0 ELSE w.total_hours END)     AS applied_hrs,
-                     SUM(CASE WHEN w.week_status = 'Defaulted'
-                               AND w.defaulted_by = 'EMPLOYEE'
+                     SUM(CASE WHEN w.submitted_on IS NULL
                               THEN w.total_hours ELSE 0 END)     AS default_hrs
                 FROM oc_ts_week     w
                 JOIN oc_time_worker k ON k.employee_id = w.employee_id
                WHERE w.period_id = p_period_id
-                 -- Period doc: salary hold is for employees; contractors are
-                 -- invoice-driven (RA-012 still open).
-                 AND k.worker_type = 'Employee'
+                 AND k.status    = 'Active'
                GROUP BY w.employee_id
-              HAVING SUM(CASE WHEN w.week_status = 'Defaulted'
-                               AND w.defaulted_by = 'EMPLOYEE'
-                              THEN 1 ELSE 0 END) > 0)
+              HAVING SUM(CASE WHEN w.submitted_on IS NULL THEN 1 ELSE 0 END) > 0)
     LOOP
       v_read := v_read + 1;
 
@@ -2048,8 +2070,60 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
                     weeks_defaulted, applied_hours, default_hours, salary_status)
             VALUES (e.employee_id, p_period_id, e.weeks_total, e.weeks_sub,
                     e.weeks_def, e.applied_hrs, e.default_hrs, 'Held');
+
+      -- The 60 calendar days the employee gets to correct (CFG-012). Stamped
+      -- only when the hold is first opened: re-running the job must not keep
+      -- pushing the deadline out, or the window never closes.
+      UPDATE oc_ts_salary_hold h
+         SET h.hold_release_days = NVL(h.hold_release_days,
+               (SELECT NVL(p.hold_release_days, 60) FROM oc_time_period p
+                 WHERE p.period_id = p_period_id)),
+             h.window_expires_on = NVL(h.window_expires_on,
+               TRUNC(SYSDATE) + NVL((SELECT NVL(p.hold_release_days, 60)
+                                       FROM oc_time_period p
+                                      WHERE p.period_id = p_period_id), 60))
+       WHERE h.employee_id = e.employee_id
+         AND h.period_id   = p_period_id;
+
+      -- ── the dates themselves ─────────────────────────────────
+      -- One row per unsubmitted DAY. INSERT ... WHERE NOT EXISTS rather than a
+      -- MERGE so a day the employee has already corrected is never reset by a
+      -- later run of the job -- losing somebody's correction because the
+      -- scheduler ran twice would be unforgivable and entirely silent.
+      INSERT INTO oc_ts_salary_hold_day
+             (hold_id, employee_id, period_id, work_date, ts_week_id,
+              expected_hours, day_status, created_by)
+      SELECT h.hold_id, e.employee_id, p_period_id, d.entry_date, d.ts_week_id,
+             d.std_hours, 'Held', p_actor
+        FROM (SELECT en.ts_week_id, en.entry_date,
+                     NVL(MAX(en.standard_hours),0) AS std_hours
+                FROM oc_ts_entry en
+                JOIN oc_ts_week  wk ON wk.ts_week_id = en.ts_week_id
+               WHERE wk.employee_id  = e.employee_id
+                 AND wk.period_id    = p_period_id
+                 AND wk.submitted_on IS NULL
+               GROUP BY en.ts_week_id, en.entry_date
+              HAVING NVL(MAX(en.standard_hours),0) > 0) d
+        CROSS JOIN (SELECT hold_id FROM oc_ts_salary_hold
+                     WHERE employee_id = e.employee_id
+                       AND period_id   = p_period_id) h
+       WHERE NOT EXISTS (SELECT 1 FROM oc_ts_salary_hold_day x
+                          WHERE x.employee_id = e.employee_id
+                            AND x.work_date   = d.entry_date);
       v_up := v_up + 1;
     END LOOP;
+
+    -- The window closing is a state, not an absence of one. Without this a
+    -- lapsed row stays 'Held' for ever and nothing distinguishes "still has
+    -- time" from "too late" except arithmetic the reader has to do.
+    UPDATE oc_ts_salary_hold_day d
+       SET d.day_status = 'Expired', d.updated_by = p_actor,
+           d.updated_on = SYSTIMESTAMP
+     WHERE d.period_id  = p_period_id
+       AND d.day_status IN ('Held','Rejected')
+       AND EXISTS (SELECT 1 FROM oc_ts_salary_hold h
+                    WHERE h.hold_id = d.hold_id
+                      AND TRUNC(SYSDATE) > h.window_expires_on);
 
     -- An employee with no employee-caused default left is released
     -- automatically: the reason for the hold has gone. Same filter as above —
@@ -2059,19 +2133,143 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
        SET salary_status = 'Released',
            released_by   = p_actor,
            released_on   = SYSTIMESTAMP,
-           remarks       = 'Auto-released: no defaulted weeks remain.'
+           remarks       = 'Auto-released: every week has now been submitted.'
      WHERE h.period_id     = p_period_id
        AND h.salary_status = 'Held'
        AND NOT EXISTS (SELECT 1 FROM oc_ts_week w
-                        WHERE w.employee_id = h.employee_id
-                          AND w.period_id   = h.period_id
-                          AND w.week_status = 'Defaulted'
-                          AND w.defaulted_by = 'EMPLOYEE');
+                        WHERE w.employee_id  = h.employee_id
+                          AND w.period_id    = h.period_id
+                          AND w.submitted_on IS NULL);
 
     finish_job(v_job, v_read, v_up, 0);
     COMMIT;
     RETURN v_job;
   END run_salary_stopping;
+
+
+  -- The employee corrects one held DATE. PROC-007, functional owner 10-Aug-2026:
+  -- "displayed to employee for a period of 60 calendar days to correct by date
+  -- and get it approved".
+  --
+  -- Deliberately takes no actor_emp_id and calls no assert_not_self. RULE-015
+  -- stops a manager APPROVING their own time; it has nothing to say about a
+  -- person entering their own hours, which is what every employee does on the
+  -- timesheet anyway. The control here is the manager's sign-off in
+  -- decide_salary_hold_day, not a restriction on who may type.
+  PROCEDURE correct_salary_hold_day(
+    p_hold_day_id IN NUMBER,
+    p_hours       IN NUMBER,
+    p_reason      IN VARCHAR2,
+    p_actor       IN VARCHAR2 DEFAULT 'VBCS_USER')
+  IS
+    v_status  oc_ts_salary_hold_day.day_status%TYPE;
+    v_expires DATE;
+    v_date    DATE;
+  BEGIN
+    SELECT d.day_status, h.window_expires_on, d.work_date
+      INTO v_status, v_expires, v_date
+      FROM oc_ts_salary_hold_day d
+      JOIN oc_ts_salary_hold     h ON h.hold_id = d.hold_id
+     WHERE d.hold_day_id = p_hold_day_id;
+
+    -- Already decided. Correcting an approved day would silently reopen a
+    -- release payroll has already been told about.
+    IF v_status NOT IN ('Held','Rejected') THEN
+      RAISE_APPLICATION_ERROR(-20005,
+        'This date is ' || v_status || ' and can no longer be corrected.');
+    END IF;
+
+    -- The 60 days are the whole point of the window; past it this is a payroll
+    -- conversation, not a self-service one.
+    IF v_expires IS NOT NULL AND TRUNC(SYSDATE) > v_expires THEN
+      RAISE_APPLICATION_ERROR(-20006,
+        'The 60-day correction window for this date closed on '
+        || TO_CHAR(v_expires,'DD-Mon-YYYY') || '. Contact payroll.');
+    END IF;
+
+    IF p_hours IS NULL OR p_hours < 0 OR p_hours > 24 THEN
+      RAISE_APPLICATION_ERROR(-20003, 'Enter between 0 and 24 hours.');
+    END IF;
+
+    IF p_reason IS NULL OR LENGTH(TRIM(p_reason)) = 0 THEN
+      RAISE_APPLICATION_ERROR(-20013,
+        'Give a reason for the correction — your manager approves it on the '
+        || 'strength of it.');
+    END IF;
+
+    UPDATE oc_ts_salary_hold_day
+       SET day_status        = 'Corrected',
+           corrected_hours   = p_hours,
+           correction_reason = p_reason,
+           corrected_by      = p_actor,
+           corrected_on      = SYSTIMESTAMP,
+           reject_remarks    = NULL,
+           updated_by        = p_actor,
+           updated_on        = SYSTIMESTAMP
+     WHERE hold_day_id = p_hold_day_id;
+  END correct_salary_hold_day;
+
+
+  -- The manager's decision. Approve frees that date; Reject sends it back and
+  -- it stays held, which is why Rejected is still a correctable state above.
+  PROCEDURE decide_salary_hold_day(
+    p_hold_day_id  IN NUMBER,
+    p_approve      IN VARCHAR2,
+    p_remarks      IN VARCHAR2 DEFAULT NULL,
+    p_actor_emp_id IN VARCHAR2,
+    p_actor        IN VARCHAR2 DEFAULT 'VBCS_USER')
+  IS
+    v_emp    VARCHAR2(50);
+    v_status oc_ts_salary_hold_day.day_status%TYPE;
+    v_hold   NUMBER;
+    v_left   NUMBER;
+  BEGIN
+    SELECT employee_id, day_status, hold_id
+      INTO v_emp, v_status, v_hold
+      FROM oc_ts_salary_hold_day
+     WHERE hold_day_id = p_hold_day_id;
+
+    -- RULE-015 applies here: this IS an approval.
+    assert_not_self(v_emp, p_actor_emp_id);
+
+    IF v_status <> 'Corrected' THEN
+      RAISE_APPLICATION_ERROR(-20005,
+        'Only a corrected date can be decided. This one is ' || v_status || '.');
+    END IF;
+
+    IF NVL(p_approve,'N') = 'Y' THEN
+      UPDATE oc_ts_salary_hold_day
+         SET day_status = 'Approved', approved_by = p_actor_emp_id,
+             approved_on = SYSTIMESTAMP, updated_by = p_actor,
+             updated_on = SYSTIMESTAMP
+       WHERE hold_day_id = p_hold_day_id;
+    ELSE
+      IF p_remarks IS NULL OR LENGTH(TRIM(p_remarks)) = 0 THEN
+        RAISE_APPLICATION_ERROR(-20013,
+          'Say why it is being sent back (RULE-013).');
+      END IF;
+      UPDATE oc_ts_salary_hold_day
+         SET day_status = 'Rejected', reject_remarks = p_remarks,
+             approved_by = NULL, approved_on = NULL,
+             updated_by = p_actor, updated_on = SYSTIMESTAMP
+       WHERE hold_day_id = p_hold_day_id;
+    END IF;
+
+    -- When every held date is approved the hold itself has nothing left to
+    -- hold, so it releases. Done here rather than waiting for the nightly job:
+    -- this is somebody's pay, and "it will clear tonight" is not good enough.
+    SELECT COUNT(*) INTO v_left
+      FROM oc_ts_salary_hold_day
+     WHERE hold_id = v_hold AND day_status <> 'Approved';
+
+    IF v_left = 0 THEN
+      UPDATE oc_ts_salary_hold
+         SET salary_status = 'Released', released_by = p_actor_emp_id,
+             released_on = SYSTIMESTAMP,
+             remarks = 'Released: every held date corrected and approved.'
+       WHERE hold_id = v_hold AND salary_status = 'Held';
+    END IF;
+  END decide_salary_hold_day;
 
 
   PROCEDURE release_salary_hold(

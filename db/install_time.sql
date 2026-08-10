@@ -226,6 +226,23 @@ PROMPT >>> 13 several periods may be Open (RULE-017 relaxed)
 @@13_open_periods.sql
 PROMPT >>> 14 invoice annexure over the accrual hand-off
 @@14_invoice_annexure.sql
+PROMPT >>> 15 salary stopping, day-wise (PROC-007 revised)
+@@15_salary_hold_days.sql
+
+-- RECOMPILE, and it is not optional on a fresh schema.
+--
+-- OC_TIME_PKG is created at step 09, but run_salary_stopping and the two
+-- correction procedures write OC_TS_SALARY_HOLD_DAY, which does not exist until
+-- step 15 above. On an existing schema the table is already there and 09
+-- compiles clean; on a FIRST install the body compiles INVALID and nothing
+-- afterwards would touch it, so the first call to any salary-stopping procedure
+-- fails with ORA-04063 long after the installer reported success.
+--
+-- Recompiling here rather than renumbering keeps the file numbers in
+-- chronological order, which is how every other script in this module reads.
+PROMPT >>> recompiling OC_TIME_PKG against the new table
+ALTER PACKAGE oc_time_pkg COMPILE BODY;
+SHOW ERRORS
 
 -- ── REST surface ─────────────────────────────────────────────
 PROMPT >>> 12 ORDS oc.time            (employee)

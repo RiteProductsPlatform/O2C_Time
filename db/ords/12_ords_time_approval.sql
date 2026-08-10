@@ -37,6 +37,8 @@
 --   GET  llc/cover/:projectId/:absenceDate       eligible cover LOV
 --   POST llc/:id/assign                          assign a cover
 --   POST llc/:id/approve                         approve the coverage
+--   GET  salaryhold/queue/:managerId             corrections awaiting me
+--   POST salaryhold/day/:holdDayId/decide        approve/reject one date
 --   GET  salaryhold/:periodId                    defaulted employees
 --   POST salaryhold/run/:periodId                run the salary-stopping job
 --   POST salaryhold/:id/release                  release a hold
@@ -1058,6 +1060,67 @@ BEGIN
         oc_time_pkg.approve_cover(:id, :actorEmpId, NVL(:actor,'VBCS_USER'));
         COMMIT; :status_code := 200;
         HTP.P('{"llcId":' || :id || ',"llcStatus":"Approved","billed":true}');
+      EXCEPTION WHEN OTHERS THEN
+        ROLLBACK;
+        :status_code := CASE WHEN SQLCODE BETWEEN -20025 AND -20001 THEN 400 ELSE 500 END;
+        HTP.P('{"error":"' ||
+              REPLACE(REPLACE(SQLERRM,'ORA-'||LTRIM(TO_CHAR(ABS(SQLCODE)))||': ',''),'"','\"')
+              || '"}');
+      END;
+    ]');
+  COMMIT;
+END;
+/
+
+-- ── Salary stopping, day-wise (PROC-007, revised 10-Aug-2026) ─
+-- GET salaryhold/queue/:managerId — only corrections waiting on a decision. A
+-- queue that lists everything ever held is a report, not a queue, and stops
+-- being opened.
+BEGIN
+  ORDS.DEFINE_TEMPLATE(p_module_name => 'oc.time.approval',
+                       p_pattern => 'salaryhold/queue/:managerId');
+  ORDS.DEFINE_HANDLER(
+    p_module_name => 'oc.time.approval', p_pattern => 'salaryhold/queue/:managerId',
+    p_method => 'GET',
+    p_source_type => ORDS.source_type_collection_feed,
+    p_source => q'[
+      SELECT hold_day_id, employee_id, employee_name, worker_type,
+             period_id, period_name, work_date, expected_hours,
+             corrected_hours, correction_reason, corrected_on, ts_week_id
+        FROM v_oc_ts_salary_hold_queue
+       WHERE manager_emp_id = :managerId
+       ORDER BY employee_name, work_date
+    ]');
+  COMMIT;
+END;
+/
+
+-- POST salaryhold/day/:holdDayId/decide — approve or reject one corrected date.
+BEGIN
+  ORDS.DEFINE_TEMPLATE(p_module_name => 'oc.time.approval',
+                       p_pattern => 'salaryhold/day/:holdDayId/decide');
+  ORDS.DEFINE_HANDLER(
+    p_module_name => 'oc.time.approval',
+    p_pattern => 'salaryhold/day/:holdDayId/decide', p_method => 'POST',
+    p_source_type => ORDS.source_type_plsql,
+    p_source => q'[
+      DECLARE v_status VARCHAR2(20); v_hold NUMBER; v_sal VARCHAR2(20);
+      BEGIN
+        oc_time_pkg.decide_salary_hold_day(
+          p_hold_day_id  => :holdDayId,
+          p_approve      => NVL(:approve,'N'),
+          p_remarks      => :remarks,
+          p_actor_emp_id => :actorEmpId,
+          p_actor        => NVL(:actor,'VBCS_USER'));
+        SELECT d.day_status, d.hold_id, h.salary_status
+          INTO v_status, v_hold, v_sal
+          FROM oc_ts_salary_hold_day d
+          JOIN oc_ts_salary_hold h ON h.hold_id = d.hold_id
+         WHERE d.hold_day_id = :holdDayId;
+        COMMIT;
+        :status_code := 200;
+        HTP.P('{"holdDayId":' || :holdDayId || ',"dayStatus":"' || v_status ||
+              '","holdId":' || v_hold || ',"salaryStatus":"' || v_sal || '"}');
       EXCEPTION WHEN OTHERS THEN
         ROLLBACK;
         :status_code := CASE WHEN SQLCODE BETWEEN -20025 AND -20001 THEN 400 ELSE 500 END;
