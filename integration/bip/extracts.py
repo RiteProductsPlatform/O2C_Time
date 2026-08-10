@@ -21,7 +21,26 @@ so without it you get every historical version of every row.
 # ── EFFECTIVE-DATE PREDICATE ─────────────────────────────────────────────
 # Fusion passes report parameters as strings; TO_DATE keeps the comparison a
 # date one rather than an implicit-conversion accident.
-ED = "TO_DATE(:P_EFFECTIVE_DATE,'YYYY-MM-DD')"
+# BOTH PARAMETERS ARE OPTIONAL, and that is a requirement, not a convenience.
+#
+# OC_TIME_SYNC_CONFIG carries exactly ONE value for INT 002 to pass:
+# LASTSYNC_DATE. The reports declared TWO binds, and BIP declares every
+# parameter with defaultValue="" -- which in Oracle IS NULL. So a report run by
+# OIC got P_EFFECTIVE_DATE = NULL, every "NULL BETWEEN x AND y" evaluated
+# false, and the extract returned ZERO ROWS WHILE REPORTING SUCCESS. Nine of
+# eleven feeds. Exactly the silent-zero this module's docstring warns about,
+# and invisible from the sync status.
+#
+# The NVL defaults make the correct behaviour the DEFAULT behaviour:
+#
+#   P_EFFECTIVE_DATE unset -> today on the Fusion database
+#   P_LAST_SYNC      unset -> 1900, i.e. a full load
+#
+# Passing either still overrides, so --effective-date and --since keep working
+# for pinned, reproducible test runs. But a caller that knows nothing about
+# these parameters now gets "everything, as of now", which is the only sane
+# reading of no arguments -- and not zero rows.
+ED = "NVL(TO_DATE(:P_EFFECTIVE_DATE,'YYYY-MM-DD'), TRUNC(SYSDATE))"
 
 # Which projects the module cares about at all.
 #
@@ -739,7 +758,11 @@ VERIFIED = [e for e in ALL_EXTRACTS if e.get("verified", True)]
 # The monthly full refresh does not fix that either -- it re-asserts what exists
 # and never removes what does not. Reconciliation is a separate problem; do not
 # read "full refresh" as "self-correcting" for deletes.
-LAST_SYNC = "TO_DATE(:P_LAST_SYNC,'YYYY-MM-DD')"
+# 1900, not NULL. LASTSYNC_DATE is nullable and IS null before the first
+# successful run -- so the very first sync, the one that must load everything,
+# was the one guaranteed to compare against NULL and return nothing. It would
+# have read as "no changes" on a completely empty schema.
+LAST_SYNC = "NVL(TO_DATE(:P_LAST_SYNC,'YYYY-MM-DD'), DATE '1900-01-01')"
 
 # alias -> is this alias effective-dated IN THIS QUERY (does it contribute an
 # EFFECTIVE_START_DATE that can move a row in or out of the as-of window)?
