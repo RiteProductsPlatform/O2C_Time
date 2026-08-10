@@ -181,10 +181,10 @@ DECLARE
                        || 'Needs WORKERS and PROJECTS already loaded.',
           'OC_TIME_ALLOCATION', 40, 'Both', 'Y'),
     t_row('CALENDAR',     'Corporate working days and holidays (INT-004/005).',
-          'OC_TIME_CALENDAR',   50, 'Monthly', 'Y'),
+          'OC_TIME_CALENDAR',   50, 'Both', 'Y'),
     t_row('WORKER_SHIFTS','Per-person per-day shift, the SHIFT calendar layer. '
                        || 'Highest precedence, so a shift day beats a holiday.',
-          'OC_TIME_CALENDAR',   60, 'Monthly', 'Y'),
+          'OC_TIME_CALENDAR',   60, 'Both', 'Y'),
     -- ── registered, deliberately not scheduled ───────────────
     t_row('ABSENCES',     'OFF: absence is read LIVE per person per date at page '
                        || 'load, not synced (decision 09-Aug-2026). The model is '
@@ -228,6 +228,20 @@ BEGIN
                       || 'WHERE p.project_number = x.PROJECT_NUMBER)'
    WHERE bip_report_name IN ('TASKS','ALLOCATIONS')
      AND fk_column IS NULL;
+
+  -- CALENDAR and WORKER_SHIFTS run on BOTH schedules, not Monthly only.
+  --
+  -- A holiday added mid-month, a shift reassigned, a working pattern changed --
+  -- each moves the hours a default produces for days that have not happened
+  -- yet, and on Monthly-only they would not be seen until the next month was
+  -- built. By then the days they affect are already populated with the old
+  -- calendar, and correcting them is an adjustment rather than a prepopulation.
+  --
+  -- Cheap to do daily: 142 and 2351 rows, and both are incremental.
+  UPDATE oc_time_sync_config
+     SET schedule_tag = 'Both'
+   WHERE bip_report_name IN ('CALENDAR','WORKER_SHIFTS')
+     AND schedule_tag <> 'Both';
 
   -- Match what UK_OC_TTSK_WBS enforces, not what discovery happens to find.
   UPDATE oc_time_sync_config
