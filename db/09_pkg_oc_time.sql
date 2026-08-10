@@ -263,7 +263,8 @@ CREATE OR REPLACE PACKAGE oc_time_pkg AS
   -- ── Salary stopping (PROC-007) ─────────────────────────────
   FUNCTION run_salary_stopping(
     p_period_id IN NUMBER,
-    p_actor     IN VARCHAR2 DEFAULT 'SCHEDULER') RETURN NUMBER;     -- job_run_id
+    p_actor     IN VARCHAR2 DEFAULT 'SCHEDULER',
+    p_from      IN DATE     DEFAULT NULL) RETURN NUMBER;     -- job_run_id
 
   PROCEDURE release_salary_hold(
     p_hold_id      IN NUMBER,
@@ -2107,7 +2108,8 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
   -- one Defaulted week. 'Submitted / awaiting approval' does NOT hold pay.
   FUNCTION run_salary_stopping(
     p_period_id IN NUMBER,
-    p_actor     IN VARCHAR2 DEFAULT 'SCHEDULER') RETURN NUMBER
+    p_actor     IN VARCHAR2 DEFAULT 'SCHEDULER',
+    p_from      IN DATE     DEFAULT NULL) RETURN NUMBER
   IS
     v_job  NUMBER;
     v_read NUMBER := 0;
@@ -2127,10 +2129,42 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
     --   * never in the future, whenever the job is actually run
     -- and TRUNC(SYSDATE) alone if the period has no payroll cut-off set.
     v_upto DATE;
+    -- THE PAYROLL PERIOD IS NOT THE CALENDAR MONTH, and scoping this job by
+    -- PERIOD_ID was wrong (corrected 10-Aug-2026).
+    --
+    -- Payroll for "July" runs roughly 26-Jun to 26-Jul. So the window crosses
+    -- a calendar boundary in both directions: 26-30 June belong to the July
+    -- payroll run but to the JUNE period row, and 27-31 July belong to the
+    -- NEXT run. Filtering on w.period_id = p_period_id therefore held the wrong
+    -- days at both ends -- it missed the late-June days entirely and swept in
+    -- end-of-July days that payroll had not reached.
+    --
+    -- The window is derived from consecutive payroll cut-offs rather than a new
+    -- column, because that is already the fact that defines it: the run covers
+    -- everything after the last cut-off up to this one. When the accrual
+    -- control period arrives with an explicit start date, p_from below is where
+    -- it plugs in and nothing else changes.
+    v_from DATE;
   BEGIN
     SELECT LEAST(NVL(payroll_cutoff, TRUNC(SYSDATE)), TRUNC(SYSDATE))
       INTO v_upto
       FROM oc_time_period WHERE period_id = p_period_id;
+
+    IF p_from IS NOT NULL THEN
+      v_from := p_from;
+    ELSE
+      -- The day after the previous period's payroll cut-off. NVL to the start
+      -- of this period when there is no earlier cut-off to chain from, so a
+      -- first run is bounded rather than unbounded.
+      SELECT NVL(MAX(prev.payroll_cutoff) + 1,
+                 (SELECT start_date FROM oc_time_period WHERE period_id = p_period_id))
+        INTO v_from
+        FROM oc_time_period prev
+       WHERE prev.payroll_cutoff IS NOT NULL
+         AND prev.payroll_cutoff < (SELECT NVL(payroll_cutoff, TRUNC(SYSDATE))
+                                      FROM oc_time_period
+                                     WHERE period_id = p_period_id);
+    END IF;
 
     v_job := start_job('Salary Stopping', 'SalaryStopping',
                        p_period_id, TRUNC(SYSDATE), NULL, p_actor);
@@ -2164,12 +2198,12 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
                               THEN w.total_hours ELSE 0 END)     AS default_hrs
                 FROM oc_ts_week     w
                 JOIN oc_time_worker k ON k.employee_id = w.employee_id
-               WHERE w.period_id = p_period_id
-                 AND k.status    = 'Active'
-                 -- Only weeks that have actually started by the bound. Without
-                 -- this an employee whose only unsubmitted week is still in the
-                 -- future gets a hold header with no dates under it.
+               WHERE k.status = 'Active'
+                 -- Any week OVERLAPPING the payroll window, whichever calendar
+                 -- period it belongs to. Overlap, not containment: a week that
+                 -- straddles the cut-off contributes its earlier days.
                  AND w.week_start <= v_upto
+                 AND w.week_end   >= v_from
                GROUP BY w.employee_id
               HAVING SUM(CASE WHEN w.submitted_on IS NULL THEN 1 ELSE 0 END) > 0)
     LOOP
@@ -2220,9 +2254,10 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
                 FROM oc_ts_entry en
                 JOIN oc_ts_week  wk ON wk.ts_week_id = en.ts_week_id
                WHERE wk.employee_id  = e.employee_id
-                 AND wk.period_id    = p_period_id
                  AND wk.submitted_on IS NULL
-                 -- Strictly before: a day cannot be late on the day itself.
+                 -- The payroll window, not the calendar month. Strictly before
+                 -- the cut-off: a day cannot be late on the day itself.
+                 AND en.entry_date  >= v_from
                  AND en.entry_date   < v_upto
                GROUP BY en.ts_week_id, en.entry_date
               HAVING NVL(MAX(en.standard_hours),0) > 0) d
@@ -2260,9 +2295,9 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
        AND h.salary_status = 'Held'
        AND NOT EXISTS (SELECT 1 FROM oc_ts_week w
                         WHERE w.employee_id  = h.employee_id
-                          AND w.period_id    = h.period_id
                           AND w.submitted_on IS NULL
-                          AND w.week_start  <= v_upto);
+                          AND w.week_start  <= v_upto
+                          AND w.week_end    >= v_from);
 
     finish_job(v_job, v_read, v_up, 0);
     COMMIT;

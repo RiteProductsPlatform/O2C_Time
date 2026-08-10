@@ -92,11 +92,43 @@ PROMPT ============================================================
 -- BEFORE RE-RUNNING THE INSTALLER ON AN ENVIRONMENT WITH REAL CUT-OFFS, either
 -- change the date here or comment this statement out. Everything else in the
 -- installer is idempotent; this one is opinionated.
-UPDATE oc_time_period
-   SET delivery_cutoff = DATE '2026-09-30', updated_by = 'ADMIN'
- WHERE period_year = 2026 AND period_month = 7
-   AND delivery_cutoff < DATE '2026-09-30';
-COMMIT;
+-- DISABLED 10-Aug-2026. The delivery cut-off is not ours to invent: it comes
+-- from the ACCRUAL close calendar, and July's real value is around 10-Aug, not
+-- 30-Sep. Leaving this active meant every re-run of the installer silently
+-- replaced a correct date with a testing one -- and the guard did not save it,
+-- because it only skipped values already LATER than 30-Sep.
+--
+-- Re-enable only with the real date, or better, set the cut-offs from the
+-- accrual calendar and delete this block.
+--
+-- UPDATE oc_time_period
+--    SET delivery_cutoff = DATE '2026-09-30', updated_by = 'ADMIN'
+--  WHERE period_year = 2026 AND period_month = 7
+--    AND delivery_cutoff < DATE '2026-09-30';
+-- COMMIT;
+
+-- Report what the cut-offs actually are, so a July that is Open but read-only
+-- is diagnosable rather than mysterious. Editability is delivery-cut-off
+-- driven (RULE-007), and salary stopping is payroll-cut-off driven -- the two
+-- are different dates and sit either side of month end.
+DECLARE
+  CURSOR c IS
+    SELECT period_name, status,
+           TO_CHAR(delivery_cutoff,'DD-Mon-YYYY') AS del,
+           TO_CHAR(payroll_cutoff,'DD-Mon-YYYY')  AS pay
+      FROM oc_time_period
+     WHERE period_year = 2026 AND period_month IN (6, 7, 8)
+     ORDER BY period_month;
+BEGIN
+  DBMS_OUTPUT.PUT_LINE('period    status  delivery      payroll');
+  FOR r IN c LOOP
+    DBMS_OUTPUT.PUT_LINE(RPAD(r.period_name,10) || RPAD(r.status,8)
+      || RPAD(NVL(r.del,'(not set)'),14) || NVL(r.pay,'(not set)'));
+  END LOOP;
+  DBMS_OUTPUT.PUT_LINE(
+    'If delivery is in the past the month is Open and READ-ONLY (RULE-007).');
+END;
+/
 
 PROMPT ============================================================
 PROMPT [4/4] Populate AUG-2026
