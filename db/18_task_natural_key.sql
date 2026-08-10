@@ -103,35 +103,82 @@ COLUMN table_name      FORMAT A22
 COLUMN constraint_name FORMAT A24
 COLUMN cols            FORMAT A44
 
-COLUMN kind FORMAT A11
+-- IN PL/SQL, NOT SQL. USER_IND_EXPRESSIONS.COLUMN_EXPRESSION is a LONG, and a
+-- LONG cannot appear inside NVL, LISTAGG, GROUP BY or virtually any SQL
+-- expression -- only bare in a SELECT list. Wrapping it in NVL() alongside a
+-- VARCHAR2 column is ORA-00932 "inconsistent datatypes: expected LONG got CHAR",
+-- which reads like a column mismatch and is really "you may not touch a LONG
+-- here at all". PL/SQL assigns a LONG to VARCHAR2(32760) implicitly, so reading
+-- it one row at a time works where the set-based query cannot.
+--
+-- Same family as the SQL-only / PL/SQL-only traps already in CLAUDE.md section 5:
+-- check which side of that line a thing lives on before writing the statement.
+SET SERVEROUTPUT ON SIZE UNLIMITED
 
-SELECT c.table_name, 'CONSTRAINT' AS kind, c.constraint_name AS name,
-       LISTAGG(cc.column_name, ', ')
-         WITHIN GROUP (ORDER BY cc.position) AS cols
-  FROM user_constraints c
-  JOIN user_cons_columns cc ON cc.constraint_name = c.constraint_name
- WHERE c.constraint_type = 'U'
-   AND c.table_name IN ('OC_TIME_WORKER','OC_TIME_PROJECT','OC_TIME_TASK',
-                        'OC_TIME_ALLOCATION','OC_TIME_ABSENCE','OC_TIME_CALENDAR')
- GROUP BY c.table_name, c.constraint_name
-UNION ALL
--- The half the loader could not see. Function-based columns show as SYS_NCnnn
--- in USER_IND_COLUMNS, so join out to USER_IND_EXPRESSIONS for the expression.
-SELECT i.table_name, 'INDEX', i.index_name,
-       LISTAGG(NVL(e.column_expression, ic.column_name), ', ')
-         WITHIN GROUP (ORDER BY ic.column_position)
-  FROM user_indexes i
-  JOIN user_ind_columns ic ON ic.index_name = i.index_name
-  LEFT JOIN user_ind_expressions e
-         ON e.index_name = ic.index_name
-        AND e.column_position = ic.column_position
- WHERE i.uniqueness = 'UNIQUE'
-   AND i.table_name IN ('OC_TIME_WORKER','OC_TIME_PROJECT','OC_TIME_TASK',
-                        'OC_TIME_ALLOCATION','OC_TIME_ABSENCE','OC_TIME_CALENDAR')
-   AND NOT EXISTS (SELECT 1 FROM user_constraints c2
-                    WHERE c2.index_name = i.index_name)
- GROUP BY i.table_name, i.index_name
- ORDER BY 1, 2;
+DECLARE
+  v_expr VARCHAR2(4000);
+  v_cols VARCHAR2(4000);
+BEGIN
+  DBMS_OUTPUT.PUT_LINE(RPAD('TABLE', 22) || RPAD('KIND', 12) ||
+                       RPAD('NAME', 24) || 'COLUMNS');
+  DBMS_OUTPUT.PUT_LINE(RPAD('-', 96, '-'));
+
+  -- Unique CONSTRAINTS: what the loader's discovery CAN see.
+  FOR c IN (
+    SELECT c.table_name, c.constraint_name,
+           LISTAGG(cc.column_name, ', ')
+             WITHIN GROUP (ORDER BY cc.position) AS cols
+      FROM user_constraints c
+      JOIN user_cons_columns cc ON cc.constraint_name = c.constraint_name
+     WHERE c.constraint_type = 'U'
+       AND c.table_name IN ('OC_TIME_WORKER','OC_TIME_PROJECT','OC_TIME_TASK',
+                            'OC_TIME_ALLOCATION','OC_TIME_ABSENCE',
+                            'OC_TIME_CALENDAR')
+     GROUP BY c.table_name, c.constraint_name
+     ORDER BY c.table_name, c.constraint_name)
+  LOOP
+    DBMS_OUTPUT.PUT_LINE(RPAD(c.table_name, 22) || RPAD('CONSTRAINT', 12) ||
+                         RPAD(c.constraint_name, 24) || c.cols);
+  END LOOP;
+
+  -- Unique INDEXES with no constraint behind them: what it CANNOT.
+  FOR i IN (
+    SELECT i.table_name, i.index_name
+      FROM user_indexes i
+     WHERE i.uniqueness = 'UNIQUE'
+       AND i.table_name IN ('OC_TIME_WORKER','OC_TIME_PROJECT','OC_TIME_TASK',
+                            'OC_TIME_ALLOCATION','OC_TIME_ABSENCE',
+                            'OC_TIME_CALENDAR')
+       AND NOT EXISTS (SELECT 1 FROM user_constraints c2
+                        WHERE c2.index_name = i.index_name)
+     ORDER BY i.table_name, i.index_name)
+  LOOP
+    v_cols := NULL;
+    FOR ic IN (SELECT column_name, column_position
+                 FROM user_ind_columns
+                WHERE index_name = i.index_name
+                ORDER BY column_position)
+    LOOP
+      v_expr := NULL;
+      -- A function-based column is stored as SYS_NCnnnnn$; the real expression
+      -- is only in USER_IND_EXPRESSIONS, as a LONG.
+      IF ic.column_name LIKE 'SYS\_NC%' ESCAPE '' THEN
+        BEGIN
+          SELECT column_expression INTO v_expr      -- LONG -> VARCHAR2, legal here
+            FROM user_ind_expressions
+           WHERE index_name = i.index_name
+             AND column_position = ic.column_position;
+        EXCEPTION WHEN NO_DATA_FOUND THEN v_expr := NULL;
+        END;
+      END IF;
+      v_cols := v_cols || ', ' || NVL(v_expr, ic.column_name);
+    END LOOP;
+
+    DBMS_OUTPUT.PUT_LINE(RPAD(i.table_name, 22) || RPAD('INDEX', 12) ||
+                         RPAD(i.index_name, 24) || LTRIM(v_cols, ', '));
+  END LOOP;
+END;
+/
 
 PROMPT
 PROMPT Every row marked INDEX is a key the loader's discovery CANNOT see. If a
