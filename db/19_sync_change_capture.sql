@@ -124,6 +124,31 @@ UPDATE oc_time_sync_config SET capture_changes = 'Y' WHERE capture_changes IS NU
 COMMIT;
 
 PROMPT ============================================================
+PROMPT [2b/4] OC_TIME_SYNC_FAILED.JOB_RUN_ID must accept NULL
+PROMPT ============================================================
+
+-- A failure that happened OUTSIDE a scheduled job is still a failure, and until
+-- now it could not be recorded: JOB_RUN_ID was NOT NULL, so every attempt to
+-- log one raised ORA-01400 -- from inside an exception handler, which then
+-- reported the logging table's constraint instead of whatever had actually gone
+-- wrong. Measured on the live endpoint: a CALENDAR load came back "Load into
+-- OC_TIME_CALENDAR failed: ORA-01400 ... OC_TIME_SYNC_FAILED.JOB_RUN_ID" and
+-- the real cause was simply gone.
+--
+-- The foreign key stays and still validates a job id when one is given; it just
+-- no longer insists there is one. ON DELETE CASCADE cannot reach rows with a
+-- null parent, which is correct -- they belong to no job to be cascaded from.
+BEGIN
+  EXECUTE IMMEDIATE 'ALTER TABLE oc_time_sync_failed MODIFY (job_run_id NULL)';
+  DBMS_OUTPUT.PUT_LINE('OC_TIME_SYNC_FAILED.JOB_RUN_ID is now nullable.');
+EXCEPTION WHEN OTHERS THEN
+  IF SQLCODE = -1451 THEN            -- already nullable
+    DBMS_OUTPUT.PUT_LINE('JOB_RUN_ID already nullable - skipped.');
+  ELSE RAISE; END IF;
+END;
+/
+
+PROMPT ============================================================
 PROMPT [3/4] Append-only: an audit that can be edited is not one
 PROMPT ============================================================
 

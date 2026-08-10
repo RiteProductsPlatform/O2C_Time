@@ -9265,9 +9265,13 @@ BEGIN
    -- Only actual differences. Re-reading an overlapping window is normal and
    -- most rows come back identical; recording those would bury the real
    -- changes under thousands of no-ops every single night.
+   -- DBMS_LOB.COMPARE, not <>. Two CLOBs cannot be compared with a relational
+   -- operator in SQL; Oracle wants the LOB package, and the failure surfaces at
+   -- RUN time from dynamic SQL rather than at compile time.
    || ' WHERE t.ROWID IS NULL '
-   || '    OR JSON_ARRAY(' || LTRIM(v_oldj, ',') || ' RETURNING CLOB) <> '
-   || '       JSON_ARRAY(' || LTRIM(v_newj, ',') || ' RETURNING CLOB)';
+   || '    OR DBMS_LOB.COMPARE('
+   || '         JSON_ARRAY(' || LTRIM(v_oldj, ',') || ' RETURNING CLOB),'
+   || '         JSON_ARRAY(' || LTRIM(v_newj, ',') || ' RETURNING CLOB)) != 0';
 
     BEGIN
       EXECUTE IMMEDIATE v_cap
@@ -9278,6 +9282,13 @@ BEGIN
       -- could not write an audit row helps nobody, but a SILENT failure to
       -- capture is exactly what this file exists to prevent -- so it is
       -- recorded where the other sync failures already are.
+      --
+      -- AND THE LOGGING ITSELF IS GUARDED. Without the inner handler this block
+      -- masked the very error it was reporting: OC_TIME_SYNC_FAILED.JOB_RUN_ID
+      -- was NOT NULL, the INSERT raised ORA-01400, that escaped, and the load
+      -- returned "Load into OC_TIME_CALENDAR failed: ORA-01400 ... JOB_RUN_ID"
+      -- -- naming the logging table for a fault in the capture, with the real
+      -- cause gone. An error handler that can raise is not one.
       DECLARE
         v_ce VARCHAR2(400) := SUBSTR(SQLERRM, 1, 400);
       BEGIN
@@ -9287,6 +9298,7 @@ BEGIN
                 'Before-image capture failed; the merge still ran, so the '
              || 'previous values for this batch are NOT recoverable: ' || v_ce,
                 -1);
+      EXCEPTION WHEN OTHERS THEN NULL;   -- see below
       END;
     END;
   END IF;
@@ -9525,6 +9537,31 @@ END;
 -- SHIFTS included -- a changed working day moves the hours a default produces.
 UPDATE oc_time_sync_config SET capture_changes = 'Y' WHERE capture_changes IS NULL;
 COMMIT;
+
+PROMPT ============================================================
+PROMPT [2b/4] OC_TIME_SYNC_FAILED.JOB_RUN_ID must accept NULL
+PROMPT ============================================================
+
+-- A failure that happened OUTSIDE a scheduled job is still a failure, and until
+-- now it could not be recorded: JOB_RUN_ID was NOT NULL, so every attempt to
+-- log one raised ORA-01400 -- from inside an exception handler, which then
+-- reported the logging table's constraint instead of whatever had actually gone
+-- wrong. Measured on the live endpoint: a CALENDAR load came back "Load into
+-- OC_TIME_CALENDAR failed: ORA-01400 ... OC_TIME_SYNC_FAILED.JOB_RUN_ID" and
+-- the real cause was simply gone.
+--
+-- The foreign key stays and still validates a job id when one is given; it just
+-- no longer insists there is one. ON DELETE CASCADE cannot reach rows with a
+-- null parent, which is correct -- they belong to no job to be cascaded from.
+BEGIN
+  EXECUTE IMMEDIATE 'ALTER TABLE oc_time_sync_failed MODIFY (job_run_id NULL)';
+  DBMS_OUTPUT.PUT_LINE('OC_TIME_SYNC_FAILED.JOB_RUN_ID is now nullable.');
+EXCEPTION WHEN OTHERS THEN
+  IF SQLCODE = -1451 THEN            -- already nullable
+    DBMS_OUTPUT.PUT_LINE('JOB_RUN_ID already nullable - skipped.');
+  ELSE RAISE; END IF;
+END;
+/
 
 PROMPT ============================================================
 PROMPT [3/4] Append-only: an audit that can be edited is not one
