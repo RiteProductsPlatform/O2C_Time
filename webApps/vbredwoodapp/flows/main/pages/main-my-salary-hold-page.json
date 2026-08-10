@@ -1,0 +1,99 @@
+{
+  "description": "PROC-007 \u2014 the employee's own held dates after the payroll cut-off. Read-only here: the correction is made by reopening the week in My Timesheet and resubmitting it, which is what the functional owner described (10-Aug-2026). Distinct from main-salary-stopping, which is the MANAGER's view of who is held.",
+  "variables": {
+    "busy": {
+      "type": "boolean",
+      "defaultValue": false,
+      "input": "none"
+    },
+    "loaded": {
+      "type": "boolean",
+      "defaultValue": false,
+      "input": "none",
+      "description": "Separates 'nothing held' from 'not fetched yet'. Without it the empty state shows for a moment on every visit and reads as good news that has not been established."
+    },
+    "holdRows": {
+      "type": "any[]",
+      "defaultValue": [],
+      "input": "none"
+    },
+    "holdADP": {
+      "type": "vb/ArrayDataProvider2",
+      "defaultValue": {
+        "data": "{{ $variables.holdRows }}",
+        "idAttribute": "holdDayId"
+      },
+      "description": "Page scope, so the array-linked binding is safe here \u2014 at APPLICATION scope it is evaluated during variable setup and leaves the ADP half-built."
+    },
+    "daysLeft": {
+      "type": "number",
+      "defaultValue": 0,
+      "input": "none",
+      "description": "Smallest days_left across the open rows. The banner counts down the tightest deadline, not an average."
+    },
+    "openCount": {
+      "type": "number",
+      "defaultValue": 0,
+      "input": "none"
+    },
+    "windowClosed": {
+      "type": "boolean",
+      "defaultValue": false,
+      "input": "none",
+      "description": "Every held date is past its 60 days. The page still lists them \u2014 hiding them would leave someone whose pay is held with no explanation anywhere."
+    }
+  },
+  "types": {
+    "holdRowType": {
+      "holdDayId": "number",
+      "workDate": "string",
+      "dayName": "string",
+      "tsWeekId": "number",
+      "periodName": "string",
+      "expectedHours": "number",
+      "dayStatus": "string",
+      "correctedHours": "number",
+      "correctionReason": "string",
+      "rejectRemarks": "string",
+      "salaryStatus": "string",
+      "windowExpiresOn": "string",
+      "daysLeft": "number",
+      "windowOpen": "string"
+    }
+  },
+  "chains": {},
+  "eventListeners": {
+    "vbEnter": {
+      "chains": [
+        {
+          "chain": "loadHoldsChain"
+        }
+      ]
+    },
+    "application:contextLoaded": {
+      "chains": [
+        {
+          "chain": "loadHoldsChain"
+        }
+      ]
+    },
+    "reloadHolds": {
+      "chains": [
+        {
+          "chain": "loadHoldsChain"
+        }
+      ]
+    },
+    "openWeek": {
+      "chains": [
+        {
+          "chain": "openWeekChain",
+          "parameters": {
+            "row": "{{ $current.data }}"
+          }
+        }
+      ]
+    }
+  },
+  "imports": {}
+}

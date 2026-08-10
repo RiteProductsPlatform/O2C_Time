@@ -1,0 +1,102 @@
+<div class="rw-page-full">
+
+  <h1 class="oj-typography-heading-lg">Salary on Hold</h1>
+  <p class="oj-typography-body-md oj-text-color-secondary">
+    Dates the payroll cut-off passed without a submitted timesheet. Reopen the
+    week, correct it and resubmit — your manager approves it as usual.
+  </p>
+
+  <!-- The one sentence that decides whether somebody acts today. Built in the
+       page module: S1 bars this much logic inside a binding. -->
+  <div :class="[[ $page.functions.bannerClass($variables.windowClosed,
+                                              $variables.loaded,
+                                              $variables.holdRows.length) ]]"
+       role="status">
+    <oj-bind-text value="[[ $page.functions.bannerMessage(
+                              $variables.openCount, $variables.daysLeft,
+                              $variables.windowClosed, $variables.loaded,
+                              $variables.holdRows.length) ]]"></oj-bind-text>
+  </div>
+
+  <oj-bind-if test="[[ $variables.loaded && $variables.holdRows.length > 0 ]]">
+    <div class="rw-ts">
+
+      <!-- Flex rows with ARIA roles, not <table>. An oj-bind-for-each inside
+           <tbody> is invalid HTML: the parser foster-parents it out of the
+           table and the generated cells render as a run of text above it while
+           the static headers collapse into one column. -->
+      <div class="rw-ts-head" role="row">
+        <span class="rw-ts-proj" role="columnheader">Date</span>
+        <span class="rw-ts-task" role="columnheader">Month</span>
+        <span class="rw-ts-tot"  role="columnheader">Expected</span>
+        <span class="rw-ts-tot"  role="columnheader">Submitted</span>
+        <span class="rw-ts-sub"  role="columnheader">Status</span>
+        <span class="rw-ts-act"  role="columnheader">Action</span>
+      </div>
+
+      <oj-bind-for-each data="[[ $variables.holdRows ]]">
+        <template data-oj-as="row">
+          <div class="rw-ts-row" role="row">
+
+            <span class="rw-ts-proj" role="cell">
+              <oj-bind-text value="[[ $application.functions.fmtDate(row.data.workDate) ]]"></oj-bind-text>
+              <span class="rw-ts-sys">
+                <oj-bind-text value="[[ row.data.dayName ]]"></oj-bind-text>
+              </span>
+            </span>
+
+            <span class="rw-ts-task" role="cell">
+              <oj-bind-text value="[[ row.data.periodName ]]"></oj-bind-text>
+            </span>
+
+            <span class="rw-ts-tot" role="cell">
+              <oj-bind-text value="[[ $application.functions.fmtHours(row.data.expectedHours) ]]"></oj-bind-text>
+            </span>
+
+            <span class="rw-ts-tot" role="cell">
+              <oj-bind-text value="[[ $application.functions.fmtHoursBlank(row.data.correctedHours) ]]"></oj-bind-text>
+            </span>
+
+            <span class="rw-ts-sub" role="cell">
+              <span :class="[[ $page.functions.dayStatusClass(row.data.dayStatus) ]]">
+                <oj-bind-text value="[[ row.data.dayStatus ]]"></oj-bind-text>
+              </span>
+              <span class="rw-ts-note">
+                <oj-bind-text value="[[ $page.functions.dayStatusHint(
+                                          row.data.dayStatus, row.data.windowOpen) ]]"></oj-bind-text>
+              </span>
+              <!-- A rejection without its reason is just a refusal (RULE-013). -->
+              <oj-bind-if test="[[ row.data.rejectRemarks ]]">
+                <span class="rw-ts-note">
+                  <oj-bind-text value="[[ row.data.rejectRemarks ]]"></oj-bind-text>
+                </span>
+              </oj-bind-if>
+            </span>
+
+            <span class="rw-ts-act" role="cell">
+              <!-- Only a row still inside its window gets a button. The server
+                   refuses the rest anyway; offering it would be a refusal
+                   waiting to happen. -->
+              <oj-bind-if test="[[ $page.functions.canReopen(row.data.windowOpen) ]]">
+                <oj-button chroming="callToAction"
+                           :aria-label="[[ $page.functions.reopenLabel(row.data.workDate) ]]"
+                           on-oj-action="[[ $listeners.openWeek ]]">
+                  <span>Open week</span>
+                </oj-button>
+              </oj-bind-if>
+            </span>
+
+          </div>
+        </template>
+      </oj-bind-for-each>
+
+    </div>
+  </oj-bind-if>
+
+  <oj-bind-if test="[[ $variables.loaded && $variables.holdRows.length === 0 ]]">
+    <div class="rw-ts-empty">
+      Nothing is held. Every week was submitted before the payroll cut-off.
+    </div>
+  </oj-bind-if>
+
+</div>

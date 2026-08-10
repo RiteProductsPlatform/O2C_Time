@@ -27,6 +27,10 @@ define([], () => {
     items: [
       { page: 'main-my-timesheet',      label: 'My Timesheet',       icon: 'oj-ux-ico-clock' },
       { page: 'main-client-timesheets', label: 'Client Timesheets',  icon: 'oj-ux-ico-attachment' },
+      // PROC-007, employee side. Under My Work, not Team: main-salary-stopping
+      // in the Team group is the MANAGER's list of who is held. Two pages over
+      // the same data, and the difference is whose pay it is.
+      { page: 'main-my-salary-hold',    label: 'Salary on Hold',     icon: 'oj-ux-ico-warning' },
     ],
   };
 

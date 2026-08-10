@@ -267,7 +267,7 @@
     "/oc/time/admin/accrual/pull/{periodYear}/{periodMonth}": {
       "get": {
         "operationId": "pullAccrual",
-        "summary": "THE ACCRUAL PULL — unprocessed interface rows for a month (INT-014)",
+        "summary": "THE ACCRUAL PULL \u2014 unprocessed interface rows for a month (INT-014)",
         "description": "Called by the O2C accrual application after month-end manager approval. Serves only unprocessed rows from successfully confirmed months, so the pull is resumable and never double-counts. The consumer must acknowledge each batch via ackAccrual.",
         "x-vb": {
           "actionHint": "getMany"
@@ -1210,7 +1210,7 @@
     "/oc/time/admin/sync/task": {
       "post": {
         "operationId": "syncTask",
-        "summary": "INT-002 master-data upsert. PPM WBS tasks, carrying EXPENDITURE_TYPE (POET’s E). Load PROJECTS first - the FK is to project. Chunked: omit jobRunId on the first call, pass it back on later ones so the load is one job row; final=Y closes it. Bad rows go to OC_TIME_SYNC_FAILED rather than aborting the chunk.",
+        "summary": "INT-002 master-data upsert. PPM WBS tasks, carrying EXPENDITURE_TYPE (POET\u2019s E). Load PROJECTS first - the FK is to project. Chunked: omit jobRunId on the first call, pass it back on later ones so the load is one job row; final=Y closes it. Bad rows go to OC_TIME_SYNC_FAILED rather than aborting the chunk.",
         "x-vb": {
           "actionHint": "create"
         },
@@ -1256,7 +1256,7 @@
     "/oc/time/admin/sync/worker": {
       "post": {
         "operationId": "syncWorker",
-        "summary": "INT-001 master-data upsert. HCM workers. APP_ROLE is never overwritten - it is this app’s entitlement, not HCM’s. Chunked: omit jobRunId on the first call, pass it back on later ones so the load is one job row; final=Y closes it. Bad rows go to OC_TIME_SYNC_FAILED rather than aborting the chunk.",
+        "summary": "INT-001 master-data upsert. HCM workers. APP_ROLE is never overwritten - it is this app\u2019s entitlement, not HCM\u2019s. Chunked: omit jobRunId on the first call, pass it back on later ones so the load is one job row; final=Y closes it. Bad rows go to OC_TIME_SYNC_FAILED rather than aborting the chunk.",
         "x-vb": {
           "actionHint": "create"
         },
@@ -3585,7 +3585,7 @@
       "get": {
         "operationId": "getTaskLov",
         "summary": "Task LOV: project WBS + the common non-billable tasks (RULE-010)",
-        "description": "Leave and Billing Loss are excluded — they are system-maintained (RULE-008, RULE-009).",
+        "description": "Leave and Billing Loss are excluded \u2014 they are system-maintained (RULE-008, RULE-009).",
         "x-vb": {
           "actionHint": "getMany"
         },
@@ -3765,7 +3765,7 @@
       "post": {
         "operationId": "revokeWeek",
         "summary": "Pull a submitted week back so the employee can correct it",
-        "description": "Submitted only. Once a manager has approved, undoing it is their send-back, not the employee’s revoke — the package refuses with -20021. A closed period refuses with -20022; correct that through a backdated adjustment (RULE-019).",
+        "description": "Submitted only. Once a manager has approved, undoing it is their send-back, not the employee\u2019s revoke \u2014 the package refuses with -20021. A closed period refuses with -20022; correct that through a backdated adjustment (RULE-019).",
         "parameters": [
           {
             "name": "id",
@@ -3805,6 +3805,137 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/oc/time/salaryhold/mine/{employeeId}": {
+      "get": {
+        "operationId": "getMySalaryHold",
+        "summary": "My held dates after the payroll cut-off (PROC-007). One row per date the timesheet was not submitted, with the days left in the 60-day correction window.",
+        "x-vb": {
+          "actionHint": "getMany"
+        },
+        "parameters": [
+          {
+            "name": "employeeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The signed-in worker. Keyed on the person, never on a period alone - this returns somebody's pay status."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Held dates, earliest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "hold_day_id": {
+                            "type": "integer"
+                          },
+                          "work_date": {
+                            "type": "string"
+                          },
+                          "day_name": {
+                            "type": "string"
+                          },
+                          "ts_week_id": {
+                            "type": "integer"
+                          },
+                          "period_name": {
+                            "type": "string"
+                          },
+                          "expected_hours": {
+                            "type": "number"
+                          },
+                          "day_status": {
+                            "type": "string"
+                          },
+                          "corrected_hours": {
+                            "type": "number"
+                          },
+                          "correction_reason": {
+                            "type": "string"
+                          },
+                          "reject_remarks": {
+                            "type": "string"
+                          },
+                          "salary_status": {
+                            "type": "string"
+                          },
+                          "window_expires_on": {
+                            "type": "string"
+                          },
+                          "days_left": {
+                            "type": "integer"
+                          },
+                          "window_open": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/oc/time/salaryhold/day/{holdDayId}/correct": {
+      "post": {
+        "operationId": "correctSalaryHoldDay",
+        "summary": "Record a correction against one held date. Used only where the week itself cannot be reopened; the normal path is to resubmit the week, which marks these dates corrected automatically.",
+        "x-vb": {
+          "actionHint": "create"
+        },
+        "parameters": [
+          {
+            "name": "holdDayId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "hours": {
+                    "type": "number"
+                  },
+                  "reason": {
+                    "type": "string"
+                  },
+                  "actor": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Corrected"
+          },
+          "400": {
+            "description": "Outside the window, or already decided"
           }
         }
       }
@@ -4050,7 +4181,7 @@
           },
           "workDate": {
             "type": "string",
-            "description": "YYYY-MM-DD — the affected day. Adjustments are day-wise."
+            "description": "YYYY-MM-DD \u2014 the affected day. Adjustments are day-wise."
           },
           "oldProjectId": {
             "type": "integer"

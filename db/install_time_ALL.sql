@@ -4536,6 +4536,7 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
     v_locked   oc_ts_week.locked_flag%TYPE;
     v_pstatus  oc_time_period.status%TYPE;
     v_delivery oc_time_period.delivery_cutoff%TYPE;
+    v_reopen   NUMBER;
   BEGIN
     SELECT w.week_start, w.week_status, w.locked_flag, p.status, p.delivery_cutoff
       INTO v_ws, v_status, v_locked, v_pstatus, v_delivery
@@ -4543,9 +4544,52 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
       JOIN oc_time_period p ON p.period_id = w.period_id
      WHERE w.ts_week_id = p_ts_week_id;
 
-    -- RULE-004: future weeks are visible but frozen (SC-02).
+    -- RULE-004: future weeks are visible but frozen (SC-02). Checked before the
+    -- salary-hold reopen below, because a hold can never justify filling in a
+    -- week that has not happened.
     IF v_ws > week_start_of(SYSDATE) THEN
       RAISE_APPLICATION_ERROR(-20004, 'Future weeks cannot be filled.');
+    END IF;
+
+    -- SALARY-HOLD REOPEN (PROC-007, functional owner 10-Aug-2026): the employee
+    -- "will see the defaulted week timesheet after the payroll cutoff is over
+    -- and will be able to resubmit it".
+    --
+    -- Every gate below this point would otherwise refuse exactly that week, and
+    -- for good reasons in the normal case: it is locked because defaulting
+    -- locked it, and the delivery cut-off has long passed. But a salary hold
+    -- exists precisely to give this person a bounded second chance, and a
+    -- correction window they cannot type into is not a correction window.
+    --
+    -- Deliberately narrow, so this is a keyhole and not a hole:
+    --   * only a week with a HELD or REJECTED hold day against it
+    --   * only inside the 60 calendar days (CFG-012) -- the same expiry the
+    --     screen and the correction procedure read, so all three agree
+    --   * the week must still be the employee's to change; Approved,
+    --     Overridden and Closed are checked below and are NOT reopened
+    --
+    -- EXISTS is SQL-only (PLS-00204), hence the SELECT INTO.
+    SELECT CASE WHEN EXISTS (
+             SELECT 1
+               FROM oc_ts_salary_hold_day d
+               JOIN oc_ts_salary_hold     h ON h.hold_id = d.hold_id
+              WHERE d.ts_week_id  = p_ts_week_id
+                AND d.day_status IN ('Held','Rejected')
+                AND h.salary_status = 'Held'
+                AND (h.window_expires_on IS NULL
+                     OR TRUNC(SYSDATE) <= h.window_expires_on))
+           THEN 1 ELSE 0 END
+      INTO v_reopen FROM dual;
+
+    IF v_reopen = 1 THEN
+      -- Still refuse the three states that are somebody else's decision. A
+      -- hold reopens an UNSUBMITTED week; it does not undo an approval.
+      IF v_status IN ('Approved','Overridden and approved','Closed') THEN
+        RAISE_APPLICATION_ERROR(-20007,
+          'This week has already been approved and cannot be changed, even '
+          || 'though pay is held. Ask your manager to send it back.');
+      END IF;
+      RETURN;
     END IF;
 
     IF v_locked = 'Y' THEN
@@ -5037,6 +5081,32 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
            updated_by     = p_actor
      WHERE ts_week_id = p_ts_week_id;
 
+    -- SALARY HOLD: resubmitting the week IS the correction (PROC-007). The
+    -- functional owner described the employee screen as seeing "the defaulted
+    -- week timesheet after the payroll cutoff is over" and being "able to
+    -- resubmit it" -- so the correction is the timesheet itself, not a second
+    -- form beside it. Marking the held dates here means the employee corrects
+    -- in one place and the manager approves in one place, instead of the same
+    -- hours being entered twice and the two copies disagreeing.
+    --
+    -- corrected_hours is the day's actual submitted total, which is what
+    -- CHK_OC_TSSHD_CORR requires and what payroll needs to see.
+    UPDATE oc_ts_salary_hold_day d
+       SET d.day_status        = 'Corrected',
+           d.corrected_hours   = NVL((SELECT SUM(e.hours) FROM oc_ts_entry e
+                                       WHERE e.ts_week_id = p_ts_week_id
+                                         AND e.entry_date = d.work_date
+                                         AND e.entry_type IN ('Actual','Default')), 0),
+           d.correction_reason = NVL(d.correction_reason,
+                                     'Week resubmitted by the employee.'),
+           d.corrected_by      = p_actor,
+           d.corrected_on      = SYSTIMESTAMP,
+           d.reject_remarks    = NULL,
+           d.updated_by        = p_actor,
+           d.updated_on        = SYSTIMESTAMP
+     WHERE d.ts_week_id  = p_ts_week_id
+       AND d.day_status IN ('Held','Rejected');
+
     log_event(p_ts_week_id, v_emp, NULL, v_period, 'WEEK', NULL,
               CASE WHEN v_corr = 'Y' THEN 'Resubmit' ELSE 'Submit' END,
               NULL, NULL, v_emp, p_trace_id);
@@ -5288,6 +5358,33 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
            approved_on = SYSTIMESTAMP,
            updated_by  = p_actor
      WHERE ts_week_id = p_ts_week_id;
+
+    -- SALARY HOLD: approving the resubmitted week approves its held dates, and
+    -- if that was the last one the hold releases here rather than waiting for
+    -- the nightly job. This is somebody's pay -- "it will clear tonight" is not
+    -- good enough, and the manager has just done the only thing that was
+    -- outstanding.
+    UPDATE oc_ts_salary_hold_day
+       SET day_status  = 'Approved',
+           approved_by = p_actor_emp_id,
+           approved_on = SYSTIMESTAMP,
+           updated_by  = p_actor,
+           updated_on  = SYSTIMESTAMP
+     WHERE ts_week_id  = p_ts_week_id
+       AND day_status  = 'Corrected';
+
+    UPDATE oc_ts_salary_hold h
+       SET h.salary_status = 'Released',
+           h.released_by   = p_actor_emp_id,
+           h.released_on   = SYSTIMESTAMP,
+           h.remarks       = 'Released: every held date resubmitted and approved.'
+     WHERE h.salary_status = 'Held'
+       AND EXISTS (SELECT 1 FROM oc_ts_salary_hold_day d
+                    WHERE d.hold_id = h.hold_id
+                      AND d.ts_week_id = p_ts_week_id)
+       AND NOT EXISTS (SELECT 1 FROM oc_ts_salary_hold_day d
+                        WHERE d.hold_id = h.hold_id
+                          AND d.day_status <> 'Approved');
 
     log_event(p_ts_week_id, v_emp, NULL, v_period, 'WEEK', NULL,
               'Approve', NULL, NULL, p_actor_emp_id, p_trace_id);
