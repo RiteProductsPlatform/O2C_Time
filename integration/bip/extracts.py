@@ -170,18 +170,19 @@ PROJECTS = {
     "target": "OC_TIME_PROJECT",
     "integration": "INT-002",
     "key": ["PROJECT_NUMBER"],
-    "columns": ["PROJECT_ID", "PROJECT_NUMBER", "PROJECT_NAME", "PROJECT_TYPE",
-                "CUSTOMER_NAME", "PROJECT_STATUS", "START_DATE", "END_DATE",
+    "columns": ["FUSION_PROJECT_ID", "PROJECT_NUMBER", "PROJECT_NAME", "PROJECT_TYPE",
+                "CUSTOMER_NAME", "STATUS", "PROJECT_START_DATE", "PROJECT_END_DATE",
                 "ORGANIZATION", "PROJECT_MANAGER_ID", "TIME_ENTRY_ENABLED"],
     "sql": """
-SELECT p.project_id                            AS project_id,
+-- Fusion's id. NOT our PROJECT_ID -- that is a local identity key.
+SELECT p.project_id                            AS fusion_project_id,
        p.segment1                              AS project_number,
        ptl.name                                AS project_name,
        pt.project_type                         AS project_type,
        cust.party_name                         AS customer_name,
-       p.project_status_code                   AS project_status,
-       TO_CHAR(p.start_date,'YYYY-MM-DD')      AS start_date,
-       TO_CHAR(p.completion_date,'YYYY-MM-DD') AS end_date,
+       p.project_status_code                   AS status,
+       TO_CHAR(p.start_date,'YYYY-MM-DD')      AS project_start_date,
+       TO_CHAR(p.completion_date,'YYYY-MM-DD') AS project_end_date,
        org.name                                AS organization,
        -- The project manager. CrewRite routes approval to a crew lead; here it
        -- is the project manager, and RULE-015 depends on it — an employee's
@@ -248,20 +249,22 @@ TASKS = {
     "name": "TASKS",
     "target": "OC_TIME_TASK",
     "integration": "INT-002",
-    "key": ["TASK_ID"],
-    "columns": ["TASK_ID", "PROJECT_ID", "PROJECT_NUMBER", "TASK_NUMBER",
-                "TASK_NAME", "CHARGEABLE_FLAG", "BILLABLE_FLAG",
+    "key": ["FUSION_TASK_ID"],
+    "columns": ["FUSION_TASK_ID", "FUSION_PROJECT_ID", "PROJECT_NUMBER", "TASK_CODE",
+                "TASK_NAME", "CHARGEABLE_FLAG", "BILLABLE_TYPE",
                 "WBS_LEVEL", "PARENT_TASK_ID", "START_DATE", "END_DATE",
                 "EXPENDITURE_TYPE"],
     "sql": """
-SELECT e.proj_element_id                        AS task_id,
-       e.project_id                             AS project_id,
+-- Fusion's ids. TASK_ID and PROJECT_ID on OC_TIME_TASK are LOCAL keys.
+SELECT e.proj_element_id                        AS fusion_task_id,
+       e.project_id                             AS fusion_project_id,
        p.segment1                               AS project_number,
-       e.element_number                         AS task_number,
+       e.element_number                         AS task_code,
        etl.name                                 AS task_name,
        -- RULE-010: only a chargeable task may appear in the grid's task LOV.
        NVL(e.chargeable_flag,'N')               AS chargeable_flag,
-       NVL(e.billable_flag,'N')                 AS billable_flag,
+       CASE WHEN NVL(e.billable_flag,'N') = 'Y'
+            THEN 'Billable' ELSE 'Non-billable' END  AS billable_type,
        e.denorm_wbs_level                       AS wbs_level,
        e.denorm_parent_element_id               AS parent_task_id,
        TO_CHAR(e.start_date,'YYYY-MM-DD')       AS start_date,
@@ -345,13 +348,13 @@ ABSENCES = {
     "target": "OC_TIME_ABSENCE",
     "integration": "INT-006",
     "key": ["EMPLOYEE_ID", "ABSENCE_DATE", "ABSENCE_TYPE"],
-    "columns": ["EMPLOYEE_ID", "ABSENCE_DATE", "ABSENCE_TYPE", "DURATION_HOURS",
+    "columns": ["EMPLOYEE_ID", "ABSENCE_DATE", "ABSENCE_TYPE", "ABSENCE_HOURS",
                 "APPROVAL_STATUS", "ABSENCE_STATUS"],
     "sql": """
 SELECT papf.person_number                    AS employee_id,
        TO_CHAR(d.absence_date,'YYYY-MM-DD')  AS absence_date,
        t.name                                AS absence_type,
-       d.duration                            AS duration_hours,
+       d.duration                            AS absence_hours,
        e.approval_status_cd                  AS approval_status,
        e.absence_status_cd                   AS absence_status
   FROM anc_per_abs_entries e
@@ -375,9 +378,9 @@ CALENDAR = {
     "name": "CALENDAR",
     "target": "OC_TIME_CALENDAR",
     "integration": "INT-004 / INT-005",
-    "key": ["LAYER", "SCOPE_KEY", "CALENDAR_DATE"],
-    "columns": ["LAYER", "SCOPE_KEY", "CALENDAR_DATE", "IS_WORKING_DAY",
-                "HOLIDAY_NAME", "SHIFT_CODE", "STANDARD_HOURS"],
+    "key": ["LAYER", "SCOPE_KEY", "CAL_DATE"],
+    "columns": ["LAYER", "SCOPE_KEY", "CAL_DATE", "IS_WORKING_DAY",
+                "HOLIDAY_NAME", "SHIFT_CODE", "STD_HOURS"],
     "sql": """
 -- CORPORATE layer only: public holidays from HCM calendar events, expanded to
 -- one row per day. PROJECT / CLIENT / SHIFT layers are loaded separately -
@@ -385,11 +388,11 @@ CALENDAR = {
 -- PROJECT 2 > CORPORATE 1).
 SELECT 'CORPORATE'                                       AS layer,
        NVL(ce.short_code,'GLOBAL')                       AS scope_key,
-       TO_CHAR(TRUNC(ce.start_date_time) + lvl.n,'YYYY-MM-DD') AS calendar_date,
+       TO_CHAR(TRUNC(ce.start_date_time) + lvl.n,'YYYY-MM-DD') AS cal_date,
        'N'                                               AS is_working_day,
        ce.short_code                                     AS holiday_name,
        CAST(NULL AS VARCHAR2(20))                        AS shift_code,
-       0                                                 AS standard_hours
+       0                                                 AS std_hours
   FROM per_calendar_events ce
   CROSS JOIN (SELECT LEVEL - 1 AS n FROM dual CONNECT BY LEVEL <= 30) lvl
  WHERE ce.category = 'PH'   -- public holiday
@@ -510,9 +513,9 @@ WORKER_SHIFTS = {
     "name": "WORKER_SHIFTS",
     "target": "OC_TIME_CALENDAR (SHIFT layer)",
     "integration": "INT-004",
-    "key": ["EMPLOYEE_ID", "CALENDAR_DATE"],
-    "columns": ["LAYER", "EMPLOYEE_ID", "CALENDAR_DATE", "IS_WORKING_DAY",
-                "SHIFT_CODE", "SHIFT_NAME", "STANDARD_HOURS"],
+    "key": ["SCOPE_KEY", "CAL_DATE"],
+    "columns": ["LAYER", "SCOPE_KEY", "CAL_DATE", "IS_WORKING_DAY",
+                "SHIFT_CODE", "SHIFT_NAME", "STD_HOURS"],
     "sql": """
 -- The SHIFT layer, resolved. Fusion has already expanded work pattern x work
 -- schedule into concrete person x date x shift rows, so this reads the answer
@@ -522,12 +525,14 @@ WORKER_SHIFTS = {
 -- a single row and sums the duration. WORK_DURATION is MINUTES in HTS - hence
 -- the /60; taking it as hours would give every worker a 480-hour day.
 SELECT 'SHIFT'                                     AS layer,
-       papf.person_number                          AS employee_id,
-       TO_CHAR(ss.ref_date,'YYYY-MM-DD')           AS calendar_date,
+-- SCOPE_KEY, not EMPLOYEE_ID. OC_TIME_CALENDAR is polymorphic: on the
+-- SHIFT layer the scope key IS the employee.
+       papf.person_number                          AS scope_key,
+       TO_CHAR(ss.ref_date,'YYYY-MM-DD')           AS cal_date,
        'Y'                                         AS is_working_day,
        MIN(TO_CHAR(ss.shift_id))                   AS shift_code,
        MIN(ss.shift_name)                          AS shift_name,
-       ROUND(SUM(NVL(ss.work_duration,0)) / 60, 2) AS standard_hours
+       ROUND(SUM(NVL(ss.work_duration,0)) / 60, 2) AS std_hours
   FROM hts_schedule_shifts_vl ss
   JOIN per_all_people_f papf
     ON papf.person_id = ss.person_id
