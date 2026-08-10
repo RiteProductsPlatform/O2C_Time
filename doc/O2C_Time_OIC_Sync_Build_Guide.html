@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>O2C Time — OIC Sync Build Guide</title>
+<!--
+  O2C Timesheet Module - OIC master-data sync, build guide.
+  Written 11-Aug-2026. Standalone: no external CSS, fonts, scripts or images,
+  so it opens from a file:// path, an email attachment or a shared drive.
+
+  SUPERSEDES sections 1.1 and 3 of O2C_Time_OIC_Build_Guide.html, which were
+  written before the sync endpoints existed and are now wrong in ways that
+  matter -- 1.1 says a watermark cannot filter (it can, and does), and 3.3/3.4
+  describe a staging scope and chunked post that the single sync/load endpoint
+  removes.
+
+  Every claim is marked verified or unproven. Verified means it was called
+  against the live SIT endpoint or the dev20 pod on 11-Aug-2026, not that it
+  looks right in the source -- three faults were found that day that reading
+  the code had not predicted.
+-->
+<style>
+  :root{
+    --ground:#F4F6F8; --surface:#FFFFFF; --surface-2:#EDF1F4;
+    --ink:#141A21; --ink-2:#3D4954; --ink-3:#6B7883;
+    --rule:#D9E0E6; --rule-2:#C3CDD6;
+    --signal:#0A6B75; --signal-ink:#064B52; --signal-wash:#E3F1F2;
+    --alert:#9B3A26; --alert-wash:#F7E8E4;
+    --ok:#2C6E49; --ok-wash:#E6F0E9;
+    --code-bg:#EDF1F4;
+    --shadow:0 1px 2px rgba(20,26,33,.06),0 8px 24px -12px rgba(20,26,33,.18);
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --ground:#0D1116; --surface:#151B22; --surface-2:#1C242C;
+      --ink:#E7ECF1; --ink-2:#B3BEC8; --ink-3:#7F8C97;
+      --rule:#26313A; --rule-2:#35434E;
+      --signal:#54B9C3; --signal-ink:#8AD3DA; --signal-wash:#0F2D31;
+      --alert:#D9836B; --alert-wash:#33201A;
+      --ok:#6FB98A; --ok-wash:#16281D;
+      --code-bg:#1C242C;
+      --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.6);
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#0D1116; --surface:#151B22; --surface-2:#1C242C;
+    --ink:#E7ECF1; --ink-2:#B3BEC8; --ink-3:#7F8C97;
+    --rule:#26313A; --rule-2:#35434E;
+    --signal:#54B9C3; --signal-ink:#8AD3DA; --signal-wash:#0F2D31;
+    --alert:#D9836B; --alert-wash:#33201A;
+    --ok:#6FB98A; --ok-wash:#16281D;
+    --code-bg:#1C242C;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.6);
+  }
+
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--ground); color:var(--ink);
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    font-size:16px; line-height:1.65;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:60rem; margin:0 auto; padding:3.5rem 1.5rem 6rem;
+        display:flex; flex-direction:column; gap:3rem}
+
+  code,kbd,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+        font-size:.875em; font-variant-ligatures:none}
+  code{background:var(--code-bg); padding:.12em .38em; border-radius:3px;
+       color:var(--ink); border:1px solid var(--rule)}
+  pre{margin:0; background:var(--code-bg); border:1px solid var(--rule);
+      border-radius:6px; padding:1rem 1.15rem; overflow-x:auto; line-height:1.55}
+  pre code{background:none; border:none; padding:0; font-size:.82rem}
+
+  header{display:flex; flex-direction:column; gap:1rem;
+         padding-bottom:2rem; border-bottom:2px solid var(--ink)}
+  .eyebrow{font-size:.7rem; letter-spacing:.16em; text-transform:uppercase;
+           color:var(--signal); font-weight:650}
+  h1{margin:0; font-size:clamp(2rem,5vw,2.9rem); line-height:1.08;
+     letter-spacing:-.025em; font-weight:760; text-wrap:balance}
+  .standfirst{margin:0; font-size:1.06rem; color:var(--ink-2); max-width:62ch}
+  .meta{display:flex; flex-wrap:wrap; gap:.5rem 1.25rem; font-size:.78rem;
+        color:var(--ink-3); font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+
+  section{display:flex; flex-direction:column; gap:1.15rem}
+  h2{margin:0; font-size:1.42rem; letter-spacing:-.015em; font-weight:700;
+     text-wrap:balance; display:flex; align-items:baseline; gap:.7rem}
+  h2 .num{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+          font-size:.82rem; color:var(--signal); font-weight:600;
+          border:1px solid var(--rule-2); border-radius:4px;
+          padding:.1rem .42rem; flex:none}
+  h3{margin:1rem 0 0; font-size:1.02rem; font-weight:680; letter-spacing:-.005em}
+  p{margin:0; max-width:68ch}
+  ul,ol{margin:0; padding-left:1.25rem; max-width:68ch;
+        display:flex; flex-direction:column; gap:.4rem}
+
+  .chip{display:inline-flex; align-items:center; gap:.35rem; font-size:.68rem;
+        letter-spacing:.07em; text-transform:uppercase; font-weight:700;
+        padding:.18rem .5rem; border-radius:3px; white-space:nowrap;
+        font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  .chip.ok{background:var(--ok-wash); color:var(--ok); border:1px solid var(--ok)}
+  .chip.un{background:var(--alert-wash); color:var(--alert); border:1px solid var(--alert)}
+
+  .card{background:var(--surface); border:1px solid var(--rule);
+        border-radius:8px; padding:1.35rem 1.5rem; box-shadow:var(--shadow);
+        display:flex; flex-direction:column; gap:.85rem}
+  .card.trap{border-left:3px solid var(--alert)}
+  .card h4{margin:0; font-size:.98rem; font-weight:700; letter-spacing:-.005em}
+
+  .tablewrap{overflow-x:auto; border:1px solid var(--rule); border-radius:8px;
+             background:var(--surface)}
+  table{border-collapse:collapse; width:100%; font-size:.86rem; min-width:34rem}
+  th,td{text-align:left; padding:.6rem .85rem; border-bottom:1px solid var(--rule);
+        vertical-align:top}
+  th{font-size:.68rem; letter-spacing:.09em; text-transform:uppercase;
+     color:var(--ink-3); font-weight:700; background:var(--surface-2);
+     position:sticky; top:0}
+  tbody tr:last-child td{border-bottom:none}
+  td.n{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+       font-variant-numeric:tabular-nums; white-space:nowrap}
+
+  .flow{display:flex; flex-direction:column; gap:0; border:1px solid var(--rule);
+        border-radius:8px; overflow:hidden; background:var(--surface)}
+  .step{display:grid; grid-template-columns:3.5rem 1fr; gap:0;
+        border-bottom:1px solid var(--rule)}
+  .step:last-child{border-bottom:none}
+  .step .rail{background:var(--surface-2); border-right:1px solid var(--rule);
+        display:flex; align-items:flex-start; justify-content:center;
+        padding:1rem .4rem; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+        font-size:.78rem; font-weight:700; color:var(--signal)}
+  .step .body{padding:1rem 1.2rem; display:flex; flex-direction:column; gap:.5rem;
+        min-width:0}
+  .step .body strong{font-weight:680}
+
+  .kv{display:grid; grid-template-columns:auto 1fr; gap:.3rem 1rem;
+      font-size:.85rem; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  .kv dt{color:var(--ink-3)}
+  .kv dd{margin:0; color:var(--ink)}
+
+  hr{border:none; border-top:1px solid var(--rule); margin:0}
+  a{color:var(--signal-ink); text-underline-offset:2px}
+  a:focus-visible,summary:focus-visible{outline:2px solid var(--signal); outline-offset:2px}
+  footer{font-size:.82rem; color:var(--ink-3); border-top:1px solid var(--rule);
+         padding-top:1.5rem; max-width:68ch}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">O2C Timesheet Module · Integration</div>
+  <h1>Building the OIC master-data sync</h1>
+  <p class="standfirst">Two integrations, six feeds, two schedules. Everything below marked
+     <span class="chip ok">verified</span> was called against the live SIT endpoints
+     and the dev20 pod; everything marked <span class="chip un">unproven</span> has not been run yet.</p>
+  <div class="meta">
+    <span>11-Aug-2026</span>
+    <span>ords-sit.rite.digital/ords/o2c_time</span>
+    <span>supersedes O2C_Time_OIC_Build_Guide §1.1, §3</span>
+  </div>
+</header>
+
+<section>
+  <h2><span class="num">why</span>What changed since the last guide</h2>
+  <p>The earlier build guide was written on 09-Aug, before the sync endpoints existed. Two of its
+     sections are now actively misleading:</p>
+  <div class="card trap">
+    <h4>§1.1 “The watermark cannot filter anything”</h4>
+    <p>True when written — no extract had a <code>LAST_UPDATE_DATE</code> predicate, so it recommended
+       a full refresh on every run. <code>:P_LAST_SYNC</code> was added exactly as that section’s own
+       closing note proposed. Measured on the pod: passing <code>2026-08-01</code> returns 12 workers
+       and 9 allocations instead of 5850 and 543. The delta is real; do not build a full refresh.</p>
+  </div>
+  <div class="card trap">
+    <h4>§3.3–3.4 <code>stageAndTransform</code> / chunked <code>postToOrds</code></h4>
+    <p>Describes posting rows to the per-entity JSON endpoints. Those still exist but key differently
+       and are not this path. There is now a single endpoint that takes the BIP XML verbatim, so the
+       staging scope and the chunked post both disappear.</p>
+  </div>
+</section>
+
+<section>
+  <h2><span class="num">1</span>The shape</h2>
+  <p>OIC carries no field mapping and no SQL. It knows how to read a config row, run a report, and
+     hand the bytes over. Everything about which columns exist and how a row is matched lives in the
+     database, next to the tables it writes.</p>
+  <div class="flow">
+    <div class="step">
+      <div class="rail">001</div>
+      <div class="body">
+        <strong>Orchestrator — one per schedule</strong>
+        <p>Reads the config, loops the feeds <em>in run order</em>, calls the child for each, then
+           triggers population.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="rail">002</div>
+      <div class="body">
+        <strong>Child — built once, called six times</strong>
+        <p>Runs one BIP report with two parameters, decodes the response, posts the XML to ORDS,
+           reads the result.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="num">2</span>What ORDS hands you <span class="chip ok">verified</span></h2>
+  <p><code>GET /oc/time/sync/config?scheduleTag=Monthly</code> — returned <code>200</code> with six
+     rows. This is the whole input to the orchestrator.</p>
+  <pre><code>{"items":[{
+  "reportname"     : "WORKERS",
+  "reportpath"     : "/Custom/O2C_TIME/O2C_WORKERS.xdm",
+  "targettable"    : "OC_TIME_WORKER",
+  "lastsyncdate"   : null,
+  "effectivedate"  : "2026-09-01",
+  "targetperiodid" : 21,
+  "syncmode"       : "INCREMENTAL",
+  "scheduletag"    : "Both",
+  "runorder"       : 10,
+  "syncstatus"     : "Ready",
+  "purpose"        : "People, their manager, standard day and status (INT-001)…"
+}, … ]}</code></pre>
+
+  <div class="card trap">
+    <h4>The keys are lowercase</h4>
+    <p>ORDS returns <code>lastsyncdate</code>, not <code>lastSyncDate</code> — the camelCase aliases in
+       the handler’s <code>SELECT</code> are not preserved. A mapper written against the camelCase name
+       resolves to nothing and reports no error.</p>
+  </div>
+
+  <p>Run order is data, not decoration — <code>OC_TIME_ALLOCATION</code> has foreign keys to both
+     worker and project, so an allocation whose worker has not loaded lands in
+     <code>OC_TIME_SYNC_FAILED</code> instead of the table:</p>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Order</th><th>Feed</th><th>Target</th><th class="n">Rows</th><th>Schedule</th></tr></thead>
+      <tbody>
+        <tr><td class="n">10</td><td>WORKERS</td><td><code>OC_TIME_WORKER</code></td><td class="n">5,850</td><td>Both</td></tr>
+        <tr><td class="n">20</td><td>PROJECTS</td><td><code>OC_TIME_PROJECT</code></td><td class="n">47</td><td>Both</td></tr>
+        <tr><td class="n">30</td><td>TASKS</td><td><code>OC_TIME_TASK</code></td><td class="n">624</td><td>Both</td></tr>
+        <tr><td class="n">40</td><td>ALLOCATIONS</td><td><code>OC_TIME_ALLOCATION</code></td><td class="n">543</td><td>Both</td></tr>
+        <tr><td class="n">50</td><td>CALENDAR</td><td><code>OC_TIME_CALENDAR</code></td><td class="n">142</td><td>Both</td></tr>
+        <tr><td class="n">60</td><td>WORKER_SHIFTS</td><td><code>OC_TIME_CALENDAR</code></td><td class="n">2,351</td><td>Both</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p><strong>Sequence it. Do not fan out.</strong> Parallel branches half-work and look fine.</p>
+</section>
+
+<section>
+  <h2><span class="num">3</span>The child integration</h2>
+  <div class="flow">
+    <div class="step">
+      <div class="rail">3.1</div>
+      <div class="body">
+        <strong>Run the report</strong>
+        <p><code>ExternalReportWSSService</code> → <code>runDataModel</code>, at
+           <code>reportpath</code>, with <em>both</em> parameters:</p>
+        <dl class="kv">
+          <dt>P_LAST_SYNC</dt><dd>← <code>lastsyncdate</code></dd>
+          <dt>P_EFFECTIVE_DATE</dt><dd>← <code>effectivedate</code></dd>
+        </dl>
+        <p>Both <code>YYYY-MM-DD</code>, both straight through — no expression, no date maths.
+           All eleven reports take the same two, so there is no per-report branching.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="rail">3.2</div>
+      <div class="body">
+        <strong>Decode</strong>
+        <p>The XML comes back <strong>base64-encoded</strong> in <code>&lt;reportBytes&gt;</code>.
+           Decode before posting. Responses may also be gzipped depending on the front end —
+           including SOAP faults, so a failure can arrive as binary.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="rail">3.3</div>
+      <div class="body">
+        <strong>Post it</strong>
+        <p><code>POST /oc/time/sync/load/{reportname}</code> with <code>Content-Type:
+           application/xml</code> and the decoded XML as the <em>raw body</em> — not a field inside a
+           JSON envelope. The target table is looked up from the config by report name; you do not
+           send it.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="rail">3.4</div>
+      <div class="body">
+        <strong>Read the result</strong>
+        <pre><code>{"reportName":"CALENDAR","targetTable":"OC_TIME_CALENDAR",
+ "status":"Success","rowsRead":1,"rowsMerged":1,
+ "message":"1 of 1 row(s) merged into OC_TIME_CALENDAR."}</code></pre>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Code</th><th>Means</th><th>Do</th></tr></thead>
+            <tbody>
+              <tr><td class="n">200</td><td>merged</td><td>log <code>rowsRead</code>/<code>rowsMerged</code>, continue</td></tr>
+              <tr><td class="n">404</td><td>report not configured or disabled</td><td>stop — a config fault, retrying will not help</td></tr>
+              <tr><td class="n">422</td><td>load refused; message names the rule</td><td>stop the feed, keep going with the rest</td></tr>
+              <tr><td class="n">500</td><td>unexpected</td><td>retry once, then fault</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>422 and 500 are deliberately distinct: one will never succeed on retry, the other might.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="num">4</span>The two orchestrators</h2>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th></th><th>Monthly</th><th>Daily</th></tr></thead>
+      <tbody>
+        <tr><td>Trigger</td><td>28th, 20:00 local, per payroll country</td><td>twice daily — 09:00 / 15:00 local</td></tr>
+        <tr><td><code>scheduleTag</code></td><td class="n">Monthly</td><td class="n">Daily</td></tr>
+        <tr><td><code>effectivedate</code></td><td>1st of next month</td><td>today</td></tr>
+        <tr><td><code>lastsyncdate</code></td><td colspan="2">from the config row, both schedules — always incremental</td></tr>
+        <tr><td>Then call</td><td><code>POST /oc/time/admin/jobs/populate/{targetperiodid}</code><br>with an <strong>empty body</strong></td><td><code>POST /oc/time/admin/jobs/daily</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card trap">
+    <h4>The monthly effective date is next month, not today</h4>
+    <p>The monthly run builds <em>next</em> month, so the HCM as-of date must fall inside it — otherwise
+       you populate September from August’s allocations, and it looks entirely normal doing so. ORDS
+       computes this and returns it, so the mapper never does date arithmetic; December→January is
+       where hand-rolled month maths breaks.</p>
+  </div>
+  <div class="card trap">
+    <h4>An empty body on <code>populate</code> means everybody</h4>
+    <p>The same endpoint scoped to one person is what the timesheet page calls on every load. Passing
+       <code>employeeId</code> is the difference between one worker and the whole company — be
+       deliberate about leaving it out.</p>
+  </div>
+  <p>A <code>null</code> <code>targetperiodid</code> means next month has no
+     <code>OC_TIME_PERIOD</code> row yet. Nothing creates periods automatically, so the monthly run
+     would have nothing to build — check it before the 28th.</p>
+</section>
+
+<section>
+  <h2><span class="num">5</span>Traps, each one paid for</h2>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Symptom</th><th>Cause</th></tr></thead>
+      <tbody>
+        <tr><td>Report returns 0 rows, reports success</td><td>an undeclared or unpassed bind. Both parameters now default inside the SQL, but a <em>malformed</em> date raises <code>ORA-01861</code> rather than defaulting</td></tr>
+        <tr><td>Mapper field is always empty</td><td>JSON keys are lowercase; <code>lastSyncDate</code> matches nothing</td></tr>
+        <tr><td><code>ORA-01861: literal does not match format string</code></td><td>an ISO timestamp reached <code>P_LAST_SYNC</code>. It must be <code>YYYY-MM-DD</code>, and <code>null</code> must stay JSON null — never the string <code>"null"</code></td></tr>
+        <tr><td>Rows land in <code>OC_TIME_SYNC_FAILED</code>, not the table</td><td>feeds ran in parallel; the parent had not loaded</td></tr>
+        <tr><td>Load says “returned no XML at all”</td><td>body not decoded from base64, or sent as a JSON field rather than the raw body</td></tr>
+        <tr><td>Large extract silently truncated</td><td>the chunk loop is a <em>byte-offset download</em> via <code>reportFileID</code>, not row paging. 5,850 rows fit one response; do not assume that holds</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <h2><span class="num">6</span>What is proven</h2>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Link</th><th>State</th><th>Evidence</th></tr></thead>
+      <tbody>
+        <tr><td>BIP models deployed</td><td><span class="chip ok">verified</span></td><td>11/11 to <code>/Custom/O2C_TIME/</code></td></tr>
+        <tr><td>All feeds compile &amp; return rows</td><td><span class="chip ok">verified</span></td><td><code>--validate ALL</code>, 11 ok</td></tr>
+        <tr><td>Delta filters correctly</td><td><span class="chip ok">verified</span></td><td>5850 → 12 since 01-Aug</td></tr>
+        <tr><td><code>GET sync/config</code></td><td><span class="chip ok">verified</span></td><td>200, 6 rows, correct dates</td></tr>
+        <tr><td><code>POST sync/load</code> — insert</td><td><span class="chip ok">verified</span></td><td>200, 1 of 1 merged</td></tr>
+        <tr><td><code>POST sync/load</code> — update</td><td><span class="chip ok">verified</span></td><td>merged 1, not 2</td></tr>
+        <tr><td>Before-image capture</td><td><span class="chip ok">verified</span></td><td>2 rows in <code>OC_TIME_SYNC_CHANGE</code></td></tr>
+        <tr><td>Bad report name rejected</td><td><span class="chip ok">verified</span></td><td>404 with the reason</td></tr>
+        <tr><td>BIP called from OIC</td><td><span class="chip un">unproven</span></td><td>—</td></tr>
+        <tr><td><code>jobs/populate</code> / <code>jobs/daily</code></td><td><span class="chip un">unproven</span></td><td>—</td></tr>
+        <tr><td>End-to-end on real volume</td><td><span class="chip un">unproven</span></td><td>tested at 1 row</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Build in that order and each failure has one cause. The endpoints answer a plain
+     <code>curl</code> with no auth, so any step can be isolated outside OIC first.</p>
+</section>
+
+<section>
+  <h2><span class="num">7</span>Open before go-live</h2>
+  <ul>
+    <li><strong>Deletions are undetectable.</strong> An incremental delta returns changed rows; a
+        <em>removed</em> one returns nothing. Accepted on the basis that allocations are end-dated
+        rather than deleted — an end-dated row does come back. Worth confirming that is always the
+        practice.</li>
+    <li><strong>Future prepopulated days.</strong> A retro reallocation adjusts up to today; days
+        already populated beyond it still carry the old project and want re-populating, not
+        adjusting.</li>
+    <li><strong>Employee cut-off for adjustments</strong> currently reads <code>DELIVERY_CUTOFF</code>.
+        If it should be the payroll cut-off, that is one line.</li>
+    <li><strong>Period control</strong> invoked from the O2C main application is still pending.</li>
+    <li><strong>Adjustment generation rules</strong> await the flag/scenario workbook. Capture is live
+        and queues everything <code>Pending</code> meanwhile, so nothing is lost while it is out.</li>
+  </ul>
+</section>
+
+<footer>
+  Row counts measured on dev20, 11-Aug-2026. Endpoint behaviour measured against
+  <span class="mono">ords-sit.rite.digital</span> the same day. Where this guide and
+  <span class="mono">O2C_Time_OIC_Build_Guide.html</span> disagree, this one was tested.
+</footer>
+
+</div>
+</body>
+</html>
