@@ -13,6 +13,7 @@ As at 11-Aug-2026.
 | H3 | Employee cut-off for adjustments | `oc_time_default_adjustments` reads `DELIVERY_CUTOFF`. If it should be `PAYROLL_CUTOFF`, one line. |
 | H4 | Future prepopulated days | Retro reallocation adjusts up to today. Days already populated beyond it still carry the old project and want re-populating, not adjusting. |
 | H5 | Period control from the O2C main app | Not started. |
+| H6 | OIC sync runs are invisible on the admin screen | `v_oc_time_sync_status` reads `oc_time_sync_job`; `OC_TIME_LOAD_XML` writes only `oc_time_sync_failed` and never inserts a job row, so a scheduled daily sync appears nowhere on the Sync Status page. The bookmark state in `OC_TIME_SYNC_CONFIG` is not surfaced either. Fix is to have the loader write a job row — same table, so the existing page picks it up with no UI change. **Matters more now the sync runs unattended on a schedule:** until then, the only view of it is OIC monitoring or a direct query. |
 
 ---
 
