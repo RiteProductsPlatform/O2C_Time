@@ -327,18 +327,27 @@ END;
 /
 
 PROMPT ============================================================
-PROMPT [8/11] OC_TIME_PROJECT — Organization (Non-Billable) project
+PROMPT [8/11] OC_TIME_PROJECT — nothing seeded (PRJ-ORG removed)
 PROMPT ============================================================
 
+-- PRJ-ORG IS NO LONGER SEEDED. Decided 11-Aug-2026.
+--
+-- It was the Organization (Non-Billable) project, implicitly everyone's
+-- (FLD-006) -- the place non-project time was booked. Every project in this
+-- schema is now to come from Fusion, and PRJ-ORG never did: it existed only
+-- here, so it could not be costed, reported on, or reconciled against PPM.
+--
+-- The time it carried does not disappear -- it moves. Non-project hours are now
+-- booked against the employee's REAL project with an UNBILLED_REASON saying why
+-- they are not billable, which is a better record than a synthetic project:
+-- the hours stay attached to the engagement they were incurred on, and the
+-- reason is per line rather than per project.
+--
+-- 23_unbilled_reason_per_line.sql makes the reason settable on any line and
+-- lets it drive BILLABLE_TYPE. Removing this seed without that change would
+-- leave non-project time with nowhere to go at all.
 BEGIN
-  INSERT INTO oc_time_project (
-    project_number, project_name, project_type, revenue_model,
-    leave_loss_flag, status, created_by)
-  SELECT 'PRJ-ORG', 'Organization (Non-Billable)', 'Organization', NULL,
-         'N', 'Active', 'SEED'
-    FROM dual
-   WHERE NOT EXISTS (SELECT 1 FROM oc_time_project WHERE project_number = 'PRJ-ORG');
-  DBMS_OUTPUT.PUT_LINE('PRJ-ORG seeded (' || SQL%ROWCOUNT || ' row).');
+  NULL;   -- intentionally nothing; see above
 END;
 /
 

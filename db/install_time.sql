@@ -246,6 +246,9 @@ PROMPT >>> 17 columns the extracts send with nowhere to land
 PROMPT >>> 18 OC_TIME_TASK natural key (the loader cannot merge without it)
 @@18_task_natural_key.sql
 PROMPT >>> 16 OIC sync config + the generic XML loader
+PROMPT [n/m] 23_unbilled_reason_per_line.sql - reason per line, PRJ-ORG retired
+@@23_unbilled_reason_per_line.sql
+
 @@16_oic_sync_config.sql
 
 PROMPT [n/m] 19_sync_change_capture.sql - before-image capture + append-only
