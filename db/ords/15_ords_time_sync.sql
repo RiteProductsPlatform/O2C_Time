@@ -77,7 +77,41 @@ BEGIN
       SELECT bip_report_name                          AS "reportName",
              bip_report_path                          AS "reportPath",
              target_table                             AS "targetTable",
-             NVL(TO_CHAR(lastsync_date,'YYYY-MM-DD'), '') AS "lastSyncDate",
+             -- NULL ON THE MONTHLY RUN, AND THAT IS NOT AN OVERSIGHT.
+             --
+             -- The delta predicate is ANDed onto the as-of filter, so a
+             -- monthly run carrying a bookmark asks BIP for
+             --
+             --   allocations in force on 1-Sep AND changed since 11-Aug
+             --
+             -- An allocation created in June, effective 1-Sep onward, is in
+             -- force on 1-Sep and has NOT changed since 11-Aug. It is
+             -- excluded -- which is precisely the row the monthly run exists
+             -- to fetch. September then populates from whatever the cache
+             -- already holds, and the daily runs filled that with the AUGUST
+             -- as-of picture. Everybody lands on their old projects, the job
+             -- reports Success, and nothing in the output looks wrong.
+             --
+             -- A delta answers "what changed since". Once the as-of date moves
+             -- to a future point the question is "what is true then", and that
+             -- answer includes rows last touched months ago. The two filters
+             -- cannot both apply.
+             --
+             -- JSON null is the correct wire value: OIC maps it to an unset
+             -- parameter, BIP substitutes defaultValue="", and the report's own
+             -- NVL(..., DATE '1900-01-01') makes it a full as-of pull. Note ''
+             -- IS NULL in Oracle, so the ELSE branch cannot emit an empty
+             -- string either -- and the literal STRING "null" must never be
+             -- emitted, which is why neither branch is quoted or wrapped.
+             --
+             -- Cost is not the objection it looks like. Measured 11-Aug: a
+             -- re-merge that changes nothing runs in 4.9s against 17s for the
+             -- cold build, because MERGE finds the rows already there. The
+             -- full pull is 1,595 allocation rows.
+             CASE WHEN :scheduleTag = 'Monthly'
+                  THEN NULL
+                  ELSE NVL(TO_CHAR(lastsync_date,'YYYY-MM-DD'), '')
+             END                                      AS "lastSyncDate",
              -- P_EFFECTIVE_DATE, COMPUTED HERE RATHER THAN IN THE MAPPER.
              --
              -- The two schedules need different as-of dates and the difference
