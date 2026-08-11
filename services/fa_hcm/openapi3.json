@@ -14,12 +14,12 @@
   },
   "servers": [
     {
-      "url": "vb-catalog://backends/fa/hcm",
-      "description": "Resolved by VB from services/catalog.json. Credentials are held in the VB Studio backend configuration, never in source."
+      "url": "vb-catalog://backends/fa",
+      "description": "The POD HOST ONLY. Credentials are held in the VB Studio backend configuration, never in source.\n\nThis was 'vb-catalog://backends/fa/hcm' and it did not resolve: the URL came out as {host}/hcm/absences. VB reads the segment after the backend name as a CHILD BACKEND, and when no child called 'hcm' is registered in the project's Backends configuration it falls through and appends the name as a literal path segment. catalog.json declaring backends.fa.backends.hcm is not enough on its own — the child has to exist in the VB Studio project too, and it did not survive the move to the new project (11-Aug-2026).\n\nSo the REST prefix now lives on each path below instead. It repeats, which is the cost of not depending on project-level configuration that source control cannot see."
     }
   ],
   "paths": {
-    "/workers": {
+    "/hcmRestApi/resources/11.13.18.05/workers": {
       "get": {
         "operationId": "getWorkers",
         "x-vb": {
@@ -87,7 +87,7 @@
         }
       }
     },
-    "/absences": {
+    "/hcmRestApi/resources/11.13.18.05/absences": {
       "get": {
         "operationId": "getAbsences",
         "x-vb": {
