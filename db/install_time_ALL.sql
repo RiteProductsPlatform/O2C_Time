@@ -6272,6 +6272,7 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
     -- control period arrives with an explicit start date, p_from below is where
     -- it plugs in and nothing else changes.
     v_from DATE;
+    v_hold NUMBER;          -- the hold row the day rows hang off
   BEGIN
     SELECT LEAST(NVL(payroll_cutoff, TRUNC(SYSDATE)), TRUNC(SYSDATE))
       INTO v_upto
@@ -6387,47 +6388,54 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
          AND h.period_id   = p_period_id;
 
       -- ── the dates themselves ─────────────────────────────────
-      -- One row per unsubmitted DAY. INSERT ... WHERE NOT EXISTS rather than a
-      -- MERGE so a day the employee has already corrected is never reset by a
-      -- later run of the job -- losing somebody's correction because the
-      -- scheduler ran twice would be unforgivable and entirely silent.
-      -- ONE FLAT GROUP BY, not an aggregating inline view cross-joined to a
-      -- second subquery. The nested form raised ORA-00979 at run time and the
-      -- clause it objected to was not identifiable by reading it -- both
-      -- levels looked legal in isolation. Flattened, every non-aggregated
-      -- column is visibly in the GROUP BY and there is nothing to argue about.
+      -- A CURSOR THAT AGGREGATES, THEN A PLAIN VALUES INSERT.
       --
-      -- p_period_id, 'Held' and p_actor are a bind, a literal and a bind: none
-      -- needs grouping, which is exactly why the nested version was hard to
-      -- read -- the eye counts eight select items and four group items and
-      -- cannot tell at a glance that the difference is legitimate.
-      INSERT INTO oc_ts_salary_hold_day
-             (hold_id, employee_id, period_id, work_date, ts_week_id,
-              expected_hours, day_status, created_by)
-      SELECT h.hold_id, wk.employee_id, p_period_id, en.entry_date,
-             en.ts_week_id, MAX(en.standard_hours), 'Held', p_actor
-        FROM oc_ts_entry en
-        JOIN oc_ts_week  wk ON wk.ts_week_id = en.ts_week_id
-        CROSS JOIN (SELECT hold_id FROM oc_ts_salary_hold
-                     WHERE employee_id = e.employee_id
-                       AND period_id   = p_period_id) h
-       WHERE wk.employee_id  = e.employee_id
-         AND wk.submitted_on IS NULL
-         -- The payroll window, not the calendar month. Strictly before the
-         -- cut-off: a day cannot be late on the day itself.
-         AND en.entry_date  >= v_from
-         AND en.entry_date   < v_upto
-         AND NOT EXISTS (SELECT 1 FROM oc_ts_salary_hold_day x
-                          WHERE x.employee_id = e.employee_id
-                            AND x.work_date   = en.entry_date)
-       -- THE BINDS ARE IN THE GROUP BY, and they have to be. p_period_id and
-       -- p_actor are PL/SQL parameters, constant for the whole statement, so
-       -- they cannot change the grouping -- but Oracle still refuses them in
-       -- the select list of a grouped query unless they are named here.
-       -- ORA-00979 twice over, once nested and once flat, was this.
-       GROUP BY h.hold_id, wk.employee_id, en.entry_date, en.ts_week_id,
-                p_period_id, p_actor
-      HAVING MAX(en.standard_hours) > 0;
+      -- Three attempts at INSERT ... SELECT with a GROUP BY failed with
+      -- ORA-00979: nested inline view, flattened, and with the binds named in
+      -- the GROUP BY. The common element was never the shape -- it was
+      -- p_period_id and p_actor sitting in the select list of a grouped
+      -- statement inside PL/SQL, which Oracle will not accept however it is
+      -- arranged.
+      --
+      -- So the grouping happens where it is uncontroversial: a cursor whose
+      -- select list is real columns and one aggregate, nothing else. The
+      -- insert is then row by row with no grouping at all. Slower, and it
+      -- runs -- which the elegant version did not.
+      --
+      -- NOT EXISTS stays in the cursor's WHERE, evaluated per row before
+      -- grouping. A day the employee has already corrected is never reset by a
+      -- later run: losing somebody's correction because the scheduler ran
+      -- twice would be unforgivable and entirely silent. There is no unique
+      -- key on (employee, work_date) to catch it, so this test is the only
+      -- thing standing between a re-run and a duplicate.
+      SELECT MAX(hold_id) INTO v_hold
+        FROM oc_ts_salary_hold
+       WHERE employee_id = e.employee_id AND period_id = p_period_id;
+
+      FOR d IN (SELECT en.ts_week_id, en.entry_date,
+                       MAX(en.standard_hours) AS std_hours
+                  FROM oc_ts_entry en
+                  JOIN oc_ts_week  wk ON wk.ts_week_id = en.ts_week_id
+                 WHERE wk.employee_id  = e.employee_id
+                   AND wk.submitted_on IS NULL
+                   -- The payroll window, not the calendar month. Strictly
+                   -- before the cut-off: a day cannot be late on the day
+                   -- itself.
+                   AND en.entry_date  >= v_from
+                   AND en.entry_date   < v_upto
+                   AND NOT EXISTS (SELECT 1 FROM oc_ts_salary_hold_day x
+                                    WHERE x.employee_id = e.employee_id
+                                      AND x.work_date   = en.entry_date)
+                 GROUP BY en.ts_week_id, en.entry_date
+                HAVING MAX(en.standard_hours) > 0)
+      LOOP
+        INSERT INTO oc_ts_salary_hold_day
+               (hold_id, employee_id, period_id, work_date, ts_week_id,
+                expected_hours, day_status, created_by)
+        VALUES (v_hold, e.employee_id, p_period_id, d.entry_date, d.ts_week_id,
+                d.std_hours, 'Held', p_actor);
+      END LOOP;
+
       v_up := v_up + 1;
     END LOOP;
 
