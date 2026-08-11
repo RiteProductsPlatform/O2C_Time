@@ -2,6 +2,23 @@
 -- time/90_demo_reset.sql
 -- O2C Timesheet Module — clear ONE period's transactions for a walkthrough
 --
+-- DEVELOPMENT ONLY. NOT FOR UAT OR PRODUCTION.
+--
+-- This exists because THIS schema was populated before several rules were
+-- fixed -- the default-task ordering that put 32h on a task called Leave, and
+-- master data that came from 90_test_seed rather than Fusion. Rebuilding was
+-- faster and more trustworthy than correcting it row by row. That is a one-off
+-- repair of a development environment, not a process.
+--
+-- PRODUCTION NEVER DELETES. The month is built once by the monthly
+-- orchestrator, populate_month is a MERGE so re-running it is safe, and
+-- anything needing correction afterwards goes through the Reversal/Adjustment
+-- chain -- which posts into the next open period and preserves what was there.
+-- That is why OC_TIME_SYNC_CHANGE captures before-images and why an adjustment
+-- carries SOURCE_PERIOD and POST_PERIOD separately.
+--
+-- The guard in [2] enforces it: a period confirmed to accrual is refused.
+--
 -- DESTRUCTIVE, and scoped to a single period. Read [0] before running it.
 --
 -- WHY PERIOD-SCOPED
@@ -96,6 +113,7 @@ DECLARE
   v_name   VARCHAR2(30);
   v_year   NUMBER;
   v_month  NUMBER;
+  v_conf   NUMBER;
 
   PROCEDURE gone(p_what VARCHAR2, p_n NUMBER) IS
   BEGIN
@@ -109,6 +127,34 @@ BEGIN
   DBMS_OUTPUT.PUT_LINE('Target period: ' || v_name
                     || '  (period_id ' || v_period || ')');
   DBMS_OUTPUT.PUT_LINE(RPAD('-', 52, '-'));
+
+  -- THE GUARD. A period that has been confirmed to accrual has had its hours
+  -- handed to finance -- billed, costed, or on their way to being. Deleting
+  -- them here would leave the consumer holding rows for a month this schema no
+  -- longer has, and no amount of re-populating puts that back.
+  --
+  -- This is the line between "scratch data" and "money has moved", and it is
+  -- what stops this file being run in UAT or production by someone who found
+  -- it in db/. A production month is corrected FORWARD -- through the
+  -- Reversal/Adjustment chain, which posts into the next open period and
+  -- preserves what was there -- and never by deletion.
+  SELECT COUNT(*) INTO v_conf
+    FROM oc_ts_month_confirm WHERE period_id = v_period;
+
+  IF v_conf > 0 THEN
+    DBMS_OUTPUT.PUT_LINE('');
+    DBMS_OUTPUT.PUT_LINE('REFUSED. ' || v_name || ' has ' || v_conf
+      || ' month confirmation(s): its hours have already gone to accrual.');
+    DBMS_OUTPUT.PUT_LINE('Nothing has been deleted.');
+    DBMS_OUTPUT.PUT_LINE('');
+    DBMS_OUTPUT.PUT_LINE('Correct a confirmed month forward, with an '
+                      || 'adjustment -- oc_time_retro_realloc, or '
+                      || 'apply_adjustment for a single day. Both post into '
+                      || 'the next OPEN period and leave the closed book '
+                      || 'exactly as accrual received it.');
+    ROLLBACK;
+    RETURN;
+  END IF;
 
   -- Children of the week, by join. Entries, approvals and audit have no
   -- period of their own -- the week owns it.
