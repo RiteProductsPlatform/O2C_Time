@@ -471,6 +471,7 @@
         <tr><td>Rows land in <code>OC_TIME_SYNC_FAILED</code>, not the table</td><td>feeds ran in parallel; the parent had not loaded</td></tr>
         <tr><td>Load says “returned no XML at all”</td><td>body not decoded from base64, or sent as a JSON field rather than the raw body</td></tr>
         <tr><td>Large extract silently truncated</td><td>the chunk loop is a <em>byte-offset download</em> via <code>reportFileID</code>, not row paging. 5,850 rows fit one response; do not assume that holds</td></tr>
+        <tr><td><code>ICS-11240 — Invalid syntax error for recurrence expression</code>, while the <strong>Readable schedule</strong> beside it renders the run times correctly</td><td>the iCal expression needs a <strong>trailing semicolon</strong>. <code>…;BYSECOND=0;</code> validates, <code>…;BYSECOND=0</code> does not. Oracle's documented examples omit it and the error names no position. The renderer is lenient and the validator is strict, so the screen proves the parse succeeded and calls it invalid at the same time — do not read that as a broken validator and save past it, <code>Save</code> fails identically and no schedule is created</td></tr>
       </tbody>
     </table>
   </div>
