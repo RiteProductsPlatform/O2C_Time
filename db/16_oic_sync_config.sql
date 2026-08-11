@@ -450,8 +450,50 @@ BEGIN
     v_val := v_val || ',s.' || v_fkcol;
   END IF;
 
+  -- ZERO ROWS IS SUCCESS, NOT A CONFIGURATION FAULT.
+  --
+  -- An incremental feed returning nothing is the NORMAL case -- most nights
+  -- most reports have no changes -- and it must not be confused with a report
+  -- whose aliases do not match the table.
+  --
+  -- The two look identical to the column scan: it reads ROW[1]/*, and with no
+  -- ROW element there is nothing to match, so v_cols is null either way. Told
+  -- apart by counting the rows first.
+  --
+  -- Getting this wrong is self-perpetuating, which is how it hid. A quiet
+  -- night reported Failed, the failure path deliberately does NOT advance
+  -- LASTSYNC_DATE, so the next run read a stale bookmark and pulled everything
+  -- again -- and a full pull always has rows, so it always "worked". The
+  -- symptom was a sync that appeared to ignore its delta.
+  SELECT COUNT(*) INTO o_rows_read
+    FROM XMLTABLE('/DATA_DS/ROWSET/ROW' PASSING XMLTYPE(p_xml));
+
+  IF o_rows_read = 0 THEN
+    o_rows_merged := 0;
+    o_status      := 'Success';
+    o_message     := 'No rows changed since the last sync. Nothing to merge.';
+
+    -- The bookmark still moves. The report was asked what changed and
+    -- answered "nothing" -- that answer is as complete as a thousand rows, and
+    -- leaving the bookmark behind would re-ask the same question for ever.
+    UPDATE oc_time_sync_config
+       SET lastsync_date    = TRUNC(SYSDATE),
+           sync_status      = 'Success',
+           last_run_on      = SYSTIMESTAMP,
+           last_rows_read   = 0,
+           last_rows_merged = 0,
+           last_message     = o_message,
+           updated_by       = NVL(p_actor, 'OIC'),
+           updated_on       = SYSTIMESTAMP
+     WHERE UPPER(target_table) = v_tab
+       AND (p_report_name IS NULL OR bip_report_name = p_report_name);
+    COMMIT;
+    RETURN;
+  END IF;
+
   IF v_cols IS NULL THEN
-    o_message := 'No column in ' || v_tab || ' matches any element in the XML. '
+    o_message := 'The report returned ' || o_rows_read || ' row(s) but no '
+              || 'column in ' || v_tab || ' matches any element in them. '
               || 'Check the report''s SELECT aliases against the table.';
     RETURN;
   END IF;
@@ -553,8 +595,7 @@ BEGIN
     ' WHEN NOT MATCHED THEN INSERT (' || LTRIM(v_ins, ',') ||
     ') VALUES (' || LTRIM(v_val, ',') || ')';
 
-  SELECT COUNT(*) INTO o_rows_read
-    FROM XMLTABLE('/DATA_DS/ROWSET/ROW' PASSING XMLTYPE(p_xml));
+  -- o_rows_read was counted above, before the zero-row check.
 
   -- ── 4. the before-image, BEFORE the merge destroys it ──────
   -- The MERGE below overwrites every non-key column. Once it has run, the
