@@ -2687,8 +2687,29 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
 
     -- RULE-020: every employee on the project must be Approved. This is a
     -- single all-employees-at-once action; there is no per-employee send.
+    --
+    -- ADVANCE CLOSURE IS THE ONE EXCEPTION, settled 11-Aug-2026. Section 8.2
+    -- of the module notes left this open: a Defaulted week blocks the confirm,
+    -- while advance close says defaulted hours are "treated as approved". The
+    -- recommendation was to keep blocking and make advance close the explicit
+    -- exception, and that is what this is.
+    --
+    -- It is deliberately NOT a widening of the normal path. A Normal confirm
+    -- still refuses a defaulted week, so nobody closes a month with unapproved
+    -- time by accident -- they have to say 'Advance closure', which is recorded
+    -- on OC_TS_MONTH_CONFIRM.CONFIRM_TYPE and answers "why did this month go
+    -- out without approvals" months later.
+    --
+    -- Defaulted already means a cut-off passed and a job decided: the weekly
+    -- job for the employee, the delivery job for the manager, each stamping
+    -- DEFAULTED_BY. The hours are real and prepopulated; what is missing is
+    -- somebody's agreement, and advance closure is the decision to proceed
+    -- without it.
     SELECT COUNT(*),
-           SUM(CASE WHEN month_status = 'Approved' THEN 1 ELSE 0 END)
+           SUM(CASE WHEN month_status = 'Approved'
+                      OR (p_confirm_type = 'Advance closure'
+                          AND month_status = 'Defaulted')
+                    THEN 1 ELSE 0 END)
       INTO v_emps, v_appr
       FROM v_oc_ts_month_summary
      WHERE project_id = p_project_id AND period_id = p_period_id;
@@ -2700,7 +2721,10 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
 
     IF v_emps <> NVL(v_appr,0) THEN
       RAISE_APPLICATION_ERROR(-20020,
-        'Approve every employee''s month before confirming to accrual.');
+        'Approve every employee''s month before confirming to accrual. '
+     || 'If a cut-off has passed and the hours must go out without those '
+     || 'approvals, confirm with type ''Advance closure'' -- which accepts '
+     || 'Defaulted months and records that it did.');
     END IF;
 
     v_batch := 'O2CTIME-' || TO_CHAR(p_project_id) || '-' ||
