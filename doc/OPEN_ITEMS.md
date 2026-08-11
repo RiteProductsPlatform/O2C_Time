@@ -42,7 +42,12 @@ As at 11-Aug-2026.
 
 | # | Item |
 |---|---|
-| I1 | **Monthly orchestrator.** Same shape as the daily one: `v_oc_time_sync_monthly`, then `POPULATE_MONTH` with `targetPeriodId`. Watch OIC's 4-minute adapter timeout — a whole-month populate is the call most likely to exceed it. |
+| I1 | ~~Monthly orchestrator~~ **BUILT AND PROVEN 12-Aug** — `O2C_TIME_SYNC_MONTHLY` reads `V_OC_TIME_SYNC_MONTHLY` via the DBaaS adapter, loops 6 feeds through the *same* INT 002, then calls `POPULATE_MONTH(21, NULL, 'OIC_MONTHLY')`. Run: 6 iterations, ~34s total (14.6s feeds + 18.4s populate), SEP-2026 built with 1,070 weeks for 214 people. The 4-minute timeout was never in play — measure before designing round it. |
+| I1a | **Monthly: null guard on `targetPeriodId`.** Switch after the config read, fault if empty. Passes today (id 21) and fails the first month nobody creates the next period — surfacing as an adapter error on a null primary-key column rather than a readable message. |
+| I1b | **Monthly: rename the `Daily…` nodes.** `Map`/`Invoke DailySyncStatusUpdate` are inherited names from the clone and now call `POPULATE_MONTH`. A node called `Daily…` in the monthly integration will mislead somebody. |
+| I1c | **Monthly: set the schedule.** `FREQ=MONTHLY;INTERVAL=1;BYMONTHDAY=25;BYHOUR=2;BYMINUTE=0;BYSECOND=0;` — trailing semicolon required, timezone Calcutta. Must run *before* the month it builds. |
+| I1d | **233 allocations have no chargeable WBS task** (`NO_WBS_TASK`, all 233 failures of the first monthly run). `populate_month` has nowhere to book hours, so it skips and logs. RULE-010: only a chargeable task reaches the LOV, and `NVL(chargeable_flag,'N')` turns a Fusion null into `N`. Almost certainly the PPM setup gap already on the plan — confirm against `oc_time_task.chargeable_flag`. |
+| I1e | **TASKS pulled 523 rows where 5,478 are in force.** Unexplained. The TASKS extract has no effective-date filter (`{ED}` is declared for parameter parity only), so the as-of date does *not* account for it — an earlier claim of mine that was wrong. Not the cause of I1d, since MERGE never deletes and the cache still holds all 5,478. |
 | I2 | BIP credentials into a Lookup. Currently literals in the mapper, so they are in every export. |
 | I3 | Fault handling in INT 001. One failed feed aborts the run; it should log and continue to the next. |
 | I4 | Tracing → Production once stable. |
