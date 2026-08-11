@@ -6283,14 +6283,34 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
       -- The day after the previous period's payroll cut-off. NVL to the start
       -- of this period when there is no earlier cut-off to chain from, so a
       -- first run is bounded rather than unbounded.
-      SELECT NVL(MAX(prev.payroll_cutoff) + 1,
-                 (SELECT start_date FROM oc_time_period WHERE period_id = p_period_id))
-        INTO v_from
-        FROM oc_time_period prev
-       WHERE prev.payroll_cutoff IS NOT NULL
-         AND prev.payroll_cutoff < (SELECT NVL(payroll_cutoff, TRUNC(SYSDATE))
-                                      FROM oc_time_period
-                                     WHERE period_id = p_period_id);
+      -- TWO STATEMENTS, not one. The single-statement version read
+      --   SELECT NVL(MAX(prev.payroll_cutoff) + 1,
+      --              (SELECT start_date FROM oc_time_period WHERE ...))
+      --     FROM oc_time_period prev WHERE ...
+      -- and raised ORA-00937, "not a single-group group function": a scalar
+      -- subquery in the select list is not an aggregate, so sitting it beside
+      -- MAX() with no GROUP BY is illegal. It compiles -- the package built
+      -- clean -- and fails only when the function is called, which is why it
+      -- surfaced in the middle of a month end rather than at install.
+      DECLARE
+        v_prev DATE;
+      BEGIN
+        SELECT MAX(prev.payroll_cutoff) INTO v_prev
+          FROM oc_time_period prev
+         WHERE prev.payroll_cutoff IS NOT NULL
+           AND prev.payroll_cutoff < (SELECT NVL(payroll_cutoff, TRUNC(SYSDATE))
+                                        FROM oc_time_period
+                                       WHERE period_id = p_period_id);
+
+        IF v_prev IS NOT NULL THEN
+          v_from := v_prev + 1;          -- the day after the last cut-off
+        ELSE
+          -- Nothing earlier to chain from: bound the window at this period's
+          -- own start rather than leaving it open.
+          SELECT start_date INTO v_from
+            FROM oc_time_period WHERE period_id = p_period_id;
+        END IF;
+      END;
     END IF;
 
     v_job := start_job('Salary Stopping', 'SalaryStopping',
@@ -6820,10 +6840,18 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
     -- DEFAULTED_BY. The hours are real and prepopulated; what is missing is
     -- somebody's agreement, and advance closure is the decision to proceed
     -- without it.
+    -- 'Pending', NOT 'Defaulted'. V_OC_TS_MONTH_SUMMARY derives month_status
+    -- as one of four values only -- 'No employees', 'Rejected', 'Approved',
+    -- 'Pending' -- so a defaulted month reads as Pending and the first version
+    -- of this test matched a value that cannot occur. Every project refused.
+    --
+    -- 'Rejected' still blocks even on advance closure, and deliberately: a
+    -- rejection is a manager actively saying no, which is the opposite of the
+    -- silence advance closure exists to override.
     SELECT COUNT(*),
            SUM(CASE WHEN month_status = 'Approved'
                       OR (p_confirm_type = 'Advance closure'
-                          AND month_status = 'Defaulted')
+                          AND month_status = 'Pending')
                     THEN 1 ELSE 0 END)
       INTO v_emps, v_appr
       FROM v_oc_ts_month_summary
