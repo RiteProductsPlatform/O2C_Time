@@ -5,7 +5,7 @@
     "version": "1.1.0",
     "description": "Reached through VB's server-side proxy, so the browser never sees the pod url or any credential (NFR-005). Deliberately small: master data still arrives through the OC_TIME_* cache, which is what OC_TIME_PKG can enforce rules over. Add operations here only for something the cache genuinely cannot answer, and write anything a rule must later validate back through ORDS — a value fetched straight into the page passes no rule at all.\n\nEvery query below was verified live against the dev20 pod on 08-Aug-2026.",
     "x-traps": [
-      "The filter separator is ' AND ', never ';'. A semicolon returns 400 on this pod.",
+      "The filter separator is ';', never ' AND '. Measured 12-Aug-2026: every ' AND ' combination returns 500, the same predicates joined by ';' return 200. A SINGLE predicate works either way, which is exactly why the wrong form survives until something needs two. This note said the reverse until 12-Aug and cost an afternoon.",
       "Filter absence on OVERLAP, not containment: endDate>=from AND startDate<=to. Using startDate>=from silently drops a leave that began before the window and runs into it.",
       "/absences takes personId, the internal numeric id — NOT PersonNumber. Passing the person number returns 200 with zero items, which reads exactly like 'this person has no leave'. Resolve it with getWorkers first.",
       "Fusion returns approvalStatusCd 'APPROVED' in caps; populate_month filters on exactly 'Approved'. The wrong case caches fine and then never becomes a timesheet row.",
@@ -31,28 +31,39 @@
             "name": "q",
             "in": "query",
             "required": false,
-            "schema": { "type": "string" },
+            "schema": {
+              "type": "string"
+            },
             "description": "Fusion filter. To resolve a worker: PersonNumber='RI2824'. Omit entirely for the reachability probe."
           },
           {
             "name": "limit",
             "in": "query",
             "required": false,
-            "schema": { "type": "integer", "default": 1 },
+            "schema": {
+              "type": "integer",
+              "default": 1
+            },
             "description": "Kept at 1. This is a lookup, not a data pull — pulling all 5976 workers here would be slow and pointless."
           },
           {
             "name": "onlyData",
             "in": "query",
             "required": false,
-            "schema": { "type": "boolean", "default": true },
+            "schema": {
+              "type": "boolean",
+              "default": true
+            },
             "description": "Drops Fusion's HATEOAS links block, which is far larger than the record itself."
           },
           {
             "name": "fields",
             "in": "query",
             "required": false,
-            "schema": { "type": "string", "default": "PersonNumber,PersonId" },
+            "schema": {
+              "type": "string",
+              "default": "PersonNumber,PersonId"
+            },
             "description": "PersonNumber is what OC_TIME_WORKER.EMPLOYEE_ID holds, so seeing one confirms the two systems agree on the key. PersonId is what every other HCM call is keyed on (INT-001)."
           }
         ],
@@ -69,21 +80,35 @@
                       "items": {
                         "type": "object",
                         "properties": {
-                          "PersonNumber": { "type": "string" },
-                          "PersonId": { "type": "number" }
+                          "PersonNumber": {
+                            "type": "string"
+                          },
+                          "PersonId": {
+                            "type": "number"
+                          }
                         }
                       }
                     },
-                    "count": { "type": "integer" },
-                    "hasMore": { "type": "boolean" }
+                    "count": {
+                      "type": "integer"
+                    },
+                    "hasMore": {
+                      "type": "boolean"
+                    }
                   }
                 }
               }
             }
           },
-          "401": { "description": "The proxy reached Fusion but the credentials were refused" },
-          "403": { "description": "Authenticated, but the service account lacks the HCM data role" },
-          "404": { "description": "Wrong resource path or REST version for this pod" }
+          "401": {
+            "description": "The proxy reached Fusion but the credentials were refused"
+          },
+          "403": {
+            "description": "Authenticated, but the service account lacks the HCM data role"
+          },
+          "404": {
+            "description": "Wrong resource path or REST version for this pod"
+          }
         }
       }
     },
@@ -99,21 +124,29 @@
             "name": "q",
             "in": "query",
             "required": true,
-            "schema": { "type": "string" },
-            "description": "personId={id} AND endDate>='{from}' AND startDate<='{to}'. Note ' AND ', not ';', and the overlap form — see x-traps."
+            "schema": {
+              "type": "string"
+            },
+            "description": "personId={id};endDate>='{from}';startDate<='{to}'. Note the ';' separator and the overlap form — see x-traps."
           },
           {
             "name": "limit",
             "in": "query",
             "required": false,
-            "schema": { "type": "integer", "default": 100 },
+            "schema": {
+              "type": "integer",
+              "default": 100
+            },
             "description": "A week has at most seven days of leave; 100 is headroom for a long absence returned as many rows."
           },
           {
             "name": "onlyData",
             "in": "query",
             "required": false,
-            "schema": { "type": "boolean", "default": true }
+            "schema": {
+              "type": "boolean",
+              "default": true
+            }
           },
           {
             "name": "fields",
@@ -139,25 +172,50 @@
                       "items": {
                         "type": "object",
                         "properties": {
-                          "startDate": { "type": "string", "format": "date" },
-                          "endDate": { "type": "string", "format": "date" },
-                          "duration": { "type": "number", "description": "in DAYS" },
-                          "absenceType": { "type": "string" },
-                          "absenceStatusCd": { "type": "string" },
-                          "approvalStatusCd": { "type": "string" }
+                          "startDate": {
+                            "type": "string",
+                            "format": "date"
+                          },
+                          "endDate": {
+                            "type": "string",
+                            "format": "date"
+                          },
+                          "duration": {
+                            "type": "number",
+                            "description": "in DAYS"
+                          },
+                          "absenceType": {
+                            "type": "string"
+                          },
+                          "absenceStatusCd": {
+                            "type": "string"
+                          },
+                          "approvalStatusCd": {
+                            "type": "string"
+                          }
                         }
                       }
                     },
-                    "count": { "type": "integer" },
-                    "hasMore": { "type": "boolean" }
+                    "count": {
+                      "type": "integer"
+                    },
+                    "hasMore": {
+                      "type": "boolean"
+                    }
                   }
                 }
               }
             }
           },
-          "400": { "description": "Almost always the filter syntax — a ';' separator instead of ' AND '" },
-          "401": { "description": "The proxy reached Fusion but the credentials were refused" },
-          "403": { "description": "Authenticated, but the account lacks the Absence data role" }
+          "400": {
+            "description": "Almost always the filter syntax — a ';' separator instead of ' AND '"
+          },
+          "401": {
+            "description": "The proxy reached Fusion but the credentials were refused"
+          },
+          "403": {
+            "description": "Authenticated, but the account lacks the Absence data role"
+          }
         }
       }
     }

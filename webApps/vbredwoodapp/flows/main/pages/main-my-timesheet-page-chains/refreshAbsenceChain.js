@@ -89,14 +89,22 @@ define([
         }
 
         // ── 2. the live read ─────────────────────────────────────
-        // ' AND ', never ';' — a semicolon is a 400 on this pod. And the test
-        // is OVERLAP, not containment: a leave that started last week and runs
-        // into this one still puts leave on these days.
+        // ';', NEVER ' AND '. This comment said the opposite until 12-Aug-2026
+        // and the opposite was wrong: measured against the pod, every ' AND '
+        // combination returns 500 while the same predicates joined by ';'
+        // return 200. Single predicates work either way, which is what makes
+        // the wrong version look plausible right up until you use two.
+        //
+        //   personId=<id> AND endDate>='2026-08-10'        500
+        //   personId=<id>;endDate>='2026-08-10'            200
+        //
+        // The test is OVERLAP, not containment: a leave that started last week
+        // and runs into this one still puts leave on these days.
         const res = await Actions.callRest(context, {
           endpoint: 'fa_hcm/getAbsences',
           uriParams: {
             q: 'personId=' + personId
-               + " AND endDate>='" + from + "' AND startDate<='" + to + "'",
+               + ";endDate>='" + from + "';startDate<='" + to + "'",
             limit: 100, onlyData: true,
             fields: 'startDate,endDate,duration,absenceType,'
                     + 'absenceStatusCd,approvalStatusCd',
