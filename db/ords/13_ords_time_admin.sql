@@ -1577,6 +1577,107 @@ BEGIN
 END;
 /
 
+-- ── Period rollover (time/24) ────────────────────────────────
+--
+-- DEFINED HERE, NOT IN A FILE OF THEIR OWN. This script opens with
+-- ORDS.DELETE_MODULE on oc.time.admin, so a handler defined anywhere else and
+-- attached to this module disappears the next time this file runs. Every
+-- oc.time.admin route has to live in this file.
+
+-- ── GET periods/rollover ─────────────────────────────────────
+--
+-- NOT 'periods/admin', and the operation is getPeriodRollover rather than
+-- getPeriodsAdmin: GET periods already exists on this module as
+-- getAdminPeriods, and two operations a transposition apart is a defect
+-- waiting to be written. This one answers a different question -- may this
+-- period be opened or closed, and what is stopping it.
+BEGIN
+  ORDS.DEFINE_TEMPLATE(p_module_name => 'oc.time.admin', p_pattern => 'periods/rollover');
+  ORDS.DEFINE_HANDLER(
+    p_module_name => 'oc.time.admin', p_pattern => 'periods/rollover',
+    p_method => 'GET',
+    p_source_type => ORDS.source_type_collection_feed,
+    p_source => q'~
+      SELECT period_id, period_name, status, phase,
+             start_date, end_date, delivery_cutoff, finance_cutoff,
+             weeks, people, unconfirmed_projects, can_open, can_close
+        FROM v_oc_time_period_admin
+       ORDER BY start_date DESC
+    ~');
+  COMMIT;
+END;
+/
+
+-- ── POST period/:periodId/open ───────────────────────────────
+BEGIN
+  ORDS.DEFINE_TEMPLATE(p_module_name => 'oc.time.admin',
+                       p_pattern => 'period/:periodId/open');
+  ORDS.DEFINE_HANDLER(
+    p_module_name => 'oc.time.admin', p_pattern => 'period/:periodId/open',
+    p_method => 'POST',
+    p_source_type => ORDS.source_type_plsql,
+    p_source => q'~
+      DECLARE
+        v_job    NUMBER;
+        v_status VARCHAR2(20);
+        v_name   VARCHAR2(30);
+      BEGIN
+        v_job := oc_time_open_period(:periodId, NVL(:actor,'VBCS_ADMIN'));
+        SELECT period_name, status INTO v_name, v_status
+          FROM oc_time_period WHERE period_id = :periodId;
+        COMMIT;
+        :status_code := 200;
+        HTP.P('{"jobRunId":' || v_job || ',"periodName":"' || v_name ||
+              '","status":"' || v_status || '"}');
+      EXCEPTION WHEN OTHERS THEN
+        ROLLBACK; :status_code := 400;
+        HTP.P('{"error":"' ||
+              REPLACE(REPLACE(SQLERRM,'ORA-'||LTRIM(TO_CHAR(ABS(SQLCODE)))||': ',''),'"','\"')
+              || '"}');
+      END;
+    ~');
+  COMMIT;
+END;
+/
+
+-- ── POST period/:periodId/close ──────────────────────────────
+--
+-- force=Y is the advance-closure case and is deliberately awkward to reach:
+-- the caller has to send it, so it cannot happen by pressing the ordinary
+-- button. Without it, a period with unconfirmed projects refuses -- see
+-- OC_TIME_CLOSE_PERIOD for why closing early cannot be undone by approving.
+BEGIN
+  ORDS.DEFINE_TEMPLATE(p_module_name => 'oc.time.admin',
+                       p_pattern => 'period/:periodId/close');
+  ORDS.DEFINE_HANDLER(
+    p_module_name => 'oc.time.admin', p_pattern => 'period/:periodId/close',
+    p_method => 'POST',
+    p_source_type => ORDS.source_type_plsql,
+    p_source => q'~
+      DECLARE
+        v_job    NUMBER;
+        v_status VARCHAR2(20);
+        v_name   VARCHAR2(30);
+      BEGIN
+        v_job := oc_time_close_period(:periodId, NVL(:actor,'VBCS_ADMIN'),
+                                      NVL(:force,'N'));
+        SELECT period_name, status INTO v_name, v_status
+          FROM oc_time_period WHERE period_id = :periodId;
+        COMMIT;
+        :status_code := 200;
+        HTP.P('{"jobRunId":' || v_job || ',"periodName":"' || v_name ||
+              '","status":"' || v_status || '"}');
+      EXCEPTION WHEN OTHERS THEN
+        ROLLBACK; :status_code := 400;
+        HTP.P('{"error":"' ||
+              REPLACE(REPLACE(SQLERRM,'ORA-'||LTRIM(TO_CHAR(ABS(SQLCODE)))||': ',''),'"','\"')
+              || '"}');
+      END;
+    ~');
+  COMMIT;
+END;
+/
+
 PROMPT
 PROMPT ============================================================
 PROMPT ORDS module oc.time.admin defined.

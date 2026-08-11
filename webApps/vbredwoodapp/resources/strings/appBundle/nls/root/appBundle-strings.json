@@ -1258,5 +1258,16 @@
   "my_timesheet_approval_workflow_sub": "Every submission, approval and rejection on this week.",
   "my_timesheet_no_activity_yet": "Nothing has happened on this week yet.",
   "my_timesheet_week_not_started": "This week has not started yet, so it cannot be filled in. The hours below are the expected pattern from your allocation. Come back on Monday and the week opens for entry.",
-  "my_timesheet_week_locked": "This week was completed by the weekly cut-off and is locked, so it can no longer be edited here. Ask your manager to correct it or to unlock it."
+  "my_timesheet_week_locked": "This week was completed by the weekly cut-off and is locked, so it can no longer be edited here. Ask your manager to correct it or to unlock it.",
+  "sync_status_period_rollover": "Period rollover",
+  "sync_status_period_rollover_hint": "The monthly sync populates next month automatically. Opening it is this step.",
+  "sync_status_period": "Period",
+  "sync_status_phase": "Phase",
+  "sync_status_weeks": "Weeks",
+  "sync_status_people": "People",
+  "sync_status_unconfirmed": "Unconfirmed",
+  "sync_status_open_period": "Open",
+  "sync_status_close_period": "Close",
+  "sync_status_close_the_period": "Close the period",
+  "sync_status_confirm_close": "Close it"
 }

@@ -46,6 +46,34 @@ define([], () => {
       return 'Retry ' + entityKey;
     }
 
+    /**
+     * Chip class for a period's stored status. Open and Closed are the only
+     * two values chk_oc_tp_status allows — there is no 'Future' — so this
+     * says nothing about whether the month has started. That is phaseText.
+     */
+    periodStatusClass(status) {
+      return status === 'Open'
+        ? 'rw-status rw-status-approved'
+        : 'rw-status rw-status-rejected';
+    }
+
+    /**
+     * Where the month sits against today, derived in the view from its dates
+     * rather than from STATUS. A Future month reading Closed is correct and
+     * this is what tells the admin so.
+     */
+    phaseText(phase) {
+      return phase || '';
+    }
+
+    /** Why a period cannot be closed yet, for the button's accessible name. */
+    closeBlockedLabel(periodName, unconfirmed) {
+      return Number(unconfirmed) > 0
+        ? 'Cannot close ' + periodName + ' — ' + unconfirmed +
+          ' project(s) not yet confirmed to accrual'
+        : 'Close ' + periodName;
+    }
+
   }
 
   return PageModule;

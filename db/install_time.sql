@@ -259,6 +259,9 @@ PROMPT [n/m] 20_retro_reallocation.sql - retro allocation change -> Reversal/Adj
 
 PROMPT [n/m] 21_adjustment_lifecycle.sql - submit/approve cut-offs for adjustments
 @@21_adjustment_lifecycle.sql
+
+PROMPT [n/m] 24_period_rollover.sql - open/close a period from the admin screen
+@@24_period_rollover.sql
 -- 15 is NOT here: it creates a table the package body reads, so it runs before
 -- step 09 above. Moving it back would reintroduce nine ORA-00942s.
 
