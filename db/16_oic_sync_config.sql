@@ -841,8 +841,33 @@ SELECT bip_report_name, bip_report_path, target_table,
 -- with no period row the monthly run has nothing to build.
 CREATE OR REPLACE VIEW v_oc_time_sync_monthly AS
 SELECT c.bip_report_name, c.bip_report_path, c.target_table,
-       NVL(TO_CHAR(c.lastsync_date, 'YYYY-MM-DD'), '1900-01-01')
-                                                          AS last_sync_date,
+       -- ALWAYS 1900-01-01 -- the bookmark is deliberately NOT read here.
+       --
+       -- The delta predicate is ANDed onto the as-of filter, so a monthly run
+       -- carrying a bookmark asks BIP for
+       --
+       --   allocations in force on 1-Sep AND changed since 11-Aug
+       --
+       -- An allocation created in June, effective 1-Sep onward, satisfies the
+       -- first and fails the second. It is dropped -- and it is exactly the row
+       -- the monthly run exists to fetch. September then populates from
+       -- whatever the cache already holds, which the daily runs filled with the
+       -- AUGUST as-of picture: everyone on their old projects, job status
+       -- Success, nothing in the output that looks wrong.
+       --
+       -- A delta answers "what changed since". Once the as-of date moves to a
+       -- future point the question is "what is true then", and that answer
+       -- includes rows last touched months ago. Both filters cannot apply.
+       --
+       -- A LITERAL, not NULL, and not the daily view's NVL. The database
+       -- adapter rejects a null in a key column outright -- see the note on
+       -- V_OC_TIME_SYNC_DAILY -- so the full-pull sentinel has to be stated.
+       -- 1900-01-01 is what the report's own NVL would have produced anyway.
+       --
+       -- Cost is not the objection it appears. Measured 11-Aug: a re-merge
+       -- changing nothing runs in 4.9s against 17s for a cold build, because
+       -- MERGE finds the rows already there. ALLOCATIONS is 1,595 rows.
+       '1900-01-01'                                       AS last_sync_date,
        TO_CHAR(ADD_MONTHS(TRUNC(SYSDATE,'MM'), 1), 'YYYY-MM-DD')
                                                           AS effective_date,
        (SELECT MAX(p.period_id) FROM oc_time_period p
