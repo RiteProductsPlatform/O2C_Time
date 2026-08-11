@@ -6420,7 +6420,13 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
          AND NOT EXISTS (SELECT 1 FROM oc_ts_salary_hold_day x
                           WHERE x.employee_id = e.employee_id
                             AND x.work_date   = en.entry_date)
-       GROUP BY h.hold_id, wk.employee_id, en.entry_date, en.ts_week_id
+       -- THE BINDS ARE IN THE GROUP BY, and they have to be. p_period_id and
+       -- p_actor are PL/SQL parameters, constant for the whole statement, so
+       -- they cannot change the grouping -- but Oracle still refuses them in
+       -- the select list of a grouped query unless they are named here.
+       -- ORA-00979 twice over, once nested and once flat, was this.
+       GROUP BY h.hold_id, wk.employee_id, en.entry_date, en.ts_week_id,
+                p_period_id, p_actor
       HAVING MAX(en.standard_hours) > 0;
       v_up := v_up + 1;
     END LOOP;
