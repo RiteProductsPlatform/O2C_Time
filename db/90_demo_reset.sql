@@ -127,17 +127,14 @@ BEGIN
                   WHERE w.ts_week_id = ad.ts_week_id AND w.period_id = v_period);
   gone('OC_TS_AUDIT', SQL%ROWCOUNT);
 
-  -- Salary holds: the day rows hang off the hold, so they go first.
-  BEGIN
-    DELETE FROM oc_ts_salary_hold_day d
-     WHERE EXISTS (SELECT 1 FROM oc_ts_salary_hold h
-                    WHERE h.salary_hold_id = d.salary_hold_id
-                      AND h.period_id = v_period);
-    gone('OC_TS_SALARY_HOLD_DAY', SQL%ROWCOUNT);
-  EXCEPTION WHEN OTHERS THEN
-    DBMS_OUTPUT.PUT_LINE('OC_TS_SALARY_HOLD_DAY               skipped - '
-                      || SUBSTR(SQLERRM, 1, 60));
-  END;
+  -- Salary holds: the day rows go first, but NOT by joining to the parent.
+  -- OC_TS_SALARY_HOLD_DAY carries PERIOD_ID itself, so the join was never
+  -- needed -- and the version that had one named the key SALARY_HOLD_ID on
+  -- both tables. It is HOLD_ID on both. ORA-00904 killed the whole block and
+  -- the exception handler rolled it back, so a run that printed four cheerful
+  -- section banners deleted nothing at all.
+  DELETE FROM oc_ts_salary_hold_day WHERE period_id = v_period;
+  gone('OC_TS_SALARY_HOLD_DAY', SQL%ROWCOUNT);
 
   DELETE FROM oc_ts_salary_hold WHERE period_id = v_period;
   gone('OC_TS_SALARY_HOLD', SQL%ROWCOUNT);
