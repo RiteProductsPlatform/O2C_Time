@@ -425,14 +425,27 @@ define([], () => {
      *  is the worst place for it to fail.
      */
     absenceToRows(items, employeeId, from, to, stdHoursPerDay) {
+      // EVERY Date HERE IS PINNED TO UTC -- the 'Z' suffix and the setUTCDate
+      // walk below are both load-bearing, not tidiness.
+      //
+      // These are CALENDAR DATES, not instants. Without the 'Z', JavaScript
+      // parses '2026-08-14T00:00:00' in the BROWSER's zone, and toISOString()
+      // then converts to UTC: at UTC+5:30 that is 2026-08-13T18:30Z, and
+      // substring(0,10) yields '2026-08-13'. Leave applied for Friday landed
+      // on Thursday -- measured 12-Aug-2026, and the shift is silent because
+      // every date involved is still a valid date.
+      //
+      // The failure is timezone-dependent, which is what makes it nasty: it
+      // never appears for a viewer at or behind UTC, so it cannot be
+      // reproduced from London and is guaranteed from India.
       const std = Number(stdHoursPerDay) || 8;
-      const lo = new Date(from + 'T00:00:00');
-      const hi = new Date(to + 'T00:00:00');
+      const lo = new Date(from + 'T00:00:00Z');
+      const hi = new Date(to + 'T00:00:00Z');
       const out = [];
 
       (items || []).forEach((x) => {
-        const s = new Date(String(x.startDate).substring(0, 10) + 'T00:00:00');
-        const e = new Date(String(x.endDate).substring(0, 10) + 'T00:00:00');
+        const s = new Date(String(x.startDate).substring(0, 10) + 'T00:00:00Z');
+        const e = new Date(String(x.endDate).substring(0, 10) + 'T00:00:00Z');
         if (isNaN(s) || isNaN(e)) { return; }
 
         const whole = Math.round((e - s) / 86400000) + 1;
@@ -442,7 +455,11 @@ define([], () => {
         const start = s > lo ? s : lo;
         const end = e < hi ? e : hi;
 
-        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        // setUTCDate / getUTCDate, not setDate / getDate. The local-zone pair
+        // would walk the calendar in the browser's zone while toISOString()
+        // reads it back in UTC, reintroducing the same off-by-one on the
+        // second and later days of a multi-day absence.
+        for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
           out.push({
             EMPLOYEE_ID: employeeId,
             ABSENCE_DATE: d.toISOString().substring(0, 10),
