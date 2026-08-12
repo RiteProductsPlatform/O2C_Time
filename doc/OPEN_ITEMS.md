@@ -8,7 +8,7 @@ As at 11-Aug-2026.
 
 | # | Item | Note |
 |---|---|---|
-| H1 | VBCS unbilled-reason dropdown | DB side is done (`23_unbilled_reason_per_line.sql`). Needs the page, an LOV endpoint and the save chain. Blocked while the VB Studio workspace is down. |
+| H1 | VBCS unbilled-reason dropdown | DB side is done (`23_unbilled_reason_per_line.sql`). Needs the page, an LOV endpoint and the save chain. **Downgraded 12-Aug:** PRJ-ORG was retired (`status='Closed'`) and non-billable time now books to the *real* project against a COMMON task — Onboarding, Training, Travel, Client Holiday, which `V_OC_TS_TASK_LOV` already appends to every active project. So there is a working route today and this is no longer blocking; it adds a free-text reason on any line, which is finer-grained than a fixed task list. |
 | H2 | Orphan allocations | Employee leaves a project and joins nothing. The change stays `Pending` in `OC_TIME_SYNC_CHANGE` with a note. Hours are wrong but there is nowhere to move them. |
 | H3 | Employee cut-off for adjustments | `oc_time_default_adjustments` reads `DELIVERY_CUTOFF`. If it should be `PAYROLL_CUTOFF`, one line. |
 | H4 | Future prepopulated days | Retro reallocation adjusts up to today. Days already populated beyond it still carry the old project and want re-populating, not adjusting. |
