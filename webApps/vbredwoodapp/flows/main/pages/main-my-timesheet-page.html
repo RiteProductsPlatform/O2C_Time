@@ -289,10 +289,12 @@
                       <oj-bind-text value="[[ line.data.unbilledReason ]]"></oj-bind-text>
                     </span>
                   </oj-bind-if>
-                  <oj-bind-if test="[[ line.data.isLeave === 'Y' ]]">
-                    <span class="rw-flag rw-flag-advance"
-                          title="Sourced from HCM Absence. Leave is never entered here (RULE-008)."><oj-bind-text value="[[$application.translations.appBundle.my_timesheet_from_hr]]"></oj-bind-text></span>
-                  </oj-bind-if>
+                  <!-- The "From HR" chip was removed on 12-Aug-2026 by request.
+                       Where the hours came from is recorded in the database,
+                       on OC_TS_ENTRY.SOURCE = 'Absence' (time/25), rather than
+                       announced in the grid. The row is still read-only and
+                       still labelled Leave, so nothing about how it behaves
+                       changed -- only the badge is gone. -->
                 </span>
 
                 <!-- ACT-005 / RULE-005: quarter-hour blocks. A text box with its

@@ -262,6 +262,9 @@ PROMPT [n/m] 21_adjustment_lifecycle.sql - submit/approve cut-offs for adjustmen
 
 PROMPT [n/m] 24_period_rollover.sql - open/close a period from the admin screen
 @@24_period_rollover.sql
+
+PROMPT [n/m] 25_absence_source.sql - leave is its own source, not a manager edit
+@@25_absence_source.sql
 -- 15 is NOT here: it creates a table the package body reads, so it runs before
 -- step 09 above. Moving it back would reintroduce nine ORA-00942s.
 

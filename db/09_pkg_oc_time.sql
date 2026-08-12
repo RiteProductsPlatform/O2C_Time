@@ -891,15 +891,28 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
            ON (e.ts_week_id = s.ts_week_id AND e.project_id = s.project_id
            AND e.task_id    = s.task_id    AND e.entry_date = s.entry_date
            AND e.entry_type = 'Actual')
+         -- SOURCE = 'Absence' ON BOTH BRANCHES.
+         --
+         -- The UPDATE branch used to leave SOURCE alone, so a day that had
+         -- already been prepopulated kept 'Prepopulated' when leave landed on
+         -- it. TRG_OC_TSE_AUDIT_CAPTURE switches on SOURCE and has no case for
+         -- that value, so it fell to ELSE -> 'ManagerEdit', and the approval
+         -- workflow told the employee "Edited by the manager" about a change no
+         -- manager made. Reported 12-Aug-2026.
+         --
+         -- 'Absence' is also what records, in the database, that these hours
+         -- came from Absence Management -- which is why the screen no longer
+         -- needs a chip to say so.
          WHEN MATCHED THEN UPDATE
               SET e.hours = ab.absence_hours, e.is_leave = 'Y',
-                  e.absence_type = ab.absence_type, e.updated_by = p_actor
+                  e.absence_type = ab.absence_type, e.source = 'Absence',
+                  e.updated_by = p_actor
          WHEN NOT MATCHED THEN
               INSERT (ts_week_id, project_id, task_id, entry_date, hours,
                       entry_type, is_leave, absence_type, source, created_by)
               VALUES (v_week, ab.project_id, v_task, ab.absence_date,
                       ab.absence_hours, 'Actual', 'Y', ab.absence_type,
-                      'Prepopulated', p_actor);
+                      'Absence', p_actor);
         v_upserted := v_upserted + 1;
 
         -- RULE-008: a full day of leave takes the whole day, so the work this

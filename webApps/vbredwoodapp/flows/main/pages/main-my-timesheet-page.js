@@ -281,6 +281,11 @@ define([], () => {
         Adjustment:     'Retro adjustment',
         Reversal:       'Reversal',
         ManagerEdit:    'Edited by the manager',
+        // Leave arriving from Absence Management. Before 12-Aug-2026 this
+        // landed as ManagerEdit and the workflow told the employee a named
+        // manager had edited their week -- on the one screen whose whole job
+        // is to say truthfully who did what.
+        AbsenceSync:    'Leave applied from the absence module',
         Import:         'Imported',
       }[row.change_type] || row.change_type;
       return said + scope + by;
