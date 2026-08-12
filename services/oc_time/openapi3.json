@@ -4089,6 +4089,74 @@
           }
         ]
       }
+    },
+    "/oc/time/line/task": {
+      "post": {
+        "operationId": "changeLineTask",
+        "summary": "Move a timesheet line to a different task on the same project (H8). Refuses if that task already has a line — the hours are never merged silently. Leave lines cannot be moved (RULE-008).",
+        "x-vb": {
+          "actionHint": "create"
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "tsWeekId",
+                  "projectId",
+                  "oldTaskId",
+                  "newTaskId"
+                ],
+                "properties": {
+                  "tsWeekId": {
+                    "type": "integer"
+                  },
+                  "projectId": {
+                    "type": "integer"
+                  },
+                  "oldTaskId": {
+                    "type": "integer"
+                  },
+                  "newTaskId": {
+                    "type": "integer"
+                  },
+                  "actor": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Moved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "moved": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Refused — the rule's own message",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {

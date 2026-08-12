@@ -782,6 +782,42 @@ BEGIN
 END;
 /
 
+-- ── POST line/task  (H8) ─────────────────────────────────────
+--
+-- Move a line to a different task. Defined here because this script opens with
+-- ORDS.DELETE_MODULE on oc.time -- a handler attached to this module from any
+-- other file disappears the next time this one runs.
+--
+-- Refuses rather than merges when the target task already has a line
+-- (decision, 12-Aug). The rule and its wording live in
+-- OC_TIME_CHANGE_LINE_TASK; this only carries the message out.
+BEGIN
+  ORDS.DEFINE_TEMPLATE(p_module_name => 'oc.time', p_pattern => 'line/task');
+  ORDS.DEFINE_HANDLER(
+    p_module_name => 'oc.time', p_pattern => 'line/task', p_method => 'POST',
+    p_source_type => ORDS.source_type_plsql,
+    p_source => q'~
+      BEGIN
+        oc_time_change_line_task(
+          p_ts_week_id  => :tsWeekId,
+          p_project_id  => :projectId,
+          p_old_task_id => :oldTaskId,
+          p_new_task_id => :newTaskId,
+          p_actor       => NVL(:actor, 'VBCS_USER'));
+        COMMIT;
+        :status_code := 200;
+        HTP.P('{"moved":true}');
+      EXCEPTION WHEN OTHERS THEN
+        ROLLBACK; :status_code := 400;
+        HTP.P('{"error":"' ||
+              REPLACE(REPLACE(SQLERRM,'ORA-'||LTRIM(TO_CHAR(ABS(SQLCODE)))||': ',''),'"','\"')
+              || '"}');
+      END;
+    ~');
+  COMMIT;
+END;
+/
+
 PROMPT
 PROMPT ============================================================
 PROMPT ORDS module oc.time defined.
