@@ -446,7 +446,15 @@ define([], () => {
           out.push({
             EMPLOYEE_ID: employeeId,
             ABSENCE_DATE: d.toISOString().substring(0, 10),
-            ABSENCE_TYPE: x.absenceType || 'Leave',
+            // TRIMMED. Fusion returns "Earned leave " with a trailing space on
+            // this pod -- measured 12-Aug-2026, and invisible everywhere it is
+            // displayed because both the Fusion screen and the grid collapse
+            // it. Untrimmed it reaches OC_TIME_ABSENCE.ABSENCE_TYPE and then
+            // OC_TS_ENTRY.ABSENCE_TYPE, where nothing compares it today and
+            // the first thing that does -- a lookup join, a report filter, a
+            // GROUP BY against 'Earned leave' -- fails silently and looks like
+            // missing data rather than a whitespace mismatch.
+            ABSENCE_TYPE: String(x.absenceType || 'Leave').trim() || 'Leave',
             // CHK_OC_TABS_HRS caps the column at 24
             DURATION_HOURS: Math.round(Math.min(perDay * std, 24) * 100) / 100,
             APPROVAL_STATUS:
