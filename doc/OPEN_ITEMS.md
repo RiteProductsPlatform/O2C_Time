@@ -23,6 +23,7 @@ As at 11-Aug-2026.
 | # | Item | Why it matters |
 |---|---|---|
 | O1 | **ABSENCES is not synced** | Disabled by decision 09-Aug (read live per person). But `populate_month` reads `OC_TIME_ABSENCE` for leave rows, and only `90_test_seed` fills it. In production, leave prepopulation produces nothing. Enable the feed, or change how leave reaches the timesheet. |
+| O15 | **Every calendar date is duplicated** | 42 working days counted for an August with 21: two `CORPORATE` rows per date, same values, one hand-seeded and one synced. Two rows at the same `LAYER` and `PRECEDENCE` make the precedence resolution ambiguous and nothing in the model forbids it. `93_remove_test_data.sql` deliberately does **not** delete on `SOURCE_METHOD` for this reason — a calendar that comes back short populates nothing and shows an empty timesheet rather than an error. Fix on its own terms: decide the natural key, dedupe, then constrain. |
 | O2 | Deletions are undetectable | An incremental delta returns changed rows; a deleted row returns nothing. Accepted on the basis that allocations are end-dated, not deleted — worth confirming that is always the practice. |
 | O3 | Adjustment generation rules | Capture is live and queues everything `Pending`. Nothing drains it until the flag/scenario workbook comes back. |
 | O4 | A task that moves project in Fusion | Now errors instead of silently duplicating. Neither is correct handling. |

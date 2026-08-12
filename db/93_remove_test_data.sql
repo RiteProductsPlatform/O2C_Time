@@ -147,21 +147,36 @@ PROMPT ============================================================
 PROMPT [4/6] Calendar and absences
 PROMPT ============================================================
 
+-- THE CALENDAR IS DELIBERATELY LEFT ALONE. Decided 12-Aug-2026.
+--
+-- SOURCE_METHOD would have been the discriminator -- 'BIP' or 'REST' on
+-- anything a sync wrote, NULL on a hand-seeded row -- but deleting on it is
+-- not safe yet, because the two sets OVERLAP rather than sitting side by side:
+--
+--   SELECT COUNT(*) FROM oc_time_calendar
+--    WHERE cal_date BETWEEN DATE '2026-08-01' AND DATE '2026-08-31'
+--      AND is_working_day = 'Y';           -->  42, for a month with 21
+--
+-- Every August date carries TWO CORPORATE rows, one seeded and one synced,
+-- with the same values. Dropping the seeded half would probably be correct and
+-- would probably leave 21 -- but "probably" is not good enough for the table
+-- that decides whether a day exists at all. A calendar that comes back short
+-- silently populates nothing, and the symptom is an empty timesheet rather
+-- than an error.
+--
+-- The duplication is worth fixing on its own terms, not as a side effect of a
+-- cleanup: two rows at the same LAYER and PRECEDENCE for one date make the
+-- precedence resolution ambiguous, and nothing in the model forbids it.
+-- Recorded as an open item rather than acted on here.
 DECLARE
-  v_c NUMBER; v_b NUMBER;
+  v_b NUMBER;
 BEGIN
-  -- SOURCE_METHOD is 'BIP' or 'REST' on anything a sync wrote and NULL on a
-  -- hand-seeded row. That is the only reliable discriminator here -- the
-  -- calendar has no Fusion id of its own.
-  DELETE FROM oc_time_calendar WHERE source_method IS NULL;
-  v_c := SQL%ROWCOUNT;
-
   DELETE FROM oc_time_absence WHERE fusion_absence_id IS NULL;
   v_b := SQL%ROWCOUNT;
 
   COMMIT;
-  DBMS_OUTPUT.PUT_LINE('calendar rows ' || v_c || ' deleted');
   DBMS_OUTPUT.PUT_LINE('absences      ' || v_b || ' deleted');
+  DBMS_OUTPUT.PUT_LINE('calendar      untouched by decision - see the note above');
 END;
 /
 
