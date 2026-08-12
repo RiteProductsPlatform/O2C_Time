@@ -331,6 +331,15 @@
   .rw-ts-proj  { flex:0 0 13rem; padding:8px; overflow:hidden;
                  text-overflow:ellipsis; white-space:nowrap; }
   .rw-ts-task  { flex:0 0 11rem; padding:8px; }
+  /* H8. The task is a button on an editable, non-leave line. It has to read as
+     the task name it replaced, not as a control competing with Save draft --
+     so no chrome, left aligned, inheriting the cell's type. The affordance is
+     the hover and the focus ring, which oj-button supplies. A leave line and a
+     locked week render plain text instead, so the absence of a button is
+     itself the signal that the line cannot be moved. */
+  .rw-ts-task-btn { margin:-4px 0 0 -8px; text-align:left; max-width:100%; }
+  .rw-ts-task-btn .oj-button-label { font-weight:inherit; text-align:left;
+                 white-space:normal; }
   .rw-ts-tot   { flex:0 0 5.5rem; padding:8px; text-align:center; }
   .rw-ts-act   { flex:0 0 3.5rem; padding:4px; text-align:center; }
   .rw-ts .rw-grid-day { flex:1 1 0; min-width:8.5rem; padding:6px 8px; text-align:center; }

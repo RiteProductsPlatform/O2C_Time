@@ -1269,5 +1269,11 @@
   "sync_status_open_period": "Open",
   "sync_status_close_period": "Close",
   "sync_status_close_the_period": "Close the period",
-  "sync_status_confirm_close": "Close it"
+  "sync_status_confirm_close": "Close it",
+  "my_timesheet_change_the_task": "Change the task",
+  "my_timesheet_change_task_hint": "The hours already entered move with the line. If the new task is non-billable, they become non-billable.",
+  "my_timesheet_current_task": "Current task",
+  "my_timesheet_move_to": "Move to",
+  "my_timesheet_move_the_hours": "Move the hours",
+  "my_timesheet_project": "Project"
 }

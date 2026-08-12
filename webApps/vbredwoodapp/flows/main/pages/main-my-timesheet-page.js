@@ -429,6 +429,15 @@ define([], () => {
      *  and then never becomes a row — it fails silently at the last step, which
      *  is the worst place for it to fail.
      */
+    /**
+     * H8 — accessible name for the task button. "Offshore" alone tells a
+     * screen-reader user the value but not that it is actionable, and the
+     * visible text is already the task name.
+     */
+    changeTaskLabel(taskName) {
+      return 'Change the task on the ' + (taskName || 'this') + ' line';
+    }
+
     absenceToRows(items, employeeId, from, to, stdHoursPerDay) {
       // EVERY Date HERE IS PINNED TO UTC -- the 'Z' suffix and the setUTCDate
       // walk below are both load-bearing, not tidiness.

@@ -344,6 +344,49 @@
       "type": "boolean",
       "defaultValue": false,
       "input": "none"
+    },
+    "chgWeekId": {
+      "type": "number",
+      "defaultValue": null,
+      "input": "none"
+    },
+    "chgProjectId": {
+      "type": "number",
+      "defaultValue": null,
+      "input": "none"
+    },
+    "chgProjectName": {
+      "type": "string",
+      "defaultValue": "",
+      "input": "none"
+    },
+    "chgOldTaskId": {
+      "type": "number",
+      "defaultValue": null,
+      "input": "none"
+    },
+    "chgOldTaskName": {
+      "type": "string",
+      "defaultValue": "",
+      "input": "none"
+    },
+    "chgNewTaskId": {
+      "type": "number",
+      "defaultValue": null
+    },
+    "chgTaskOptionsArray": {
+      "type": "any[]",
+      "defaultValue": [],
+      "input": "none"
+    },
+    "chgTaskOptions": {
+      "type": "vb/ArrayDataProvider2",
+      "defaultValue": {
+        "itemType": "taskOptType",
+        "keyAttributes": "value",
+        "data": "{{ $page.variables.chgTaskOptionsArray }}"
+      },
+      "description": "H8 - the tasks this line's own project offers. Same LOV as Add a line, so RULE-010 is applied once server-side; Leave is excluded by SELECTABLE_FLAG and can never appear here."
     }
   },
   "types": {
@@ -598,6 +641,30 @@
             "cell": "{{ $current.data }}",
             "key": "{{ $event.key }}"
           }
+        }
+      ]
+    },
+    "openChangeTask": {
+      "chains": [
+        {
+          "chain": "openChangeTaskChain",
+          "parameters": {
+            "row": "{{ $current.data }}"
+          }
+        }
+      ]
+    },
+    "confirmChangeTask": {
+      "chains": [
+        {
+          "chain": "changeTaskChain"
+        }
+      ]
+    },
+    "cancelChangeTask": {
+      "chains": [
+        {
+          "chain": "cancelChangeTaskChain"
         }
       ]
     }

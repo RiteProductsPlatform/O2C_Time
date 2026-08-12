@@ -279,7 +279,26 @@
                 </span>
 
                 <span class="rw-ts-task" role="cell">
-                  <oj-bind-text value="[[ line.data.taskName ]]"></oj-bind-text>
+                  <!-- H8. The task is a BUTTON when the line may be moved, and
+                       plain text otherwise. A real <button>, not a styled span:
+                       a keypress handler on a div fires for every character
+                       key, which is the bug the nav items already carry a note
+                       about. Buttons get Enter and Space handling for free.
+
+                       Leave is excluded because it is system-owned (RULE-008).
+                       The database refuses it too -- this only decides whether
+                       the affordance is offered. -->
+                  <oj-bind-if test="[[ $variables.editable && line.data.isLeave !== 'Y' ]]">
+                    <oj-button chroming="borderless"
+                               class="rw-ts-task-btn"
+                               :aria-label="[[ $page.functions.changeTaskLabel(line.data.taskName) ]]"
+                               on-oj-action="[[ $listeners.openChangeTask ]]">
+                      <span><oj-bind-text value="[[ line.data.taskName ]]"></oj-bind-text></span>
+                    </oj-button>
+                  </oj-bind-if>
+                  <oj-bind-if test="[[ !$variables.editable || line.data.isLeave === 'Y' ]]">
+                    <oj-bind-text value="[[ line.data.taskName ]]"></oj-bind-text>
+                  </oj-bind-if>
                   <!-- The unbilled reason IS the task for the common non-billable
                        tasks (RULE-002), so it is only worth showing separately
                        when it says something different. -->
@@ -702,6 +721,49 @@
       <oj-button chroming="callToAction" disabled="[[ $variables.busy ]]"
                  on-oj-action="[[ $listeners.applyAdjustment ]]">
         <span><oj-bind-text value="[[$application.translations.appBundle.my_timesheet_apply_send_for_approval]]"></oj-bind-text></span>
+      </oj-button>
+    </div>
+  </oj-dialog>
+
+  <!-- ══════════════════ Change task (H8) ══════════════════
+       A dialog rather than an inline dropdown: oj-select-single needs a
+       DataProvider and the options differ per row, which cannot be built
+       inside an oj-bind-for-each. Same pattern and the same click count as
+       Add a line.
+
+       The endpoint REFUSES if the chosen task already has a line — it never
+       merges two lines' hours silently. That refusal is shown verbatim. -->
+  <oj-dialog id="changeTaskDlg"
+             dialog-title="[[$application.translations.appBundle.my_timesheet_change_the_task]]"
+             cancel-behavior="icon">
+    <div slot="body">
+      <p class="oj-typography-body-sm rw-metric-label">
+        <oj-bind-text value="[[$application.translations.appBundle.my_timesheet_change_task_hint]]"></oj-bind-text>
+      </p>
+
+      <oj-form-layout label-edge="top">
+        <oj-input-text label-hint="[[$application.translations.appBundle.my_timesheet_project]]"
+                       readonly="true" value="[[ $variables.chgProjectName ]]">
+        </oj-input-text>
+        <oj-input-text label-hint="[[$application.translations.appBundle.my_timesheet_current_task]]"
+                       readonly="true" value="[[ $variables.chgOldTaskName ]]">
+        </oj-input-text>
+        <oj-select-single label-hint="[[$application.translations.appBundle.my_timesheet_move_to]]"
+                          required="true"
+                          data="[[ $variables.chgTaskOptions ]]"
+                          item-text="label"
+                          value="{{ $variables.chgNewTaskId }}">
+        </oj-select-single>
+      </oj-form-layout>
+    </div>
+    <div slot="footer">
+      <oj-button on-oj-action="[[ $listeners.cancelChangeTask ]]">
+        <span><oj-bind-text value="[[$application.translations.appBundle.common_cancel]]"></oj-bind-text></span>
+      </oj-button>
+      <oj-button chroming="callToAction"
+                 disabled="[[ $variables.busy || !$variables.chgNewTaskId ]]"
+                 on-oj-action="[[ $listeners.confirmChangeTask ]]">
+        <span><oj-bind-text value="[[$application.translations.appBundle.my_timesheet_move_the_hours]]"></oj-bind-text></span>
       </oj-button>
     </div>
   </oj-dialog>
