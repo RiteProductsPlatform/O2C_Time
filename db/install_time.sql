@@ -274,6 +274,9 @@ PROMPT [n/m] 27_status_model_v4.sql - two status axes, flags as rows, rules as d
 
 PROMPT [n/m] 28_transition_timing.sql - lateness is decided by the cut-off
 @@28_transition_timing.sql
+
+PROMPT [n/m] 29_mec_period_sync.sql - periods come from the main app (H5)
+@@29_mec_period_sync.sql
 -- 15 is NOT here: it creates a table the package body reads, so it runs before
 -- step 09 above. Moving it back would reintroduce nine ORA-00942s.
 
