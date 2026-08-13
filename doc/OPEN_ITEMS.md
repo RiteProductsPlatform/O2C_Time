@@ -13,7 +13,6 @@ As at 11-Aug-2026.
 | H3 | Employee cut-off for adjustments | `oc_time_default_adjustments` reads `DELIVERY_CUTOFF`. If it should be `PAYROLL_CUTOFF`, one line. |
 | H4 | Future prepopulated days | Retro reallocation adjusts up to today. Days already populated beyond it still carry the old project and want re-populating, not adjusting. |
 | ~~H5~~ | ~~Period control from the O2C main app~~ | **CLOSED 13-Aug.** `OC_MEC_PERIOD` at `/ords/o2c_dev/oc/period/mec-periods` is authoritative from today. `db/29_mec_period_sync.sql` mirrors it into `OC_TIME_PERIOD`, matched on `START_DATE` — never on `period_id`, since MEC's 21 is August and ours is September. The weekly cut-off, contractor window, adjustment/backdate months and `ADVANCE_CLOSE` stay local: MEC has no source for them, and its `advance_close` is a computed warning where ours is a recorded decision. |
-| H9 | **Period rollover screen must become read-only** | `24_period_rollover.sql` gave the admin Open/Close buttons on 12-Aug. MEC now owns status, so those buttons write a value the next sync overwrites. The panel should show MEC's status and drop the actions. Also: MEC enforces **one Open period at a time** and auto-closes on the accounting date, which reinstates RULE-017 after it was deliberately relaxed on 04-Aug. |
 | ~~H8~~ | ~~**Task column becomes an LOV on existing lines**~~ **BUILT 13-Aug** (`26_change_line_task.sql` + change-task dialog). Option A taken: the task name is a button, opening a dialog with that project's LOV. Inline `oj-select-single` was rejected — it needs a per-row DataProvider, which cannot be built inside an `oj-bind-for-each`, and a plain `<select>` hits the same parser trap as the day strip. | Raised 12-Aug. Today TASK (WBS) is static text; an employee with several tasks on one project cannot move hours between them without deleting the line and re-adding it. Make it an `oj-select-single` per row, fed by the same `getTaskLov` the Add-line dialog uses, filtered to the row's own project. **Leave lines stay read-only** — RULE-008 makes leave system-owned, and it is already excluded from the LOV by `SELECTABLE_FLAG='N'`, so the guard is `isLeave !== 'Y'` on the editor, not a change to the LOV. Same rule already governs whether the day cells accept input. |
 | ~~H8a~~ | ~~**Decision: what happens when the chosen task already has a line?**~~ **REFUSE, decided 12-Aug.** | `UK_OC_TSE_CELL` is `(ts_week_id, project_id, task_id, entry_date, entry_type)`. Changing a line's task rewrites part of that key, so if the employee picks a task that already exists on the same project the update collides. Three options: **merge** the two lines by summing hours per day; **refuse** with "that task is already on this timesheet"; or **swap** the two lines' tasks. Merge is friendliest and silently changes numbers; refuse is safest and most annoying. Not a coding question — decide it, then it is a small build. |
 | H7 | **A leave cancelled in Fusion is never removed** | `syncAbsence` MERGEs — inserts and updates, never deletes — so a cancelled leave keeps its cached row and keeps appearing on the timesheet. Worse, cancelling *every* leave in the window returns an empty payload and the chain returns early without calling `syncAbsence` or `runPopulation` at all, so nothing is touched. **Fix:** the live read is authoritative for the window it asked about, so reconcile instead of merge — delete cached rows inside `from..to` that are absent from the payload, merge the rest, repopulate; and run the reconcile on the empty payload rather than returning early. Scope strictly to the requested window so it can never touch a date the read did not cover. Confirmed 12-Aug; the chain already documents the gap in its own comment. |
@@ -126,3 +125,97 @@ Also before go-live: `OC_TIME_PERIOD` covers only this month and next, the cut-o
 **Rotate it.** Removing it from the files does not clear the history, and the repo now has a second remote.
 
 `.env` and `.mcp.json` are untracked and have never been committed. Keep it that way.
+
+---
+
+## 6. Period control moved to the main app — the full picture
+
+**Decided 13-Aug-2026.** `OC_MEC_PERIOD` in the O2C main application is authoritative for
+periods from today. `GET https://ords-sit.rite.digital/ords/o2c_dev/oc/period/mec-periods`.
+
+This is H5, closed. What follows is everything it changes, written out rather than
+abbreviated, because none of it is obvious six weeks from now.
+
+### 6.1 The open question — how the timesheet reads it
+
+`OC_TIME_PERIOD` is read in **72 places** and carries **10 foreign keys** (`OC_TS_WEEK`,
+`OC_TS_MONTH_CONFIRM`, `OC_TS_ENTRY`, the accrual interface, the defaulting jobs,
+`V_OC_TIME_CUTOFFS`). PL/SQL cannot call an HTTP endpoint from inside a query, so the
+screens can read MEC live but `populate_month`, the cut-off jobs and `editable_flag`
+cannot. Something has to be readable in SQL.
+
+| | How | Freshness | Cost |
+|---|---|---|---|
+| **A — sync** (`db/29_mec_period_sync.sql`, built) | copies MEC into the local table | as fresh as the last run | staleness between runs |
+| **B — view** (preferred) | `OC_TIME_PERIOD` becomes a view over `o2c_dev.oc_mec_period` joined to a small local table | **always live** | the 10 foreign keys must be dropped |
+
+**B needs one grant:** `GRANT SELECT ON o2c_dev.oc_mec_period TO o2c_time;` run as `o2c_dev`
+or ADMIN. Both ORDS bases are on the same host, so the schemas are probably in one database
+— confirm before assuming.
+
+**B is recommended.** The FKs it costs are already illusory: once MEC owns periods it can
+delete one the timesheet has weeks against, and no constraint here prevents that. The
+guarantee is gone; only the appearance of it remains. If B is taken, `29` is deleted rather
+than kept.
+
+If the schemas are in different databases, B is impossible, A is the only option, and the
+sync frequency becomes the question.
+
+### 6.2 Never match on PERIOD_ID
+
+Measured 13-Aug: MEC's `period_id` **21 is August 2026**; ours **21 is September 2026**. A
+sync or join keyed on the id overwrites one month with another. Names do not work either —
+`August 2026` against `AUG-2026`. **`START_DATE` is the only safe key.**
+
+### 6.3 Five columns stay local
+
+MEC has no source for four of them, and the fifth has the same name for a different thing.
+
+| Column | Why |
+|---|---|
+| `TS_CUTOFF_DAY` / `TS_CUTOFF_TIME` | the **weekly** cut-off, Monday 17:00 — the employee deadline, and what every V4 `TIMING` comparison is made against. MEC carries only delivery/finance/MEC/book dates, all manager and finance side. |
+| `CONTRACTOR_RESUBMIT_DAYS` | the 60-day contractor window |
+| `ADJUSTMENT_MONTHS` / `BACKDATED_MONTHS` | timesheet backdate policy |
+| `PAYROLL_CUTOFF` / `CLIENT_CUTOFF` | no MEC equivalent |
+| `ADVANCE_CLOSE` | **same name, opposite meaning.** MEC computes it — "Yes whenever any close-cycle date is still ahead of today". Ours records a *decision*: that a month was confirmed to accrual without full approval. Taking theirs replaces a deliberate act with a derived warning and loses the only record of why a month went out unapproved. |
+
+A period arriving from MEC with no weekly cut-off must default to **Monday 17:00**, never
+null — a null makes every Submit in that month unclassifiable under V4 `TIMING`.
+
+### 6.4 RULE-017 is reinstated, reversing the 04-Aug decision
+
+MEC's own screen states it: *"only one period may be Open at a time, and a period
+auto-closes once its accounting date has passed. Periods cannot overlap."*
+
+RULE-017 was deliberately **relaxed** on 04-Aug on request so JUL-2026 and AUG-2026 could be
+open together; `UK_OC_TP_SINGLE_OPEN` was dropped by `13_open_periods.sql` and commented out
+of `01_time_reference.sql` so re-running it could not restore the rule. Adopting MEC as
+authoritative **undoes that**.
+
+Consequences:
+- **August auto-closes on 1 September** (accounting date 31/08). If September is not opened
+  in the same breath there is a window with no Open period and nobody can enter time.
+  Adjusting the accounting date into the next month avoids it — confirmed acceptable for
+  testing 13-Aug.
+- `get_open_period_id` was rewritten to cope with several open months after it raised
+  `TOO_MANY_ROWS`. Still correct, but the ordering logic becomes dead weight.
+- **CLAUDE.md §7a now describes the old behaviour.** Anyone reading it will think the code
+  has drifted. It has not — the decision was reversed.
+
+### 6.5 The rollover screen must become read-only
+
+`db/24_period_rollover.sql` gave the admin Open/Close buttons on the Sync Status page on
+12-Aug — one day before this decision. MEC now owns status, so those buttons write a value
+the next sync or view read overwrites.
+
+**What to change:** keep the panel, drop the two actions. `V_OC_TIME_PERIOD_ADMIN` still
+earns its place — phase, week and people counts, unconfirmed-project count — but
+`CAN_OPEN` / `CAN_CLOSE` become informational, and `oc_time_open_period` /
+`oc_time_close_period` are retired. Period control happens in the main app.
+
+### 6.6 The status filter does not work
+
+`?status=Closed` returns the Open rows too, as does `?status=Open` — measured 13-Aug against
+three periods. The documented "filterable by status" is not implemented. It answers 200
+rather than erroring, which is the dangerous kind. **Take the whole table and filter
+locally.** Decided 13-Aug not to chase it.
