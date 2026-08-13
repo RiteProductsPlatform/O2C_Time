@@ -105,7 +105,7 @@
   <p class="eyebrow">O2C Timesheet Module &middot; Time scenarios_V4.xlsx</p>
   <h1>Status &amp; flag model V4 — build it to be replaced</h1>
   <p class="standfirst">Two status axes, at two grains, with a disclaimer saying it will change again. That last part should decide the architecture, not be a footnote to it.</p>
-  <p class="meta">13 August 2026 &middot; read from the four visible sheets — Statuses, Flags, Scenarios, Other requirements &middot; supersedes the revision-2 model in CLAUDE.md &sect;7 &middot; <strong>phase 1 is built</strong> (<code>db/27_status_model_v4.sql</code>); the backdated-change rule in &sect;7 is confirmed</p>
+  <p class="meta">13 August 2026 &middot; read from the four visible sheets — Statuses, Flags, Scenarios, Other requirements &middot; supersedes the revision-2 model in CLAUDE.md &sect;7 &middot; <strong>phase 1 is built</strong> (<code>db/27_status_model_v4.sql</code>, <code>db/28_transition_timing.sql</code>) &middot; revised against the 13-Aug discussion transcript: approval is weekly, R4 proceeds, R9 added</p>
 
   <div class="note">
     <span class="label">The disclaimer is the most important line in the mail</span>
@@ -252,12 +252,11 @@
     <figcaption>The day is the grain that changes; the week is a rollup of it. Definitions sit in their own tables so a new status, flag or transition is an <code>INSERT</code> rather than a migration.</figcaption>
   </figure>
 
-  <div class="guard">
-    <span class="label">Decide this early: is the week derived, or maintained alongside?</span>
-    <p>Two readings, and they lead to different code.</p>
-    <p><strong>Derived (recommended).</strong> The day is the truth; the week is a materialised rollup — all days approved &rarr; week Approved, any day rejected &rarr; week Rejected. This matches how the workbook behaves: a backdated change to <em>one day</em> invalidates the whole week. It also matches SC-08, day-wise approval, which already exists.</p>
-    <p><strong>Independent.</strong> Both set separately. More flexible, and it permits a week saying Approved while a day says Rejected — a contradiction somebody will eventually have to explain to finance.</p>
-    <p>I would derive. But the rollup rule for each combination has to be written down before it is coded, because "any day rejected &rarr; week Rejected" is a choice, not a fact.</p>
+  <div class="note">
+    <span class="label">Settled 13 August — the week acts, the day records</span>
+    <p>The discussion considered day-level approval and <strong>decided against it</strong>: <em>"It's always weekly. Submission is weekly, so approval also. So even if one day there is a wrong thing, we will reject the entire week."</em> The approval workflow is week by week.</p>
+    <p><strong>Days still carry everything</strong> — both statuses, the flag and the rejection reason — written by the week action rather than set independently. So the day columns are not decoration: they are what the screen renders and what accrual consumes downstream. Nothing is ever acted on at day level.</p>
+    <p>That resolves the rollup question without needing a precedence table. The week is not derived from its days; the days are derived from the week.</p>
   </div>
 
   <h2>3 &middot; Flags — five, timestamped, and two old ones fold in</h2>
@@ -309,13 +308,20 @@
   from_submission   null = any
   from_approval     null = any
   period_state      Open | Closed | null = any
-  require_flag      null = any    &lt;- how "was ever Defaulted" survives
+  timing            WithinCutoff | PastCutoff | null = any
+  require_flag      null = any    &lt;- for rules that need history
   to_submission     the new value
   to_approval       the new value
   raise_flag        null, or the flag to set
   match_order       lowest wins, so specific beats catch-all</pre>
 
   <p>The whole of section 2 loads as rows. When V5 arrives with different combinations, you reload the table and the package does not change.</p>
+
+  <div class="guard">
+    <span class="label">TIMING earned its place by catching a mistake of mine</span>
+    <p>The first build made a resubmission <code>Late Submission</code> when the week carried the <code>Defaulted</code> flag. Confirmed 13-Aug that lateness depends on <strong>the cut-off</strong>, not on history: a defaulted week corrected in time is an ordinary submission, and a never-defaulted week resubmitted after Monday 17:00 is late.</p>
+    <p>The two correlate in every row of the workbook — those resubmissions are all of past weeks, so the cut-off had always passed. The flag rode along with lateness without causing it. Timing is not derivable from the two axes, so it is a column of its own and the Submit rules split on it alone (<code>db/28_transition_timing.sql</code>).</p>
+  </div>
 
   <p>The alternative — sixteen branches of PL/SQL — has to be re-read, re-tested and re-reviewed every revision, and the workbook has told you in advance that there will be revisions.</p>
 
@@ -354,10 +360,11 @@
         <tr><td>R1</td><td>Contractors may act for <strong>60 calendar days</strong> regardless of status; counts as Late Submission</td><td>New. Employees stay restricted to Not Yet Submitted or Rejected. <code>assert_editable</code> gains <code>WORKER_TYPE</code>.</td></tr>
         <tr><td>R2</td><td>Manager approves weekly or monthly; manager defaulting on delivery cut-off only</td><td><span class="chip c-ok">ALREADY TRUE</span></td></tr>
         <tr><td>R3</td><td><strong>Month end mid-week</strong> — manager approved, employee never submitted &rarr; employee edits the new month only</td><td>New. Weeks are already clipped to the month, which does most of the work.</td></tr>
-        <tr><td>R4</td><td><strong>Billed PM self-approves</strong></td><td><span class="chip c-stop">CONFLICTS</span> RULE-015 sends a manager's own time to their reporting manager. Needs an explicit exception.</td></tr>
+        <tr><td>R4</td><td><strong>Billed PM self-approves</strong></td><td><span class="chip c-ok">DECIDED 13-AUG</span> proceed as specified. Challenged in the room — <em>"that is contradicting to how Oracle works, his line manager will be approving"</em> — but confirmed on Ravi's instruction. RULE-015 gains an exception.</td></tr>
         <tr><td>R5</td><td><strong>Action date</strong> on every submission, approval and rejection — current and back-dated</td><td>Partly there. <code>OC_TS_APPROVAL</code> logs events; a separate business action date is not stored.</td></tr>
         <tr><td>R6</td><td>PM gives <strong>adjustment reasons</strong></td><td>New. Reason list: client initiated &middot; project change &middot; backdated leave &middot; T&amp;M change.</td></tr>
         <tr><td>R7</td><td><strong>Accrual T&amp;M hour changes flow back</strong> to the employee's timesheet</td><td><span class="chip c-new">NEW SCOPE</span> a writeback from accrual, in no current design.</td></tr>
+        <tr><td>R9</td><td><strong>Manager may override an approved timesheet for up to 3 months</strong></td><td><span class="chip c-new">NEW</span> from the 13-Aug discussion — <em>"till three months, he can change even if it is approved."</em> No equivalent window exists today. Scheduled for the final phase alongside the scenarios and flags.</td></tr>
         <tr><td>R8</td><td>Manager refresh after cut-off</td><td>Explicitly <strong>parked</strong> — "don't develop".</td></tr>
       </tbody>
     </table>
@@ -403,6 +410,7 @@
   <h3>Phase 4 &middot; Their own projects</h3>
   <ul>
     <li>R3 month-end mid-week &middot; R4 billed-PM self-approval &middot; R7 accrual writeback</li>
+    <li><strong>R9 the three-month manager override</strong>, with the scenarios and flags</li>
   </ul>
 
   <h3>Only then retire</h3>
