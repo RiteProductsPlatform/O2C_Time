@@ -1275,5 +1275,6 @@
   "my_timesheet_current_task": "Current task",
   "my_timesheet_move_to": "Move to",
   "my_timesheet_move_the_hours": "Move the hours",
-  "my_timesheet_project": "Project"
+  "my_timesheet_project": "Project",
+  "sync_status_period_source_hint": "Periods are owned by the O2C main application and read live. Open and close them on its Period Control screen; changes appear here immediately."
 }

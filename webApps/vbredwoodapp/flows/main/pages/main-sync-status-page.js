@@ -48,8 +48,8 @@ define([], () => {
 
     /**
      * Chip class for a period's stored status. Open and Closed are the only
-     * two values chk_oc_tp_status allows — there is no 'Future' — so this
-     * says nothing about whether the month has started. That is phaseText.
+     * two values the main application allows, so this says nothing about
+     * whether the month has started -- that is PHASE.
      */
     periodStatusClass(status) {
       return status === 'Open'
@@ -57,21 +57,25 @@ define([], () => {
         : 'rw-status rw-status-rejected';
     }
 
-    /**
-     * Where the month sits against today, derived in the view from its dates
-     * rather than from STATUS. A Future month reading Closed is correct and
-     * this is what tells the admin so.
-     */
+    /** Where the month sits against today, derived from its dates. */
     phaseText(phase) {
       return phase || '';
     }
 
-    /** Why a period cannot be closed yet, for the button's accessible name. */
-    closeBlockedLabel(periodName, unconfirmed) {
-      return Number(unconfirmed) > 0
-        ? 'Cannot close ' + periodName + ' — ' + unconfirmed +
-          ' project(s) not yet confirmed to accrual'
-        : 'Close ' + periodName;
+    /**
+     * Whether this period is actually tracking the main application. 'N' means
+     * no upstream row starts on this date, so the status and cut-offs shown
+     * are the last known local values rather than live ones -- worth seeing at
+     * a glance, because everything else on the row looks normal either way.
+     */
+    mecLinkClass(mecLinked) {
+      return mecLinked === 'Y'
+        ? 'rw-status rw-status-approved'
+        : 'rw-status rw-status-rejected';
+    }
+
+    mecLinkLabel(mecLinked) {
+      return mecLinked === 'Y' ? 'Live from O2C' : 'Not linked';
     }
 
   }

@@ -41,9 +41,11 @@ define([
             weeks: p.weeks || 0,
             people: p.people || 0,
             unconfirmed: p.unconfirmed_projects || 0,
-            // The view returns 'Y'/'N'; the buttons bind booleans.
-            canOpen: p.can_open === 'Y',
-            canClose: p.can_close === 'Y',
+            // Where the row comes from. The main application owns period
+            // status from 13-Aug, so this replaced canOpen/canClose: there
+            // is nothing to enable here any more, only something to report.
+            mecLinked: p.mec_linked,
+            mecPeriodName: p.mec_period_name || '',
           }));
         } else if (!resp.ok) {
           await Actions.fireNotificationEvent(context, {

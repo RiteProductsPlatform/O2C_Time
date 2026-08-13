@@ -71,12 +71,6 @@
         "keyAttributes": "periodId",
         "data": "{{ $page.variables.periods }}"
       }
-    },
-    "closePeriodId": {
-      "type": "number",
-      "defaultValue": null,
-      "input": "none",
-      "description": "Which period the confirmation dialog is about. Held on the page rather than passed through the dialog, because the dialog's confirm button has no row context."
     }
   },
   "types": {
@@ -129,8 +123,8 @@
       "weeks": "number",
       "people": "number",
       "unconfirmed": "number",
-      "canOpen": "boolean",
-      "canClose": "boolean"
+      "mecLinked": "string",
+      "mecPeriodName": "string"
     }
   },
   "chains": {},
@@ -214,41 +208,6 @@
         },
         {
           "chain": "loadPeriodsChain"
-        }
-      ]
-    },
-    "openPeriod": {
-      "chains": [
-        {
-          "chain": "openPeriodChain",
-          "parameters": {
-            "periodId": "{{ $current.row.periodId }}"
-          }
-        }
-      ]
-    },
-    "askClosePeriod": {
-      "chains": [
-        {
-          "chain": "askClosePeriodChain",
-          "parameters": {
-            "periodId": "{{ $current.row.periodId }}",
-            "periodName": "{{ $current.row.periodName }}"
-          }
-        }
-      ]
-    },
-    "confirmClosePeriod": {
-      "chains": [
-        {
-          "chain": "closePeriodChain"
-        }
-      ]
-    },
-    "cancelClosePeriod": {
-      "chains": [
-        {
-          "chain": "cancelClosePeriodChain"
         }
       ]
     }

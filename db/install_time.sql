@@ -277,6 +277,9 @@ PROMPT [n/m] 28_transition_timing.sql - lateness is decided by the cut-off
 
 PROMPT [n/m] 30_mec_period_live.sql - periods read LIVE from the main app
 @@30_mec_period_live.sql
+
+PROMPT [n/m] 31_retire_period_writes.sql - nothing here opens or closes a period
+@@31_retire_period_writes.sql
 -- 29_mec_period_sync.sql is the FALLBACK, not part of the install. It copies
 -- periods instead of reading them live, and is only wanted if neither a grant
 -- on o2c_dev.oc_mec_period nor a database link can be had. 30 prints the exact
