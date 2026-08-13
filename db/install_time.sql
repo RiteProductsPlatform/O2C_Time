@@ -275,8 +275,12 @@ PROMPT [n/m] 27_status_model_v4.sql - two status axes, flags as rows, rules as d
 PROMPT [n/m] 28_transition_timing.sql - lateness is decided by the cut-off
 @@28_transition_timing.sql
 
-PROMPT [n/m] 29_mec_period_sync.sql - periods come from the main app (H5)
-@@29_mec_period_sync.sql
+PROMPT [n/m] 30_mec_period_live.sql - periods read LIVE from the main app
+@@30_mec_period_live.sql
+-- 29_mec_period_sync.sql is the FALLBACK, not part of the install. It copies
+-- periods instead of reading them live, and is only wanted if neither a grant
+-- on o2c_dev.oc_mec_period nor a database link can be had. 30 prints the exact
+-- statement to ask for if it cannot reach the table.
 -- 15 is NOT here: it creates a table the package body reads, so it runs before
 -- step 09 above. Moving it back would reintroduce nine ORA-00942s.
 

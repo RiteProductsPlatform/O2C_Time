@@ -144,22 +144,42 @@ abbreviated, because none of it is obvious six weeks from now.
 screens can read MEC live but `populate_month`, the cut-off jobs and `editable_flag`
 cannot. Something has to be readable in SQL.
 
-| | How | Freshness | Cost |
-|---|---|---|---|
-| **A — sync** (`db/29_mec_period_sync.sql`, built) | copies MEC into the local table | as fresh as the last run | staleness between runs |
-| **B — view** (preferred) | `OC_TIME_PERIOD` becomes a view over `o2c_dev.oc_mec_period` joined to a small local table | **always live** | the 10 foreign keys must be dropped |
+**RESOLVED 13-Aug: live, via `db/30_mec_period_live.sql`.**
 
-**B needs one grant:** `GRANT SELECT ON o2c_dev.oc_mec_period TO o2c_time;` run as `o2c_dev`
-or ADMIN. Both ORDS bases are on the same host, so the schemas are probably in one database
-— confirm before assuming.
+`OC_TIME_PERIOD` is no longer a table. It is a **view**: the timesheet's own identity and
+settings joined to the main application's live period row. The old table was renamed to
+`OC_TIME_PERIOD_BASE`.
 
-**B is recommended.** The FKs it costs are already illusory: once MEC owns periods it can
-delete one the timesheet has weeks against, and no constraint here prevents that. The
-guarantee is gone; only the appearance of it remains. If B is taken, `29` is deleted rather
-than kept.
+I had said a view would cost the 10 foreign keys. **It does not** — that was wrong. The keys
+point at *identity*, identity stays in a real table, and `RENAME` carries every constraint
+with it. So all 72 joins keep working unedited and now read live, and all 10 foreign keys
+keep working too. Nothing else in the schema changed.
 
-If the schemas are in different databases, B is impossible, A is the only option, and the
-sync frequency becomes the question.
+| Comes from | Columns |
+|---|---|
+| **main app, live** | `STATUS`, `END_DATE`, `ACCOUNTING_DATE`, `DELIVERY_CUTOFF`, `FINANCE_CUTOFF`, `MEC_CLOSE`, `BOOK_CLOSURE` |
+| **local** | `PERIOD_ID`, `PERIOD_NAME`, `START_DATE`, `TS_CUTOFF_DAY`/`TIME`, `CONTRACTOR_RESUBMIT_DAYS`, `ADJUSTMENT_MONTHS`, `BACKDATED_MONTHS`, `PAYROLL_`/`CLIENT_CUTOFF`, `ADVANCE_CLOSE` |
+
+It needs a route to the table — **one of**:
+
+```sql
+GRANT SELECT ON o2c_dev.oc_mec_period TO o2c_time;        -- same database, as o2c_dev/ADMIN
+
+CREATE DATABASE LINK o2c_dev_link                          -- different database, as ADMIN
+  CONNECT TO o2c_dev IDENTIFIED BY <pwd> USING '<tns>';
+```
+
+`30` tries both, creates a synonym over whichever works, and prints the exact statement to
+ask for if neither does. `db/29_mec_period_sync.sql` survives only as the fallback for that
+case — a copy rather than a live read.
+
+**The cost of live, stated deliberately:** if the main application is unreachable, every
+query touching a period fails, and that is most of them. A copy would have gone stale
+instead. That trade was made knowingly.
+
+`oc_time_provision_mec_periods` is the one thing still copied, once per period: a
+`PERIOD_ID` for the foreign keys to point at, and a weekly cut-off, which the main app has
+no source for. Everything that *changes* is read live.
 
 ### 6.2 Never match on PERIOD_ID
 
@@ -199,7 +219,7 @@ Consequences:
   testing 13-Aug.
 - `get_open_period_id` was rewritten to cope with several open months after it raised
   `TOO_MANY_ROWS`. Still correct, but the ordering logic becomes dead weight.
-- **CLAUDE.md §7a now describes the old behaviour.** Anyone reading it will think the code
+- **The operating notes still describe the old behaviour** (CLAUDE.md, the section headed *"RULE-017 is relaxed — several periods may be Open"*). Anyone reading it will think the code
   has drifted. It has not — the decision was reversed.
 
 ### 6.5 The rollover screen must become read-only
