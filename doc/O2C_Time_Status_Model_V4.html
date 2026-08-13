@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Status &amp; flag model V4 — implementation plan</title>
+<style>
+  :root {
+    --paper:#FBFBF9; --plate:#FCFCFA;
+    --ink:#15191E; --ink-soft:#3D464E; --muted:#5C666E;
+    --rule:#E1E5E3; --rule-soft:#EDEFED;
+    --accent:#0A535C; --accent-bg:#EAF2F2;
+    --guard:#8A5200; --guard-bg:#FBF3E6;
+    --code-bg:#F3F5F3;
+    --ok:#1E6B45; --ok-bg:#E7F2EC;
+    --stop:#8C2F2A; --stop-bg:#F8EBEA;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:#11151A; --plate:#161B21;
+      --ink:#E3E8EA; --ink-soft:#B6C0C6; --muted:#8A959C;
+      --rule:#2A323A; --rule-soft:#222A31;
+      --accent:#63B3BC; --accent-bg:#16292C;
+      --guard:#D9A159; --guard-bg:#2A2114;
+      --code-bg:#1C2229;
+      --ok:#6FBF95; --ok-bg:#15271F;
+      --stop:#E08A83; --stop-bg:#2B1917;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:#11151A; --plate:#161B21;
+    --ink:#E3E8EA; --ink-soft:#B6C0C6; --muted:#8A959C;
+    --rule:#2A323A; --rule-soft:#222A31;
+    --accent:#63B3BC; --accent-bg:#16292C;
+    --guard:#D9A159; --guard-bg:#2A2114;
+    --code-bg:#1C2229;
+    --ok:#6FBF95; --ok-bg:#15271F;
+    --stop:#E08A83; --stop-bg:#2B1917;
+  }
+  * { box-sizing:border-box; }
+  body { background:var(--paper); color:var(--ink);
+    font-family:"Segoe UI", ui-sans-serif, system-ui, -apple-system, sans-serif;
+    font-size:16px; line-height:1.62; margin:0; padding:3.5rem 1.5rem 6rem;
+    -webkit-font-smoothing:antialiased; }
+  .wrap { max-width:54rem; margin:0 auto; }
+  code, pre { font-family:Consolas, ui-monospace, Menlo, monospace; font-size:0.875em; }
+  .eyebrow { text-transform:uppercase; letter-spacing:0.11em; font-size:0.7rem;
+    font-weight:700; color:var(--accent); margin:0 0 0.5rem; }
+  h1 { font-size:clamp(1.9rem,4.5vw,2.5rem); line-height:1.14; letter-spacing:-0.021em;
+    font-weight:700; margin:0 0 0.7rem; }
+  .standfirst { font-size:1.09rem; color:var(--ink-soft); margin:0 0 1.4rem; }
+  .meta { font-size:0.82rem; color:var(--muted); border-top:1px solid var(--rule);
+    padding-top:0.85rem; margin:0 0 3rem; }
+  h2 { font-size:1.32rem; letter-spacing:-0.012em; font-weight:700;
+    margin:3.2rem 0 0.3rem; padding-top:1.5rem; border-top:1px solid var(--rule); }
+  h2:first-of-type { margin-top:0; }
+  h3 { font-size:1.02rem; font-weight:700; margin:2rem 0 0.4rem; }
+  p { margin:0 0 1rem; }
+  .lede { color:var(--ink-soft); margin-bottom:1.6rem; }
+  code:not(pre code) { background:var(--code-bg); padding:0.1em 0.36em;
+    border-radius:3px; color:var(--ink); }
+  pre { background:var(--code-bg); border:1px solid var(--rule-soft); border-radius:5px;
+    padding:0.9rem 1rem; overflow-x:auto; margin:0 0 1.2rem; line-height:1.55; }
+  figure { margin:1.6rem 0 1.2rem; padding:0; }
+  .plate { background:var(--plate); border:1px solid var(--rule); border-radius:6px;
+    padding:1.4rem 1rem; overflow-x:auto; }
+  .plate svg { display:block; margin:0 auto; max-width:100%; height:auto;
+    color:var(--ink-soft); }
+  figcaption { font-size:0.83rem; color:var(--muted); margin-top:0.7rem; }
+  .svg-title { font-weight:700; font-size:11px; letter-spacing:0.06em;
+    text-transform:uppercase; }
+  .svg-h { font-weight:700; font-size:12.5px; }
+  .svg-b { font-size:11.5px; }
+  .svg-s { font-size:10.5px; }
+  .tablewrap { overflow-x:auto; margin:0 0 1.3rem; }
+  table { border-collapse:collapse; width:100%; font-size:0.88rem; min-width:32rem; }
+  th { text-align:left; font-weight:700; font-size:0.72rem; text-transform:uppercase;
+    letter-spacing:0.075em; color:var(--muted); border-bottom:1.5px solid var(--rule);
+    padding:0 0.8rem 0.5rem 0; vertical-align:bottom; }
+  td { border-bottom:1px solid var(--rule-soft); padding:0.55rem 0.8rem 0.55rem 0;
+    vertical-align:top; color:var(--ink-soft); }
+  td:first-child { color:var(--ink); white-space:nowrap; }
+  .chip { display:inline-block; font-size:0.7rem; font-weight:700; letter-spacing:0.03em;
+    padding:0.12em 0.5em; border-radius:3px; white-space:nowrap; }
+  .c-new { background:var(--accent-bg); color:var(--accent); }
+  .c-ok { background:var(--ok-bg); color:var(--ok); }
+  .c-stop { background:var(--stop-bg); color:var(--stop); }
+  .guard, .note { border-radius:0 4px 4px 0; padding:0.95rem 1.1rem 0.4rem; margin:0 0 1.2rem; }
+  .guard { background:var(--guard-bg); border-left:3px solid var(--guard); }
+  .note { background:var(--accent-bg); border-left:3px solid var(--accent); }
+  .guard .label, .note .label { text-transform:uppercase; letter-spacing:0.09em;
+    font-size:0.68rem; font-weight:700; display:block; margin-bottom:0.3rem; }
+  .guard .label { color:var(--guard); }
+  .note .label { color:var(--accent); }
+  .guard p:last-child, .note p:last-child { margin-bottom:0.6rem; }
+  ul, ol { margin:0 0 1.1rem; padding-left:1.3rem; }
+  li { margin-bottom:0.42rem; }
+  .built { color:var(--ok); }
+  .phase-note { margin-bottom:0.6rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <p class="eyebrow">O2C Timesheet Module &middot; Time scenarios_V4.xlsx</p>
+  <h1>Status &amp; flag model V4 — build it to be replaced</h1>
+  <p class="standfirst">Two status axes, at two grains, with a disclaimer saying it will change again. That last part should decide the architecture, not be a footnote to it.</p>
+  <p class="meta">13 August 2026 &middot; read from the four visible sheets — Statuses, Flags, Scenarios, Other requirements &middot; supersedes the revision-2 model in CLAUDE.md &sect;7 &middot; <strong>phase 1 is built</strong> (<code>db/27_status_model_v4.sql</code>); the backdated-change rule in &sect;7 is confirmed</p>
+
+  <div class="note">
+    <span class="label">The disclaimer is the most important line in the mail</span>
+    <p><em>"This might undergo changes as we build integrations. Kindly structure the code accordingly."</em></p>
+    <p>Taken seriously, that rules out the obvious implementation. Statuses in <code>CHECK</code> constraints, flags as boolean columns and transitions as <code>IF/ELSE</code> in PL/SQL all mean the next revision is a schema migration plus a package rewrite plus a regression pass. <strong>Every one of those should be data instead.</strong></p>
+    <p>The rest of this plan is mostly that decision applied consistently.</p>
+  </div>
+
+  <h2>1 &middot; Two axes — the structural change</h2>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Axis</th><th>Values</th><th>Set by</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Submission</strong><br><span style="color:var(--muted)">employee</span></td>
+            <td>Not Yet Submitted &middot; Submitted &middot; Defaulted &middot; Late Submission</td>
+            <td>employee, or the weekly cut-off job</td></tr>
+        <tr><td><strong>Approval</strong><br><span style="color:var(--muted)">manager</span></td>
+            <td>Pending &middot; Approved &middot; Rejected &middot; Manager Defaulted</td>
+            <td>manager, or the delivery cut-off job</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>Scenario 14 is <code>Defaulted / Manager Defaulted</code> — both cut-offs missed. Scenario 16 is <code>Defaulted / Approved</code>. Neither can be held in one column, and today the module loses half of each.</p>
+
+  <p><code>DEFAULTED_BY</code> exists only because one column could not say <em>whose</em> cut-off was missed. Split the axes and it becomes redundant — which is a good sign: this is the shape the module has been approximating, not a different one.</p>
+
+  <figure>
+    <div class="plate">
+      <svg viewBox="0 0 780 268" role="img"
+           aria-label="One status column plus DEFAULTED_BY on the left becomes two independent status axes on the right">
+        <defs>
+          <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5"
+                  markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+          </marker>
+        </defs>
+
+        <text class="svg-title" x="20" y="18" fill="currentColor">Today — one column, seven values</text>
+        <rect x="20" y="32" width="292" height="104" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
+        <text class="svg-h" x="34" y="54" fill="currentColor">WEEK_STATUS</text>
+        <text class="svg-b" x="34" y="76" fill="currentColor">Not yet submitted / Submitted /</text>
+        <text class="svg-b" x="34" y="94" fill="currentColor">Approved / Rejected / Defaulted /</text>
+        <text class="svg-b" x="34" y="112" fill="currentColor">Overridden and approved / Closed</text>
+
+        <line x1="166" y1="136" x2="166" y2="170" stroke="currentColor" stroke-width="1.2"
+              stroke-dasharray="4 3" marker-end="url(#ar)"/>
+        <text class="svg-s" x="176" y="158" fill="currentColor">needed because one column</text>
+        <text class="svg-s" x="176" y="170" fill="currentColor">cannot say whose cut-off</text>
+
+        <rect x="20" y="176" width="292" height="52" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
+        <text class="svg-h" x="34" y="198" fill="currentColor">DEFAULTED_BY</text>
+        <text class="svg-b" x="34" y="216" fill="currentColor">EMPLOYEE or MANAGER</text>
+
+        <text class="svg-title" x="468" y="18" fill="var(--accent)">V4 — two axes, independent</text>
+        <rect x="468" y="32" width="292" height="88" rx="4" fill="none" stroke="var(--accent)" stroke-width="1.4"/>
+        <text class="svg-h" x="482" y="54" fill="var(--accent)">SUBMISSION_STATUS</text>
+        <text class="svg-b" x="482" y="74" fill="currentColor">Not Yet Submitted &#183; Submitted</text>
+        <text class="svg-b" x="482" y="92" fill="currentColor">Defaulted &#183; Late Submission</text>
+        <text class="svg-s" x="482" y="110" fill="currentColor">the employee axis</text>
+
+        <rect x="468" y="140" width="292" height="88" rx="4" fill="none" stroke="var(--accent)" stroke-width="1.4"/>
+        <text class="svg-h" x="482" y="162" fill="var(--accent)">APPROVAL_STATUS</text>
+        <text class="svg-b" x="482" y="182" fill="currentColor">Pending &#183; Approved</text>
+        <text class="svg-b" x="482" y="200" fill="currentColor">Rejected &#183; Manager Defaulted</text>
+        <text class="svg-s" x="482" y="218" fill="currentColor">the manager axis</text>
+
+        <path d="M 312 68 L 468 68" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar)"/>
+        <path d="M 312 104 C 390 104, 390 176, 468 176" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar)"/>
+        <path d="M 312 202 L 468 202" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar)"/>
+      </svg>
+    </div>
+    <figcaption>Every current value maps onto the two axes without loss. <code>DEFAULTED_BY</code> disappears into the approval axis; <code>Closed</code> disappears into the period, which already carries it.</figcaption>
+  </figure>
+
+  <h2>2 &middot; And two grains — status lives on the day as well</h2>
+
+  <p class="lede">This is the part that changes the table design rather than just the columns.</p>
+
+  <p><code>OC_TS_ENTRY</code> already has <code>DAY_STATUS</code> with <code>Pending / Approved / Rejected</code> — a day-level approval axis, half-built and unnamed as such. V4 wants both axes and flags at both grains.</p>
+
+  <figure>
+    <div class="plate">
+      <svg viewBox="0 0 780 404" role="img"
+           aria-label="The day carries both axes and rolls up to the week; three definition tables drive both grains by foreign key">
+        <defs>
+          <marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5"
+                  markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+          </marker>
+        </defs>
+
+        <rect x="20" y="30" width="300" height="128" rx="5" fill="none"
+              stroke="currentColor" stroke-width="1.2"/>
+        <text class="svg-title" x="34" y="52" fill="currentColor">OC_TS_WEEK — the week</text>
+        <text class="svg-b" x="34" y="76" fill="currentColor">SUBMISSION_STATUS</text>
+        <text class="svg-b" x="34" y="96" fill="currentColor">APPROVAL_STATUS</text>
+        <text class="svg-b" x="34" y="122" fill="currentColor">OC_TS_WEEK_FLAG</text>
+        <text class="svg-s" x="34" y="140" fill="currentColor">flag + set_on + set_by</text>
+
+        <rect x="20" y="238" width="300" height="128" rx="5" fill="none"
+              stroke="var(--accent)" stroke-width="1.4"/>
+        <text class="svg-title" x="34" y="260" fill="var(--accent)">OC_TS_ENTRY — the day</text>
+        <text class="svg-b" x="34" y="284" fill="currentColor">SUBMISSION_STATUS</text>
+        <text class="svg-b" x="34" y="304" fill="currentColor">APPROVAL_STATUS</text>
+        <text class="svg-s" x="176" y="304" fill="currentColor">(was DAY_STATUS)</text>
+        <text class="svg-b" x="34" y="330" fill="currentColor">OC_TS_DAY_FLAG</text>
+        <text class="svg-s" x="34" y="348" fill="currentColor">flag + set_on + set_by</text>
+
+        <line x1="170" y1="238" x2="170" y2="158" stroke="currentColor"
+              stroke-width="1.6" marker-end="url(#ar2)"/>
+        <text class="svg-s" x="182" y="196" fill="currentColor">roll up — the day is</text>
+        <text class="svg-s" x="182" y="208" fill="currentColor">the grain that changes</text>
+
+        <rect x="452" y="30" width="308" height="336" rx="5" fill="none"
+              stroke="currentColor" stroke-width="1.2" stroke-dasharray="5 3"/>
+        <text class="svg-title" x="466" y="52" fill="currentColor">Definitions — data, not DDL</text>
+
+        <rect x="470" y="70" width="272" height="72" rx="4" fill="none" stroke="currentColor" stroke-width="1"/>
+        <text class="svg-h" x="484" y="92" fill="currentColor">OC_TS_STATUS_DEF</text>
+        <text class="svg-s" x="484" y="110" fill="currentColor">axis &#183; code &#183; label &#183; sort</text>
+        <text class="svg-s" x="484" y="128" fill="currentColor">8 rows, two axes</text>
+
+        <rect x="470" y="158" width="272" height="72" rx="4" fill="none" stroke="currentColor" stroke-width="1"/>
+        <text class="svg-h" x="484" y="180" fill="currentColor">OC_TS_FLAG_DEF</text>
+        <text class="svg-s" x="484" y="198" fill="currentColor">code &#183; label &#183; scope</text>
+        <text class="svg-s" x="484" y="216" fill="currentColor">5 rows</text>
+
+        <rect x="470" y="246" width="272" height="98" rx="4" fill="none"
+              stroke="var(--accent)" stroke-width="1.4"/>
+        <text class="svg-h" x="484" y="268" fill="var(--accent)">OC_TS_TRANSITION</text>
+        <text class="svg-s" x="484" y="286" fill="currentColor">event + from-state + period-state</text>
+        <text class="svg-s" x="484" y="304" fill="currentColor">&#8594; to-state + flag</text>
+        <text class="svg-s" x="484" y="326" fill="currentColor">the Scenarios sheet, as rows</text>
+
+        <path d="M 470 106 C 400 106, 380 84, 320 84" fill="none" stroke="currentColor"
+              stroke-width="1" stroke-dasharray="4 3" marker-end="url(#ar2)"/>
+        <path d="M 470 194 C 400 194, 380 292, 320 292" fill="none" stroke="currentColor"
+              stroke-width="1" stroke-dasharray="4 3" marker-end="url(#ar2)"/>
+        <text class="svg-s" x="336" y="128" fill="currentColor">FK, not CHECK</text>
+      </svg>
+    </div>
+    <figcaption>The day is the grain that changes; the week is a rollup of it. Definitions sit in their own tables so a new status, flag or transition is an <code>INSERT</code> rather than a migration.</figcaption>
+  </figure>
+
+  <div class="guard">
+    <span class="label">Decide this early: is the week derived, or maintained alongside?</span>
+    <p>Two readings, and they lead to different code.</p>
+    <p><strong>Derived (recommended).</strong> The day is the truth; the week is a materialised rollup — all days approved &rarr; week Approved, any day rejected &rarr; week Rejected. This matches how the workbook behaves: a backdated change to <em>one day</em> invalidates the whole week. It also matches SC-08, day-wise approval, which already exists.</p>
+    <p><strong>Independent.</strong> Both set separately. More flexible, and it permits a week saying Approved while a day says Rejected — a contradiction somebody will eventually have to explain to finance.</p>
+    <p>I would derive. But the rollup rule for each combination has to be written down before it is coded, because "any day rejected &rarr; week Rejected" is a choice, not a fact.</p>
+  </div>
+
+  <h2>3 &middot; Flags — five, timestamped, and two old ones fold in</h2>
+
+  <p><strong>Advance closure and Reversal both come through as <code>Adjusted</code></strong>, per the 13-Aug correction. So the flag vocabulary is exactly the workbook's five:</p>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>V4 flag</th><th>Today</th><th>Note</th></tr></thead>
+      <tbody>
+        <tr><td>Overridden</td><td><code>OVERRIDDEN_FLAG</code></td><td>renamed from "Overridden &amp; approved"</td></tr>
+        <tr><td>Adjusted</td><td><code>HAS_ADJUSTMENT_FLAG</code><br><code>ADVANCE_CLOSURE_FLAG</code><br><code>HAS_REVERSAL_FLAG</code></td><td><strong>three collapse into one</strong></td></tr>
+        <tr><td>Defaulted</td><td><code>DEFAULTED_FLAG</code></td><td>unchanged</td></tr>
+        <tr><td>Late Submission</td><td><code>LATE_SUBMISSION_FLAG</code></td><td>unchanged</td></tr>
+        <tr><td>Manager Defaulted</td><td>&mdash;</td><td><span class="chip c-new">NEW</span> today it is <code>DEFAULTED_BY='MANAGER'</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note">
+    <span class="label">Collapsing three into one loses nothing, because the detail was never in the flag</span>
+    <p>The flag was only ever a summary — the specifics live in the rows and stay exactly where they are:</p>
+    <ul>
+      <li><strong>Advance closure</strong> &rarr; <code>OC_TS_MONTH_CONFIRM.CONFIRM_TYPE</code>, which records that a month went to accrual unapproved, and when, and by whom</li>
+      <li><strong>Reversal</strong> &rarr; <code>OC_TS_ENTRY.ENTRY_TYPE</code>, plus the signed <code>HOURS</code> that make a reversal a reversal</li>
+    </ul>
+    <p>So "why was this adjusted" is still answerable in one join. The screen shows one chip instead of three, which is also an improvement.</p>
+  </div>
+
+  <p><strong>"Every flag should be maintained with time stamp"</strong> is what makes flags rows rather than columns. Six booleans today record <em>that</em> something happened and never <em>when</em>.</p>
+
+<pre>OC_TS_WEEK_FLAG                      OC_TS_DAY_FLAG
+  ts_week_id                           ts_entry_id
+  flag_code   &rarr; OC_TS_FLAG_DEF         flag_code   &rarr; OC_TS_FLAG_DEF
+  set_on      TIMESTAMP                set_on      TIMESTAMP
+  set_by      VARCHAR2(100)            set_by      VARCHAR2(100)
+  cleared_on  TIMESTAMP                cleared_on  TIMESTAMP
+  PK (ts_week_id, flag_code)           PK (ts_entry_id, flag_code)</pre>
+
+  <p>Two tables rather than one polymorphic table, so both keep a real foreign key. The old boolean columns become a view, and nothing reading them breaks on day one.</p>
+
+  <h2>4 &middot; The transition table — where the disclaimer pays off</h2>
+
+  <p class="lede">Section 2 of the Scenarios sheet is sixteen rows of one rule. Those rows should be <em>data</em>.</p>
+
+<pre>OC_TS_TRANSITION
+  event_code        DailyChange | Submit | Approve | Reject |
+                    WeeklyCutoff | DeliveryCutoff | &hellip;
+  from_submission   null = any
+  from_approval     null = any
+  period_state      Open | Closed | null = any
+  require_flag      null = any    &lt;- how "was ever Defaulted" survives
+  to_submission     the new value
+  to_approval       the new value
+  raise_flag        null, or the flag to set
+  match_order       lowest wins, so specific beats catch-all</pre>
+
+  <p>The whole of section 2 loads as rows. When V5 arrives with different combinations, you reload the table and the package does not change.</p>
+
+  <p>The alternative — sixteen branches of PL/SQL — has to be re-read, re-tested and re-reviewed every revision, and the workbook has told you in advance that there will be revisions.</p>
+
+  <div class="note">
+    <span class="label">This is also what closes O3</span>
+    <p>The sync change-capture layer is live and queues every master-data change as <code>Pending</code> in <code>OC_TIME_SYNC_CHANGE</code>, with nothing draining it — that has been O3 since the capture was built.</p>
+    <p>Section 2 <em>is</em> the drain rule. Load it into <code>OC_TS_TRANSITION</code>, point the daily process at it, and O3 closes as a side effect rather than as a separate project.</p>
+  </div>
+
+  <h2>5 &middot; Migration — nothing is lost</h2>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Today</th><th>Submission</th><th>Approval</th><th>Flag</th></tr></thead>
+      <tbody>
+        <tr><td>Not yet submitted</td><td>Not Yet Submitted</td><td>Pending</td><td>&mdash;</td></tr>
+        <tr><td>Submitted</td><td>Submitted</td><td>Pending</td><td>&mdash;</td></tr>
+        <tr><td>Approved</td><td>Submitted</td><td>Approved</td><td>&mdash;</td></tr>
+        <tr><td>Rejected</td><td>Submitted</td><td>Rejected</td><td>&mdash;</td></tr>
+        <tr><td>Defaulted &middot; <code>BY='EMPLOYEE'</code></td><td>Defaulted</td><td>Pending</td><td>Defaulted</td></tr>
+        <tr><td>Defaulted &middot; <code>BY='MANAGER'</code></td><td>Submitted</td><td>Manager Defaulted</td><td>Manager Defaulted</td></tr>
+        <tr><td>Overridden and approved</td><td>Submitted</td><td>Approved</td><td>Overridden</td></tr>
+        <tr><td>Closed</td><td colspan="2">the <em>period</em> is Closed, not the week</td><td>&mdash;</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p><code>Closed</code> is the only value with nowhere to go, correctly — it duplicates <code>OC_TIME_PERIOD.STATUS</code>, and editability is already derived from the period and the cut-offs.</p>
+
+  <h2>6 &middot; Requirements beyond the status model</h2>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>#</th><th>Requirement</th><th>Standing</th></tr></thead>
+      <tbody>
+        <tr><td>R1</td><td>Contractors may act for <strong>60 calendar days</strong> regardless of status; counts as Late Submission</td><td>New. Employees stay restricted to Not Yet Submitted or Rejected. <code>assert_editable</code> gains <code>WORKER_TYPE</code>.</td></tr>
+        <tr><td>R2</td><td>Manager approves weekly or monthly; manager defaulting on delivery cut-off only</td><td><span class="chip c-ok">ALREADY TRUE</span></td></tr>
+        <tr><td>R3</td><td><strong>Month end mid-week</strong> — manager approved, employee never submitted &rarr; employee edits the new month only</td><td>New. Weeks are already clipped to the month, which does most of the work.</td></tr>
+        <tr><td>R4</td><td><strong>Billed PM self-approves</strong></td><td><span class="chip c-stop">CONFLICTS</span> RULE-015 sends a manager's own time to their reporting manager. Needs an explicit exception.</td></tr>
+        <tr><td>R5</td><td><strong>Action date</strong> on every submission, approval and rejection — current and back-dated</td><td>Partly there. <code>OC_TS_APPROVAL</code> logs events; a separate business action date is not stored.</td></tr>
+        <tr><td>R6</td><td>PM gives <strong>adjustment reasons</strong></td><td>New. Reason list: client initiated &middot; project change &middot; backdated leave &middot; T&amp;M change.</td></tr>
+        <tr><td>R7</td><td><strong>Accrual T&amp;M hour changes flow back</strong> to the employee's timesheet</td><td><span class="chip c-new">NEW SCOPE</span> a writeback from accrual, in no current design.</td></tr>
+        <tr><td>R8</td><td>Manager refresh after cut-off</td><td>Explicitly <strong>parked</strong> — "don't develop".</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>7 &middot; The backdated-change rule — <span class="built">confirmed</span></h2>
+
+  <div class="note">
+    <span class="label">Confirmed 13 August &middot; this decides every row in section 2</span>
+    <p>A backdated change sets <strong>Approval &rarr; Rejected</strong> and <strong>Submission &rarr; Not Yet Submitted</strong>. <strong>Both axes move</strong> — the prior approval is void and the week goes back to the employee.</p>
+    <p>The Scenarios sheet writes this as <code>Rejected | Not Yet submitted</code> under headers reading <code>Employee Status | Manager Status</code>, which looks like the two columns swapped. It is not an error in the sheet: that cell is <strong>shorthand for "sent back"</strong>, and both values are the new state rather than one per column.</p>
+    <p>Everywhere else the labelled Employee&nbsp;|&nbsp;Manager order holds exactly. Scenarios 4, 5, 8, 9, 12, 14 and 16 all parse cleanly against it — <code>Defaulted | Manager Defaulted</code>, <code>Late submission | Approved</code>, <code>Submitted | Manager Defaulted</code> — so section 2's phrasing is the single exception, not a systematic reversal.</p>
+  </div>
+
+  <p>The alternative reading would have left a manager's approval standing on hours that had since changed. That is a defect rather than a design, which is why the logic pointed here before the confirmation did.</p>
+
+  <h2>8 &middot; Phases</h2>
+
+  <h3>Phase 1 &middot; Definitions and structure <span class="chip c-ok">BUILT 13-AUG</span></h3>
+  <p class="phase-note"><code>db/27_status_model_v4.sql</code> — additive and reversible.</p>
+  <ul>
+    <li><code>OC_TS_STATUS_DEF</code>, <code>OC_TS_FLAG_DEF</code>, <code>OC_TS_TRANSITION</code>, seeded from the workbook</li>
+    <li><code>SUBMISSION_STATUS</code> / <code>APPROVAL_STATUS</code> on both <code>OC_TS_WEEK</code> and <code>OC_TS_ENTRY</code>, FK to the definitions — <strong>no CHECK constraints</strong></li>
+    <li><code>OC_TS_WEEK_FLAG</code> and <code>OC_TS_DAY_FLAG</code></li>
+    <li>Backfill from <code>WEEK_STATUS</code> + <code>DEFAULTED_BY</code> + the six booleans, per &sect;5</li>
+    <li><strong>Keep <code>WEEK_STATUS</code> maintained in parallel</strong> as a derived value, so nothing breaks and the mapping can be proven against a real period</li>
+  </ul>
+
+  <h3>Phase 2 &middot; The engine — closes O3</h3>
+  <ul>
+    <li>One <code>apply_event</code> that reads <code>OC_TS_TRANSITION</code>; <code>submit_week</code>, <code>approve_week</code>, <code>reject_week</code> and both cut-off jobs call it instead of setting statuses themselves</li>
+    <li>The day &rarr; week rollup, once &sect;2's question is answered</li>
+    <li>Daily process drains <code>OC_TIME_SYNC_CHANGE</code> through the same engine</li>
+    <li>R1 contractor window &middot; R5 action date</li>
+  </ul>
+
+  <h3>Phase 3 &middot; Screens</h3>
+  <ul>
+    <li>Two chips per week and per day; flag chips from the flag tables with timestamps on hover</li>
+    <li>Manager filters gain the approval axis &middot; R6 adjustment reasons</li>
+  </ul>
+
+  <h3>Phase 4 &middot; Their own projects</h3>
+  <ul>
+    <li>R3 month-end mid-week &middot; R4 billed-PM self-approval &middot; R7 accrual writeback</li>
+  </ul>
+
+  <h3>Only then retire</h3>
+  <p>Drop <code>DEFAULTED_BY</code>, the six booleans, and decide whether <code>WEEK_STATUS</code> stays as a derived convenience. Not before phase 3 is proven on real data.</p>
+
+</div>
+</body>
+</html>
