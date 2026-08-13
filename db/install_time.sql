@@ -265,6 +265,15 @@ PROMPT [n/m] 24_period_rollover.sql - open/close a period from the admin screen
 
 PROMPT [n/m] 25_absence_source.sql - leave is its own source, not a manager edit
 @@25_absence_source.sql
+
+PROMPT [n/m] 26_change_line_task.sql - move a line to a different task (H8)
+@@26_change_line_task.sql
+
+PROMPT [n/m] 27_status_model_v4.sql - two status axes, flags as rows, rules as data
+@@27_status_model_v4.sql
+
+PROMPT [n/m] 28_transition_timing.sql - lateness is decided by the cut-off
+@@28_transition_timing.sql
 -- 15 is NOT here: it creates a table the package body reads, so it runs before
 -- step 09 above. Moving it back would reintroduce nine ORA-00942s.
 
