@@ -242,7 +242,21 @@ PROMPT ============================================================
 PROMPT [4/5] A thin wrapper for callers that do not need the outputs
 PROMPT ============================================================
 
-CREATE OR REPLACE PROCEDURE oc_time_apply_event(
+-- A DIFFERENT NAME, and it has to be.
+--
+-- This was written as a 3-argument oc_time_apply_event, on the assumption it
+-- would overload the 6-argument engine above. Only PACKAGE members overload.
+-- At schema level CREATE OR REPLACE does exactly what it says: it REPLACED the
+-- engine, and this body's call to itself with 6 arguments failed PLS-00306.
+--
+-- The damage was not the error -- it was that the engine was gone and the
+-- error pointed at the wrapper. Anything running between that and the next
+-- script would have found oc_time_apply_event taking three arguments and
+-- doing nothing.
+--
+-- Same family as the traps in CLAUDE.md section 5: a PL/SQL feature reached
+-- for on the wrong side of a boundary. Overloading needs a package.
+CREATE OR REPLACE PROCEDURE oc_time_fire_event(
   p_ts_week_id IN NUMBER,
   p_event      IN VARCHAR2,
   p_actor      IN VARCHAR2 DEFAULT 'SYSTEM')

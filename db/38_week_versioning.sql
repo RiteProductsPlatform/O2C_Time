@@ -447,10 +447,11 @@ SELECT period_name, status, advance_close AS adv,
   FROM oc_time_period ORDER BY start_date;
 
 PROMPT
-PROMPT Expect Y for AUG-2026 alone -- delivery 03-Sep precedes MEC close
-PROMPT 07-Sep, so billing runs ahead of the close. The Period Control screen
-PROMPT will still show Yes on three of four; that screen computes it the old
-PROMPT way and is the bug this corrects.
+PROMPT Measured 14-Aug: Y for AUG-2026 alone -- delivery 01-Sep precedes MEC
+PROMPT close 05-Sep, so billing runs ahead of the close. Every other month has
+PROMPT its delivery cut-off AFTER the close, which is the ordinary case. The
+PROMPT Period Control screen still shows Yes on three of four; that screen
+PROMPT computes it the old way and is the bug this corrects.
 
 PROMPT
 PROMPT --- version trail (empty until an event fires) ----------------
