@@ -281,8 +281,11 @@ PROMPT [n/m] 30_mec_period_live.sql - periods read LIVE from the main app
 PROMPT [n/m] 31_retire_period_writes.sql - nothing here opens or closes a period
 @@31_retire_period_writes.sql
 
-PROMPT [n/m] 34_provision_periods.sql - a local anchor for each upstream period
-@@34_provision_periods.sql
+PROMPT [n/m] 35_period_direct.sql - OC_TIME_PERIOD is a direct select upstream
+@@35_period_direct.sql
+-- 34_provision_periods.sql is SUPERSEDED by 35. It created a local anchor row
+-- per period, which 35 removes the need for entirely -- PERIOD_ID is now the
+-- main application's own id, so a period added there is simply here.
 -- 32 and 33 are incident scripts from 14-Aug, not part of a clean install:
 -- 32 is disabled (it dropped a live view on a wrong diagnosis) and 33 repairs
 -- what it removed. A fresh schema needs neither.
