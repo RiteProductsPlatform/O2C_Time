@@ -2,22 +2,29 @@
 -- time/33_repair_after_cleanup.sql
 -- O2C Timesheet Module — put back what 32 removed, and revalidate
 --
--- WHAT WENT WRONG, 14-Aug-2026
---   30 renamed OC_TIME_PERIOD to OC_TIME_PERIOD_BASE and created the view --
---   but the grant on OC_MEC_PERIOD was not yet in place, so the view compiled
---   INVALID. Oracle reports an invalid view as ORA-00942 when it is reached
---   through a %TYPE reference, which is what 31 then hit.
+-- WHAT WENT WRONG, 14-Aug-2026 -- three mistakes, all mine
 --
---   That was misread as "connected to the wrong schema". It was not. The
---   module lives in the SAME schema as OC_MEC_PERIOD, and 'o2c_time' in the
---   ORDS url is a URL MAPPING rather than a schema name -- the object listing
---   32 printed proves it: OC_TIME_WORKER, OC_TIME_PKG and OC_TIME_PERIOD_BASE
---   are all right there.
+--   1. 30 renamed OC_TIME_PERIOD to OC_TIME_PERIOD_BASE and created the view
+--      while the grant on OC_MEC_PERIOD was still missing, so the view
+--      compiled INVALID. Oracle reports an invalid view as ORA-00942 through
+--      a type reference, which is what 31 hit.
 --
---   32, written on that wrong diagnosis, then dropped the live view. Net
---   effect: no OC_TIME_PERIOD at all, and everything reading it INVALID --
---   the package body, V_OC_TIME_SIGNIN, V_OC_TIME_CUTOFFS and the rest.
---   Sign-in included.
+--   2. I read the "O2C_DEV.OC_TIME_OPEN_PERIOD" in 31's error as proof of the
+--      wrong schema and wrote 32 to clean up. Run against O2C_TIME -- where
+--      the module actually lives -- it dropped the LIVE view and took
+--      nineteen objects down with it, sign-in included.
+--
+--   3. Correcting that, I flipped the synonym from o2c_dev.oc_mec_period to
+--      the bare name, on a second wrong belief that the module sat beside
+--      OC_MEC_PERIOD. It does not. The grant makes the QUALIFIED name visible
+--      from O2C_TIME and leaves the bare one unresolvable, so the synonym
+--      created cleanly and then failed with ORA-00980 -- an error that reads
+--      like a broken synonym and is really a missing schema prefix.
+--
+--   The through-line: each fix was built on an inference from an error
+--   message rather than on a check. Step [1] now TRIES each candidate with a
+--   real query and keeps the one that answers, which is what should have
+--   happened at the start.
 --
 -- WHAT THIS DOES
 --   Recreates what 32 dropped, now the grant exists, then recompiles
@@ -52,17 +59,52 @@ PROMPT ============================================================
 
 DECLARE
   v_c NUMBER;
+  v_target VARCHAR2(100) := NULL;
+
+  -- Tries each candidate and keeps the first that actually SELECTS. Creating
+  -- the synonym is not proof: CREATE SYNONYM succeeds against a name that does
+  -- not resolve, and only fails later with ORA-00980. So the test is a query.
+  FUNCTION works(p_target VARCHAR2) RETURN BOOLEAN IS
+    v_n NUMBER;
+  BEGIN
+    EXECUTE IMMEDIATE 'SELECT COUNT(*) FROM ' || p_target INTO v_n;
+    RETURN TRUE;
+  EXCEPTION WHEN OTHERS THEN RETURN FALSE;
+  END;
 BEGIN
+  -- QUALIFIED FIRST. The module is in O2C_TIME and OC_MEC_PERIOD is in
+  -- O2C_DEV, so the grant makes o2c_dev.oc_mec_period visible but leaves the
+  -- bare name unresolvable. An earlier version of this script used the bare
+  -- name and failed with ORA-00980 -- which reads like a broken synonym and
+  -- is really a missing schema prefix.
+  IF    works('o2c_dev.oc_mec_period') THEN v_target := 'o2c_dev.oc_mec_period';
+  ELSIF works('oc_mec_period')          THEN v_target := 'oc_mec_period';
+  ELSIF works('oc_mec_period@o2c_dev_link') THEN v_target := 'oc_mec_period@o2c_dev_link';
+  END IF;
+
+  IF v_target IS NULL THEN
+    DBMS_OUTPUT.PUT_LINE('----------------------------------------------------');
+    DBMS_OUTPUT.PUT_LINE('OC_MEC_PERIOD is not readable from '
+                      || SYS_CONTEXT('USERENV','CURRENT_SCHEMA') || '.');
+    DBMS_OUTPUT.PUT_LINE('Tried: o2c_dev.oc_mec_period, oc_mec_period,');
+    DBMS_OUTPUT.PUT_LINE('       oc_mec_period@o2c_dev_link');
+    DBMS_OUTPUT.PUT_LINE('');
+    DBMS_OUTPUT.PUT_LINE('Run as o2c_dev or ADMIN, then re-run this script:');
+    DBMS_OUTPUT.PUT_LINE('  GRANT SELECT ON o2c_dev.oc_mec_period TO o2c_time;');
+    DBMS_OUTPUT.PUT_LINE('');
+    DBMS_OUTPUT.PUT_LINE('A grant to a ROLE will not do -- a view compiled by');
+    DBMS_OUTPUT.PUT_LINE('this schema needs the privilege granted DIRECTLY.');
+    DBMS_OUTPUT.PUT_LINE('----------------------------------------------------');
+    RAISE_APPLICATION_ERROR(-20032, 'OC_MEC_PERIOD unreadable - see output above');
+  END IF;
+
   BEGIN EXECUTE IMMEDIATE 'DROP SYNONYM oc_mec_period_src';
   EXCEPTION WHEN OTHERS THEN NULL; END;
+  EXECUTE IMMEDIATE 'CREATE SYNONYM oc_mec_period_src FOR ' || v_target;
 
-  -- Unqualified: OC_MEC_PERIOD is in this schema, or granted and visible.
-  EXECUTE IMMEDIATE 'CREATE SYNONYM oc_mec_period_src FOR oc_mec_period';
   EXECUTE IMMEDIATE 'SELECT COUNT(*) FROM oc_mec_period_src' INTO v_c;
-  DBMS_OUTPUT.PUT_LINE('oc_mec_period_src -> oc_mec_period, ' || v_c || ' period(s)');
-EXCEPTION WHEN OTHERS THEN
-  DBMS_OUTPUT.PUT_LINE('Could not reach OC_MEC_PERIOD: ' || SUBSTR(SQLERRM,1,140));
-  RAISE;
+  DBMS_OUTPUT.PUT_LINE('oc_mec_period_src -> ' || v_target
+                    || '   (' || v_c || ' period(s))');
 END;
 /
 

@@ -91,13 +91,19 @@ DECLARE
 BEGIN
   -- 1. Same database, granted. The simplest thing that can work, and the most
   --    likely: /ords/o2c_time and /ords/o2c_dev are the same ORDS host.
-  IF reachable('oc_mec_period') THEN
+  IF reachable('o2c_dev.oc_mec_period') THEN
     v_ok := 'GRANT';
+    BEGIN EXECUTE IMMEDIATE 'DROP SYNONYM oc_mec_period_src';
+    EXCEPTION WHEN OTHERS THEN NULL; END;
+    EXECUTE IMMEDIATE 'CREATE SYNONYM oc_mec_period_src FOR o2c_dev.oc_mec_period';
+
+  -- 2. Different database, over a link.
+  ELSIF reachable('oc_mec_period') THEN
+    v_ok := 'SAME SCHEMA';
     BEGIN EXECUTE IMMEDIATE 'DROP SYNONYM oc_mec_period_src';
     EXCEPTION WHEN OTHERS THEN NULL; END;
     EXECUTE IMMEDIATE 'CREATE SYNONYM oc_mec_period_src FOR oc_mec_period';
 
-  -- 2. Different database, over a link.
   ELSIF reachable('oc_mec_period@o2c_dev_link') THEN
     v_ok := 'DBLINK';
     BEGIN EXECUTE IMMEDIATE 'DROP SYNONYM oc_mec_period_src';
