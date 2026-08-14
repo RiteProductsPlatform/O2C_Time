@@ -638,7 +638,7 @@ COLUMN app_role FORMAT A22
 COLUMN mgr FORMAT A24
 COLUMN purpose FORMAT A34
 
-PROMPT --- Test cast -----------------------------------------------
+PROMPT --- Test cast
 SELECT w.employee_id, w.employee_name, w.worker_type, w.app_role,
        NVL(m.employee_name,'(none)') AS mgr,
        CASE
@@ -660,7 +660,7 @@ SELECT w.employee_id, w.employee_name, w.worker_type, w.app_role,
           w.employee_id;
 
 PROMPT
-PROMPT --- Projects and team size ----------------------------------
+PROMPT --- Projects and team size
 COLUMN project_number FORMAT A12
 COLUMN project_name FORMAT A30
 COLUMN pm FORMAT A26
@@ -676,7 +676,7 @@ SELECT p.project_number, p.project_name, p.revenue_model, p.leave_loss_flag,
  ORDER BY p.project_number;
 
 PROMPT
-PROMPT --- Calendar precedence resolved (SC-21 expected results) ---
+PROMPT --- Calendar precedence resolved (SC-21 expected results)
 PROMPT --- 13-Jul 8h | 14-Jul 9h | 15-Jul non-working | 16-Jul 8h Night (RI2824)
 COLUMN cal_date FORMAT A12
 COLUMN winning_layer FORMAT A12
@@ -695,7 +695,7 @@ SELECT TO_CHAR(e.cal_date,'DD-Mon (DY)') AS cal_date,
  ORDER BY e.cal_date, e.precedence DESC;
 
 PROMPT
-PROMPT --- Absences ------------------------------------------------
+PROMPT --- Absences
 SELECT a.employee_id, w.employee_name,
        TO_CHAR(a.absence_date,'DD-Mon-YYYY') AS absence_date,
        a.absence_type, a.absence_hours, a.is_lop, a.is_maternity
@@ -705,7 +705,7 @@ SELECT a.employee_id, w.employee_name,
  ORDER BY a.absence_date, a.employee_id;
 
 PROMPT
-PROMPT --- Sign-in accounts (all password Rite@123) ----------------
+PROMPT --- Sign-in accounts (all password Rite@123)
 PROMPT --- EFFECTIVE_ROLE is what the app sees; ROLE_SOURCE says where it came from
 COLUMN email FORMAT A38
 COLUMN full_name FORMAT A26
@@ -726,7 +726,7 @@ SELECT u.email, u.full_name, u.status,
           u.email;
 
 PROMPT
-PROMPT --- Row counts ----------------------------------------------
+PROMPT --- Row counts
 SELECT 'workers'      AS item, COUNT(*) AS cnt FROM oc_time_worker
 UNION ALL SELECT 'projects',      COUNT(*) FROM oc_time_project
 UNION ALL SELECT 'tasks',         COUNT(*) FROM oc_time_task

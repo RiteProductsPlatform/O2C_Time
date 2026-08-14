@@ -9819,7 +9819,7 @@ SELECT run_order, bip_report_name, enabled_flag,
 PROMPT (INT 001 must filter on ENABLED_FLAG = 'Y' and ORDER BY RUN_ORDER.)
 
 PROMPT
-PROMPT --- how each feed is matched -------------------------------
+PROMPT --- how each feed is matched
 COLUMN matched_on FORMAT A34
 
 -- Worth showing plainly: '(discovered)' means the loader will go looking in
@@ -14957,7 +14957,7 @@ PROMPT and anyone hired since simply missing.
 PROMPT
 PROMPT Monthly also gets targetPeriodId, for
 PROMPT   POST /oc/time/admin/jobs/populate/{targetPeriodId}   (empty body)
-PROMPT A NULL targetPeriodId means next month has no OC_TIME_PERIOD row yet --
+PROMPT A NULL targetPeriodId means next month has no OC_TIME_PERIOD row yet
 PROMPT create the period before the monthly run, or it has nothing to build.
 --== END ords/15_ords_time_sync.sql ==
 
@@ -15020,24 +15020,24 @@ COLUMN object_name FORMAT A34
 COLUMN object_type FORMAT A14
 COLUMN status      FORMAT A8
 
-PROMPT --- Invalid objects (expect none) ---------------------------
+PROMPT --- Invalid objects (expect none)
 SELECT object_type, object_name, status
   FROM user_objects
  WHERE status <> 'VALID'
  ORDER BY object_type, object_name;
 
-PROMPT --- Tables --------------------------------------------------
+PROMPT --- Tables
 SELECT table_name AS object_name
   FROM user_tables
  WHERE table_name LIKE 'OC_T%' OR table_name LIKE 'XX_O2C%'
  ORDER BY table_name;
 
-PROMPT --- Views ---------------------------------------------------
+PROMPT --- Views
 SELECT view_name AS object_name FROM user_views
  WHERE view_name LIKE 'V_OC_T%'
  ORDER BY view_name;
 
-PROMPT --- ORDS modules --------------------------------------------
+PROMPT --- ORDS modules
 COLUMN name      FORMAT A22
 COLUMN uri_prefix FORMAT A26
 SELECT m.name, m.uri_prefix, m.status,
@@ -15050,7 +15050,7 @@ SELECT m.name, m.uri_prefix, m.status,
  WHERE m.name IN ('oc.time','oc.time.approval','oc.time.admin','oc.time.auth')
  ORDER BY m.name;
 
-PROMPT --- Seed counts ---------------------------------------------
+PROMPT --- Seed counts
 SELECT 'lookup rows'   AS item, COUNT(*) AS cnt FROM oc_time_lookup
 UNION ALL
 SELECT 'common tasks',  COUNT(*) FROM oc_time_task WHERE task_type = 'COMMON'

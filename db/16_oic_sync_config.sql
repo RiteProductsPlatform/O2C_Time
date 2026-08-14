@@ -904,7 +904,7 @@ SELECT run_order, bip_report_name, enabled_flag,
 PROMPT (INT 001 must filter on ENABLED_FLAG = 'Y' and ORDER BY RUN_ORDER.)
 
 PROMPT
-PROMPT --- how each feed is matched -------------------------------
+PROMPT --- how each feed is matched
 COLUMN matched_on FORMAT A34
 
 -- Worth showing plainly: '(discovered)' means the loader will go looking in

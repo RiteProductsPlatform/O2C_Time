@@ -438,7 +438,7 @@ SELECT v.ts_week_id,
   JOIN oc_time_period p ON p.period_id = w.period_id;
 
 PROMPT
-PROMPT --- advance close under the corrected rule --------------------
+PROMPT --- advance close under the corrected rule
 COLUMN period_name FORMAT A12
 COLUMN adv         FORMAT A4
 SELECT period_name, status, advance_close AS adv,
@@ -454,7 +454,7 @@ PROMPT Period Control screen still shows Yes on three of four; that screen
 PROMPT computes it the old way and is the bug this corrects.
 
 PROMPT
-PROMPT --- version trail (empty until an event fires) ----------------
+PROMPT --- version trail (empty until an event fires)
 SELECT COUNT(*) AS versions FROM oc_ts_week_version;
 
 PROMPT

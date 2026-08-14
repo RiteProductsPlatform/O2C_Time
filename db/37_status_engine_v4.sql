@@ -287,7 +287,7 @@ SELECT p.period_name,
  ORDER BY p.period_name;
 
 PROMPT
-PROMPT Every week should read NotYetSubmitted / Pending after the rebuild --
+PROMPT Every week should read NotYetSubmitted / Pending after the rebuild
 PROMPT populate creates them and nobody has acted yet.
 
 COLUMN event_code FORMAT A16

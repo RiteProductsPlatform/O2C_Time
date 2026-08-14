@@ -278,7 +278,7 @@ SELECT period_name, mec_period_name AS mec_name, mec_linked, status,
 
 PROMPT
 PROMPT STATUS above is read live. Change it in the main application's Period
-PROMPT Control screen, re-run this SELECT, and it has already changed here --
+PROMPT Control screen, re-run this SELECT, and it has already changed here
 PROMPT there is no sync to wait for and nothing to schedule.
 PROMPT
 PROMPT MEC_LINKED = 'N' means a period exists here that the main application

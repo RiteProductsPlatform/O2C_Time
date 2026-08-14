@@ -274,5 +274,5 @@ SELECT w.period_id, COUNT(*) AS orphan_weeks
  GROUP BY w.period_id;
 
 PROMPT
-PROMPT That must be empty. It is what replaces the ten dropped foreign keys --
+PROMPT That must be empty. It is what replaces the ten dropped foreign keys
 PROMPT run it after any period is deleted upstream.

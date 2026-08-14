@@ -487,7 +487,7 @@ END;
 /
 
 PROMPT
-PROMPT --- the two axes against the old column -----------------------
+PROMPT --- the two axes against the old column
 COLUMN week_status FORMAT A26
 COLUMN submission  FORMAT A18
 COLUMN approval    FORMAT A18
@@ -498,14 +498,14 @@ SELECT week_status, submission_status AS submission,
  ORDER BY week_status;
 
 PROMPT
-PROMPT --- flags now carried, with the timestamp they never had ------
+PROMPT --- flags now carried, with the timestamp they never had
 COLUMN flag_code FORMAT A20
 SELECT flag_code, COUNT(*) AS weeks,
        TO_CHAR(MIN(set_on),'DD-MON HH24:MI') AS earliest
   FROM oc_ts_week_flag GROUP BY flag_code ORDER BY flag_code;
 
 PROMPT
-PROMPT --- the rules, as data ---------------------------------------
+PROMPT --- the rules, as data
 COLUMN event_code FORMAT A16
 COLUMN from_s FORMAT A16
 COLUMN to_s   FORMAT A16
@@ -518,7 +518,7 @@ SELECT event_code, match_order, from_submission AS from_s, period_state,
 
 PROMPT
 PROMPT PHASE 1 IS ADDITIVE. WEEK_STATUS, DAY_STATUS, DEFAULTED_BY and the six
-PROMPT boolean flags are all still written by the package and still correct --
+PROMPT boolean flags are all still written by the package and still correct
 PROMPT nothing reading them has changed. Phase 2 moves the rules onto
 PROMPT OC_TS_TRANSITION; only after that is proven should anything be dropped.
 PROMPT

@@ -322,7 +322,7 @@ PROMPT [6/6] Verification
 PROMPT ============================================================
 
 COLUMN resolves_to FORMAT A24
-PROMPT --- approval trail follows its weeks ---
+PROMPT --- approval trail follows its weeks
 SELECT NVL(TO_CHAR(a.period_id),'(null)') AS period_id, COUNT(*) AS approvals,
        CASE WHEN p.period_id IS NULL THEN '*** no such period ***'
             ELSE p.period_name END AS resolves_to
@@ -331,7 +331,7 @@ SELECT NVL(TO_CHAR(a.period_id),'(null)') AS period_id, COUNT(*) AS approvals,
  GROUP BY a.period_id, p.period_id, p.period_name ORDER BY 1;
 
 PROMPT
-PROMPT --- DeliveryCutoff rules ---
+PROMPT --- DeliveryCutoff rules
 COLUMN from_submission FORMAT A18
 COLUMN to_approval     FORMAT A18
 SELECT match_order, from_submission, from_approval, to_approval, raise_flag

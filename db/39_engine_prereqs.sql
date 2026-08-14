@@ -227,7 +227,7 @@ SELECT COUNT(*) AS still_null FROM oc_ts_week
  WHERE submission_status IS NULL OR approval_status IS NULL;
 
 PROMPT
-PROMPT --- both objects present, neither having replaced the other ---
+PROMPT --- both objects present, neither having replaced the other
 COLUMN object_name FORMAT A26
 SELECT object_name, status FROM user_objects
  WHERE object_name IN ('OC_TIME_APPLY_EVENT','OC_TIME_FIRE_EVENT',

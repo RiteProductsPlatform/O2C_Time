@@ -254,7 +254,7 @@ SELECT p.period_name, p.mec_period_name AS mec_name, p.status,
   FROM oc_time_period p ORDER BY p.start_date;
 
 PROMPT
-PROMPT --- periods MEC has never heard of (not deleted, reported) ----
+PROMPT --- periods MEC has never heard of (not deleted, reported)
 SELECT period_name, status, TO_CHAR(start_date,'DD-MON-YY') AS starts,
        (SELECT COUNT(*) FROM oc_ts_week w WHERE w.period_id = p.period_id) AS weeks
   FROM oc_time_period p WHERE p.mec_period_id IS NULL ORDER BY p.start_date;

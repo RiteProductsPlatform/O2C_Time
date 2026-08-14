@@ -70,14 +70,14 @@ SELECT period_id, period_name, status,
   FROM oc_mec_period_src ORDER BY start_date;
 
 PROMPT
-PROMPT --- transactions that will be cleared and rebuilt -------------
+PROMPT --- transactions that will be cleared and rebuilt
 SELECT 'oc_ts_week'  AS table_name, COUNT(*) AS rows_ FROM oc_ts_week
 UNION ALL SELECT 'oc_ts_entry',     COUNT(*) FROM oc_ts_entry
 UNION ALL SELECT 'oc_ts_approval',  COUNT(*) FROM oc_ts_approval
 UNION ALL SELECT 'oc_ts_audit',     COUNT(*) FROM oc_ts_audit;
 
 PROMPT
-PROMPT Prepopulated hours come back identically. Anything a PERSON did --
+PROMPT Prepopulated hours come back identically. Anything a PERSON did
 PROMPT typed hours, submissions, approvals, rejections -- does not.
 
 PROMPT ============================================================
@@ -292,7 +292,7 @@ SELECT p.period_id, p.period_name, p.status,
   FROM oc_time_period p ORDER BY p.start_date;
 
 PROMPT
-PROMPT --- weeks on an id no period has (must be empty) --------------
+PROMPT --- weeks on an id no period has (must be empty)
 SELECT w.period_id, COUNT(*) AS weeks
   FROM oc_ts_week w
  WHERE NOT EXISTS (SELECT 1 FROM oc_time_period p WHERE p.period_id = w.period_id)

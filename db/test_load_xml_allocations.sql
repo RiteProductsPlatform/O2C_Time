@@ -56,7 +56,7 @@ END;
 
 PROMPT
 PROMPT === 1. THE REGRESSION: XML carrying the OLD alias =============
-PROMPT The element is named PROJECT_ID and holds Fusion's fifteen-digit id --
+PROMPT The element is named PROJECT_ID and holds Fusion's fifteen-digit id
 PROMPT exactly what the extract used to emit. The loader must IGNORE it and
 PROMPT resolve PROJECT_ID from PROJECT_NUMBER instead.
 PROMPT

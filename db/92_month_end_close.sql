@@ -64,7 +64,7 @@ SELECT w.week_status, COUNT(*) AS weeks, COUNT(DISTINCT w.employee_id) AS people
  ORDER BY w.week_status;
 
 PROMPT
-PROMPT Read that before continuing. Anything already Approved stays as it is --
+PROMPT Read that before continuing. Anything already Approved stays as it is
 PROMPT the defaulting jobs only touch weeks that missed a cut-off.
 
 PROMPT

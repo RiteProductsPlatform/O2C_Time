@@ -196,7 +196,7 @@ SELECT NVL(TO_CHAR(w.period_id),'(null)') AS period_id,
  ORDER BY 1;
 
 PROMPT
-PROMPT Every row must resolve. AUG-2026 should now appear with its 670 weeks --
+PROMPT Every row must resolve. AUG-2026 should now appear with its 670 weeks
 PROMPT it is the only Open period, so it is the one that had to be reachable.
 
 COLUMN period_name FORMAT A12
