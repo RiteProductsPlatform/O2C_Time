@@ -1141,7 +1141,6 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
     v_type     oc_time_worker.worker_type%TYPE;
     v_cutday   oc_time_period.ts_cutoff_day%TYPE;
     v_cuttime  oc_time_period.ts_cutoff_time%TYPE;
-    v_late     VARCHAR2(1) := 'N';
     v_corr     VARCHAR2(1) := 'N';
     v_unbilled NUMBER;
     v_missing  NUMBER;
@@ -1176,17 +1175,15 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
       validate_day(p_ts_week_id, d.entry_date);
     END LOOP;
 
-    -- RULE-007: after the weekly cut-off a submission is accepted but flagged
-    -- Late submission. The cut-off is <weekday time> AFTER the week end, in the
-    -- base location's local time (the job runs per country, CFG-010).
-    IF v_cutday IS NOT NULL THEN
-      IF SYSDATE > NEXT_DAY(v_we, v_cutday)
-                 + NVL(TO_NUMBER(SUBSTR(v_cuttime,1,2)),17)/24 THEN
-        v_late := 'Y';
-      END IF;
-    END IF;
+    -- RULE-007 (lateness) IS NO LONGER DECIDED HERE. It was computed inline --
+    -- SYSDATE against NEXT_DAY(week_end, cutday) -- reading the hour only and
+    -- dropping the minutes, so a 17:30 cut-off behaved as 17:00. The engine's
+    -- oc_time_week_timing reads hours AND minutes and is the single answer
+    -- both this and the defaulting job now use, so they cannot disagree.
 
-    -- A resubmission after rejection carries the Correction flag (SC-16).
+    -- A resubmission after rejection is recorded in the log as Resubmit; the
+    -- Correction FLAG itself was dropped in revision 2, the OC_TS_APPROVAL row
+    -- being the audit trail.
     IF v_status = 'Rejected' THEN v_corr := 'Y'; END IF;
 
     -- RULE-021: a contractor logging non-billable time needs an exception
@@ -1200,23 +1197,28 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
          AND is_leave      = 'N';
     END IF;
 
-    -- A submission is ALWAYS 'Submitted' (revised 30-Jul-2026). Landing after the
-    -- weekly cut-off no longer changes the status — it raises the Late submission
-    -- FLAG instead. 'Defaulted' is now produced only by the defaulting jobs.
+    -- ── THE ENGINE DECIDES THE STATUS (phase 2b) ──────────────
+    -- Submitted or LateSubmission is a ROW in OC_TS_TRANSITION, not a branch
+    -- here, and the timing it matches on is computed at THIS instant -- not
+    -- the one the page worked out when it rendered, which may be minutes old
+    -- and on the wrong side of 17:00. It also writes both axes, cascades to
+    -- every day, raises the flag, keeps WEEK_STATUS in step, and leaves a
+    -- numbered version behind.
+    oc_time_fire_event(p_ts_week_id, 'Submit', p_actor);
+
+    -- What the engine does not own: who pressed the button, and clearing the
+    -- previous rejection so a resubmission does not carry the old reason
+    -- forward into the manager's queue.
     UPDATE oc_ts_week
-       SET week_status          = 'Submitted',
-           submitted_by         = p_actor,
-           submitted_on         = SYSTIMESTAMP,
-           late_submission_flag = GREATEST(late_submission_flag, v_late),
-           reject_reason        = NULL,
-           reject_remarks       = NULL,
-           updated_by           = p_actor
+       SET submitted_by   = p_actor,
+           submitted_on   = SYSTIMESTAMP,
+           reject_reason  = NULL,
+           reject_remarks = NULL,
+           updated_by     = p_actor
      WHERE ts_week_id = p_ts_week_id;
 
-    -- Every day goes back to Pending for the manager to act on.
     UPDATE oc_ts_entry
-       SET day_status     = 'Pending',
-           reject_reason  = NULL,
+       SET reject_reason  = NULL,
            reject_remarks = NULL,
            updated_by     = p_actor
      WHERE ts_week_id = p_ts_week_id;
@@ -1289,9 +1291,11 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
         || 'backdated adjustment instead.');
     END IF;
 
+    -- ── THE ENGINE DECIDES THE STATUS (phase 2b) ──────────────
+    oc_time_fire_event(p_ts_week_id, 'Revoke', p_actor);
+
     UPDATE oc_ts_week
-       SET week_status  = 'Not yet submitted',
-           submitted_by = NULL,
+       SET submitted_by = NULL,
            submitted_on = NULL,
            updated_by   = p_actor
      WHERE ts_week_id = p_ts_week_id;
@@ -1329,27 +1333,32 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
     v_read  NUMBER := 0;
     v_up    NUMBER := 0;
     v_fail  NUMBER := 0;
-    v_cutday  oc_time_period.ts_cutoff_day%TYPE;
-    v_cuttime oc_time_period.ts_cutoff_time%TYPE;
+    -- v_cutday / v_cuttime are gone: the cut-off moment is no longer computed
+    -- here at all, it is asked of oc_time_week_timing.
   BEGIN
     v_job := start_job('Weekly Defaulting', 'WeeklyDefaulting',
                        p_period_id, TRUNC(p_as_of), NULL, p_actor);
 
-    SELECT ts_cutoff_day, ts_cutoff_time INTO v_cutday, v_cuttime
-      FROM oc_time_period WHERE period_id = p_period_id;
-
+    -- Selected on the AXIS, not on WEEK_STATUS. The axis is the V4 truth and
+    -- WEEK_STATUS is derived from it; filtering on the derived value would
+    -- work today and quietly stop working the moment phase 3 removes it.
     FOR w IN (SELECT ts_week_id, employee_id, week_end
                 FROM oc_ts_week
-               WHERE period_id   = p_period_id
-                 AND week_status = 'Not yet submitted'
-                 AND week_end    < TRUNC(p_as_of))
+               WHERE period_id          = p_period_id
+                 AND submission_status  = 'NotYetSubmitted'
+                 AND week_end           < TRUNC(p_as_of))
     LOOP
       v_read := v_read + 1;
       BEGIN
-        -- Only default once the cut-off for that week has actually passed.
-        IF v_cutday IS NOT NULL
-           AND p_as_of <= NEXT_DAY(w.week_end, v_cutday)
-                        + NVL(TO_NUMBER(SUBSTR(v_cuttime,1,2)),17)/24 THEN
+        -- ONE ANSWER ABOUT THE CUT-OFF, and the engine owns it. This block
+        -- used to compute its own -- SUBSTR(cuttime,1,2)/24 -- which read the
+        -- hour and dropped the minutes, so at a 17:30 cut-off it defaulted
+        -- weeks half an hour before the Submit rules considered them late: a
+        -- week both Defaulted and WithinCutoff at once.
+        --
+        -- p_as_of is passed through so a replay against a past date evaluates
+        -- against that date and not against today.
+        IF oc_time_week_timing(w.ts_week_id, p_as_of) = 'WithinCutoff' THEN
           CONTINUE;
         END IF;
 
@@ -1361,17 +1370,20 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
            AND entry_type = 'Actual'
            AND source     = 'Prepopulated';
 
+        -- ── THE ENGINE DECIDES THE STATUS (phase 2b) ──────────
+        -- WeeklyCutoff sets submission to Defaulted, raises the Defaulted
+        -- flag, and writes DEFAULTED_BY = 'EMPLOYEE' -- the default that holds
+        -- pay (RULE-016). It also leaves a version, so an auto-submission the
+        -- employee never made is as traceable as one they did.
+        oc_time_fire_event(w.ts_week_id, 'WeeklyCutoff', p_actor);
+
+        -- Locking and the submission stamp are not status. Only a manager can
+        -- edit the week now.
         UPDATE oc_ts_week
-           SET week_status     = 'Defaulted',
-               defaulted_flag  = 'Y',
-               -- The employee missed their own cut-off, so this is the default
-               -- that holds pay (RULE-016) and locks the week — only a manager
-               -- can edit it now.
-               defaulted_by    = 'EMPLOYEE',
-               locked_flag     = 'Y',
-               submitted_by    = p_actor,
-               submitted_on    = SYSTIMESTAMP,
-               updated_by      = p_actor
+           SET locked_flag  = 'Y',
+               submitted_by = p_actor,
+               submitted_on = SYSTIMESTAMP,
+               updated_by   = p_actor
          WHERE ts_week_id = w.ts_week_id;
 
         log_event(w.ts_week_id, w.employee_id, NULL, p_period_id, 'WEEK', NULL,
@@ -1430,20 +1442,28 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
       RETURN v_job;
     END IF;
 
+    -- ANYTHING STILL AWAITING THE MANAGER, whichever way it got there. The
+    -- old filter was week_status = 'Submitted', which silently excluded a
+    -- week the weekly job had defaulted -- that week reached the manager just
+    -- as surely, and their not acting on it is exactly what this job records.
+    --
+    -- NotYetSubmitted is excluded, and that is the whole point: a manager
+    -- cannot fail to approve something nobody sent. The engine has no rule for
+    -- that combination and would raise -20034 rather than blame them.
     FOR w IN (SELECT ts_week_id, employee_id
                 FROM oc_ts_week
-               WHERE period_id   = p_period_id
-                 AND week_status = 'Submitted')
+               WHERE period_id         = p_period_id
+                 AND approval_status   = 'Pending'
+                 AND submission_status IN ('Submitted','LateSubmission','Defaulted'))
     LOOP
       v_read := v_read + 1;
       BEGIN
-        UPDATE oc_ts_week
-           SET week_status    = 'Defaulted',
-               defaulted_flag = 'Y',
-               defaulted_by   = 'MANAGER',
-               updated_by     = p_actor,
-               updated_on     = SYSTIMESTAMP
-         WHERE ts_week_id = w.ts_week_id;
+        -- ── THE ENGINE DECIDES THE STATUS (phase 2b) ──────────
+        -- Approval becomes ManagerDefaulted; the SUBMISSION axis is left
+        -- untouched, so an employee who submitted on time keeps that on their
+        -- record. DEFAULTED_BY stays EMPLOYEE where it already was, which is
+        -- what stops a manager's lateness releasing an employee's salary hold.
+        oc_time_fire_event(w.ts_week_id, 'DeliveryCutoff', p_actor);
 
         log_event(w.ts_week_id, w.employee_id, NULL, p_period_id, 'WEEK', NULL,
                   'Default', NULL,
@@ -1482,19 +1502,31 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
 
     assert_not_self(v_emp, p_actor_emp_id);
 
-    -- ACT-014: approving the week marks every working day approved.
+    -- ── THE ENGINE DECIDES THE STATUS (phase 2b) ──────────────
+    -- ACT-014: approving the week approves every day in it, which the engine
+    -- does in one statement so a day can never disagree with its week.
+    --
+    -- ApproveOverride is a DIFFERENT EVENT, not a flag checked afterwards. It
+    -- raises Overridden itself and derives 'Overridden and approved', so the
+    -- override cannot be lost between deciding it and recording it.
+    --
+    -- Note the ordering this depends on: OVERRIDDEN_FLAG is already 'Y' by the
+    -- time approve_week runs, because the manager's edit set it. Reading it
+    -- here to CHOOSE the event is therefore safe; reading it inside the engine
+    -- to derive the label would not be, which is why apply_event treats the
+    -- ApproveOverride event as authoritative rather than the column.
+    oc_time_fire_event(p_ts_week_id,
+      CASE WHEN v_over = 'Y' THEN 'ApproveOverride' ELSE 'Approve' END, p_actor);
+
+    -- Who approved it, and when. The engine owns status; it does not own this.
     UPDATE oc_ts_entry
-       SET day_status  = 'Approved',
-           approved_by = p_actor,
+       SET approved_by = p_actor,
            approved_on = SYSTIMESTAMP,
            updated_by  = p_actor
-     WHERE ts_week_id = p_ts_week_id
-       AND day_status <> 'Approved';
+     WHERE ts_week_id = p_ts_week_id;
 
     UPDATE oc_ts_week
-       SET week_status = CASE WHEN v_over = 'Y'
-                              THEN 'Overridden and approved' ELSE 'Approved' END,
-           approved_by = p_actor,
+       SET approved_by = p_actor,
            approved_on = SYSTIMESTAMP,
            updated_by  = p_actor
      WHERE ts_week_id = p_ts_week_id;
@@ -1552,18 +1584,26 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
 
     assert_not_self(v_emp, p_actor_emp_id);
 
+    -- ── THE ENGINE DECIDES THE STATUS (phase 2b) ──────────────
+    -- Rejection moves BOTH axes, and the two move differently: approval
+    -- becomes Rejected, and submission resets to NotYetSubmitted because the
+    -- week genuinely is back with the employee to send again. Confirmed
+    -- 13-Aug -- and it is why the employee's next submission can land as
+    -- LateSubmission if the cut-off has since passed, which a single status
+    -- column could not have expressed.
+    oc_time_fire_event(p_ts_week_id, 'Reject', p_actor);
+
+    -- The reason, and unlocking so they can correct and resubmit
+    -- (PROC-005 / RULE-007). Reason and remarks are not status, so the engine
+    -- has no opinion on them.
     UPDATE oc_ts_entry
-       SET day_status     = 'Rejected',
-           reject_reason  = p_reason,
+       SET reject_reason  = p_reason,
            reject_remarks = p_remarks,
            updated_by     = p_actor
      WHERE ts_week_id = p_ts_week_id;
 
-    -- Back with the employee: unlock so they can correct and resubmit
-    -- (PROC-005 / RULE-007).
     UPDATE oc_ts_week
-       SET week_status    = 'Rejected',
-           reject_reason  = p_reason,
+       SET reject_reason  = p_reason,
            reject_remarks = p_remarks,
            locked_flag    = 'N',
            approved_by    = NULL,
@@ -1585,41 +1625,24 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
     p_actor        IN VARCHAR2 DEFAULT 'VBCS_USER',
     p_trace_id     IN VARCHAR2 DEFAULT NULL)
   IS
-    v_emp     oc_ts_week.employee_id%TYPE;
-    v_period  oc_ts_week.period_id%TYPE;
-    v_over    oc_ts_week.overridden_flag%TYPE;
-    v_pending NUMBER;
   BEGIN
-    SELECT employee_id, period_id, overridden_flag
-      INTO v_emp, v_period, v_over
-      FROM oc_ts_week WHERE ts_week_id = p_ts_week_id;
-
-    assert_not_self(v_emp, p_actor_emp_id);
-
-    UPDATE oc_ts_entry
-       SET day_status  = 'Approved',
-           approved_by = p_actor,
-           approved_on = SYSTIMESTAMP,
-           updated_by  = p_actor
-     WHERE ts_week_id = p_ts_week_id
-       AND entry_date = TRUNC(p_entry_date);
-
-    SELECT COUNT(*) INTO v_pending
-      FROM oc_ts_entry
-     WHERE ts_week_id = p_ts_week_id AND day_status <> 'Approved';
-
-    IF v_pending = 0 THEN
-      UPDATE oc_ts_week
-         SET week_status = CASE WHEN v_over = 'Y'
-                                THEN 'Overridden and approved' ELSE 'Approved' END,
-             approved_by = p_actor,
-             approved_on = SYSTIMESTAMP,
-             updated_by  = p_actor
-       WHERE ts_week_id = p_ts_week_id;
-    END IF;
-
-    log_event(p_ts_week_id, v_emp, NULL, v_period, 'DAY', TRUNC(p_entry_date),
-              'Approve', NULL, NULL, p_actor_emp_id, p_trace_id);
+    -- RETIRED 14-Aug-2026. APPROVAL IS WEEKLY, and only weekly: "if a week is
+    -- approved all the days in a week are approved, and if a week is rejected
+    -- all the days in the week are rejected".
+    --
+    -- A day never holds a decision of its own. While it could, this procedure
+    -- was able to leave a week whose days disagreed with it -- half approved,
+    -- half pending, and a WEEK_STATUS rolled up from whichever happened to be
+    -- last. That is precisely what the two-axis model exists to remove, and
+    -- oc_time_apply_event now writes every day of a week in ONE statement so
+    -- the disagreement is not expressible.
+    --
+    -- Kept as a procedure rather than dropped: the ORDS handler still calls
+    -- it, and a clear refusal is better than the PLS-00201 an unresolved
+    -- identifier would give. -20027 is inside the range ORDS maps to 400, so
+    -- the message reaches the screen verbatim.
+    RAISE_APPLICATION_ERROR(-20027,
+      'Days are not approved or rejected individually. Act on the whole week.');
   END approve_day;
 
 
@@ -1632,38 +1655,24 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
     p_actor        IN VARCHAR2 DEFAULT 'VBCS_USER',
     p_trace_id     IN VARCHAR2 DEFAULT NULL)
   IS
-    v_emp    oc_ts_week.employee_id%TYPE;
-    v_period oc_ts_week.period_id%TYPE;
   BEGIN
-    IF p_reason IS NULL OR p_reason NOT IN ('Manager','Client','Absence') THEN
-      RAISE_APPLICATION_ERROR(-20013, 'Select a rejection reason.');
-    END IF;
-
-    SELECT employee_id, period_id INTO v_emp, v_period
-      FROM oc_ts_week WHERE ts_week_id = p_ts_week_id;
-
-    assert_not_self(v_emp, p_actor_emp_id);
-
-    UPDATE oc_ts_entry
-       SET day_status     = 'Rejected',
-           reject_reason  = p_reason,
-           reject_remarks = p_remarks,
-           updated_by     = p_actor
-     WHERE ts_week_id = p_ts_week_id
-       AND entry_date = TRUNC(p_entry_date);
-
-    -- Any rejected day puts the whole week back with the employee, and the
-    -- rejected dates are what NOTIF-004 shows them (#5).
-    UPDATE oc_ts_week
-       SET week_status    = 'Rejected',
-           reject_reason  = p_reason,
-           reject_remarks = p_remarks,
-           locked_flag    = 'N',
-           updated_by     = p_actor
-     WHERE ts_week_id = p_ts_week_id;
-
-    log_event(p_ts_week_id, v_emp, NULL, v_period, 'DAY', TRUNC(p_entry_date),
-              'Reject', p_reason, p_remarks, p_actor_emp_id, p_trace_id);
+    -- RETIRED 14-Aug-2026. APPROVAL IS WEEKLY, and only weekly: "if a week is
+    -- approved all the days in a week are approved, and if a week is rejected
+    -- all the days in the week are rejected".
+    --
+    -- A day never holds a decision of its own. While it could, this procedure
+    -- was able to leave a week whose days disagreed with it -- half approved,
+    -- half pending, and a WEEK_STATUS rolled up from whichever happened to be
+    -- last. That is precisely what the two-axis model exists to remove, and
+    -- oc_time_apply_event now writes every day of a week in ONE statement so
+    -- the disagreement is not expressible.
+    --
+    -- Kept as a procedure rather than dropped: the ORDS handler still calls
+    -- it, and a clear refusal is better than the PLS-00201 an unresolved
+    -- identifier would give. -20027 is inside the range ORDS maps to 400, so
+    -- the message reaches the screen verbatim.
+    RAISE_APPLICATION_ERROR(-20027,
+      'Days are not approved or rejected individually. Act on the whole week.');
   END reject_day;
 
 
@@ -1686,113 +1695,24 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
     p_actor        IN VARCHAR2 DEFAULT 'VBCS_USER',
     p_trace_id     IN VARCHAR2 DEFAULT NULL)
   IS
-    v_emp      oc_ts_week.employee_id%TYPE;
-    v_period   oc_ts_week.period_id%TYPE;
-    v_wstatus  oc_ts_week.week_status%TYPE;
-    v_over     oc_ts_week.overridden_flag%TYPE;
-    v_pstatus  oc_time_period.status%TYPE;
-    v_decided  NUMBER;
-    v_rejected NUMBER;
-    v_pending  NUMBER;
-    v_reason   oc_ts_entry.reject_reason%TYPE;
-    v_remarks  oc_ts_entry.reject_remarks%TYPE;
   BEGIN
-    SELECT w.employee_id, w.period_id, w.week_status, w.overridden_flag, p.status
-      INTO v_emp, v_period, v_wstatus, v_over, v_pstatus
-      FROM oc_ts_week     w
-      JOIN oc_time_period p ON p.period_id = w.period_id
-     WHERE w.ts_week_id = p_ts_week_id;
-
-    assert_not_self(v_emp, p_actor_emp_id);
-
-    -- A confirmed month has already been handed to accrual (RULE-020), so the
-    -- hours behind it are committed elsewhere. Correcting one now is a retro
-    -- adjustment (RULE-019), not an undo.
-    IF v_wstatus = 'Closed' THEN
-      RAISE_APPLICATION_ERROR(-20023,
-        'This week is closed and has gone to accrual. Raise a backdated '
-        || 'adjustment instead.');
-    END IF;
-
-    IF v_pstatus <> 'Open' THEN
-      RAISE_APPLICATION_ERROR(-20024,
-        'The period is not open, so this decision cannot be undone. Raise a '
-        || 'backdated adjustment instead.');
-    END IF;
-
-    -- Nothing to undo is an error, not a no-op: the button would otherwise
-    -- report success for a day it never touched.
-    SELECT COUNT(*) INTO v_decided
-      FROM oc_ts_entry
-     WHERE ts_week_id = p_ts_week_id
-       AND entry_date = TRUNC(p_entry_date)
-       AND day_status IN ('Approved','Rejected');
-
-    IF v_decided = 0 THEN
-      RAISE_APPLICATION_ERROR(-20025,
-        'There is no approval or rejection on '
-        || TO_CHAR(TRUNC(p_entry_date),'DD-Mon-YYYY') || ' to undo.');
-    END IF;
-
-    UPDATE oc_ts_entry
-       SET day_status     = 'Pending',
-           reject_reason  = NULL,
-           reject_remarks = NULL,
-           approved_by    = NULL,
-           approved_on    = NULL,
-           updated_by     = p_actor
-     WHERE ts_week_id = p_ts_week_id
-       AND entry_date = TRUNC(p_entry_date);
-
-    SELECT COUNT(CASE WHEN day_status = 'Rejected' THEN 1 END),
-           COUNT(CASE WHEN day_status <> 'Approved' THEN 1 END)
-      INTO v_rejected, v_pending
-      FROM oc_ts_entry
-     WHERE ts_week_id = p_ts_week_id;
-
-    IF v_rejected > 0 THEN
-      -- Still rejected somewhere. Carry the reason of a day that IS still
-      -- rejected, so the week does not keep quoting the one just undone.
-      SELECT MAX(reject_reason), MAX(reject_remarks)
-        INTO v_reason, v_remarks
-        FROM oc_ts_entry
-       WHERE ts_week_id = p_ts_week_id AND day_status = 'Rejected';
-
-      UPDATE oc_ts_week
-         SET week_status    = 'Rejected',
-             reject_reason  = v_reason,
-             reject_remarks = v_remarks,
-             approved_by    = NULL,
-             approved_on    = NULL,
-             updated_by     = p_actor
-       WHERE ts_week_id = p_ts_week_id;
-
-    ELSIF v_pending = 0 THEN
-      UPDATE oc_ts_week
-         SET week_status    = CASE WHEN v_over = 'Y'
-                                   THEN 'Overridden and approved' ELSE 'Approved' END,
-             reject_reason  = NULL,
-             reject_remarks = NULL,
-             updated_by     = p_actor
-       WHERE ts_week_id = p_ts_week_id;
-
-    ELSE
-      -- Back with the manager. 'Submitted' and not 'Not yet submitted': the
-      -- employee did submit, and undoing a manager decision must never quietly
-      -- put the week back in their drafts where they would have to send it
-      -- again.
-      UPDATE oc_ts_week
-         SET week_status    = 'Submitted',
-             reject_reason  = NULL,
-             reject_remarks = NULL,
-             approved_by    = NULL,
-             approved_on    = NULL,
-             updated_by     = p_actor
-       WHERE ts_week_id = p_ts_week_id;
-    END IF;
-
-    log_event(p_ts_week_id, v_emp, NULL, v_period, 'DAY', TRUNC(p_entry_date),
-              'Revoke', NULL, NULL, p_actor_emp_id, p_trace_id);
+    -- RETIRED 14-Aug-2026. APPROVAL IS WEEKLY, and only weekly: "if a week is
+    -- approved all the days in a week are approved, and if a week is rejected
+    -- all the days in the week are rejected".
+    --
+    -- A day never holds a decision of its own. While it could, this procedure
+    -- was able to leave a week whose days disagreed with it -- half approved,
+    -- half pending, and a WEEK_STATUS rolled up from whichever happened to be
+    -- last. That is precisely what the two-axis model exists to remove, and
+    -- oc_time_apply_event now writes every day of a week in ONE statement so
+    -- the disagreement is not expressible.
+    --
+    -- Kept as a procedure rather than dropped: the ORDS handler still calls
+    -- it, and a clear refusal is better than the PLS-00201 an unresolved
+    -- identifier would give. -20027 is inside the range ORDS maps to 400, so
+    -- the message reaches the screen verbatim.
+    RAISE_APPLICATION_ERROR(-20027,
+      'Days are not approved or rejected individually. Act on the whole week.');
   END revoke_decision;
 
 
@@ -1810,21 +1730,49 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
     p_actor        IN VARCHAR2 DEFAULT 'VBCS_USER',
     p_trace_id     IN VARCHAR2 DEFAULT NULL)
   IS
-    v_done NUMBER := 0;
+    v_emp    oc_ts_week.employee_id%TYPE;
+    v_period oc_ts_week.period_id%TYPE;
+    v_app    VARCHAR2(30);
   BEGIN
-    FOR d IN (SELECT DISTINCT entry_date
-                FROM oc_ts_entry
-               WHERE ts_week_id = p_ts_week_id
-                 AND day_status IN ('Approved','Rejected')
-               ORDER BY entry_date) LOOP
-      revoke_decision(p_ts_week_id, d.entry_date, p_actor_emp_id, p_actor, p_trace_id);
-      v_done := v_done + 1;
-    END LOOP;
+    -- Was a loop over days calling revoke_decision. Approval is weekly, so
+    -- there is one decision to undo, not one per day: "if a week is approved
+    -- all the days in a week are approved, and if a week is rejected all the
+    -- days in the week are rejected" (confirmed 14-Aug). The day loop could
+    -- only ever have produced the same answer more slowly, or a partial one.
+    SELECT employee_id, period_id, approval_status
+      INTO v_emp, v_period, v_app
+      FROM oc_ts_week WHERE ts_week_id = p_ts_week_id;
 
-    IF v_done = 0 THEN
+    IF v_app = 'Pending' THEN
       RAISE_APPLICATION_ERROR(-20025,
         'There is no approval or rejection on this week to undo.');
     END IF;
+
+    assert_not_self(v_emp, p_actor_emp_id);
+
+    -- ── THE ENGINE DECIDES THE STATUS (phase 2b) ──────────────
+    -- Approval returns to Pending; the SUBMISSION axis is untouched, so the
+    -- employee's record still shows they submitted, and when.
+    oc_time_fire_event(p_ts_week_id, 'RevokeDecision', p_actor);
+
+    UPDATE oc_ts_week
+       SET approved_by    = NULL,
+           approved_on    = NULL,
+           reject_reason  = NULL,
+           reject_remarks = NULL,
+           updated_by     = p_actor
+     WHERE ts_week_id = p_ts_week_id;
+
+    UPDATE oc_ts_entry
+       SET approved_by    = NULL,
+           approved_on    = NULL,
+           reject_reason  = NULL,
+           reject_remarks = NULL,
+           updated_by     = p_actor
+     WHERE ts_week_id = p_ts_week_id;
+
+    log_event(p_ts_week_id, v_emp, NULL, v_period, 'WEEK', NULL,
+              'RevokeDecision', NULL, NULL, p_actor_emp_id, p_trace_id);
   END revoke_week_decision;
 
 
@@ -1966,19 +1914,36 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
                WHERE w.period_id  = p_period_id
                  AND e.project_id = p_project_id
                  AND (p_employee_id IS NULL OR w.employee_id = p_employee_id)
-                 AND w.week_status NOT IN
-                     ('Approved','Overridden and approved','Closed'))
+                 -- On the AXIS, and narrowed to Pending. The old filter was
+                 -- "week_status NOT IN (Approved, Overridden and approved,
+                 -- Closed)", which also selected REJECTED weeks -- and the
+                 -- AdvanceApprove rule only matches from Pending, so the
+                 -- engine would raise -20034 partway through. This loop has no
+                 -- per-week handler, so that one rejected week would abandon
+                 -- the whole month's advance closure with some weeks approved
+                 -- and the rest not.
+                 --
+                 -- Excluding them is also right on its own terms: a week the
+                 -- manager rejected should not be swept into an approval by a
+                 -- closure job.
+                 AND w.approval_status = 'Pending')
     LOOP
       assert_not_self(w.employee_id, p_actor_emp_id);
 
+      -- ── THE ENGINE DECIDES THE STATUS (phase 2b) ────────────
+      -- Advance closure approves whatever state the week is in, including a
+      -- Defaulted one -- that is the whole point of it, and the open question
+      -- in section 8.2. The rule carries AdvanceClosure so the reason a week
+      -- was approved without a manager looking at it stays on the record.
+      oc_time_fire_event(w.ts_week_id, 'AdvanceApprove', p_actor);
+
       UPDATE oc_ts_entry
-         SET day_status = 'Approved', approved_by = p_actor,
+         SET approved_by = p_actor,
              approved_on = SYSTIMESTAMP, updated_by = p_actor
        WHERE ts_week_id = w.ts_week_id;
 
       UPDATE oc_ts_week
-         SET week_status          = 'Approved',
-             advance_closure_flag = 'Y',
+         SET advance_closure_flag = 'Y',
              approved_by          = p_actor,
              approved_on          = SYSTIMESTAMP,
              updated_by           = p_actor
@@ -2887,14 +2852,25 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
            c.accrual_message   = 'Interface table filled; batch ' || v_batch
      WHERE c.confirm_id = v_confirm;
 
-    -- The month is closed for the employees involved.
-    UPDATE oc_ts_week w
-       SET w.week_status = 'Closed', w.updated_by = p_actor
-     WHERE w.period_id = p_period_id
-       AND w.week_status IN ('Approved','Overridden and approved')
-       AND EXISTS (SELECT 1 FROM oc_ts_entry e
-                    WHERE e.ts_week_id = w.ts_week_id
-                      AND e.project_id = p_project_id);
+    -- THERE IS NO 'CLOSED' STATUS. Confirmed 14-Aug: "there is nothing called
+    -- closed -- if the cut-off date is passed it will not be editable, and if
+    -- it is rejected it becomes editable but will be late submission; then if
+    -- the delivery cut-off is crossed it goes as such, and if there is any
+    -- change needed it goes as adjustments."
+    --
+    -- So closure is not something that happens TO a week. Editability already
+    -- derives from the period's cut-offs (V_OC_TIME_CUTOFFS -> EDITABLE_FLAG),
+    -- and a change after the cut-off is an ADJUSTMENT, which apply_adjustment
+    -- and run_accrual_top_up already handle. Writing 'Closed' over the week
+    -- destroyed the approval outcome -- an approved week and an overridden-
+    -- and-approved one became indistinguishable the moment the month
+    -- confirmed, and the audit question "who approved this, and was it
+    -- overridden" stopped being answerable.
+    --
+    -- The confirmation itself is recorded on OC_TS_MONTH_CONFIRM, which is
+    -- where a month-level fact belongs. Nothing is lost by not stamping it on
+    -- every week.
+    NULL;
 
     log_event(NULL, '-', p_project_id, p_period_id, 'MONTH', NULL,
               'Confirm', NULL,

@@ -369,7 +369,7 @@ BEGIN
                    ELSE ',"error":"' || v_detail || '"' END || '}');
       EXCEPTION WHEN OTHERS THEN
         ROLLBACK;
-        :status_code := CASE WHEN SQLCODE BETWEEN -20025 AND -20001 THEN 400 ELSE 500 END;
+        :status_code := CASE WHEN SQLCODE BETWEEN -20033 AND -20001 THEN 400 ELSE 500 END;
         HTP.P('{"approved":0,"error":"' ||
               REPLACE(REPLACE(SQLERRM,'ORA-'||LTRIM(TO_CHAR(ABS(SQLCODE)))||': ',''),'"','\"')
               || '"}');
@@ -456,7 +456,7 @@ BEGIN
                    ELSE ',"error":"' || v_detail || '"' END || '}');
       EXCEPTION WHEN OTHERS THEN
         ROLLBACK;
-        :status_code := CASE WHEN SQLCODE BETWEEN -20025 AND -20001 THEN 400 ELSE 500 END;
+        :status_code := CASE WHEN SQLCODE BETWEEN -20033 AND -20001 THEN 400 ELSE 500 END;
         HTP.P('{"rejected":0,"error":"' ||
               REPLACE(REPLACE(SQLERRM,'ORA-'||LTRIM(TO_CHAR(ABS(SQLCODE)))||': ',''),'"','\"')
               || '"}');
@@ -482,7 +482,7 @@ BEGIN
         HTP.P('{"tsWeekId":' || :id || ',"weekStatus":"' || v_status || '"}');
       EXCEPTION WHEN OTHERS THEN
         ROLLBACK;
-        :status_code := CASE WHEN SQLCODE BETWEEN -20025 AND -20001 THEN 400 ELSE 500 END;
+        :status_code := CASE WHEN SQLCODE BETWEEN -20033 AND -20001 THEN 400 ELSE 500 END;
         HTP.P('{"error":"' ||
               REPLACE(REPLACE(SQLERRM,'ORA-'||LTRIM(TO_CHAR(ABS(SQLCODE)))||': ',''),'"','\"')
               || '"}');
@@ -506,7 +506,7 @@ BEGIN
         HTP.P('{"tsWeekId":' || :id || ',"weekStatus":"Rejected"}');
       EXCEPTION WHEN OTHERS THEN
         ROLLBACK;
-        :status_code := CASE WHEN SQLCODE BETWEEN -20025 AND -20001 THEN 400 ELSE 500 END;
+        :status_code := CASE WHEN SQLCODE BETWEEN -20033 AND -20001 THEN 400 ELSE 500 END;
         HTP.P('{"error":"' ||
               REPLACE(REPLACE(SQLERRM,'ORA-'||LTRIM(TO_CHAR(ABS(SQLCODE)))||': ',''),'"','\"')
               || '"}');
@@ -558,7 +558,7 @@ BEGIN
         HTP.P('{"approvedDates":' || v_done || ',"weekStatus":"' || v_status || '"}');
       EXCEPTION WHEN OTHERS THEN
         ROLLBACK;
-        :status_code := CASE WHEN SQLCODE BETWEEN -20025 AND -20001 THEN 400 ELSE 500 END;
+        :status_code := CASE WHEN SQLCODE BETWEEN -20033 AND -20001 THEN 400 ELSE 500 END;
         HTP.P('{"approvedDates":0,"error":"' ||
               REPLACE(REPLACE(SQLERRM,'ORA-'||LTRIM(TO_CHAR(ABS(SQLCODE)))||': ',''),'"','\"')
               || '"}');
@@ -598,7 +598,7 @@ BEGIN
         HTP.P('{"revoked":true,"weekStatus":"' || v_status || '"}');
       EXCEPTION WHEN OTHERS THEN
         ROLLBACK;
-        :status_code := CASE WHEN SQLCODE BETWEEN -20025 AND -20001 THEN 400 ELSE 500 END;
+        :status_code := CASE WHEN SQLCODE BETWEEN -20033 AND -20001 THEN 400 ELSE 500 END;
         HTP.P('{"revoked":false,"error":"' ||
               REPLACE(REPLACE(SQLERRM,'ORA-'||LTRIM(TO_CHAR(ABS(SQLCODE)))||': ',''),'"','\"')
               || '"}');
@@ -647,7 +647,7 @@ BEGIN
         HTP.P('{"revokedDates":' || v_done || ',"weekStatus":"' || v_status || '"}');
       EXCEPTION WHEN OTHERS THEN
         ROLLBACK;
-        :status_code := CASE WHEN SQLCODE BETWEEN -20025 AND -20001 THEN 400 ELSE 500 END;
+        :status_code := CASE WHEN SQLCODE BETWEEN -20033 AND -20001 THEN 400 ELSE 500 END;
         HTP.P('{"revokedDates":0,"error":"' ||
               REPLACE(REPLACE(SQLERRM,'ORA-'||LTRIM(TO_CHAR(ABS(SQLCODE)))||': ',''),'"','\"')
               || '"}');
@@ -698,7 +698,7 @@ BEGIN
         HTP.P('{"rejectedDates":' || v_done || '}');
       EXCEPTION WHEN OTHERS THEN
         ROLLBACK;
-        :status_code := CASE WHEN SQLCODE BETWEEN -20025 AND -20001 THEN 400 ELSE 500 END;
+        :status_code := CASE WHEN SQLCODE BETWEEN -20033 AND -20001 THEN 400 ELSE 500 END;
         HTP.P('{"rejectedDates":0,"error":"' ||
               REPLACE(REPLACE(SQLERRM,'ORA-'||LTRIM(TO_CHAR(ABS(SQLCODE)))||': ',''),'"','\"')
               || '"}');
@@ -723,7 +723,7 @@ BEGIN
         HTP.P('{"tsEntryId":' || :tsEntryId || ',"overridden":true}');
       EXCEPTION WHEN OTHERS THEN
         ROLLBACK;
-        :status_code := CASE WHEN SQLCODE BETWEEN -20025 AND -20001 THEN 400 ELSE 500 END;
+        :status_code := CASE WHEN SQLCODE BETWEEN -20033 AND -20001 THEN 400 ELSE 500 END;
         HTP.P('{"error":"' ||
               REPLACE(REPLACE(SQLERRM,'ORA-'||LTRIM(TO_CHAR(ABS(SQLCODE)))||': ',''),'"','\"')
               || '"}');
@@ -752,7 +752,7 @@ BEGIN
         HTP.P('{"tsWeekId":' || :tsWeekId || ',"weekStatus":"' || v_status || '"}');
       EXCEPTION WHEN OTHERS THEN
         ROLLBACK;
-        :status_code := CASE WHEN SQLCODE BETWEEN -20025 AND -20001 THEN 400 ELSE 500 END;
+        :status_code := CASE WHEN SQLCODE BETWEEN -20033 AND -20001 THEN 400 ELSE 500 END;
         HTP.P('{"error":"' ||
               REPLACE(REPLACE(SQLERRM,'ORA-'||LTRIM(TO_CHAR(ABS(SQLCODE)))||': ',''),'"','\"')
               || '"}');
@@ -778,7 +778,7 @@ BEGIN
         HTP.P('{"approved":true}');
       EXCEPTION WHEN OTHERS THEN
         ROLLBACK;
-        :status_code := CASE WHEN SQLCODE BETWEEN -20025 AND -20001 THEN 400 ELSE 500 END;
+        :status_code := CASE WHEN SQLCODE BETWEEN -20033 AND -20001 THEN 400 ELSE 500 END;
         HTP.P('{"error":"' ||
               REPLACE(REPLACE(SQLERRM,'ORA-'||LTRIM(TO_CHAR(ABS(SQLCODE)))||': ',''),'"','\"')
               || '"}');
@@ -843,7 +843,7 @@ BEGIN
         HTP.P('{"advanceApproved":' || v_done || ',"flag":"Advance closure"}');
       EXCEPTION WHEN OTHERS THEN
         ROLLBACK;
-        :status_code := CASE WHEN SQLCODE BETWEEN -20025 AND -20001 THEN 400 ELSE 500 END;
+        :status_code := CASE WHEN SQLCODE BETWEEN -20033 AND -20001 THEN 400 ELSE 500 END;
         HTP.P('{"advanceApproved":0,"error":"' ||
               REPLACE(REPLACE(SQLERRM,'ORA-'||LTRIM(TO_CHAR(ABS(SQLCODE)))||': ',''),'"','\"')
               || '"}');
@@ -886,7 +886,7 @@ BEGIN
         ROLLBACK;
         -- -20020 is the RULE-020 gate; the message tells the manager to approve
         -- everyone first (SC-19).
-        :status_code := CASE WHEN SQLCODE BETWEEN -20025 AND -20001 THEN 400 ELSE 500 END;
+        :status_code := CASE WHEN SQLCODE BETWEEN -20033 AND -20001 THEN 400 ELSE 500 END;
         HTP.P('{"error":"' ||
               REPLACE(REPLACE(SQLERRM,'ORA-'||LTRIM(TO_CHAR(ABS(SQLCODE)))||': ',''),'"','\"')
               || '"}');
@@ -946,7 +946,7 @@ BEGIN
               '","posted":"' || v_posted || '"}');
       EXCEPTION WHEN OTHERS THEN
         ROLLBACK;
-        :status_code := CASE WHEN SQLCODE BETWEEN -20025 AND -20001 THEN 400 ELSE 500 END;
+        :status_code := CASE WHEN SQLCODE BETWEEN -20033 AND -20001 THEN 400 ELSE 500 END;
         HTP.P('{"error":"' ||
               REPLACE(REPLACE(SQLERRM,'ORA-'||LTRIM(TO_CHAR(ABS(SQLCODE)))||': ',''),'"','\"')
               || '"}');
@@ -996,7 +996,7 @@ BEGIN
         HTP.P('{"linesCreated":' || v_n || '}');
       EXCEPTION WHEN OTHERS THEN
         ROLLBACK;
-        :status_code := CASE WHEN SQLCODE BETWEEN -20025 AND -20001 THEN 400 ELSE 500 END;
+        :status_code := CASE WHEN SQLCODE BETWEEN -20033 AND -20001 THEN 400 ELSE 500 END;
         HTP.P('{"linesCreated":0,"error":"' ||
               REPLACE(REPLACE(SQLERRM,'ORA-'||LTRIM(TO_CHAR(ABS(SQLCODE)))||': ',''),'"','\"')
               || '"}');
@@ -1039,7 +1039,7 @@ BEGIN
         HTP.P('{"llcId":' || :id || ',"llcStatus":"Assigned"}');
       EXCEPTION WHEN OTHERS THEN
         ROLLBACK;
-        :status_code := CASE WHEN SQLCODE BETWEEN -20025 AND -20001 THEN 400 ELSE 500 END;
+        :status_code := CASE WHEN SQLCODE BETWEEN -20033 AND -20001 THEN 400 ELSE 500 END;
         HTP.P('{"error":"' ||
               REPLACE(REPLACE(SQLERRM,'ORA-'||LTRIM(TO_CHAR(ABS(SQLCODE)))||': ',''),'"','\"')
               || '"}');
@@ -1062,7 +1062,7 @@ BEGIN
         HTP.P('{"llcId":' || :id || ',"llcStatus":"Approved","billed":true}');
       EXCEPTION WHEN OTHERS THEN
         ROLLBACK;
-        :status_code := CASE WHEN SQLCODE BETWEEN -20025 AND -20001 THEN 400 ELSE 500 END;
+        :status_code := CASE WHEN SQLCODE BETWEEN -20033 AND -20001 THEN 400 ELSE 500 END;
         HTP.P('{"error":"' ||
               REPLACE(REPLACE(SQLERRM,'ORA-'||LTRIM(TO_CHAR(ABS(SQLCODE)))||': ',''),'"','\"')
               || '"}');
@@ -1123,7 +1123,7 @@ BEGIN
               '","holdId":' || v_hold || ',"salaryStatus":"' || v_sal || '"}');
       EXCEPTION WHEN OTHERS THEN
         ROLLBACK;
-        :status_code := CASE WHEN SQLCODE BETWEEN -20025 AND -20001 THEN 400 ELSE 500 END;
+        :status_code := CASE WHEN SQLCODE BETWEEN -20033 AND -20001 THEN 400 ELSE 500 END;
         HTP.P('{"error":"' ||
               REPLACE(REPLACE(SQLERRM,'ORA-'||LTRIM(TO_CHAR(ABS(SQLCODE)))||': ',''),'"','\"')
               || '"}');
@@ -1219,7 +1219,7 @@ BEGIN
         HTP.P('{"holdId":' || :id || ',"salaryStatus":"Released"}');
       EXCEPTION WHEN OTHERS THEN
         ROLLBACK;
-        :status_code := CASE WHEN SQLCODE BETWEEN -20025 AND -20001 THEN 400 ELSE 500 END;
+        :status_code := CASE WHEN SQLCODE BETWEEN -20033 AND -20001 THEN 400 ELSE 500 END;
         HTP.P('{"error":"' ||
               REPLACE(REPLACE(SQLERRM,'ORA-'||LTRIM(TO_CHAR(ABS(SQLCODE)))||': ',''),'"','\"')
               || '"}');

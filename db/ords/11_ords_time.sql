@@ -236,7 +236,7 @@ BEGIN
         ROLLBACK;
         -- -20003 / -20004 / -20007 / -20010 / -20013 are business rules, so they
         -- surface as 400 with the rule's own message for the toast.
-        :status_code := CASE WHEN SQLCODE BETWEEN -20025 AND -20001 THEN 400 ELSE 500 END;
+        :status_code := CASE WHEN SQLCODE BETWEEN -20033 AND -20001 THEN 400 ELSE 500 END;
         HTP.P('{"error":"' ||
               REPLACE(REPLACE(SQLERRM,'ORA-'||LTRIM(TO_CHAR(ABS(SQLCODE)))||': ',''),'"','\"')
               || '"}');
@@ -308,7 +308,7 @@ BEGIN
         HTP.P('{"saved":' || v_saved || '}');
       EXCEPTION WHEN OTHERS THEN
         ROLLBACK;
-        :status_code := CASE WHEN SQLCODE BETWEEN -20025 AND -20001 THEN 400 ELSE 500 END;
+        :status_code := CASE WHEN SQLCODE BETWEEN -20033 AND -20001 THEN 400 ELSE 500 END;
         HTP.P('{"saved":0,"error":"' ||
               REPLACE(REPLACE(SQLERRM,'ORA-'||LTRIM(TO_CHAR(ABS(SQLCODE)))||': ',''),'"','\"')
               || '"}');
@@ -334,7 +334,7 @@ BEGIN
         HTP.P('{"removed":true}');
       EXCEPTION WHEN OTHERS THEN
         ROLLBACK;
-        :status_code := CASE WHEN SQLCODE BETWEEN -20025 AND -20001 THEN 400 ELSE 500 END;
+        :status_code := CASE WHEN SQLCODE BETWEEN -20033 AND -20001 THEN 400 ELSE 500 END;
         HTP.P('{"error":"' ||
               REPLACE(REPLACE(SQLERRM,'ORA-'||LTRIM(TO_CHAR(ABS(SQLCODE)))||': ',''),'"','\"')
               || '"}');
@@ -360,7 +360,7 @@ BEGIN
         HTP.P('{"tsWeekId":' || :id || ',"weekStatus":"' || v_status || '"}');
       EXCEPTION WHEN OTHERS THEN
         ROLLBACK;
-        :status_code := CASE WHEN SQLCODE BETWEEN -20025 AND -20001 THEN 400 ELSE 500 END;
+        :status_code := CASE WHEN SQLCODE BETWEEN -20033 AND -20001 THEN 400 ELSE 500 END;
         HTP.P('{"error":"' ||
               REPLACE(REPLACE(SQLERRM,'ORA-'||LTRIM(TO_CHAR(ABS(SQLCODE)))||': ',''),'"','\"')
               || '"}');
@@ -390,7 +390,7 @@ BEGIN
         HTP.P('{"tsWeekId":' || :id || ',"weekStatus":"' || v_status || '"}');
       EXCEPTION WHEN OTHERS THEN
         ROLLBACK;
-        :status_code := CASE WHEN SQLCODE BETWEEN -20025 AND -20001 THEN 400 ELSE 500 END;
+        :status_code := CASE WHEN SQLCODE BETWEEN -20033 AND -20001 THEN 400 ELSE 500 END;
         HTP.P('{"error":"' ||
               REPLACE(REPLACE(SQLERRM,'ORA-'||LTRIM(TO_CHAR(ABS(SQLCODE)))||': ',''),'"','\"')
               || '"}');
@@ -448,7 +448,7 @@ BEGIN
         HTP.P('{"holdDayId":' || :holdDayId || ',"dayStatus":"' || v_status || '"}');
       EXCEPTION WHEN OTHERS THEN
         ROLLBACK;
-        :status_code := CASE WHEN SQLCODE BETWEEN -20025 AND -20001 THEN 400 ELSE 500 END;
+        :status_code := CASE WHEN SQLCODE BETWEEN -20033 AND -20001 THEN 400 ELSE 500 END;
         HTP.P('{"error":"' ||
               REPLACE(REPLACE(SQLERRM,'ORA-'||LTRIM(TO_CHAR(ABS(SQLCODE)))||': ',''),'"','\"')
               || '"}');
@@ -648,7 +648,7 @@ BEGIN
         HTP.P('{"adjustmentId":' || v_id || ',"status":"Awaiting Approval"}');
       EXCEPTION WHEN OTHERS THEN
         ROLLBACK;
-        :status_code := CASE WHEN SQLCODE BETWEEN -20025 AND -20001 THEN 400 ELSE 500 END;
+        :status_code := CASE WHEN SQLCODE BETWEEN -20033 AND -20001 THEN 400 ELSE 500 END;
         HTP.P('{"error":"' ||
               REPLACE(REPLACE(SQLERRM,'ORA-'||LTRIM(TO_CHAR(ABS(SQLCODE)))||': ',''),'"','\"')
               || '"}');
