@@ -41,23 +41,23 @@
 SET DEFINE OFF
 SET SERVEROUTPUT ON
 
--- ── WHICH SCHEMA AM I? ───────────────────────────────────────
--- Run in the wrong one and every statement fails with ORA-00942 naming a
--- table that plainly exists -- because it exists in the OTHER schema. That
--- happened on 14-Aug against O2C_DEV, and the output is long enough that the
--- cause is not obvious from it. So: refuse immediately, and say so.
---
--- O2C_DEV owns OC_MEC_PERIOD and is the schema this module READS FROM.
--- O2C_TIME owns everything else here and is the schema to be CONNECTED AS.
+-- ── AM I IN THE SCHEMA THAT OWNS THIS MODULE? ────────────────
+-- Checks for the module itself rather than for a schema NAME. The first
+-- version of this guard hardcoded 'O2C_TIME' and was wrong: o2c_time in the
+-- ORDS url is a URL MAPPING, and the module actually lives in O2C_DEV
+-- alongside OC_MEC_PERIOD. A guard that asserts the wrong name blocks the
+-- right schema, which is worse than no guard at all.
 DECLARE
-  v_me VARCHAR2(128) := SYS_CONTEXT('USERENV','CURRENT_SCHEMA');
+  v_n NUMBER;
 BEGIN
-  IF v_me <> 'O2C_TIME' THEN
+  SELECT COUNT(*) INTO v_n FROM user_tables WHERE table_name = 'OC_TIME_WORKER';
+  IF v_n = 0 THEN
     RAISE_APPLICATION_ERROR(-20099,
-      'Connected as ' || v_me || '. This script must run as O2C_TIME -- ' ||
-      'O2C_DEV owns OC_MEC_PERIOD and is only read FROM. Reconnect and re-run.');
+      'Connected as ' || SYS_CONTEXT('USERENV','CURRENT_SCHEMA') ||
+      ', which does not own this module -- OC_TIME_WORKER is not here. ' ||
+      'Connect as the schema holding the timesheet tables and re-run.');
   END IF;
-  DBMS_OUTPUT.PUT_LINE('Schema OK: ' || v_me);
+  DBMS_OUTPUT.PUT_LINE('Schema OK: ' || SYS_CONTEXT('USERENV','CURRENT_SCHEMA'));
 END;
 /
 

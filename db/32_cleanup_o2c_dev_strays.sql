@@ -1,4 +1,16 @@
 --==============================================================
+-- DO NOT RUN THIS. Superseded 14-Aug-2026 by db/33_repair_after_cleanup.sql.
+--
+-- It was written on a wrong diagnosis -- that 30 and 31 had been run in the
+-- wrong schema. They had not. The module lives in the SAME schema as
+-- OC_MEC_PERIOD; 'o2c_time' in the ORDS url is a URL mapping, not a schema
+-- name. Run here, this script drops the LIVE OC_TIME_PERIOD view and takes
+-- sign-in down with it.
+--
+-- Kept only so the incident is legible. 33 undoes it.
+--==============================================================
+/*
+--==============================================================
 -- Run this AS O2C_DEV. It removes the timesheet objects that
 -- 30/31 created there by mistake on 14-Aug.
 --
@@ -32,3 +44,5 @@ SELECT object_name, object_type, status FROM user_objects
  WHERE object_name LIKE 'OC_TIME%' OR object_name LIKE 'V_OC_TIME%'
     OR object_name = 'OC_MEC_PERIOD_SRC'
  ORDER BY object_type, object_name;
+
+*/

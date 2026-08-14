@@ -51,23 +51,23 @@
 SET DEFINE OFF
 SET SERVEROUTPUT ON
 
--- ── WHICH SCHEMA AM I? ───────────────────────────────────────
--- Run in the wrong one and every statement fails with ORA-00942 naming a
--- table that plainly exists -- because it exists in the OTHER schema. That
--- happened on 14-Aug against O2C_DEV, and the output is long enough that the
--- cause is not obvious from it. So: refuse immediately, and say so.
---
--- O2C_DEV owns OC_MEC_PERIOD and is the schema this module READS FROM.
--- O2C_TIME owns everything else here and is the schema to be CONNECTED AS.
+-- ── AM I IN THE SCHEMA THAT OWNS THIS MODULE? ────────────────
+-- Checks for the module itself rather than for a schema NAME. The first
+-- version of this guard hardcoded 'O2C_TIME' and was wrong: o2c_time in the
+-- ORDS url is a URL MAPPING, and the module actually lives in O2C_DEV
+-- alongside OC_MEC_PERIOD. A guard that asserts the wrong name blocks the
+-- right schema, which is worse than no guard at all.
 DECLARE
-  v_me VARCHAR2(128) := SYS_CONTEXT('USERENV','CURRENT_SCHEMA');
+  v_n NUMBER;
 BEGIN
-  IF v_me <> 'O2C_TIME' THEN
+  SELECT COUNT(*) INTO v_n FROM user_tables WHERE table_name = 'OC_TIME_WORKER';
+  IF v_n = 0 THEN
     RAISE_APPLICATION_ERROR(-20099,
-      'Connected as ' || v_me || '. This script must run as O2C_TIME -- ' ||
-      'O2C_DEV owns OC_MEC_PERIOD and is only read FROM. Reconnect and re-run.');
+      'Connected as ' || SYS_CONTEXT('USERENV','CURRENT_SCHEMA') ||
+      ', which does not own this module -- OC_TIME_WORKER is not here. ' ||
+      'Connect as the schema holding the timesheet tables and re-run.');
   END IF;
-  DBMS_OUTPUT.PUT_LINE('Schema OK: ' || v_me);
+  DBMS_OUTPUT.PUT_LINE('Schema OK: ' || SYS_CONTEXT('USERENV','CURRENT_SCHEMA'));
 END;
 /
 
@@ -91,11 +91,11 @@ DECLARE
 BEGIN
   -- 1. Same database, granted. The simplest thing that can work, and the most
   --    likely: /ords/o2c_time and /ords/o2c_dev are the same ORDS host.
-  IF reachable('o2c_dev.oc_mec_period') THEN
+  IF reachable('oc_mec_period') THEN
     v_ok := 'GRANT';
     BEGIN EXECUTE IMMEDIATE 'DROP SYNONYM oc_mec_period_src';
     EXCEPTION WHEN OTHERS THEN NULL; END;
-    EXECUTE IMMEDIATE 'CREATE SYNONYM oc_mec_period_src FOR o2c_dev.oc_mec_period';
+    EXECUTE IMMEDIATE 'CREATE SYNONYM oc_mec_period_src FOR oc_mec_period';
 
   -- 2. Different database, over a link.
   ELSIF reachable('oc_mec_period@o2c_dev_link') THEN
@@ -147,7 +147,19 @@ BEGIN
     EXECUTE IMMEDIATE 'RENAME oc_time_period TO oc_time_period_base';
     DBMS_OUTPUT.PUT_LINE('oc_time_period -> oc_time_period_base (10 FKs followed)');
   ELSE
-    DBMS_OUTPUT.PUT_LINE('already renamed, skipped');
+    -- Already renamed. Say what that means rather than just 'skipped': the
+    -- VIEW may still be missing or invalid from an earlier run that renamed
+    -- successfully and then failed to create it -- exactly what happened on
+    -- 14-Aug when the grant was not yet in place. Step [3] recreates it
+    -- unconditionally, so re-running this script IS the repair.
+    SELECT COUNT(*) INTO v_is_table
+      FROM user_objects WHERE object_name = 'OC_TIME_PERIOD';
+    IF v_is_table = 0 THEN
+      DBMS_OUTPUT.PUT_LINE('base already renamed, and OC_TIME_PERIOD is MISSING'
+                        || ' -- step [3] recreates it');
+    ELSE
+      DBMS_OUTPUT.PUT_LINE('already renamed; the view will be replaced');
+    END IF;
   END IF;
 END;
 /
