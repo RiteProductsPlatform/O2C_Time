@@ -280,6 +280,12 @@ PROMPT [n/m] 30_mec_period_live.sql - periods read LIVE from the main app
 
 PROMPT [n/m] 31_retire_period_writes.sql - nothing here opens or closes a period
 @@31_retire_period_writes.sql
+
+PROMPT [n/m] 34_provision_periods.sql - a local anchor for each upstream period
+@@34_provision_periods.sql
+-- 32 and 33 are incident scripts from 14-Aug, not part of a clean install:
+-- 32 is disabled (it dropped a live view on a wrong diagnosis) and 33 repairs
+-- what it removed. A fresh schema needs neither.
 -- 29_mec_period_sync.sql is the FALLBACK, not part of the install. It copies
 -- periods instead of reading them live, and is only wanted if neither a grant
 -- on o2c_dev.oc_mec_period nor a database link can be had. 30 prints the exact
