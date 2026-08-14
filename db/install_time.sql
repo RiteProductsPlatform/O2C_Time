@@ -286,6 +286,9 @@ PROMPT [n/m] 35_period_direct.sql - OC_TIME_PERIOD is a direct select upstream
 
 PROMPT [n/m] 36_period_direct_fix.sql - finishes 35 (advance_close, PL/SQL, triggers)
 @@36_period_direct_fix.sql
+
+PROMPT [n/m] 37_status_engine_v4.sql - the V4 status engine (phase 2)
+@@37_status_engine_v4.sql
 -- 34_provision_periods.sql is SUPERSEDED by 35. It created a local anchor row
 -- per period, which 35 removes the need for entirely -- PERIOD_ID is now the
 -- main application's own id, so a period added there is simply here.
