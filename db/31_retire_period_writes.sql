@@ -25,6 +25,26 @@
 SET DEFINE OFF
 SET SERVEROUTPUT ON
 
+-- ── WHICH SCHEMA AM I? ───────────────────────────────────────
+-- Run in the wrong one and every statement fails with ORA-00942 naming a
+-- table that plainly exists -- because it exists in the OTHER schema. That
+-- happened on 14-Aug against O2C_DEV, and the output is long enough that the
+-- cause is not obvious from it. So: refuse immediately, and say so.
+--
+-- O2C_DEV owns OC_MEC_PERIOD and is the schema this module READS FROM.
+-- O2C_TIME owns everything else here and is the schema to be CONNECTED AS.
+DECLARE
+  v_me VARCHAR2(128) := SYS_CONTEXT('USERENV','CURRENT_SCHEMA');
+BEGIN
+  IF v_me <> 'O2C_TIME' THEN
+    RAISE_APPLICATION_ERROR(-20099,
+      'Connected as ' || v_me || '. This script must run as O2C_TIME -- ' ||
+      'O2C_DEV owns OC_MEC_PERIOD and is only read FROM. Reconnect and re-run.');
+  END IF;
+  DBMS_OUTPUT.PUT_LINE('Schema OK: ' || v_me);
+END;
+/
+
 PROMPT ============================================================
 PROMPT [1/3] The two period writers now refuse, and say why
 PROMPT ============================================================
