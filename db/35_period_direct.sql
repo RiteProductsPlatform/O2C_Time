@@ -1,48 +1,44 @@
 --==============================================================
 -- time/35_period_direct.sql
--- O2C Timesheet Module — OC_TIME_PERIOD becomes a direct select
+-- O2C Timesheet Module — O2C_DEV.OC_MEC_PERIOD *is* the period table
 --
--- Requested 14-Aug-2026: no local anchor table, no provisioning step. A period
--- added upstream should simply BE here. This delivers that.
+-- Decided 14-Aug-2026. Not a mirror, not a sync, not an anchor row. The main
+-- application's table IS period control from here, and this module reads it
+-- directly. OC_TIME_PERIOD becomes a view over it and nothing else.
 --
--- WHAT WAS IN THE WAY, AND WHY IT NO LONGER IS
+-- THE SIMPLIFICATION THAT MAKES THIS EASY
+--   An earlier draft went to some trouble to REMAP every existing PERIOD_ID so
+--   no timesheet was orphaned. That was effort spent protecting data that does
+--   not need protecting: OC_TS_WEEK and OC_TS_ENTRY are DERIVED. They are
+--   built by populate_month from allocations and the calendar, and rebuilding
+--   them is one call.
 --
---   1. PERIOD_ID. Ten tables point at it and their rows hold OUR ids, while
---      the main application has its own -- theirs is 21 for August where ours
---      is 21 for September. That is why 30 kept a local table driving the
---      join.
+--   So: take the upstream ids as they are, clear what referenced the old ones,
+--   and repopulate. Simpler, and it leaves nothing translating between two id
+--   spaces forever.
 --
---      Fixed by REMAPPING once. Every PERIOD_ID in this schema is rewritten to
---      the upstream id for the same START_DATE. After that the two systems
---      agree on what a period id means, permanently, and nothing has to
---      translate between them again.
+--   WHAT THAT COSTS: hours an employee typed, submissions, approvals and
+--   rejections in the affected periods. Everything prepopulated comes back
+--   identical; everything a person did does not. That is fine in a schema
+--   being built and is NOT fine once anyone is really using it -- so this
+--   script is a one-time migration, not a tool.
 --
---   2. The "local-only" columns. TS_CUTOFF_DAY, TS_CUTOFF_TIME,
---      CONTRACTOR_RESUBMIT_DAYS, ADJUSTMENT_MONTHS, BACKDATED_MONTHS and
---      HOLD_RELEASE_DAYS looked like per-period data holding the design
---      hostage. They are not: 10_seed.sql writes 'Monday', '17:00', 60, 3, 3
---      into every single period. They are module settings that happened to be
---      stored per row.
+-- THE SETTINGS THAT LOOKED LIKE PERIOD DATA
+--   TS_CUTOFF_DAY, TS_CUTOFF_TIME, CONTRACTOR_RESUBMIT_DAYS,
+--   ADJUSTMENT_MONTHS, BACKDATED_MONTHS, HOLD_RELEASE_DAYS were stored per
+--   period and are identical in every one of them -- 10_seed.sql writes
+--   'Monday', '17:00', 60, 3, 3 each time. They are module settings and move
+--   to OC_TIME_CONFIG. The upstream table has no column for them and should
+--   not: the weekly cut-off is this module's business.
 --
---      Fixed by moving them to OC_TIME_CONFIG, where settings already live.
---      The view cross-joins one row of them.
+-- THE FOREIGN KEYS GO
+--   A view cannot be their target. The constraint stopped a week pointing at a
+--   period that does not exist -- but the main application can delete a period
+--   we hold weeks against and no constraint of ours would stop it. The
+--   guarantee left when ownership did. Step [6] prints the query that replaces
+--   it.
 --
--- WHAT IT COSTS: THE TEN FOREIGN KEYS
---   A view cannot be the target of a foreign key, so they go. Worth being
---   honest about what that loses -- and it is less than it appears. The
---   constraint stopped a week pointing at a period that does not exist. Once
---   another application owns periods, they can delete one we hold weeks
---   against and no constraint of ours prevents it. The guarantee left when
---   ownership did; only the appearance of it remained.
---
--- THE GUARD THAT MATTERS
---   Every local period THAT HOLDS DATA must exist upstream. If SEP-2026 has
---   1,070 weeks and the main application has no September, remapping would
---   orphan them. This script REFUSES in that case and names the period. Add it
---   upstream first, then re-run.
---
--- Reversible until the base table is dropped: OC_TIME_PERIOD_BASE is left in
--- place, renamed, holding the old ids and the old values.
+-- Reversible: OC_TIME_PERIOD_BASE is kept, holding the old rows and old ids.
 --
 -- Idempotent. Depends on: time/33
 --==============================================================
@@ -55,112 +51,94 @@ BEGIN
   SELECT COUNT(*) INTO v_n FROM user_tables WHERE table_name = 'OC_TIME_WORKER';
   IF v_n = 0 THEN
     RAISE_APPLICATION_ERROR(-20099,
-      'Connected as ' || SYS_CONTEXT('USERENV','CURRENT_SCHEMA') ||
-      ', which does not own this module.');
+      'Connected as ' || SYS_CONTEXT('USERENV','CURRENT_SCHEMA')
+      || ', which does not own this module.');
   END IF;
   DBMS_OUTPUT.PUT_LINE('Schema OK: ' || SYS_CONTEXT('USERENV','CURRENT_SCHEMA'));
 END;
 /
 
 PROMPT ============================================================
-PROMPT [1/6] The mapping, and the guard
+PROMPT [1/6] What is upstream, and what is about to be rebuilt
 PROMPT ============================================================
 
-COLUMN period_name FORMAT A12
-COLUMN mec_name    FORMAT A16
-SELECT b.period_id AS local_id, b.period_name,
-       m.period_id AS mec_id, m.period_name AS mec_name,
-       (SELECT COUNT(*) FROM oc_ts_week w WHERE w.period_id = b.period_id) AS weeks,
-       CASE WHEN m.period_id IS NULL THEN '*** NO UPSTREAM ROW ***' END AS problem
-  FROM oc_time_period_base b
-  LEFT JOIN oc_mec_period_src m ON m.start_date = b.start_date
- ORDER BY b.start_date;
+COLUMN period_name FORMAT A16
+COLUMN status      FORMAT A8
+SELECT period_id, period_name, status,
+       TO_CHAR(start_date,'DD-MON-YY')           AS starts,
+       TO_CHAR(delivery_cutoff_date,'DD-MON-YY') AS delivery
+  FROM oc_mec_period_src ORDER BY start_date;
 
-DECLARE
-  v_bad NUMBER;
-  v_names VARCHAR2(400);
-BEGIN
-  -- Only periods CARRYING DATA are fatal. An empty local period with no
-  -- upstream counterpart is just noise and is dropped with the base table.
-  SELECT COUNT(*), LISTAGG(period_name, ', ') WITHIN GROUP (ORDER BY start_date)
-    INTO v_bad, v_names
-    FROM (SELECT b.period_name, b.start_date
-            FROM oc_time_period_base b
-            LEFT JOIN oc_mec_period_src m ON m.start_date = b.start_date
-           WHERE m.period_id IS NULL
-             AND EXISTS (SELECT 1 FROM oc_ts_week w WHERE w.period_id = b.period_id));
+PROMPT
+PROMPT --- transactions that will be cleared and rebuilt -------------
+SELECT 'oc_ts_week'  AS table_name, COUNT(*) AS rows_ FROM oc_ts_week
+UNION ALL SELECT 'oc_ts_entry',     COUNT(*) FROM oc_ts_entry
+UNION ALL SELECT 'oc_ts_approval',  COUNT(*) FROM oc_ts_approval
+UNION ALL SELECT 'oc_ts_audit',     COUNT(*) FROM oc_ts_audit;
 
-  IF v_bad > 0 THEN
-    DBMS_OUTPUT.PUT_LINE('----------------------------------------------------');
-    DBMS_OUTPUT.PUT_LINE('REFUSED. These periods hold timesheets and do not');
-    DBMS_OUTPUT.PUT_LINE('exist in the main application: ' || v_names);
-    DBMS_OUTPUT.PUT_LINE('');
-    DBMS_OUTPUT.PUT_LINE('Remapping now would orphan every week in them. Add');
-    DBMS_OUTPUT.PUT_LINE('them on the Period Control screen, then re-run.');
-    DBMS_OUTPUT.PUT_LINE('----------------------------------------------------');
-    RAISE_APPLICATION_ERROR(-20033,
-      'Periods with data and no upstream row: ' || v_names);
-  END IF;
-  DBMS_OUTPUT.PUT_LINE('Every period holding data maps upstream. Proceeding.');
-END;
-/
+PROMPT
+PROMPT Prepopulated hours come back identically. Anything a PERSON did --
+PROMPT typed hours, submissions, approvals, rejections -- does not.
 
 PROMPT ============================================================
-PROMPT [2/6] Move the module settings out of the period row
+PROMPT [2/6] Module settings out of the period row
 PROMPT ============================================================
 
 DECLARE
   PROCEDURE cfg(p_name VARCHAR2, p_val VARCHAR2, p_desc VARCHAR2) IS
   BEGIN
-    MERGE INTO oc_time_config t
-    USING (SELECT p_name AS n FROM dual) s
+    MERGE INTO oc_time_config t USING (SELECT p_name AS n FROM dual) s
        ON (t.config_name = s.n AND t.scope_key = 'GLOBAL')
      WHEN MATCHED THEN UPDATE SET config_value = p_val, description = p_desc
      WHEN NOT MATCHED THEN
        INSERT (config_name, config_type, config_value, scope_key, description)
        VALUES (p_name, 'business', p_val, 'GLOBAL', p_desc);
   END;
-  v_day  VARCHAR2(10); v_time VARCHAR2(5);
-  v_con  NUMBER; v_adj NUMBER; v_back NUMBER; v_hold NUMBER;
+  v_day VARCHAR2(10); v_time VARCHAR2(5);
+  v_con NUMBER; v_adj NUMBER; v_back NUMBER; v_hold NUMBER;
 BEGIN
-  -- Taken from the existing rows rather than hardcoded, so a schema that was
-  -- tuned by hand keeps its values. They are identical across periods; MAX
-  -- simply picks the one they all share.
+  -- Read from the existing rows, not hardcoded, so a hand-tuned schema keeps
+  -- its values. They are identical across periods; MAX picks the shared one.
   SELECT MAX(ts_cutoff_day), MAX(ts_cutoff_time), MAX(contractor_resubmit_days),
          MAX(adjustment_months), MAX(backdated_months), MAX(hold_release_days)
     INTO v_day, v_time, v_con, v_adj, v_back, v_hold
     FROM oc_time_period_base;
 
   cfg('ts_cutoff_day',  NVL(v_day,'Monday'),
-      'Weekly cut-off day. The EMPLOYEE deadline, and what V4 TIMING compares '
-      || 'a submission against. The main application has no column for it.');
-  cfg('ts_cutoff_time', NVL(v_time,'17:00'),
-      'Weekly cut-off time, 24h.');
+      'Weekly cut-off day -- the EMPLOYEE deadline, and what V4 TIMING '
+      || 'compares a submission against. Upstream has no column for it.');
+  cfg('ts_cutoff_time', NVL(v_time,'17:00'), 'Weekly cut-off time, 24h.');
   cfg('contractor_resubmit_days', TO_CHAR(NVL(v_con,60)),
-      'How far back a contractor may resubmit, in calendar days. Any '
-      || 'resubmission past the weekly cut-off is Late Submission.');
+      'How far back a contractor may resubmit, in calendar days.');
   cfg('adjustment_months', TO_CHAR(NVL(v_adj,3)),
       'How many closed months back an adjustment may be raised.');
   cfg('backdated_months',  TO_CHAR(NVL(v_back,3)),
       'How far back a backdated change is accepted.');
   cfg('hold_release_days', TO_CHAR(NVL(v_hold,60)),
       'Days before an unresolved salary hold auto-releases.');
-
   COMMIT;
-  DBMS_OUTPUT.PUT_LINE('6 settings moved to OC_TIME_CONFIG (scope GLOBAL)');
+  DBMS_OUTPUT.PUT_LINE('6 settings moved to OC_TIME_CONFIG (GLOBAL)');
 END;
 /
 
 PROMPT ============================================================
-PROMPT [3/6] Drop the ten foreign keys
+PROMPT [3/6] Drop the foreign keys, clear what held the old ids
 PROMPT ============================================================
 
--- Discovered rather than listed. A hardcoded list is a list that goes stale,
--- and the whole point of this step is that nothing may reference the base
--- table once the view replaces it.
 DECLARE
   v_n NUMBER := 0;
+  PROCEDURE wipe(p_table VARCHAR2) IS
+  BEGIN
+    EXECUTE IMMEDIATE 'DELETE FROM ' || p_table;
+    DBMS_OUTPUT.PUT_LINE(RPAD('  ' || p_table, 32)
+                      || TO_CHAR(SQL%ROWCOUNT, '999,999') || ' cleared');
+  EXCEPTION WHEN OTHERS THEN
+    DBMS_OUTPUT.PUT_LINE(RPAD('  ' || p_table, 32) || 'skipped - '
+                      || SUBSTR(SQLERRM,1,50));
+  END;
 BEGIN
+  -- Discovered, not listed. A hardcoded list goes stale, and nothing may
+  -- reference the base table once the view replaces it.
   FOR c IN (SELECT c.table_name, c.constraint_name
               FROM user_constraints c
               JOIN user_constraints p ON p.constraint_name = c.r_constraint_name
@@ -168,67 +146,45 @@ BEGIN
                AND p.table_name = 'OC_TIME_PERIOD_BASE') LOOP
     EXECUTE IMMEDIATE 'ALTER TABLE ' || c.table_name
                    || ' DROP CONSTRAINT ' || c.constraint_name;
-    DBMS_OUTPUT.PUT_LINE('  dropped ' || RPAD(c.constraint_name, 24)
+    DBMS_OUTPUT.PUT_LINE('  dropped FK ' || c.constraint_name
                       || ' on ' || c.table_name);
     v_n := v_n + 1;
   END LOOP;
   DBMS_OUTPUT.PUT_LINE(v_n || ' foreign key(s) dropped');
-END;
-/
+  DBMS_OUTPUT.PUT_LINE('');
 
-PROMPT ============================================================
-PROMPT [4/6] Remap every PERIOD_ID to the upstream id
-PROMPT ============================================================
-
-DECLARE
-  v_tot NUMBER := 0;
-  v_n   NUMBER;
-BEGIN
-  -- Every table with a PERIOD_ID column, found from the dictionary. The
-  -- mapping is by START_DATE, the only field that cannot mean two things.
-  FOR t IN (SELECT DISTINCT tc.table_name
-              FROM user_tab_columns tc
-              JOIN user_tables ut ON ut.table_name = tc.table_name
-             WHERE tc.column_name = 'PERIOD_ID'
-               AND tc.table_name NOT IN ('OC_TIME_PERIOD_BASE')
-               AND tc.table_name NOT LIKE '%\_BK' ESCAPE '\'
-             ORDER BY tc.table_name) LOOP
-    EXECUTE IMMEDIATE
-      'UPDATE ' || t.table_name || ' x SET x.period_id = ('
-      || '  SELECT m.period_id FROM oc_time_period_base b'
-      || '    JOIN oc_mec_period_src m ON m.start_date = b.start_date'
-      || '   WHERE b.period_id = x.period_id)'
-      || ' WHERE EXISTS ('
-      || '  SELECT 1 FROM oc_time_period_base b'
-      || '    JOIN oc_mec_period_src m ON m.start_date = b.start_date'
-      || '   WHERE b.period_id = x.period_id AND m.period_id <> b.period_id)';
-    v_n := SQL%ROWCOUNT;
-    IF v_n > 0 THEN
-      DBMS_OUTPUT.PUT_LINE('  ' || RPAD(t.table_name, 30) || v_n || ' row(s)');
-    END IF;
-    v_tot := v_tot + v_n;
-  END LOOP;
-
+  -- Children first. Everything here is derived and comes back from populate.
+  wipe('oc_ts_audit');
+  wipe('oc_ts_leave_loss_cover');
+  wipe('oc_ts_salary_hold_day');
+  wipe('oc_ts_salary_hold');
+  wipe('oc_ts_adjustment');
+  wipe('oc_ts_approval');
+  wipe('oc_ts_month_confirm');
+  wipe('oc_ts_day_flag');
+  wipe('oc_ts_week_flag');
+  wipe('oc_ts_entry');
+  wipe('oc_ts_week');
+  wipe('xx_o2c_timesheet_accrual_if');
   COMMIT;
-  DBMS_OUTPUT.PUT_LINE(v_tot || ' row(s) remapped to upstream period ids');
 END;
 /
 
 PROMPT ============================================================
-PROMPT [5/6] OC_TIME_PERIOD — a direct select, at last
+PROMPT [4/6] OC_TIME_PERIOD — the upstream table, directly
 PROMPT ============================================================
 
--- No local table in the FROM. A period added upstream appears here on the
--- next query, with nothing to run and nothing to provision.
+-- No local table in the FROM. Add a period upstream and it is here on the next
+-- query: nothing to provision, nothing to sync, nothing to remember.
 --
--- PERIOD_NAME is derived rather than taken: theirs reads 'August 2026' and
--- every screen and message in this module reads 'AUG-2026'. Their name is
--- carried alongside so nothing is hidden.
+-- PERIOD_NAME is derived rather than taken. Theirs reads 'August 2026'; every
+-- screen and message in this module reads 'AUG-2026'. Their name is carried
+-- alongside so nothing is hidden.
 CREATE OR REPLACE VIEW oc_time_period AS
 SELECT m.period_id,
-       UPPER(TO_CHAR(m.start_date, 'MON-YYYY'))    AS period_name,
-       EXTRACT(YEAR  FROM m.start_date)            AS period_year,
-       EXTRACT(MONTH FROM m.start_date)            AS period_month,
+       UPPER(TO_CHAR(m.start_date, 'MON-YYYY'))  AS period_name,
+       EXTRACT(YEAR  FROM m.start_date)          AS period_year,
+       EXTRACT(MONTH FROM m.start_date)          AS period_month,
        m.status,
        m.start_date,
        m.end_date,
@@ -237,19 +193,16 @@ SELECT m.period_id,
        m.finance_cutoff_date  AS finance_cutoff,
        m.mec_close_date       AS mec_close,
        m.book_close_date      AS book_closure,
-       -- Module settings, one row, cross-joined. These are the same for every
-       -- period and always were -- 10_seed.sql wrote identical values into
-       -- each one, which is what made them look like period data.
        c.ts_cutoff_day,
        c.ts_cutoff_time,
-       CAST(NULL AS DATE)     AS client_cutoff,
+       CAST(NULL AS DATE)              AS client_cutoff,
        CAST(NULL AS VARCHAR2(60 CHAR)) AS payroll_country,
-       CAST(NULL AS DATE)     AS payroll_cutoff,
-       -- ADVANCE_CLOSE is theirs, and means something different from the
-       -- column this module used to keep: they compute "any close-cycle date
-       -- still ahead of today", we recorded "confirmed to accrual without full
-       -- approval". The decision now lives on OC_TS_MONTH_CONFIRM.CONFIRM_TYPE
-       -- where it always had its detail, and this column carries their meaning.
+       CAST(NULL AS DATE)              AS payroll_cutoff,
+       -- Theirs, and it means what THEY mean by it: any close-cycle date still
+       -- ahead of today. This module used to record something different in a
+       -- column of the same name -- that a month went to accrual without full
+       -- approval -- and that record lives on OC_TS_MONTH_CONFIRM.CONFIRM_TYPE,
+       -- which is where its detail always was.
        m.advance_close,
        c.contractor_resubmit_days,
        c.hold_release_days,
@@ -270,7 +223,7 @@ SELECT m.period_id,
          FROM oc_time_config WHERE scope_key = 'GLOBAL') c;
 
 PROMPT ============================================================
-PROMPT [6/6] Recompile and verify
+PROMPT [5/6] Recompile, then rebuild every period from Fusion
 PROMPT ============================================================
 
 DECLARE
@@ -297,36 +250,61 @@ BEGIN
 END;
 /
 
+DECLARE
+  v_job NUMBER;
+BEGIN
+  -- Every period upstream, not just the open one. A closed month still needs
+  -- its weeks to exist so the screens can show it read-only, and so month-end
+  -- has something to confirm.
+  FOR p IN (SELECT period_id, period_name FROM oc_time_period ORDER BY start_date) LOOP
+    BEGIN
+      v_job := oc_time_pkg.populate_month(p.period_id, NULL, 'PERIOD_DIRECT');
+      DBMS_OUTPUT.PUT_LINE('  rebuilt ' || RPAD(p.period_name, 12) || ' job ' || v_job);
+    EXCEPTION WHEN OTHERS THEN
+      DBMS_OUTPUT.PUT_LINE('  ' || RPAD(p.period_name, 12) || 'FAILED - '
+                        || SUBSTR(SQLERRM, 1, 90));
+    END;
+  END LOOP;
+  COMMIT;
+END;
+/
+
+PROMPT ============================================================
+PROMPT [6/6] Verification
+PROMPT ============================================================
+
 SELECT object_name, object_type, status FROM user_objects
  WHERE status = 'INVALID' ORDER BY object_type, object_name;
 
 COLUMN period_name FORMAT A12
 COLUMN status      FORMAT A8
 COLUMN editable    FORMAT A8
-SELECT period_id, period_name, status,
-       TO_CHAR(start_date,'DD-MON-YY')      AS starts,
-       TO_CHAR(delivery_cutoff,'DD-MON-YY') AS delivery,
-       ts_cutoff_day || ' ' || ts_cutoff_time AS weekly,
-       CASE WHEN status <> 'Open' THEN 'N'
-            WHEN TRUNC(SYSDATE) > delivery_cutoff THEN 'N'
-            ELSE 'Y' END AS editable
-  FROM oc_time_period ORDER BY start_date;
+SELECT p.period_id, p.period_name, p.status,
+       TO_CHAR(p.start_date,'DD-MON-YY')      AS starts,
+       TO_CHAR(p.delivery_cutoff,'DD-MON-YY') AS delivery,
+       p.ts_cutoff_day || ' ' || p.ts_cutoff_time AS weekly,
+       CASE WHEN p.status <> 'Open' THEN 'N'
+            WHEN TRUNC(SYSDATE) > p.delivery_cutoff THEN 'N'
+            ELSE 'Y' END AS editable,
+       (SELECT COUNT(*) FROM oc_ts_week w WHERE w.period_id = p.period_id) AS weeks,
+       (SELECT COUNT(DISTINCT w.employee_id) FROM oc_ts_week w
+         WHERE w.period_id = p.period_id) AS people
+  FROM oc_time_period p ORDER BY p.start_date;
 
 PROMPT
-PROMPT --- weeks now hanging off an id no period has (must be empty) --
+PROMPT --- weeks on an id no period has (must be empty) --------------
 SELECT w.period_id, COUNT(*) AS weeks
   FROM oc_ts_week w
  WHERE NOT EXISTS (SELECT 1 FROM oc_time_period p WHERE p.period_id = w.period_id)
  GROUP BY w.period_id;
 
 PROMPT
-PROMPT PERIOD_ID is now the main application's id. Add a period there and it
-PROMPT appears here on the next query -- nothing to provision, nothing to run.
+PROMPT PERIOD_ID is now the main application's own id. Add a period there and
+PROMPT it is here immediately -- then run populate_month for it, or let the
+PROMPT monthly job do it.
 PROMPT
-PROMPT The query above replaces the ten foreign keys that were dropped. They
-PROMPT could not survive a view, and they had stopped guaranteeing anything the
-PROMPT moment another application took ownership of periods. Run it after any
-PROMPT upstream deletion.
+PROMPT The query above replaces the dropped foreign keys. Run it after any
+PROMPT upstream deletion; it is the only thing left that would notice.
 PROMPT
-PROMPT OC_TIME_PERIOD_BASE is left in place with the old ids and values. Drop
-PROMPT it once this is proven; until then it is the way back.
+PROMPT OC_TIME_PERIOD_BASE still holds the old rows and old ids. Drop it once
+PROMPT this is proven -- until then it is the way back.
