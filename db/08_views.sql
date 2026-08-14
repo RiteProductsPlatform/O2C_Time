@@ -52,9 +52,30 @@ SELECT p.project_id,
        s.approved_employees,
        s.rejected_employees,
        s.pending_employees,
-       -- FLD-034: all approved => Approved, any rejected => Rejected, else Pending
-       CASE WHEN NVL(s.employees,0) = 0                   THEN 'No employees'
-            WHEN NVL(s.rejected_employees,0) > 0          THEN 'Rejected'
+       -- FLD-034, CORRECTED 14-Aug-2026. This read
+       --
+       --   WHEN NVL(s.rejected_employees,0) > 0 THEN 'Rejected'
+       --
+       -- so rejecting ONE week for ONE person turned the whole project's
+       -- month to Rejected. Seen on 444 Opportunity To Cash: 9 employees, 1
+       -- rejected week, project row reading Rejected with 8 people untouched.
+       --
+       -- A project month is never rejected. Rejection happens to a WEEK, for
+       -- one employee, with a reason and a named manager. Rolling it up here
+       -- invented an event nobody performed, and pointed the wrong way: it
+       -- read as "this project has a problem" when the truth was "eight of
+       -- nine are waiting on you and one needs a correction".
+       --
+       -- The count is already on the row as its own badge -- '1 rejected'
+       -- beside '0 / 9 approved' -- so the status column was duplicating what
+       -- the screen already showed correctly, and only the duplicate was wrong.
+       -- REJECTED_EMPLOYEES is untouched below; nothing is hidden.
+       --
+       -- FLD-034 does say "any rejected => Rejected", and that is right for
+       -- the per-EMPLOYEE month, where a rejection really is the state of the
+       -- thing being described and the person has something to do about it.
+       -- V_OC_TS_MONTH_SUMMARY keeps it. It was carried up one grain too far.
+       CASE WHEN NVL(s.employees,0) = 0                    THEN 'No employees'
             WHEN s.employees = NVL(s.approved_employees,0) THEN 'Approved'
             ELSE 'Pending' END              AS month_status,
        s.approved_on,                                       -- FLD-035
