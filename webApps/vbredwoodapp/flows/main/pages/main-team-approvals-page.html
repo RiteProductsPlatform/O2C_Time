@@ -257,16 +257,23 @@
             </template>
 
             <!-- Approved / total is the number that tells the manager whether
-                 Confirm Month is even reachable (RULE-020). -->
+                 Confirm Month is even reachable (RULE-020).
+
+                 A '1 rejected' badge sat here until 14-Aug-2026 and was
+                 removed with the project-level 'Rejected' status it sat beside
+                 (see V_OC_TS_MGR_PROJECTS in db/08_views.sql). A rejection
+                 belongs to one employee's week, with a reason and a named
+                 manager; surfacing it on the PROJECT row put a per-person
+                 event one grain too high, where it read as something being
+                 wrong with the project. The monthly summary one click in is
+                 the right place for it, and still shows it — that page lists
+                 employees, so the count is about the things on screen.
+                 rejectedEmployees is still carried in the row data; nothing
+                 needs re-fetching if it is ever wanted back. -->
             <template slot="teamCell" data-oj-as="cell">
               <span>
                 <oj-bind-text value="[[ cell.row.approvedEmployees ]]"></oj-bind-text> /
                 <oj-bind-text value="[[ cell.row.employees ]]"></oj-bind-text> <oj-bind-text value="[[$application.translations.appBundle.team_approvals_approved]]"></oj-bind-text>
-                <oj-bind-if test="[[ cell.row.rejectedEmployees > 0 ]]">
-                  <span class="rw-flag rw-flag-reversal">
-                    <oj-bind-text value="[[ cell.row.rejectedEmployees ]]"></oj-bind-text> <oj-bind-text value="[[$application.translations.appBundle.team_approvals_rejected]]"></oj-bind-text>
-                  </span>
-                </oj-bind-if>
               </span>
             </template>
 
