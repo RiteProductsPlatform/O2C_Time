@@ -357,6 +357,14 @@ PROMPT >>> 15 ORDS oc.time.auth       (login, logout, session, set-password)
 PROMPT [n/m] ords/15_ords_time_sync.sql - the OIC surface (INT 001 / INT 002)
 @@ords/15_ords_time_sync.sql
 
+PROMPT [n/m] 46_jobs_daily_post_load.sql - jobs/daily runs the full daily chain
+@@46_jobs_daily_post_load.sql
+-- 46 MUST come after ords/13. It redefines the jobs/daily handler that 13
+-- creates, so running it earlier means 13 quietly puts the populate-only
+-- version back and the whole post-load chain is dropped with no error
+-- anywhere. Placed after 15 rather than immediately after 13 so it stays at
+-- the end of the ORDS section and cannot be reordered into the middle of it.
+
 -- ── Recompile anything the DDL invalidated ───────────────────
 --
 -- Adding a column to a table marks every dependent view INVALID. Oracle

@@ -38,11 +38,16 @@
 --   allocation changed or an absence was withdrawn, which is precisely when
 --   somebody needs it to.
 --
--- WHAT TO CHANGE IN OIC
---   Nothing structural, and no config row. The daily flow already has a
---   stored-procedure node calling populate. Point that one node at
---   OC_TIME_DAILY_POST_LOAD instead. OC_TIME_SYNC_CONFIG drives which BIP
---   reports load, not which procedures run, so it is not the place for this.
+-- NOTHING CHANGES IN OIC
+--   An earlier version of this note said to repoint a stored-procedure node.
+--   There is no such node. OIC loops OC_TIME_SYNC_CONFIG calling the load
+--   endpoint per report and then posts to jobs/daily -- it talks to this
+--   database only over ORDS, which is exactly what "it just calls the data
+--   model based on the config table" means.
+--
+--   So the change belongs in the HANDLER: time/46 repoints POST jobs/daily at
+--   this procedure. OIC keeps calling the same URL with the same body and
+--   reading the same {"jobRunId":n}, which is why o_job_id exists below.
 --
 -- Idempotent. Depends on: time/44
 --==============================================================
@@ -68,7 +73,11 @@ PROMPT ============================================================
 CREATE OR REPLACE PROCEDURE oc_time_daily_post_load(
   p_action_date IN DATE     DEFAULT TRUNC(SYSDATE),
   p_actor       IN VARCHAR2 DEFAULT 'OIC_DAILY',
-  o_summary     OUT VARCHAR2)
+  o_summary     OUT VARCHAR2,
+  -- Returned so POST jobs/daily can keep emitting {"jobRunId":n}. OIC and the
+  -- Sync Status page both read that today, and a post-load step is not a
+  -- reason to change a response shape two callers already parse.
+  o_job_id      OUT NUMBER)
 IS
   v_job    NUMBER;
   v_from   DATE;
@@ -115,6 +124,7 @@ BEGIN
   -- ── 3. populate ────────────────────────────────────────────
   v_step := 'populate';
   v_job := oc_time_pkg.populate_daily(p_action_date, NULL, p_actor);
+  o_job_id := v_job;
   note('populate job ' || v_job);
 
   -- ── 4. leave, LAST ─────────────────────────────────────────
@@ -153,8 +163,9 @@ PROMPT ============================================================
 
 DECLARE
   v_out VARCHAR2(4000);
+  v_job NUMBER;
 BEGIN
-  oc_time_daily_post_load(TRUNC(SYSDATE), 'MANUAL-15AUG', v_out);
+  oc_time_daily_post_load(TRUNC(SYSDATE), 'MANUAL-15AUG', v_out, v_job);
   DBMS_OUTPUT.PUT_LINE(CHR(10) || v_out);
 END;
 /
@@ -173,18 +184,14 @@ SELECT COUNT(*) AS stale_active FROM oc_time_allocation
 
 PROMPT
 PROMPT ============================================================
-PROMPT IN OIC
+PROMPT NOTHING CHANGES IN OIC
 PROMPT ============================================================
 PROMPT
-PROMPT The daily flow already has a stored-procedure node calling populate.
-PROMPT Point it at OC_TIME_DAILY_POST_LOAD instead and remove nothing else --
-PROMPT this procedure calls populate itself, so leaving both would populate
-PROMPT twice.
+PROMPT OIC loops OC_TIME_SYNC_CONFIG calling the load endpoint per report, then
+PROMPT posts to jobs/daily. That endpoint is where populate is invoked, so
+PROMPT time/46 repoints the HANDLER at this procedure and OIC keeps calling the
+PROMPT same URL with the same body and reading the same {"jobRunId":n}.
 PROMPT
-PROMPT It takes an action date and an actor, and returns O_SUMMARY. Map that to
-PROMPT something the run log keeps: on failure it names the step that broke,
-PROMPT which is the difference between "the daily job failed" and "the leave
-PROMPT sync failed".
-PROMPT
-PROMPT No change to OC_TIME_SYNC_CONFIG. That table drives which BIP reports
-PROMPT load; it has no notion of what runs afterwards.
+PROMPT There is no stored-procedure node to change and no config row to add.
+PROMPT An earlier note here said otherwise; it was written before checking how
+PROMPT the flow actually invokes the database.
