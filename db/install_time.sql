@@ -359,6 +359,9 @@ PROMPT [n/m] ords/15_ords_time_sync.sql - the OIC surface (INT 001 / INT 002)
 
 PROMPT [n/m] 46_jobs_daily_post_load.sql - jobs/daily runs the full daily chain
 @@46_jobs_daily_post_load.sql
+
+PROMPT [n/m] 47_cutoff_scheduler.sql - the weekly/delivery cut-off job
+@@47_cutoff_scheduler.sql
 -- 46 MUST come after ords/13. It redefines the jobs/daily handler that 13
 -- creates, so running it earlier means 13 quietly puts the populate-only
 -- version back and the whole post-load chain is dropped with no error
