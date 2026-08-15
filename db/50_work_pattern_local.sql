@@ -6,19 +6,25 @@
 -- 29-Dec-25 to 31-Dec-46, and OC_TIME_CALENDAR holds no SHIFT row for them at
 -- all. The assignment is right; it has no route here.
 --
--- WHERE THE CHAIN STOPS
---   There is no staging table for shifts. The SHIFT layer is filled by
---   POST calendar/sync/SHIFT with a DAY-BY-DAY payload -- scopeKey, calDate,
---   isWorkingDay, stdHours, shiftCode. Something has to expand a PATTERN
---   ("Sunday to Thursday") into DATES and post them, and nothing does. The
---   BIP extracts pull the raw schedules, the endpoint is built and works, and
---   the piece between them is the inbound master-data sync that CLAUDE.md
---   section 11 lists as specified but not wired.
+-- WHY IT HAS NOT ARRIVED -- CORRECTED 16-Aug
+--   An earlier version of this note said no individual pattern had ever
+--   reached this database and that nothing expands a pattern into dates.
+--   Both wrong. Measured: OC_TIME_CALENDAR holds 2,357 SHIFT days across 64
+--   people, WORKER_SHIFTS is enabled in OC_TIME_SYNC_CONFIG against
+--   OC_TIME_CALENDAR, and Fusion has already resolved pattern x schedule into
+--   person x date rows -- which is exactly why WORK_PATTERNS and
+--   WORK_SCHEDULES are deliberately off. The BLOCKED note in
+--   16_oic_sync_config.sql is a 10-Aug measurement taken before the extract
+--   aliases were corrected, and is stale.
 --
---   Until OIC does that, resolve_day finds no SHIFT row and takes the
---   NO_DATA_FOUND branch: Monday to Friday. So RI2894 currently gets Friday
---   seeded and Sunday skipped -- the exact inverse of their schedule, and
---   silently, because a missing calendar row looks identical to a normal one.
+--   The sync works. RI2894 is simply not in it: the last run was 15-Aug 00:00
+--   and the schedule was assigned afterwards, so hts_schedule_shifts_vl had
+--   nothing for them when the extract read it. Re-running the WORKER_SHIFTS
+--   load is the real fix, and this script is only for testing before that.
+--
+--   Note the rostered window is 10-May to 12-Jul, entirely in the past. So no
+--   August date is within a fortnight of a rostered day, and resolve_day's
+--   roster check correctly leaves August to the country calendar.
 --
 -- WHAT THIS IS
 --   A helper that writes the SHIFT rows directly, so a pattern can be tested
