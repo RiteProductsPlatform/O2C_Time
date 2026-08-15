@@ -151,6 +151,8 @@
       "weekStart": "string",
       "weekEnd": "string",
       "weekStatus": "string",
+      "submissionStatus": "string",
+      "approvalStatus": "string",
       "billableHours": "number",
       "nonBillableHours": "number",
       "leaveHours": "number",

@@ -135,6 +135,22 @@ SELECT w.ts_week_id,
        TO_CHAR(w.week_start,'DD-Mon') || ' to ' ||
        TO_CHAR(w.week_end,  'DD-Mon') AS week_range,        -- FLD-050
        w.week_status,
+       -- THE V4 AXES, added 15-Aug-2026. WEEK_STATUS alone cannot answer "may
+       -- the manager act on this?", and the ACT-019 button was getting it wrong
+       -- because of that: it offered to "Approve all 5 pending weeks" on a
+       -- screen showing four Not yet submitted and one Rejected.
+       --
+       -- The word 'Pending' changed meaning underneath it. In revision 2 it
+       -- meant "submitted, waiting on the manager". In V4, APPROVAL_STATUS is
+       -- 'Pending' on a week nobody has submitted either -- so a filter of
+       -- "not settled yet" now sweeps in weeks that never reached anybody.
+       --
+       -- Both axes are projected so the page can ask the real question:
+       -- approval still Pending AND the employee (or the cut-off job) actually
+       -- submitted it. Phase 3 removes WEEK_STATUS above; the pages need these
+       -- two before that can happen.
+       w.submission_status,
+       w.approval_status,
        w.billable_hours,
        w.non_billable_hours,
        w.leave_hours,

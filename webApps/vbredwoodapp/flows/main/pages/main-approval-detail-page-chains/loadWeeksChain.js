@@ -72,6 +72,10 @@ define([
           weekStart: w.week_start,
           weekEnd: w.week_end,
           weekStatus: w.week_status,
+          // The V4 axes. weekStatus collapses them, and pendingWeeks() needs
+          // them apart to tell "waiting on the manager" from "never submitted".
+          submissionStatus: w.submission_status,
+          approvalStatus: w.approval_status,
           billableHours: w.billable_hours || 0,
           nonBillableHours: w.non_billable_hours || 0,
           leaveHours: w.leave_hours || 0,

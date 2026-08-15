@@ -11,16 +11,38 @@ define([], () => {
    * ever disagree, "Approve all pending" would report a different number from
    * the one the server acts on.
    */
-  const SETTLED = ['Approved', 'Overridden and approved', 'Closed'];
+  // A week is the manager's to decide only if it actually reached them: the
+  // employee submitted it, or the weekly cut-off submitted it on their behalf.
+  // These mirror the FROM_SUBMISSION guards on the Approve / ApproveOverride /
+  // Reject rules in OC_TS_TRANSITION -- if the two ever disagree, the screen
+  // offers something the database will refuse.
+  const REACHED_MANAGER = ['Submitted', 'LateSubmission', 'Defaulted'];
 
   /**
    * PAGE-005 Approval Detail — page module functions.
    */
   class PageModule {
 
-    /** The weeks still awaiting a decision. */
+    /**
+     * ACT-019: the weeks awaiting THIS MANAGER's decision.
+     *
+     * This used to be "anything not yet settled" — every week whose status was
+     * not Approved / Overridden and approved / Closed. That was right while
+     * 'Pending' could only mean "submitted, waiting on the manager".
+     *
+     * Under V4 it is not. APPROVAL_STATUS is 'Pending' on a week nobody has
+     * submitted, so the old filter swept those in and the button offered to
+     * "Approve all 5 pending weeks" on a screen showing four Not yet submitted
+     * and one Rejected. Clicking it now raises -20034 from the engine, which
+     * is the database refusing something the screen should never have offered.
+     *
+     * Rejected is excluded for the same reason from the other side: it is a
+     * decision already taken, not one outstanding.
+     */
     pendingWeeks(weeks) {
-      return (weeks || []).filter((w) => SETTLED.indexOf(w.weekStatus) === -1);
+      return (weeks || []).filter((w) =>
+        w.approvalStatus === 'Pending' &&
+        REACHED_MANAGER.indexOf(w.submissionStatus) !== -1);
     }
 
     /**
@@ -89,10 +111,17 @@ define([], () => {
       return (weeks || []).filter((w) => picked.indexOf(w.tsWeekId) >= 0);
     }
 
+    /**
+     * Whether Approve / Reject should light up for the current selection.
+     *
+     * Uses the SAME test as pendingWeeks, deliberately: the button that acts on
+     * a selection and the button that acts on all of them must agree about what
+     * is decidable, or one of them offers something the other refuses. This
+     * read "not settled and not Rejected", which excluded a decided week but
+     * still lit up for one nobody had submitted.
+     */
     canDecideWeeks(weeks, keys) {
-      return this._selectedWeeks(weeks, keys)
-                 .some((w) => SETTLED.indexOf(w.weekStatus) === -1
-                           && w.weekStatus !== 'Rejected');
+      return this.pendingWeeks(this._selectedWeeks(weeks, keys)).length > 0;
     }
 
     canRevokeWeeks(weeks, keys) {
