@@ -127,8 +127,13 @@ BEGIN
   -- PPM end-dates an assignment when somebody is taken off a project; it does
   -- not delete it, and neither do we. Status follows the dates so every reader
   -- that filters on Active gets the right answer without also knowing the rule.
+  --
+  -- 'Ended', not 'Inactive'. CHK_OC_TAL_STATUS admits ('Active','Ended') only
+  -- -- OC_TIME_ALLOCATION does not share the Active/Inactive vocabulary the
+  -- other master tables use, and the first version of this raised ORA-02290 on
+  -- every row it tried to expire.
   UPDATE oc_time_allocation
-     SET status     = 'Inactive',
+     SET status     = 'Ended',
          updated_by = p_actor,
          updated_on = SYSTIMESTAMP
    WHERE status = 'Active'
@@ -141,7 +146,7 @@ BEGIN
      SET status     = 'Active',
          updated_by = p_actor,
          updated_on = SYSTIMESTAMP
-   WHERE status = 'Inactive'
+   WHERE status = 'Ended'
      AND oc_time_alloc_active_on(start_date, end_date) = 'Y'
      AND fusion_synced_on IS NOT NULL;
 
@@ -310,7 +315,14 @@ BEGIN
               FROM user_constraints
              WHERE table_name      = 'OC_TS_AUDIT'
                AND constraint_type = 'C'
-               AND UPPER(search_condition_vc) LIKE '%CHANGE_TYPE%')
+               AND UPPER(search_condition_vc) LIKE '%CHANGE_TYPE%'
+               -- A NOT NULL is a CHECK constraint too, rendered as
+               -- "CHANGE_TYPE" IS NOT NULL -- so it matches the filter above
+               -- and the first version of this dropped it, silently making the
+               -- column nullable. Excluded explicitly; the DBMS_OUTPUT names
+               -- what goes so a system-generated constraint cannot vanish
+               -- unnoticed again.
+               AND UPPER(search_condition_vc) NOT LIKE '%IS NOT NULL%')
   LOOP
     EXECUTE IMMEDIATE 'ALTER TABLE oc_ts_audit DROP CONSTRAINT ' || c.constraint_name;
     DBMS_OUTPUT.PUT_LINE('  dropped ' || c.constraint_name);
@@ -320,6 +332,15 @@ BEGIN
   EXECUTE IMMEDIATE q'~ALTER TABLE oc_ts_audit ADD CONSTRAINT chk_oc_tsau_type
     CHECK (change_type IN ('Override','Adjustment','Reversal','ManagerEdit',
                            'Import','DefaultCorrection','AbsenceSync'))~';
+
+  -- Restore the NOT NULL the first run removed. Harmless when it is already
+  -- there (ORA-01442), which is the normal case on a clean schema.
+  BEGIN
+    EXECUTE IMMEDIATE 'ALTER TABLE oc_ts_audit MODIFY (change_type NOT NULL)';
+    DBMS_OUTPUT.PUT_LINE('  change_type NOT NULL restored');
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLCODE = -1442 THEN NULL; ELSE RAISE; END IF;
+  END;
   DBMS_OUTPUT.PUT_LINE('chk_oc_tsau_type now accepts AbsenceSync ('
                     || v_done || ' replaced)');
 END;

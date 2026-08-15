@@ -89,7 +89,11 @@ BEGIN
               FROM user_constraints
              WHERE table_name      = 'OC_TS_AUDIT'
                AND constraint_type = 'C'
-               AND UPPER(search_condition_vc) LIKE '%CHANGE_TYPE%')
+               AND UPPER(search_condition_vc) LIKE '%CHANGE_TYPE%'
+               -- NOT NULL is a CHECK constraint too, rendered as
+               -- "CHANGE_TYPE" IS NOT NULL, so it matches the filter above.
+               -- Dropping it silently makes the column nullable.
+               AND UPPER(search_condition_vc) NOT LIKE '%IS NOT NULL%')
   LOOP
     EXECUTE IMMEDIATE 'ALTER TABLE oc_ts_audit DROP CONSTRAINT ' || c.constraint_name;
     DBMS_OUTPUT.PUT_LINE('  dropped ' || c.constraint_name);
