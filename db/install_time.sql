@@ -365,6 +365,9 @@ PROMPT [n/m] 47_cutoff_scheduler.sql - the weekly/delivery cut-off job
 
 PROMPT [n/m] 48_cutoff_local_time.sql - the cut-off is 17:00 where the person is
 @@48_cutoff_local_time.sql
+
+PROMPT [n/m] 49_country_zones.sql - a zone for every country in the data
+@@49_country_zones.sql
 -- 46 MUST come after ords/13. It redefines the jobs/daily handler that 13
 -- creates, so running it earlier means 13 quietly puts the populate-only
 -- version back and the whole post-load chain is dropped with no error
