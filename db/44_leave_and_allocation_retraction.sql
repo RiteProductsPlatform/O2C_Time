@@ -49,7 +49,7 @@ END;
 /
 
 PROMPT ============================================================
-PROMPT [1/6] OC_TIME_ALLOCATION_ACTIVE_ON — one definition of "on the project"
+PROMPT [1/7] OC_TIME_ALLOCATION_ACTIVE_ON — one definition of "on the project"
 PROMPT ============================================================
 
 -- Membership is a DATE RANGE, not a flag. Today only populate looks at the
@@ -80,7 +80,7 @@ END;
 SHOW ERRORS
 
 PROMPT ============================================================
-PROMPT [2/6] V_OC_TS_ALLOCATION honours the dates
+PROMPT [2/7] V_OC_TS_ALLOCATION honours the dates
 PROMPT ============================================================
 
 CREATE OR REPLACE VIEW v_oc_ts_allocation AS
@@ -116,7 +116,7 @@ SELECT al.allocation_id,
    AND oc_time_alloc_active_on(al.start_date, al.end_date) = 'Y';
 
 PROMPT ============================================================
-PROMPT [3/6] ALLOCATION_PCT counts only what is effective today
+PROMPT [3/7] ALLOCATION_PCT counts only what is effective today
 PROMPT ============================================================
 
 CREATE OR REPLACE PROCEDURE oc_time_expire_allocations(
@@ -153,7 +153,7 @@ END;
 SHOW ERRORS
 
 PROMPT ============================================================
-PROMPT [4/6] OC_TIME_SYNC_LEAVE — one leave row, and it can be taken back
+PROMPT [4/7] OC_TIME_SYNC_LEAVE — one leave row, and it can be taken back
 PROMPT ============================================================
 
 CREATE OR REPLACE PROCEDURE oc_time_sync_leave(
@@ -290,7 +290,43 @@ END;
 SHOW ERRORS
 
 PROMPT ============================================================
-PROMPT [5/6] Clean up what is already there
+PROMPT [5/7] OC_TS_AUDIT must accept 'AbsenceSync' before the sweep
+PROMPT ============================================================
+
+-- 25_absence_source.sql meant to widen this and missed. It dropped
+-- 'chk_oc_tsa_ctype'; the constraint 04_approval_audit.sql creates is
+-- 'chk_oc_tsau_type'. The drop failed with ORA-02443, the handler swallowed
+-- it, a second constraint was added, and the original -- which rejects
+-- AbsenceSync -- stayed. A row must satisfy both, so the retraction below
+-- failed with ORA-02290 on the very first audit row it wrote.
+--
+-- Repeated here rather than left to a re-run of 25, because this script
+-- cannot do its work without it and must be runnable on its own. Driven off
+-- the dictionary so it does not matter what the constraint is called.
+DECLARE
+  v_done NUMBER := 0;
+BEGIN
+  FOR c IN (SELECT constraint_name
+              FROM user_constraints
+             WHERE table_name      = 'OC_TS_AUDIT'
+               AND constraint_type = 'C'
+               AND UPPER(search_condition_vc) LIKE '%CHANGE_TYPE%')
+  LOOP
+    EXECUTE IMMEDIATE 'ALTER TABLE oc_ts_audit DROP CONSTRAINT ' || c.constraint_name;
+    DBMS_OUTPUT.PUT_LINE('  dropped ' || c.constraint_name);
+    v_done := v_done + 1;
+  END LOOP;
+
+  EXECUTE IMMEDIATE q'~ALTER TABLE oc_ts_audit ADD CONSTRAINT chk_oc_tsau_type
+    CHECK (change_type IN ('Override','Adjustment','Reversal','ManagerEdit',
+                           'Import','DefaultCorrection','AbsenceSync'))~';
+  DBMS_OUTPUT.PUT_LINE('chk_oc_tsau_type now accepts AbsenceSync ('
+                    || v_done || ' replaced)');
+END;
+/
+
+PROMPT ============================================================
+PROMPT [6/7] Clean up what is already there
 PROMPT ============================================================
 
 DECLARE
@@ -310,7 +346,7 @@ END;
 /
 
 PROMPT ============================================================
-PROMPT [6/6] Verification
+PROMPT [7/7] Verification
 PROMPT ============================================================
 
 PROMPT --- any employee/date still carrying more than one leave row

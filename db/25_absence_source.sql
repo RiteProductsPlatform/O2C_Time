@@ -68,22 +68,39 @@ PROMPT ============================================================
 PROMPT [2/4] OC_TS_AUDIT.CHANGE_TYPE accepts 'AbsenceSync'
 PROMPT ============================================================
 
+-- CORRECTED 15-Aug-2026. This dropped and re-added 'chk_oc_tsa_ctype'. The
+-- constraint 04_approval_audit.sql actually creates is 'chk_oc_tsau_type' --
+-- different name. So the DROP failed with ORA-02443, which the handler
+-- swallowed, a SECOND constraint was added, and the ORIGINAL one, which does
+-- not allow AbsenceSync, stayed in force. A row has to satisfy both.
+--
+-- The comment below predicted exactly this and said the trigger "will raise
+-- loudly on the first leave row if this did not take". It did not raise,
+-- because nothing wrote AbsenceSync to OC_TS_AUDIT until 44 came along months
+-- later -- so the prediction was right and the detection never fired. A
+-- warning that depends on an untravelled code path is not a warning.
+--
+-- Now driven off the dictionary: every CHECK on CHANGE_TYPE is widened,
+-- whatever it is called.
 DECLARE
+  v_done NUMBER := 0;
 BEGIN
-  BEGIN
-    EXECUTE IMMEDIATE 'ALTER TABLE oc_ts_audit DROP CONSTRAINT chk_oc_tsa_ctype';
-  EXCEPTION WHEN OTHERS THEN
-    IF SQLCODE != -2443 THEN RAISE; END IF;
-  END;
-  EXECUTE IMMEDIATE q'~ALTER TABLE oc_ts_audit ADD CONSTRAINT chk_oc_tsa_ctype
+  FOR c IN (SELECT constraint_name
+              FROM user_constraints
+             WHERE table_name      = 'OC_TS_AUDIT'
+               AND constraint_type = 'C'
+               AND UPPER(search_condition_vc) LIKE '%CHANGE_TYPE%')
+  LOOP
+    EXECUTE IMMEDIATE 'ALTER TABLE oc_ts_audit DROP CONSTRAINT ' || c.constraint_name;
+    DBMS_OUTPUT.PUT_LINE('  dropped ' || c.constraint_name);
+    v_done := v_done + 1;
+  END LOOP;
+
+  EXECUTE IMMEDIATE q'~ALTER TABLE oc_ts_audit ADD CONSTRAINT chk_oc_tsau_type
     CHECK (change_type IN ('Override','Adjustment','Reversal','ManagerEdit',
                            'Import','DefaultCorrection','AbsenceSync'))~';
-  DBMS_OUTPUT.PUT_LINE('chk_oc_tsa_ctype redefined');
-EXCEPTION WHEN OTHERS THEN
-  -- The constraint may be named differently in an older schema. Report rather
-  -- than fail: the trigger below is the part that matters and it will raise
-  -- loudly on the first leave row if this did not take.
-  DBMS_OUTPUT.PUT_LINE('chk_oc_tsa_ctype NOT changed - ' || SUBSTR(SQLERRM,1,80));
+  DBMS_OUTPUT.PUT_LINE('chk_oc_tsau_type redefined ('
+                    || v_done || ' old constraint(s) removed)');
 END;
 /
 
