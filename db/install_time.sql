@@ -289,6 +289,39 @@ PROMPT [n/m] 36_period_direct_fix.sql - finishes 35 (advance_close, PL/SQL, trig
 
 PROMPT [n/m] 37_status_engine_v4.sql - the V4 status engine (phase 2)
 @@37_status_engine_v4.sql
+
+PROMPT [n/m] 38_week_versioning.sql - every change to a week leaves a version
+@@38_week_versioning.sql
+
+PROMPT [n/m] 39_engine_prereqs.sql - axis defaults, the as-of timing, the wrapper
+@@39_engine_prereqs.sql
+
+PROMPT [n/m] 40_reclaim_orphan_periods.sql - reattach rows when upstream renumbers
+@@40_reclaim_orphan_periods.sql
+
+PROMPT [n/m] 41_remap_fixes.sql - append-only trail, backups excluded, no 'Closed'
+@@41_remap_fixes.sql
+
+PROMPT [n/m] 42_phase2b_rules.sql - Revoke / RevokeDecision / AdvanceApprove
+@@42_phase2b_rules.sql
+
+PROMPT [n/m] 43_approval_guards.sql - a manager may only decide what reached them
+@@43_approval_guards.sql
+
+-- 38..43 MUST run in this order and MUST all run. 42 seeds rules the package
+-- body calls, and a missing rule is -20034 at RUNTIME, not at compile time --
+-- so 09 would compile perfectly and then refuse the first Revoke anybody
+-- attempted. 43 then REPLACES the Approve / ApproveOverride / Reject / Revoke
+-- rules with guarded versions; stopping at 42 leaves a schema where a manager
+-- can approve a week nobody submitted. They were missing from this installer
+-- until 15-Aug-2026, which meant a freshly built UAT or PROD would have had
+-- exactly that hole while this environment did not.
+--
+-- 40 and 41 are here despite being written to repair an incident: a fresh
+-- schema has no orphans to reclaim, but it still needs
+-- oc_time_remap_periods and oc_time_daily_period_health, because PERIOD_ID is
+-- the main application's number and they can re-issue it at any time.
+--
 -- 34_provision_periods.sql is SUPERSEDED by 35. It created a local anchor row
 -- per period, which 35 removes the need for entirely -- PERIOD_ID is now the
 -- main application's own id, so a period added there is simply here.
