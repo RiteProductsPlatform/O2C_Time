@@ -55,8 +55,23 @@ DECLARE
   m t_map;
   v_added NUMBER := 0;
 
+  -- VALIDATE BEFORE WRITING. A zone Oracle does not recognise makes FROM_TZ
+  -- raise inside oc_time_week_timing, which swallows it and returns
+  -- WithinCutoff -- so that country never defaults, silently and for ever.
+  -- Seeding one is worse than leaving it unmapped, because unmapped at least
+  -- falls back to a working zone.
   PROCEDURE put(p_code VARCHAR2, p_zone VARCHAR2) IS
+    v_ok VARCHAR2(1);
   BEGIN
+    BEGIN
+      SELECT 'Y' INTO v_ok FROM dual
+       WHERE FROM_TZ(CAST(SYSDATE AS TIMESTAMP), p_zone) IS NOT NULL;
+    EXCEPTION WHEN OTHERS THEN
+      DBMS_OUTPUT.PUT_LINE('  REFUSED ' || p_code || ' -> ' || p_zone
+        || ' (this database does not know that zone)');
+      RETURN;
+    END;
+
     MERGE INTO oc_time_config c
     USING (SELECT p_code AS s FROM dual) x
        ON (c.config_name = 'ts_cutoff_tz' AND c.scope_key = x.s)
@@ -94,7 +109,12 @@ BEGIN
   put('DK','Europe/Copenhagen');   put('FI','Europe/Helsinki');
   put('PL','Europe/Warsaw');       put('CZ','Europe/Prague');
   put('HU','Europe/Budapest');     put('RO','Europe/Bucharest');
-  put('GR','Europe/Athens');       put('UA','Europe/Kyiv');
+  put('GR','Europe/Athens');
+  -- 'Kiev', not 'Kyiv'. The 2022 rename is in current tzdata but not in this
+  -- database's timezone file, and the validation above caught it on the first
+  -- run -- Ukraine's 24 workers would otherwise never have defaulted. Kiev
+  -- remains a backward-compatibility alias in new files, so it works on both.
+  put('UA','Europe/Kiev');
   put('RU','Europe/Moscow');
 
   -- Americas
@@ -177,7 +197,8 @@ PROMPT ============================================================
 PROMPT [3/3] The spread, and what the job would do now
 PROMPT ============================================================
 
-COLUMN zone FORMAT A30
+COLUMN zone  FORMAT A30
+COLUMN codes FORMAT A46
 SELECT config_value AS zone,
        COUNT(*) AS countries,
        LISTAGG(scope_key, ' ') WITHIN GROUP (ORDER BY scope_key) AS codes
