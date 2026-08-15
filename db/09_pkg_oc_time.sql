@@ -505,6 +505,7 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
     v_country  oc_time_worker.base_country%TYPE;
     v_std      oc_time_worker.std_hours_per_day%TYPE;
     v_customer oc_time_project.customer_id%TYPE;
+    v_layer    oc_time_calendar.layer%TYPE;
   BEGIN
     -- Deputation wins over base country for calendar purposes (PROC-001).
     SELECT NVL(deputed_country, base_country), std_hours_per_day
@@ -519,10 +520,13 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
 
     -- Highest-precedence matching layer wins. Scope keys are checked in the
     -- same order the precedence implies, so the first hit is the answer.
+    -- LAYER is selected too, because what follows has to know whether the
+    -- answer came from SHIFT or from something underneath it.
     BEGIN
-      SELECT shift_code, NVL(std_hours, v_std), is_working_day, holiday_name
-        INTO o_shift_code, o_std_hours, o_is_working, o_holiday_name
-        FROM (SELECT c.shift_code, c.std_hours, c.is_working_day, c.holiday_name
+      SELECT layer, shift_code, NVL(std_hours, v_std), is_working_day, holiday_name
+        INTO v_layer, o_shift_code, o_std_hours, o_is_working, o_holiday_name
+        FROM (SELECT c.layer, c.shift_code, c.std_hours, c.is_working_day,
+                     c.holiday_name
                 FROM oc_time_calendar c
                WHERE c.cal_date = TRUNC(p_date)
                  AND ( (c.layer = 'SHIFT'     AND c.scope_key = p_employee_id)
@@ -532,13 +536,56 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
                ORDER BY c.precedence DESC)
        WHERE ROWNUM = 1;
     EXCEPTION WHEN NO_DATA_FOUND THEN
-      -- No calendar row: fall back to Mon-Fri at the worker's standard hours.
+      -- No calendar row on any layer: fall back to Mon-Fri at the worker's
+      -- standard hours. Overridden immediately below if they are rostered.
+      v_layer        := NULL;
       o_shift_code   := NULL;
       o_std_hours    := v_std;
       o_is_working   := CASE WHEN TO_CHAR(TRUNC(p_date),'DY','NLS_DATE_LANGUAGE=ENGLISH')
                                   IN ('SAT','SUN') THEN 'N' ELSE 'Y' END;
       o_holiday_name := NULL;
     END;
+
+    -- ── A DAY MISSING FROM A ROSTERED WEEK IS A DAY OFF ───────
+    -- The WORKER_SHIFTS extract emits 'Y' and nothing else: it returns the days
+    -- somebody is rostered and stays silent about the rest. So for a
+    -- Sunday-to-Thursday worker, Friday and Saturday produce NO SHIFT row --
+    -- and without this the lookup above falls through to CORPORATE, where
+    -- Friday is an ordinary working day, and seeds it. The pattern extract says
+    -- as much in its own comment: "a day absent from this list is a non-working
+    -- day in that pattern".
+    --
+    -- Absence in a row-per-day table cannot speak for itself, so the question
+    -- is asked the other way round: does this person have a roster around this
+    -- date at all? If they do, the SHIFT layer is authoritative for them and a
+    -- gap in it means they are off.
+    --
+    -- Only when the answer came from a LOWER layer, or from no layer. A real
+    -- SHIFT row always wins on its own, including one saying 'Y' on a public
+    -- holiday, which is the documented intent -- a shift day beats a holiday.
+    IF NVL(v_layer, 'NONE') <> 'SHIFT' THEN
+      DECLARE
+        v_rostered NUMBER;
+      BEGIN
+        -- Bounded to the surrounding fortnight rather than "ever". A person
+        -- whose roster stopped syncing would otherwise have every later day
+        -- turn non-working and silently lose their whole timesheet; past the
+        -- end of the roster this correctly finds nothing and the country
+        -- calendar takes over again.
+        SELECT COUNT(*) INTO v_rostered
+          FROM oc_time_calendar c
+         WHERE c.layer     = 'SHIFT'
+           AND c.scope_key = p_employee_id
+           AND c.cal_date BETWEEN TRUNC(p_date) - 7 AND TRUNC(p_date) + 7;
+
+        IF v_rostered > 0 THEN
+          o_shift_code   := NULL;
+          o_std_hours    := 0;
+          o_is_working   := 'N';
+          o_holiday_name := NULL;
+        END IF;
+      END;
+    END IF;
 
     -- RULE-012: weekends are enterable but never pre-filled, so standard hours
     -- on a non-working day are zero.
