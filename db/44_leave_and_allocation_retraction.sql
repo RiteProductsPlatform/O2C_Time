@@ -411,10 +411,14 @@ PROMPT STILL TO WIRE
 PROMPT ============================================================
 PROMPT
 PROMPT oc_time_sync_leave and oc_time_expire_allocations are not called by
-PROMPT anything yet. Add both to the OIC daily run, after the absence and
-PROMPT allocation feeds land and BEFORE populate_daily -- populate picks the
-PROMPT leave project from MIN(active allocation), so expiring allocations
-PROMPT afterwards would leave the leave row on a project the person has left.
+PROMPT anything yet. time/45 wires them, and gets the order right:
+PROMPT
+PROMPT   period health -> expire allocations -> populate_daily -> sync_leave
+PROMPT
+PROMPT Allocations age BEFORE anything picks a project, because leave chooses
+PROMPT MIN(ACTIVE allocation). But the leave sync runs LAST, not first:
+PROMPT populate has its own leave block and creates the duplicate, so only
+PROMPT something running after it can remove one.
 PROMPT
 PROMPT Note the ordering inside oc_time_sync_leave is the same rule: retract
 PROMPT first, then apply. Applying first would re-create the row this run is

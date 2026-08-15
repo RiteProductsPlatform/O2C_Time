@@ -311,6 +311,9 @@ PROMPT [n/m] 43_approval_guards.sql - a manager may only decide what reached the
 PROMPT [n/m] 44_leave_and_allocation_retraction.sql - the sync can take things back
 @@44_leave_and_allocation_retraction.sql
 
+PROMPT [n/m] 45_daily_post_load.sql - what OIC calls after the feeds land
+@@45_daily_post_load.sql
+
 -- 38..43 MUST run in this order and MUST all run. 42 seeds rules the package
 -- body calls, and a missing rule is -20034 at RUNTIME, not at compile time --
 -- so 09 would compile perfectly and then refuse the first Revoke anybody
