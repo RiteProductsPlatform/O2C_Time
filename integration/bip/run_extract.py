@@ -312,6 +312,23 @@ def cmd_run(args) -> int:
 # ORDER IS A FOREIGN-KEY CONSTRAINT, not a preference. OC_TIME_ALLOCATION has
 # FKs to both project and worker, OC_TIME_TASK to project. Load allocations
 # first and every row lands in OC_TIME_SYNC_FAILED.
+# The five feeds --load can post, and the order it posts them in.
+#
+# CALENDAR and WORKER_SHIFTS are ABSENT ON PURPOSE, and it is worth knowing
+# why before adding them. --load posts JSON rows to /admin/sync/{entity},
+# which is a per-entity MERGE handler. The calendar layers have their own
+# endpoint -- POST /admin/calendar/sync/{layer} -- taking a different payload
+# shape entirely: a days[] array in camelCase, not rows[] in the table's own
+# column names.
+#
+# OIC does not use this path at all. It posts the raw BIP XML to
+# /sync/load/{reportName}, which reads TARGET_TABLE from OC_TIME_SYNC_CONFIG
+# and hands it to oc_time_load_xml -- and that is how WORKER_SHIFTS actually
+# loads in production.
+#
+# The practical consequence, met 16-Aug: "--load WORKER_SHIFTS" prints nothing
+# and does nothing. The loop skips any name not listed here without a word.
+# Deploy the model and run the OIC sync instead.
 LOAD_ORDER = [
     ("WORKERS", "worker"),
     ("PROJECTS", "project"),
