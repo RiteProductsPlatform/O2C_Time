@@ -78,22 +78,44 @@ BEGIN
        AND w.locked_flag  = 'N'
        AND p.status       = 'Open'
        AND (p_employee_id IS NULL OR w.employee_id = p_employee_id)
-       -- ONLY PEOPLE WHO HAVE A ROSTER. Realign exists to catch a roster
-       -- CHANGE, and somebody with no SHIFT row has no roster to change --
-       -- their days come from the country calendar, which populate already
-       -- agreed with when it built them.
+       -- CANDIDATES ONLY. resolve_day is still the authority -- it is called
+       -- on every row this returns and can veto any of them -- but asking it
+       -- about all 6,700 prepopulated days in the period took minutes. Its
+       -- calendar lookup is an OR across four layers, so each call is several
+       -- probes, and almost every answer was 'yes, still working'.
        --
-       -- This is also the difference between seconds and minutes. Without it
-       -- the loop calls resolve_day once per prepopulated row in the period --
-       -- roughly 6,700 for August -- and resolve_day's lookup is an OR across
-       -- four layers with CAL_DATE third in the index, so each call can scan
-       -- OC_TIME_CALENDAR. Against a calendar that now holds tens of thousands
-       -- of rows that is hundreds of millions of row touches for an answer
-       -- that was never going to change.
-       AND EXISTS (SELECT 1 FROM oc_time_calendar c
-                    WHERE c.layer     = 'SHIFT'
-                      AND c.scope_key = w.employee_id
-                      AND c.cal_date BETWEEN p_from AND p_to)
+       -- Narrowing to people WITH a roster was not enough: after the full
+       -- sync ~350 people have one and most of August's are among them.
+       --
+       -- So this filters to the only two shapes that can make resolve_day say
+       -- non-working for a rostered person, which makes it a strict superset
+       -- of what needs removing:
+       --
+       --   1. an explicit SHIFT row saying 'N' on that very day
+       --   2. NO SHIFT row on that day, but one within the surrounding
+       --      fortnight -- the missing-day-in-a-rostered-week rule
+       --
+       -- A SHIFT row saying 'Y' outranks everything below it, including a
+       -- public holiday, so it can never be the reason. Anyone with no roster
+       -- at all is excluded by 2 requiring a nearby row.
+       AND (
+             EXISTS (SELECT 1 FROM oc_time_calendar c
+                      WHERE c.layer     = 'SHIFT'
+                        AND c.scope_key = w.employee_id
+                        AND c.cal_date  = e.entry_date
+                        AND c.is_working_day = 'N')
+          OR (
+             NOT EXISTS (SELECT 1 FROM oc_time_calendar c
+                          WHERE c.layer     = 'SHIFT'
+                            AND c.scope_key = w.employee_id
+                            AND c.cal_date  = e.entry_date)
+             AND EXISTS (SELECT 1 FROM oc_time_calendar c
+                          WHERE c.layer     = 'SHIFT'
+                            AND c.scope_key = w.employee_id
+                            AND c.cal_date BETWEEN e.entry_date - 7
+                                               AND e.entry_date + 7)
+             )
+           )
   ) LOOP
     v_seen := v_seen + 1;
 
