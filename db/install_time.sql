@@ -371,6 +371,9 @@ PROMPT [n/m] 49_country_zones.sql - a zone for every country in the data
 
 PROMPT [n/m] 50_work_pattern_local.sql - set a working pattern without OIC
 @@50_work_pattern_local.sql
+
+PROMPT [n/m] 51_default_double_count.sql - a defaulted week populated twice
+@@51_default_double_count.sql
 -- 46 MUST come after ords/13. It redefines the jobs/daily handler that 13
 -- creates, so running it earlier means 13 quietly puts the populate-only
 -- version back and the whole post-load chain is dropped with no error

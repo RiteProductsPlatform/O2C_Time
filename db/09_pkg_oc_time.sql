@@ -895,12 +895,25 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
             SELECT v_week, a.project_id, v_task, v_date, v_hours, 'Actual',
                    v_shift, v_std, 'Prepopulated', p_actor
               FROM dual
+             -- 'Actual' OR 'Default'. This tested Actual alone, and
+             -- run_weekly_defaulting retags a prepopulated row to
+             -- entry_type='Default' -- so the moment a week defaulted, the
+             -- guard stopped seeing its own rows, the cells read as empty, and
+             -- the next populate filled them again. RI2824's week of 03-09 Aug
+             -- ended up with 128 hours across five days: 64 defaulted plus 64
+             -- freshly prepopulated on the same days.
+             --
+             -- UK_OC_TSE_CELL includes ENTRY_TYPE so the database allows the
+             -- pair, which is right for a Reversal(-) sitting on the same day
+             -- as the Actual it offsets. Default is not a counterpart though;
+             -- it IS that Actual under another name, and the two must never
+             -- both exist.
              WHERE NOT EXISTS (SELECT 1 FROM oc_ts_entry e
                                 WHERE e.ts_week_id = v_week
                                   AND e.project_id = a.project_id
                                   AND e.task_id    = v_task
                                   AND e.entry_date = v_date
-                                  AND e.entry_type = 'Actual');
+                                  AND e.entry_type IN ('Actual','Default'));
             v_upserted := v_upserted + SQL%ROWCOUNT;
           END;
         END LOOP;
