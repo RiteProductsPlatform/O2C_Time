@@ -690,31 +690,77 @@ WORKER_SHIFTS = {
     "integration": "INT-004",
     "key": ["SCOPE_KEY", "CAL_DATE"],
     "columns": ["LAYER", "SCOPE_KEY", "CAL_DATE", "IS_WORKING_DAY",
-                "SHIFT_CODE", "SHIFT_NAME", "STD_HOURS"],
+                "SHIFT_CODE", "STD_HOURS"],
     "sql": """
--- The SHIFT layer, resolved. Fusion has already expanded work pattern x work
--- schedule into concrete person x date x shift rows, so this reads the answer
--- rather than recomputing the cycle.
+-- The SHIFT layer: which days each worker is rostered on.
 --
--- RULE-011 is one shift per day, so the aggregate collapses any split shift to
--- a single row and sums the duration. WORK_DURATION is MINUTES in HTS - hence
--- the /60; taking it as hours would give every worker a 480-hour day.
-SELECT 'SHIFT'                                     AS layer,
--- SCOPE_KEY, not EMPLOYEE_ID. OC_TIME_CALENDAR is polymorphic: on the
--- SHIFT layer the scope key IS the employee.
-       papf.person_number                          AS scope_key,
-       TO_CHAR(ss.ref_date,'YYYY-MM-DD')           AS cal_date,
-       'Y'                                         AS is_working_day,
-       MIN(TO_CHAR(ss.shift_id))                   AS shift_code,
-       MIN(ss.shift_name)                          AS shift_name,
-       ROUND(SUM(NVL(ss.work_duration,0)) / 60, 2) AS std_hours
-  FROM hts_schedule_shifts_vl ss
+-- REWRITTEN 16-Aug-2026, AND THE OLD SOURCE WAS THE WRONG PRODUCT.
+--
+-- This used to read HTS_SCHEDULE_SHIFTS_VL. That is Workforce Scheduling,
+-- and it returned 2,094 rows for 63 Vision demo workers with nothing after
+-- 12-Jul, no matter what the extract asked for. Two people given a real Work
+-- Schedule Assignment in HCM produced ZERO rows -- so the sync ran, loaded
+-- cleanly, reported success and delivered nothing, which is the worst shape a
+-- fault can take.
+--
+-- The Work Schedule Assignment page writes PER_SCHEDULE_ASSIGNMENTS, and the
+-- schedule is resolved into dated rows in ZMM_SR_SCHEDULE_DTLS. Verified
+-- against the pod: schedule 300000340161641 returns Sun-Thu with a shift and
+-- Friday with none, which is exactly the assignment as configured.
+--
+-- RESOURCE_TYPE 'ASSIGN' carries an ASSIGNMENT_ID in RESOURCE_ID, not a
+-- PERSON_ID, so it has to go through PER_ALL_ASSIGNMENTS_M. 'DEP' and
+-- 'LEGALEMP' assign a schedule to a whole department or legal employer and are
+-- excluded -- those are org defaults belonging to the CORPORATE layer.
+--
+-- IS_WORKING_DAY IS REAL HERE, unlike the old source which only ever said 'Y'.
+-- A row with no SHIFT_ID is an explicit day off, which is how Friday arrives.
+--
+-- TWO THINGS THIS DOES NOT CARRY, both deliberate:
+--
+--   STD_HOURS is NULL. START_DATE_TIME to END_DATE_TIME spans the whole day --
+--   measured at 24 hours for a working day and 48 for a Fri+Sat off-block --
+--   so it is a period, not a shift length. The shift's real duration lives in
+--   the ZMM shift definitions, which HTS_SHIFTS_VL does not contain (our
+--   shift id is absent from all 64 of its rows). NULL is the right answer
+--   rather than a wrong number: resolve_day does NVL(std_hours, v_std) and
+--   falls back to the worker's own STD_HOURS_PER_DAY.
+--
+--   A multi-day off-block only marks its FIRST day. Friday's row covers Friday
+--   and Saturday, so Saturday arrives with no row at all. resolve_day handles
+--   that: a day missing from a week the person is rostered in counts as
+--   non-working.
+SELECT 'SHIFT'                                          AS layer,
+       papf.person_number                               AS scope_key,
+       TO_CHAR(TRUNC(d.start_date_time),'YYYY-MM-DD')   AS cal_date,
+       -- MAX over the day, and 'Y' sorts above 'N' -- so a date with any
+       -- rostered shift is a working day even if another row on it is blank.
+       -- Grouping by SHIFT_ID instead produced 38,442 duplicate keys and the
+       -- MERGE would have raised ORA-30926: a person can hold more than one
+       -- schedule assignment, and a date more than one detail row.
+       MAX(CASE WHEN d.shift_id IS NULL THEN 'N' ELSE 'Y' END) AS is_working_day,
+       TO_CHAR(MAX(d.shift_id))                         AS shift_code,
+       CAST(NULL AS NUMBER)                             AS std_hours
+  FROM per_schedule_assignments sa
+  JOIN per_all_assignments_m paam
+    ON paam.assignment_id = sa.resource_id
+   AND paam.effective_latest_change = 'Y'
+   AND {ED} BETWEEN paam.effective_start_date AND paam.effective_end_date
   JOIN per_all_people_f papf
-    ON papf.person_id = ss.person_id
-   AND ss.ref_date BETWEEN papf.effective_start_date AND papf.effective_end_date
- WHERE ss.ref_date >= ADD_MONTHS({ED}, -3)
-   AND ss.ref_date <  ADD_MONTHS({ED},  3)
- GROUP BY papf.person_number, ss.ref_date
+    ON papf.person_id = paam.person_id
+   AND {ED} BETWEEN papf.effective_start_date AND papf.effective_end_date
+  JOIN zmm_sr_schedule_dtls d
+    ON d.schedule_id = sa.schedule_id
+   AND TRUNC(d.start_date_time) >= sa.start_date
+   AND TRUNC(d.start_date_time) <= NVL(sa.end_date, DATE '4712-12-31')
+ WHERE sa.resource_type = 'ASSIGN'
+   -- The primary assignment only. Somebody carrying two schedules would
+   -- otherwise contribute a row per schedule per day and the two could
+   -- disagree about whether they are working.
+   AND NVL(sa.primary_flag,'N') = 'Y'
+   AND d.start_date_time >= ADD_MONTHS({ED}, -3)
+   AND d.start_date_time <  ADD_MONTHS({ED},  3)
+ GROUP BY papf.person_number, TRUNC(d.start_date_time)
 """.replace("{ED}", ED),
 }
 
@@ -844,7 +890,11 @@ DELTA_ALIASES = {
     "SHIFTS":         {"s": 0},
     "WORK_PATTERNS":  {"wp": 0, "wps": 0, "sh": 0},
     "WORK_SCHEDULES": {"sa": 0, "paam": 1, "papf": 1},
-    "WORKER_SHIFTS":  {"ss": 0, "papf": 1},
+    # 'ss' was hts_schedule_shifts_vl, which WORKER_SHIFTS no longer reads.
+    # Leaving it here produced ORA-00904 on "SS"."LAST_UPDATE_DATE" -- from a
+    # predicate injected after the SQL, so the file looked correct and only the
+    # pod disagreed.
+    "WORKER_SHIFTS":  {"d": 0, "sa": 0, "papf": 1},
     "EXP_TYPES":      {"etb": 0, "ettl": 0},
 }
 
