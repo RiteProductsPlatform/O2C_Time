@@ -690,7 +690,7 @@ WORKER_SHIFTS = {
     "integration": "INT-004",
     "key": ["SCOPE_KEY", "CAL_DATE"],
     "columns": ["LAYER", "SCOPE_KEY", "CAL_DATE", "IS_WORKING_DAY",
-                "SHIFT_CODE", "STD_HOURS"],
+                "SHIFT_CODE"],
     "sql": """
 -- The SHIFT layer: which days each worker is rostered on.
 --
@@ -718,13 +718,18 @@ WORKER_SHIFTS = {
 --
 -- TWO THINGS THIS DOES NOT CARRY, both deliberate:
 --
---   STD_HOURS is NULL. START_DATE_TIME to END_DATE_TIME spans the whole day --
---   measured at 24 hours for a working day and 48 for a Fri+Sat off-block --
---   so it is a period, not a shift length. The shift's real duration lives in
---   the ZMM shift definitions, which HTS_SHIFTS_VL does not contain (our
---   shift id is absent from all 64 of its rows). NULL is the right answer
---   rather than a wrong number: resolve_day does NVL(std_hours, v_std) and
---   falls back to the worker's own STD_HOURS_PER_DAY.
+--   STD_HOURS IS NOT SENT AT ALL. START_DATE_TIME to END_DATE_TIME spans the
+--   whole day -- measured at 24 hours for a working day and 48 for a Fri+Sat
+--   off-block -- so it is a period, not a shift length. The shift's real
+--   duration lives in the ZMM definitions, and our shift id appears in none of
+--   HTS_SHIFTS_VL's 64 rows.
+--
+--   Omitting the column beats sending NULL. The loader only touches columns
+--   present in BOTH the XML and the table, so a column the report does not
+--   send keeps whatever it already had -- which preserves the real hours on
+--   the 63 rows the old feed loaded, instead of blanking them. New rows get
+--   NULL, and resolve_day's NVL(std_hours, v_std) falls back to the worker's
+--   own STD_HOURS_PER_DAY, which is the right default anyway.
 --
 --   A multi-day off-block only marks its FIRST day. Friday's row covers Friday
 --   and Saturday, so Saturday arrives with no row at all. resolve_day handles
@@ -739,8 +744,7 @@ SELECT 'SHIFT'                                          AS layer,
        -- MERGE would have raised ORA-30926: a person can hold more than one
        -- schedule assignment, and a date more than one detail row.
        MAX(CASE WHEN d.shift_id IS NULL THEN 'N' ELSE 'Y' END) AS is_working_day,
-       TO_CHAR(MAX(d.shift_id))                         AS shift_code,
-       CAST(NULL AS NUMBER)                             AS std_hours
+       TO_CHAR(MAX(d.shift_id))                         AS shift_code
   FROM per_schedule_assignments sa
   JOIN per_all_assignments_m paam
     ON paam.assignment_id = sa.resource_id
