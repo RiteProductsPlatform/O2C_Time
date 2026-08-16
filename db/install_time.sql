@@ -374,6 +374,9 @@ PROMPT [n/m] 50_work_pattern_local.sql - set a working pattern without OIC
 
 PROMPT [n/m] 51_default_double_count.sql - a defaulted week populated twice
 @@51_default_double_count.sql
+
+PROMPT [n/m] 52_roster_realign.sql - a roster change reaches weeks already built
+@@52_roster_realign.sql
 -- 46 MUST come after ords/13. It redefines the jobs/daily handler that 13
 -- creates, so running it earlier means 13 quietly puts the populate-only
 -- version back and the whole post-load chain is dropped with no error
