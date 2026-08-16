@@ -57,24 +57,75 @@ PROMPT ============================================================
 -- synonym is created AND then read, and the read is what decides whether this
 -- worked.
 DECLARE
-  v_target VARCHAR2(128) := 'o2c_dev.oc_payroll_config';
+  v_target VARCHAR2(128);
   v_n      NUMBER;
+
+  -- CREATE SYNONYM succeeds against a target that cannot be resolved and only
+  -- fails later with ORA-00980, so the test has to be a QUERY, not the DDL.
+  FUNCTION works(p_target VARCHAR2) RETURN BOOLEAN IS
+    v_c NUMBER;
+  BEGIN
+    EXECUTE IMMEDIATE 'SELECT COUNT(*) FROM ' || p_target INTO v_c;
+    RETURN TRUE;
+  EXCEPTION WHEN OTHERS THEN RETURN FALSE;
+  END works;
 BEGIN
-  BEGIN EXECUTE IMMEDIATE 'DROP SYNONYM oc_payroll_config_src';
-  EXCEPTION WHEN OTHERS THEN NULL; END;
+  -- The same three candidates, in the same order, as OC_MEC_PERIOD_SRC in
+  -- time/33. QUALIFIED FIRST: the module lives in O2C_TIME and the table in
+  -- O2C_DEV, so a grant makes o2c_dev.oc_payroll_config visible while leaving
+  -- the bare name unresolvable. Hard-coding one candidate would have failed
+  -- silently on any pod wired differently.
+  IF    works('o2c_dev.oc_payroll_config')          THEN v_target := 'o2c_dev.oc_payroll_config';
+  ELSIF works('oc_payroll_config')                  THEN v_target := 'oc_payroll_config';
+  ELSIF works('oc_payroll_config@o2c_dev_link')     THEN v_target := 'oc_payroll_config@o2c_dev_link';
+  END IF;
 
-  EXECUTE IMMEDIATE 'CREATE SYNONYM oc_payroll_config_src FOR ' || v_target;
-  DBMS_OUTPUT.PUT_LINE('synonym -> ' || v_target);
+  IF v_target IS NULL THEN
+    DBMS_OUTPUT.PUT_LINE('----------------------------------------------------');
+    DBMS_OUTPUT.PUT_LINE('OC_PAYROLL_CONFIG is not readable from '
+                      || SYS_CONTEXT('USERENV','CURRENT_SCHEMA') || '.');
+    DBMS_OUTPUT.PUT_LINE('Tried: o2c_dev.oc_payroll_config, oc_payroll_config,');
+    DBMS_OUTPUT.PUT_LINE('       oc_payroll_config@o2c_dev_link');
+    DBMS_OUTPUT.PUT_LINE('');
+    DBMS_OUTPUT.PUT_LINE('Run as o2c_dev or ADMIN, then re-run this script:');
+    DBMS_OUTPUT.PUT_LINE('  GRANT SELECT ON o2c_dev.oc_payroll_config TO o2c_time;');
+    DBMS_OUTPUT.PUT_LINE('');
+    DBMS_OUTPUT.PUT_LINE('A grant to a ROLE will not do -- a view compiled by');
+    DBMS_OUTPUT.PUT_LINE('this schema needs the privilege granted DIRECTLY.');
+    DBMS_OUTPUT.PUT_LINE('');
+    DBMS_OUTPUT.PUT_LINE('The rest of this script still installs. It will find');
+    DBMS_OUTPUT.PUT_LINE('no cut-offs, and salary stopping will hold NOBODY --');
+    DBMS_OUTPUT.PUT_LINE('which is the safe answer, not a working one.');
+    DBMS_OUTPUT.PUT_LINE('----------------------------------------------------');
+  ELSE
+    BEGIN EXECUTE IMMEDIATE 'DROP SYNONYM oc_payroll_config_src';
+    EXCEPTION WHEN OTHERS THEN NULL; END;
+    EXECUTE IMMEDIATE 'CREATE SYNONYM oc_payroll_config_src FOR ' || v_target;
+    EXECUTE IMMEDIATE 'SELECT COUNT(*) FROM oc_payroll_config_src' INTO v_n;
+    DBMS_OUTPUT.PUT_LINE('oc_payroll_config_src -> ' || v_target
+                      || '   (' || v_n || ' row(s))');
+  END IF;
+END;
+/
 
-  EXECUTE IMMEDIATE 'SELECT COUNT(*) FROM oc_payroll_config_src' INTO v_n;
-  DBMS_OUTPUT.PUT_LINE(v_n || ' payroll configuration row(s) visible');
-
-EXCEPTION WHEN OTHERS THEN
-  DBMS_OUTPUT.PUT_LINE('CANNOT READ ' || v_target || ' -- ' || SUBSTR(SQLERRM,1,120));
-  DBMS_OUTPUT.PUT_LINE('Ask for:  GRANT SELECT ON ' || v_target
-                    || ' TO ' || SYS_CONTEXT('USERENV','CURRENT_SCHEMA') || ';');
-  DBMS_OUTPUT.PUT_LINE('Everything below still installs; it will simply find '
-                    || 'no cut-offs and hold nobody.');
+-- The view below needs the synonym to EXIST even when the grant is missing,
+-- or the whole script fails on a schema that has not been granted yet. An
+-- empty stand-in keeps everything compilable and returns no cut-offs, which
+-- is exactly the "hold nobody" behaviour wanted in that case.
+DECLARE
+  v_n NUMBER;
+BEGIN
+  SELECT COUNT(*) INTO v_n FROM user_synonyms
+   WHERE synonym_name = 'OC_PAYROLL_CONFIG_SRC';
+  IF v_n = 0 THEN
+    EXECUTE IMMEDIATE q'~CREATE OR REPLACE VIEW oc_payroll_config_src AS
+      SELECT CAST(NULL AS VARCHAR2(100 CHAR)) AS country,
+             CAST(NULL AS VARCHAR2(20 CHAR))  AS period_type,
+             CAST(NULL AS DATE)               AS payroll_cutoff,
+             CAST(NULL AS NUMBER)             AS hold_release_days
+        FROM dual WHERE 1 = 0~';
+    DBMS_OUTPUT.PUT_LINE('stand-in empty view created so the rest compiles');
+  END IF;
 END;
 /
 
