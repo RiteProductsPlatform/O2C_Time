@@ -78,6 +78,22 @@ BEGIN
        AND w.locked_flag  = 'N'
        AND p.status       = 'Open'
        AND (p_employee_id IS NULL OR w.employee_id = p_employee_id)
+       -- ONLY PEOPLE WHO HAVE A ROSTER. Realign exists to catch a roster
+       -- CHANGE, and somebody with no SHIFT row has no roster to change --
+       -- their days come from the country calendar, which populate already
+       -- agreed with when it built them.
+       --
+       -- This is also the difference between seconds and minutes. Without it
+       -- the loop calls resolve_day once per prepopulated row in the period --
+       -- roughly 6,700 for August -- and resolve_day's lookup is an OR across
+       -- four layers with CAL_DATE third in the index, so each call can scan
+       -- OC_TIME_CALENDAR. Against a calendar that now holds tens of thousands
+       -- of rows that is hundreds of millions of row touches for an answer
+       -- that was never going to change.
+       AND EXISTS (SELECT 1 FROM oc_time_calendar c
+                    WHERE c.layer     = 'SHIFT'
+                      AND c.scope_key = w.employee_id
+                      AND c.cal_date BETWEEN p_from AND p_to)
   ) LOOP
     v_seen := v_seen + 1;
 
