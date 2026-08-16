@@ -2203,6 +2203,7 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
     -- it plugs in and nothing else changes.
     v_from DATE;
     v_hold NUMBER;          -- the hold row the day rows hang off
+    v_pay_cut DATE;         -- this worker's payroll cut-off (per country)
   BEGIN
     SELECT LEAST(NVL(payroll_cutoff, TRUNC(SYSDATE)), TRUNC(SYSDATE))
       INTO v_upto
@@ -2266,13 +2267,30 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
     --     employee is given is "by date".
     FOR e IN (SELECT w.employee_id,
                      COUNT(*) AS weeks_total,
-                     SUM(CASE WHEN w.submitted_on IS NULL
+                     -- DEFAULTED, not "never submitted". This tested
+                     -- SUBMITTED_ON IS NULL, and run_weekly_defaulting STAMPS
+                     -- submitted_by/on when it defaults a week -- it
+                     -- auto-submits on the employee's behalf. So every week
+                     -- this job exists to catch had a SUBMITTED_ON, the HAVING
+                     -- below counted zero, and no hold was ever created. The
+                     -- page has been empty since the day it was built.
+                     --
+                     -- DEFAULTED_BY = 'EMPLOYEE' is the other half. A MANAGER
+                     -- default means the employee submitted and nobody
+                     -- approved, and RULE-016 is explicit that awaiting
+                     -- approval does not stop salary. Four scripts already
+                     -- CLAIMED this filter existed; none of them checked.
+                     SUM(CASE WHEN w.submission_status = 'Defaulted'
+                               AND w.defaulted_by = 'EMPLOYEE'
                               THEN 1 ELSE 0 END)                 AS weeks_def,
-                     SUM(CASE WHEN w.submitted_on IS NULL
+                     SUM(CASE WHEN w.submission_status = 'Defaulted'
+                               AND w.defaulted_by = 'EMPLOYEE'
                               THEN 0 ELSE 1 END)                 AS weeks_sub,
-                     SUM(CASE WHEN w.submitted_on IS NULL
+                     SUM(CASE WHEN w.submission_status = 'Defaulted'
+                               AND w.defaulted_by = 'EMPLOYEE'
                               THEN 0 ELSE w.total_hours END)     AS applied_hrs,
-                     SUM(CASE WHEN w.submitted_on IS NULL
+                     SUM(CASE WHEN w.submission_status = 'Defaulted'
+                               AND w.defaulted_by = 'EMPLOYEE'
                               THEN w.total_hours ELSE 0 END)     AS default_hrs
                 FROM oc_ts_week     w
                 JOIN oc_time_worker k ON k.employee_id = w.employee_id
@@ -2283,9 +2301,29 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
                  AND w.week_start <= v_upto
                  AND w.week_end   >= v_from
                GROUP BY w.employee_id
-              HAVING SUM(CASE WHEN w.submitted_on IS NULL THEN 1 ELSE 0 END) > 0)
+              HAVING SUM(CASE WHEN w.submission_status = 'Defaulted'
+                               AND w.defaulted_by = 'EMPLOYEE'
+                              THEN 1 ELSE 0 END) > 0)
     LOOP
       v_read := v_read + 1;
+
+      -- ── THE PAYROLL CUT-OFF, PER COUNTRY ──────────────────
+      -- PROC-007 holds pay AT THE PAYROLL CUT-OFF, not when a week defaults.
+      -- The two are different dates and the gap between them is the window in
+      -- which somebody can still fix their timesheet and be paid on time.
+      --
+      -- It cannot be a period-level bound: o2c_dev.OC_PAYROLL_CONFIG is keyed
+      -- by COUNTRY and the definition says one country may hold several
+      -- cut-offs for a period. Two people in the same month have different
+      -- cut-offs, so this is asked per person, inside the loop.
+      --
+      -- NULL means no cut-off is configured for their country, and then this
+      -- holds NOBODY. Guessing a date here would hold real pay on an invented
+      -- deadline; an unconfigured country is reported by time/53 instead.
+      v_pay_cut := oc_time_payroll_cutoff(e.employee_id, p_period_id);
+      IF v_pay_cut IS NULL OR TRUNC(SYSDATE) <= v_pay_cut THEN
+        CONTINUE;
+      END IF;
 
       MERGE INTO oc_ts_salary_hold h
       USING (SELECT e.employee_id AS employee_id, p_period_id AS period_id FROM dual) s
@@ -2347,7 +2385,8 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
                   FROM oc_ts_entry en
                   JOIN oc_ts_week  wk ON wk.ts_week_id = en.ts_week_id
                  WHERE wk.employee_id  = e.employee_id
-                   AND wk.submitted_on IS NULL
+                   AND wk.submission_status = 'Defaulted'
+                   AND wk.defaulted_by      = 'EMPLOYEE'
                    -- The payroll window, not the calendar month. Strictly
                    -- before the cut-off: a day cannot be late on the day
                    -- itself.
@@ -2394,7 +2433,8 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
        AND h.salary_status = 'Held'
        AND NOT EXISTS (SELECT 1 FROM oc_ts_week w
                         WHERE w.employee_id  = h.employee_id
-                          AND w.submitted_on IS NULL
+                          AND w.submission_status = 'Defaulted'
+                          AND w.defaulted_by      = 'EMPLOYEE'
                           AND w.week_start  <= v_upto
                           AND w.week_end    >= v_from);
 

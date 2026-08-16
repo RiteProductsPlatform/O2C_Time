@@ -377,6 +377,9 @@ PROMPT [n/m] 51_default_double_count.sql - a defaulted week populated twice
 
 PROMPT [n/m] 52_roster_realign.sql - a roster change reaches weeks already built
 @@52_roster_realign.sql
+
+PROMPT [n/m] 53_payroll_cutoff.sql - the payroll cut-off, per country, read live
+@@53_payroll_cutoff.sql
 -- 46 MUST come after ords/13. It redefines the jobs/daily handler that 13
 -- creates, so running it earlier means 13 quietly puts the populate-only
 -- version back and the whole post-load chain is dropped with no error
