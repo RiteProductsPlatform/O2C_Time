@@ -120,23 +120,29 @@ define([
           (res.body && res.body.items) || [], empId, from, to,
           $application.variables.stdHoursPerDay);
 
-        // Nothing in Fusion for this week is a legitimate answer, not a
-        // failure. It is NOT the same as "leave unchanged", though: a leave
-        // cancelled in Fusion leaves its row behind here, because the sync
-        // merge inserts and updates and never deletes. Recorded rather than
-        // silently ignored — that gap is scenario 23.
-        if (!rows.length) {
-          $page.variables.absenceState = 'none';
-          return;
-        }
-
         // ── 3. cache it ──────────────────────────────────────────
+        // NO EARLY RETURN ON AN EMPTY RESULT, and that is the whole of
+        // scenario 23. This used to skip the call when Fusion returned
+        // nothing, on the reading that there was nothing to save — but
+        // "Fusion has no leave for this person this month" is exactly what
+        // cancelled leave looks like, and skipping meant the cached row and
+        // its timesheet line survived forever. The empty answer is the
+        // signal, so it has to be delivered.
+        //
+        // employeeId + windowFrom/windowTo turn this into a statement rather
+        // than a list: "these are ALL the absences this person has between
+        // these dates". That lets the handler delete what it was not sent and
+        // retract the leave entries behind them. The BIP feed sends no window
+        // and is unaffected — it could not honestly make the same claim.
         const sync = await Actions.callRest(context, {
           endpoint: 'oc_time/syncAbsence',
           body: {
             actor: $application.variables.currentEmail || 'VBCS_USER',
             final: 'Y',
             traceId: $application.variables.traceId,
+            employeeId: empId,
+            windowFrom: from,
+            windowTo: to,
             rows: rows,
           },
         });
@@ -171,7 +177,11 @@ define([
             + $application.functions.restError(pop));
         }
 
-        $page.variables.absenceState = 'ok';
+        // 'none' still means "no leave this week" and is set here rather than
+        // by returning early, so the reconciliation above always runs first.
+        // A cancellation lands as 'none' AFTER the old row has been retracted,
+        // which is the state the user should see.
+        $page.variables.absenceState = rows.length ? 'ok' : 'none';
 
       } catch (e) {
         // No status at all — the proxy never answered. Most often the fa

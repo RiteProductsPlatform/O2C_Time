@@ -934,14 +934,24 @@ BEGIN
         -- (ORA-00984 "column not allowed here"). Captured into a local, the
         -- same way SQLERRM already is directly below.
         v_code NUMBER;
+        -- WINDOW MODE. Supplied by the browser's live read, absent from the
+        -- BIP feed. See the reconciliation block after the loop.
+        v_emp   VARCHAR2(50);
+        v_wfrom DATE;
+        v_wto   DATE;
+        v_gone  NUMBER := 0;
       BEGIN
-        SELECT job_run_id, NVL(actor,'BIP_LOADER'), NVL(fin,'N'), trace
-          INTO v_job, v_actor, v_final, v_trace
+        SELECT job_run_id, NVL(actor,'BIP_LOADER'), NVL(fin,'N'), trace,
+               emp, TO_DATE(wfrom,'YYYY-MM-DD'), TO_DATE(wto,'YYYY-MM-DD')
+          INTO v_job, v_actor, v_final, v_trace, v_emp, v_wfrom, v_wto
           FROM JSON_TABLE(v_body, '$'
                  COLUMNS (job_run_id NUMBER        PATH '$.jobRunId',
                           actor      VARCHAR2(100) PATH '$.actor',
                           fin        VARCHAR2(1)   PATH '$.final',
-                          trace      VARCHAR2(64)  PATH '$.traceId'));
+                          trace      VARCHAR2(64)  PATH '$.traceId',
+                          emp        VARCHAR2(50)  PATH '$.employeeId',
+                          wfrom      VARCHAR2(10)  PATH '$.windowFrom',
+                          wto        VARCHAR2(10)  PATH '$.windowTo'));
 
         IF v_job IS NULL THEN
           INSERT INTO oc_time_sync_job (job_name, job_type, scope_key,
@@ -1037,6 +1047,56 @@ BEGIN
           END;
         END LOOP;
 
+        -- ── WINDOW RECONCILIATION ────────────────────────────────
+        -- A MERGE can only act on what it is sent, and an absence DELETED in
+        -- Fusion is sent as nothing at all: the live read returns no row for
+        -- it, so the loop above never sees it and the cached row survives
+        -- forever. Withdrawal is handled in the loop because Fusion still
+        -- returns the record marked ORA_WITHDRAWN; outright deletion has no
+        -- such signal, and it is the more common way somebody cancels leave.
+        --
+        -- So when the caller states a WINDOW -- "this is every absence this
+        -- person has between these dates" -- absence becomes meaningful, and
+        -- anything cached inside it that was not sent is gone from Fusion.
+        --
+        -- Only the browser's live read can make that claim. The BIP feed
+        -- covers fifteen months for the whole company and sends no window, so
+        -- it skips this entirely and nothing it loads is at risk here.
+        IF v_emp IS NOT NULL AND v_wfrom IS NOT NULL AND v_wto IS NOT NULL THEN
+          DELETE FROM oc_time_absence ab
+           WHERE ab.employee_id  = v_emp
+             AND ab.absence_date BETWEEN v_wfrom AND v_wto
+             AND NOT EXISTS (
+                   SELECT 1 FROM JSON_TABLE(v_body, '$.rows[*]'
+                             COLUMNS (eid VARCHAR2(50)  PATH '$.EMPLOYEE_ID',
+                                      ad  VARCHAR2(10)  PATH '$.ABSENCE_DATE',
+                                      aty VARCHAR2(100) PATH '$.ABSENCE_TYPE',
+                                      ast VARCHAR2(30)  PATH '$.ABSENCE_STATUS')) j
+                    WHERE j.eid = ab.employee_id
+                      AND TO_DATE(j.ad,'YYYY-MM-DD') = ab.absence_date
+                      AND j.aty = ab.absence_type
+                      -- A withdrawn row counts as NOT sent, so it goes here
+                      -- too even though the loop above already removed it.
+                      AND UPPER(NVL(j.ast,'X')) NOT LIKE '%WITHDRAWN%');
+          v_gone := SQL%ROWCOUNT;
+
+          -- Removing the absence is only half of it. The timesheet already
+          -- carries an OC_TS_ENTRY leave line built from it, and nothing above
+          -- touches that -- so without this the day stays blocked by leave
+          -- that no longer exists. oc_time_sync_leave (db/44) retracts every
+          -- leave entry in range with no APPROVED absence behind it, writes
+          -- its history row, and reopens the day.
+          --
+          -- IT COMMITS INTERNALLY, so everything above is committed here too
+          -- and the EXCEPTION handler's ROLLBACK can no longer undo it. That
+          -- is tolerable because the COMMIT two statements below was going to
+          -- happen anyway and both halves are idempotent -- the next page load
+          -- re-sends the same window and reaches the same state. Worth knowing
+          -- before adding anything after this line that must be atomic with
+          -- the upserts.
+          oc_time_sync_leave(v_wfrom, v_wto, v_emp, v_actor);
+        END IF;
+
         UPDATE oc_time_sync_job
            SET records_read     = NVL(records_read,0)     + v_ok + v_fail,
                records_upserted = NVL(records_upserted,0) + v_ok,
@@ -1051,8 +1111,12 @@ BEGIN
          WHERE job_run_id = v_job;
 
         COMMIT; :status_code := 200;
+        -- "retracted" is reported separately rather than folded into a total,
+        -- because a caller that sent a window needs to see that a cancellation
+        -- was acted on: zero upserted with one retracted IS a successful
+        -- withdrawal, and is otherwise indistinguishable from a no-op.
         HTP.P('{"jobRunId":' || v_job || ',"upserted":' || v_ok ||
-              ',"failed":' || v_fail || '}');
+              ',"failed":' || v_fail || ',"retracted":' || v_gone || '}');
       EXCEPTION WHEN OTHERS THEN
         ROLLBACK; :status_code := 400;
         HTP.P('{"error":"' || REPLACE(SQLERRM,'"','\"') || '"}');
