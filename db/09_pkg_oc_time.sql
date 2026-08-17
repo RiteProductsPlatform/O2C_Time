@@ -2226,6 +2226,9 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
     v_from DATE;
     v_hold NUMBER;          -- the hold row the day rows hang off
     v_pay_cut DATE;         -- this worker's payroll cut-off (per country)
+    v_rel_days NUMBER;      -- and their release window, from the same source
+    v_win_from DATE;        -- their country's payroll window, for the day rows
+    v_win_to   DATE;
   BEGIN
     SELECT LEAST(NVL(payroll_cutoff, TRUNC(SYSDATE)), TRUNC(SYSDATE))
       INTO v_upto
@@ -2316,12 +2319,31 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
                               THEN w.total_hours ELSE 0 END)     AS default_hrs
                 FROM oc_ts_week     w
                 JOIN oc_time_worker k ON k.employee_id = w.employee_id
+                -- THE WINDOW, PER COUNTRY. Joined rather than taken from the
+                -- v_from/v_upto locals, because a cut-off belongs to the
+                -- country -- the payroll configuration screen says so in as
+                -- many words -- and two people in the same month can therefore
+                -- be judged against different dates. The locals were derived
+                -- from OC_TIME_PERIOD, which is ours and can disagree with the
+                -- configuration the gate below already reads.
+                --
+                -- CUTOFF_PASSED = 'Y' does the real gating here: a country
+                -- whose cut-off is still ahead contributes no rows at all,
+                -- which is why moving August to the 30th empties this cursor
+                -- rather than merely narrowing it.
+                --
+                -- One row per period per country, so this cannot fan out the
+                -- aggregates below.
+                JOIN v_oc_time_payroll_window pw
+                  ON pw.period_id     = p_period_id
+                 AND pw.country       = k.base_country
+                 AND pw.cutoff_passed = 'Y'
                WHERE k.status = 'Active'
                  -- Any week OVERLAPPING the payroll window, whichever calendar
                  -- period it belongs to. Overlap, not containment: a week that
                  -- straddles the cut-off contributes its earlier days.
-                 AND w.week_start <= v_upto
-                 AND w.week_end   >= v_from
+                 AND w.week_start <= pw.window_to
+                 AND w.week_end   >= pw.window_from
                GROUP BY w.employee_id
               HAVING SUM(CASE WHEN w.submission_status = 'Defaulted'
                                AND w.defaulted_by = 'EMPLOYEE'
@@ -2347,6 +2369,32 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
         CONTINUE;
       END IF;
 
+      -- THE RELEASE WINDOW IS THEIRS TOO. This read
+      --   NVL(oc_time_period.hold_release_days, 60)
+      -- while db/53 had already built oc_time_hold_release_days() to read the
+      -- payroll configuration, and nothing ever called it. Two sources for one
+      -- number, agreeing at 60 today -- which is exactly why it went unnoticed.
+      -- Change "Salary hold release period" on the screen and only one of them
+      -- would move. NVL to 60 (CFG-012) stays as the floor for a country the
+      -- configuration has no row for.
+      v_rel_days := NVL(oc_time_hold_release_days(e.employee_id, p_period_id), 60);
+
+      -- This person's own window, for the day rows below. Same source as the
+      -- cursor's join, read here because the day cursor needs the bounds as
+      -- values. NVL to the period-derived locals so a country with no window
+      -- row still behaves as it did rather than writing no days at all.
+      BEGIN
+        SELECT pw.window_from, pw.window_to
+          INTO v_win_from, v_win_to
+          FROM v_oc_time_payroll_window pw
+          JOIN oc_time_worker k ON k.base_country = pw.country
+         WHERE pw.period_id = p_period_id
+           AND k.employee_id = e.employee_id;
+      EXCEPTION WHEN OTHERS THEN
+        v_win_from := v_from;
+        v_win_to   := v_upto;
+      END;
+
       MERGE INTO oc_ts_salary_hold h
       USING (SELECT e.employee_id AS employee_id, p_period_id AS period_id FROM dual) s
          ON (h.employee_id = s.employee_id AND h.period_id = s.period_id)
@@ -2363,17 +2411,14 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
             VALUES (e.employee_id, p_period_id, e.weeks_total, e.weeks_sub,
                     e.weeks_def, e.applied_hrs, e.default_hrs, 'Held');
 
-      -- The 60 calendar days the employee gets to correct (CFG-012). Stamped
-      -- only when the hold is first opened: re-running the job must not keep
-      -- pushing the deadline out, or the window never closes.
+      -- The calendar days the employee gets to correct, from the payroll
+      -- configuration's "Salary hold release period" (CFG-012). Stamped only
+      -- when the hold is first opened: re-running the job must not keep pushing
+      -- the deadline out, or the window never closes.
       UPDATE oc_ts_salary_hold h
-         SET h.hold_release_days = NVL(h.hold_release_days,
-               (SELECT NVL(p.hold_release_days, 60) FROM oc_time_period p
-                 WHERE p.period_id = p_period_id)),
+         SET h.hold_release_days = NVL(h.hold_release_days, v_rel_days),
              h.window_expires_on = NVL(h.window_expires_on,
-               TRUNC(SYSDATE) + NVL((SELECT NVL(p.hold_release_days, 60)
-                                       FROM oc_time_period p
-                                      WHERE p.period_id = p_period_id), 60))
+                                       TRUNC(SYSDATE) + v_rel_days)
        WHERE h.employee_id = e.employee_id
          AND h.period_id   = p_period_id;
 
@@ -2412,8 +2457,9 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
                    -- The payroll window, not the calendar month. Strictly
                    -- before the cut-off: a day cannot be late on the day
                    -- itself.
-                   AND en.entry_date  >= v_from
-                   AND en.entry_date   < v_upto
+                   -- Per-country bounds, not the period-derived locals.
+                   AND en.entry_date  >= v_win_from
+                   AND en.entry_date   < v_win_to
                    AND NOT EXISTS (SELECT 1 FROM oc_ts_salary_hold_day x
                                     WHERE x.employee_id = e.employee_id
                                       AND x.work_date   = en.entry_date)
@@ -2454,11 +2500,21 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
      WHERE h.period_id     = p_period_id
        AND h.salary_status = 'Held'
        AND NOT EXISTS (SELECT 1 FROM oc_ts_week w
+                        JOIN oc_time_worker k2
+                          ON k2.employee_id = w.employee_id
+                        JOIN v_oc_time_payroll_window pw2
+                          ON pw2.period_id = h.period_id
+                         AND pw2.country   = k2.base_country
                         WHERE w.employee_id  = h.employee_id
                           AND w.submission_status = 'Defaulted'
                           AND w.defaulted_by      = 'EMPLOYEE'
-                          AND w.week_start  <= v_upto
-                          AND w.week_end    >= v_from);
+                          -- The SAME per-country window the hold was opened
+                          -- against. Judged against the period-derived locals
+                          -- instead, a hold could be released because a week
+                          -- fell outside a window that was never the one used
+                          -- to create it.
+                          AND w.week_start  <= pw2.window_to
+                          AND w.week_end    >= pw2.window_from);
 
     finish_job(v_job, v_read, v_up, 0);
     COMMIT;

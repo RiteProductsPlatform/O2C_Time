@@ -412,6 +412,18 @@ PROMPT [n/m] 53_payroll_cutoff.sql - the payroll cut-off, per country, read live
 PROMPT [n/m] 54_payroll_country_alias.sql - their country names to ours
 @@54_payroll_country_alias.sql
 
+-- 66 CREATES A VIEW THAT 09 REFERENCES, and 09 ran at step [n] far above --
+-- long before 53 made the payroll configuration readable. So run_salary_stopping
+-- compiles against a view that does not exist yet and the package body lands
+-- INVALID. That is expected and is repaired by the recompile pass below, which
+-- exists for exactly this shape of forward reference; anything still invalid
+-- after it is genuinely broken and the verification block says so.
+--
+-- Re-running install_time.sql end to end is therefore always safe. Running 09
+-- ON ITS OWN before 66 is not -- it leaves salary stopping uncompilable.
+PROMPT [n/m] 66_payroll_window_per_country.sql - the cut-off belongs to the country
+@@66_payroll_window_per_country.sql
+
 -- A no-op on a fresh install: this installer never runs 90_test_seed.sql, so
 -- there is nothing stamped TEST_SEED to remove. It is here so an environment
 -- that WAS seeded converges on the same state as one that was not, rather than
