@@ -825,7 +825,15 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
     SELECT start_date, end_date INTO v_start, v_end
       FROM oc_time_period WHERE period_id = p_period_id;
 
+    -- START_DATE and END_DATE are selected because the DAY LOOP needs them,
+    -- not just this WHERE. The predicate below picks allocations that OVERLAP
+    -- the period; it does not say which days within it they cover, and the loop
+    -- used to seed every day of the period regardless. RI2824's 555 allocation
+    -- begins 17-Aug and had been seeded from 01-Aug -- ten days on a project
+    -- they were not on yet, which then read as an allocation of zero because
+    -- no allocation row covered the date.
     FOR a IN (SELECT al.allocation_id, al.employee_id, al.project_id, al.alloc_pct,
+                     al.start_date, al.end_date,
                      w.worker_type
                 FROM oc_time_allocation al
                 JOIN oc_time_worker     w ON w.employee_id = al.employee_id
@@ -876,6 +884,20 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
           DECLARE
             v_date DATE := v_start + d;
           BEGIN
+            -- THE ALLOCATION'S OWN SPAN, per day. The cursor above only asks
+            -- whether the allocation overlaps the PERIOD, so without this a
+            -- mid-month start seeds the days before it and a mid-month end
+            -- seeds the days after. Those rows are indistinguishable from real
+            -- ones until something asks what allocation justifies them, which
+            -- is how ten days of 555 appeared for RI2824 before 17-Aug.
+            --
+            -- Checked before resolve_day because it is the cheaper test and
+            -- resolve_day reads the calendar.
+            IF v_date < a.start_date
+               OR (a.end_date IS NOT NULL AND v_date > a.end_date) THEN
+              CONTINUE;
+            END IF;
+
             resolve_day(a.employee_id, a.project_id, v_date,
                         v_shift, v_std, v_working, v_holiday);
 

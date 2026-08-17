@@ -325,6 +325,11 @@ PROMPT [n/m] 61_restore_default_hours.sql - withdrawing leave gives the day back
 PROMPT [n/m] 62_realign_alloc_hours.sql - an allocation change reaches built days
 @@62_realign_alloc_hours.sql
 
+-- After 62, and it needs 09 re-run to stay fixed: populate's day loop now
+-- honours each allocation's own span, so these dates are not seeded again.
+PROMPT [n/m] 63_unallocated_entries.sql - clear rows seeded outside an allocation
+@@63_unallocated_entries.sql
+
 PROMPT [n/m] 45_daily_post_load.sql - what OIC calls after the feeds land
 @@45_daily_post_load.sql
 
