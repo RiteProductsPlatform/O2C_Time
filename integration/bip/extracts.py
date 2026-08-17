@@ -883,10 +883,33 @@ SELECT 'SHIFT'                                          AS layer,
   LEFT JOIN zmm_sr_patterns_vl pt
     ON pt.pattern_id = sp.pattern_id
  WHERE sa.resource_type = 'ASSIGN'
-   -- The primary assignment only. Somebody carrying two schedules would
-   -- otherwise contribute a row per schedule per day and the two could
-   -- disagree about whether they are working.
-   AND NVL(sa.primary_flag,'N') = 'Y'
+   -- ONE SCHEDULE ASSIGNMENT PER PERSON, chosen -- not "the one flagged
+   -- primary", which is what this used to say.
+   --
+   -- The intent was right: two schedules would contribute a row per schedule
+   -- per day and could disagree about whether somebody is working. But
+   -- NVL(sa.primary_flag,'N') = 'Y' also silently drops anyone whose single
+   -- assignment has a NULL flag, and 68 of the 559 assignments on this pod do.
+   -- RI9001 was one: exactly one schedule, no flag, no roster, and Fusion's
+   -- own screen shows the schedule perfectly well. Nothing reported it -- a
+   -- person with no SHIFT rows just falls back to Mon-Fri, which looks like a
+   -- deliberate answer.
+   --
+   -- So rank instead of filter: prefer the flagged one, then the latest start,
+   -- then the highest id so the choice is stable across runs. A person with one
+   -- assignment always keeps it, flagged or not, and a person with several
+   -- still contributes exactly one.
+   --
+   -- The correlated subquery scopes the KEEP to this resource. Left uncorrelated
+   -- it would rank across the whole table and return one assignment for the pod.
+   AND sa.schedule_assignment_id = (
+         SELECT MAX(sa2.schedule_assignment_id) KEEP (DENSE_RANK FIRST
+                  ORDER BY CASE WHEN NVL(sa2.primary_flag,'N') = 'Y'
+                                THEN 0 ELSE 1 END,
+                           sa2.start_date DESC)
+           FROM per_schedule_assignments sa2
+          WHERE sa2.resource_id   = sa.resource_id
+            AND sa2.resource_type = 'ASSIGN')
    AND d.start_date_time >= ADD_MONTHS({ED}, -3)
    AND d.start_date_time <  ADD_MONTHS({ED},  3)
  GROUP BY papf.person_number, TRUNC(d.start_date_time)
