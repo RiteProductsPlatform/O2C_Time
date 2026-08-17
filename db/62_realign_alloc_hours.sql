@@ -195,12 +195,25 @@ DECLARE
   v_to   DATE;
   v_n    NUMBER;
 BEGIN
-  SELECT MIN(start_date) - 92, MAX(end_date)
+  -- EVERY DATE THAT HAS AN ENTRY, not the open period and three months back.
+  --
+  -- The first version bounded this by the OPEN periods, which read as prudent
+  -- and left 66 rows wrong: future months are already populated -- SEP and OCT
+  -- 2026 exist and are 'Closed'/Future -- so their rows sat outside the window
+  -- and kept the old figures. The verification query below has no date filter,
+  -- correctly, which is the only reason the gap was visible at all.
+  --
+  -- Nothing here is destructive: the procedure only touches prepopulated rows
+  -- that disagree with their allocation, and a closed month that disagrees is
+  -- exactly as wrong as an open one. If a closed period should be frozen
+  -- instead, that is a rule to state deliberately, not to get by accident from
+  -- a window.
+  SELECT MIN(entry_date), MAX(entry_date)
     INTO v_from, v_to
-    FROM oc_time_period WHERE status = 'Open';
+    FROM oc_ts_entry;
 
   IF v_from IS NULL THEN
-    DBMS_OUTPUT.PUT_LINE('No open period; nothing realigned.');
+    DBMS_OUTPUT.PUT_LINE('No timesheet entries; nothing realigned.');
     RETURN;
   END IF;
 
@@ -211,11 +224,21 @@ END;
 /
 
 PROMPT
-PROMPT --- nothing should disagree now
-SELECT COUNT(*) AS still_wrong
+PROMPT --- nothing should disagree now, and where it does, in which month
+COLUMN month FORMAT A10
+SELECT TO_CHAR(x.entry_date,'MON-YYYY') AS month,
+       COUNT(*) AS still_wrong,
+       SUM(CASE WHEN x.expected_hours = 0 THEN 1 ELSE 0 END) AS of_which_unallocated
   FROM v_oc_ts_entry_expected x
  WHERE x.held_hours <> x.expected_hours
-   AND x.expected_hours > 0;
+ GROUP BY TO_CHAR(x.entry_date,'MON-YYYY'),
+          TRUNC(x.entry_date,'MM')
+ ORDER BY TRUNC(x.entry_date,'MM');
+
+PROMPT
+PROMPT No rows is the answer. A month listed with OF_WHICH_UNALLOCATED > 0 needs
+PROMPT 63_unallocated_entries.sql -- those rows should not exist rather than hold
+PROMPT a different figure.
 
 PROMPT
 PROMPT --- and no working day should exceed its standard from prepopulation alone
