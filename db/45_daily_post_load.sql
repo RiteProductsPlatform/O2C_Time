@@ -136,6 +136,25 @@ BEGIN
   note('leave reconciled ' || TO_CHAR(v_from,'DD-MON') || '..'
        || TO_CHAR(v_to,'DD-MON'));
 
+  -- ── 5. give back the days leave had taken ──────────────────
+  -- Has to be here, after the leave sync, and cannot be done by re-running
+  -- populate. When leave lands, populate sets the prepopulated work rows to
+  -- HOURS = 0 rather than deleting them; when the absence is withdrawn, the
+  -- leave sync above removes only the LEAVE row. The zeroed rows survive, and
+  -- populate's guard treats a cell that already has an Actual/Default row as
+  -- seeded -- so it skips them and the day stays blank for good.
+  --
+  -- Running populate again here instead would be wrong twice over: it would
+  -- not touch those rows, and it would recreate the duplicate leave row that
+  -- step 4 exists to remove. db/61.
+  DECLARE
+    v_back NUMBER;
+  BEGIN
+    v_step := 'restore default hours';
+    oc_time_restore_default_hours(v_from, v_to, NULL, p_actor, v_back);
+    note(v_back || ' day-row(s) restored');
+  END;
+
   o_summary := 'OK: ' || v_note;
 
 EXCEPTION WHEN OTHERS THEN

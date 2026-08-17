@@ -311,6 +311,13 @@ PROMPT [n/m] 43_approval_guards.sql - a manager may only decide what reached the
 PROMPT [n/m] 44_leave_and_allocation_retraction.sql - the sync can take things back
 @@44_leave_and_allocation_retraction.sql
 
+-- OUT OF NUMERIC ORDER ON PURPOSE. 45's oc_time_daily_post_load calls
+-- oc_time_restore_default_hours, which 61 creates, so 61 must exist first or
+-- 45 compiles with PLS-00201 against a procedure that appears sixteen files
+-- later. Runs its own backfill too, which is harmless on a fresh install.
+PROMPT [n/m] 61_restore_default_hours.sql - withdrawing leave gives the day back
+@@61_restore_default_hours.sql
+
 PROMPT [n/m] 45_daily_post_load.sql - what OIC calls after the feeds land
 @@45_daily_post_load.sql
 

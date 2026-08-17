@@ -940,6 +940,7 @@ BEGIN
         v_wfrom DATE;
         v_wto   DATE;
         v_gone  NUMBER := 0;
+        v_back  NUMBER := 0;
       BEGIN
         SELECT job_run_id, NVL(actor,'BIP_LOADER'), NVL(fin,'N'), trace,
                emp, TO_DATE(wfrom,'YYYY-MM-DD'), TO_DATE(wto,'YYYY-MM-DD')
@@ -1095,6 +1096,13 @@ BEGIN
           -- before adding anything after this line that must be atomic with
           -- the upserts.
           oc_time_sync_leave(v_wfrom, v_wto, v_emp, v_actor);
+
+          -- And give the day back. Retraction removes the LEAVE row, but the
+          -- work rows underneath were set to HOURS = 0 when the leave arrived
+          -- rather than deleted -- so without this the day is left blank, and
+          -- a re-populate cannot help because its own guard sees those zero
+          -- rows and skips the cell. db/61.
+          oc_time_restore_default_hours(v_wfrom, v_wto, v_emp, v_actor, v_back);
         END IF;
 
         UPDATE oc_time_sync_job
@@ -1116,7 +1124,8 @@ BEGIN
         -- was acted on: zero upserted with one retracted IS a successful
         -- withdrawal, and is otherwise indistinguishable from a no-op.
         HTP.P('{"jobRunId":' || v_job || ',"upserted":' || v_ok ||
-              ',"failed":' || v_fail || ',"retracted":' || v_gone || '}');
+              ',"failed":' || v_fail || ',"retracted":' || v_gone ||
+              ',"restored":' || v_back || '}');
       EXCEPTION WHEN OTHERS THEN
         ROLLBACK; :status_code := 400;
         HTP.P('{"error":"' || REPLACE(SQLERRM,'"','\"') || '"}');
