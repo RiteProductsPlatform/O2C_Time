@@ -1,0 +1,11 @@
+METADATA|PersonEmail|PersonNumber|EmailType|EmailAddress|DateFrom|SourceSystemOwner|SourceSystemId
+MERGE|PersonEmail|RI9001|W1|navamani.solairajan@rite.digital|2024/01/01|EBS|EBS_PersonEmail_RI9001
+MERGE|PersonEmail|RI2824|W1|sampaul.jeevan@rite.digital|2024/01/01|EBS|EBS_PersonEmail_RI2824
+MERGE|PersonEmail|RI2900|W1|saisowmith.kantipudi@rite.digital|2024/01/01|EBS|EBS_PersonEmail_RI2900
+MERGE|PersonEmail|RI2963|W1|wajahad.ali@rite.digital|2024/01/01|EBS|EBS_PersonEmail_RI2963
+MERGE|PersonEmail|RI2935|W1|shivani.rathore@rite.digital|2024/01/01|EBS|EBS_PersonEmail_RI2935
+MERGE|PersonEmail|RI3004|W1|gayathri.radhakrishnan@rite.digital|2024/01/01|EBS|EBS_PersonEmail_RI3004
+MERGE|PersonEmail|RI2914|W1|bhaskar.sang@rite.digital|2024/01/01|EBS|EBS_PersonEmail_RI2914
+MERGE|PersonEmail|CRI0406|W1|ranganayaki.venugopalan@rite.digital|2024/01/01|EBS|EBS_PersonEmail_CRI0406
+MERGE|PersonEmail|RI2985|W1|aadhiseshan.a@rite.digital|2024/01/01|EBS|EBS_PersonEmail_RI2985
+MERGE|PersonEmail|RI2249|W1|saicharan.vadlakonda@rite.digital|2024/01/01|EBS|EBS_PersonEmail_RI2249

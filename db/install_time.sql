@@ -390,6 +390,12 @@ PROMPT [n/m] 54_payroll_country_alias.sql - their country names to ours
 -- keeping three fictional projects on the manager landing page forever.
 PROMPT [n/m] 55_purge_test_seed.sql - remove fabricated seed data if any exists
 @@55_purge_test_seed.sql
+
+-- After 55, because the roles it derives must not be computed from seeded
+-- projects. Safe on a fresh install: with no workers synced yet it changes
+-- nothing, and the procedure it leaves behind is what keeps roles true.
+PROMPT [n/m] 59_derive_roles.sql - APP_ROLE from HCM worker type and PPM manager
+@@59_derive_roles.sql
 -- 46 MUST come after ords/13. It redefines the jobs/daily handler that 13
 -- creates, so running it earlier means 13 quietly puts the populate-only
 -- version back and the whole post-load chain is dropped with no error
