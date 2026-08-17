@@ -491,6 +491,17 @@ define([], () => {
             APPROVAL_STATUS:
               String(x.approvalStatusCd).toUpperCase() === 'APPROVED'
                 ? 'Approved' : 'Pending',
+            // WITHDRAWAL IS NOT VISIBLE IN approvalStatusCd. Fusion leaves a
+            // withdrawn absence APPROVED there and marks it ORA_WITHDRAWN in
+            // absenceStatusCd, so on approval status alone a cancelled leave
+            // reads as an approved one and the day stays blocked.
+            //
+            // absenceStatusCd was already being REQUESTED in the chain's
+            // fields list and then dropped on the floor here. Passing it on is
+            // what lets sync/absence delete the cached row -- which is the
+            // "leave cancelled in Fusion leaves its row behind" gap the chain
+            // documents as scenario 23.
+            ABSENCE_STATUS: String(x.absenceStatusCd || '').toUpperCase(),
           });
         }
       });

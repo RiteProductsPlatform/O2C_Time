@@ -383,6 +383,13 @@ PROMPT [n/m] 53_payroll_cutoff.sql - the payroll cut-off, per country, read live
 
 PROMPT [n/m] 54_payroll_country_alias.sql - their country names to ours
 @@54_payroll_country_alias.sql
+
+-- A no-op on a fresh install: this installer never runs 90_test_seed.sql, so
+-- there is nothing stamped TEST_SEED to remove. It is here so an environment
+-- that WAS seeded converges on the same state as one that was not, rather than
+-- keeping three fictional projects on the manager landing page forever.
+PROMPT [n/m] 55_purge_test_seed.sql - remove fabricated seed data if any exists
+@@55_purge_test_seed.sql
 -- 46 MUST come after ords/13. It redefines the jobs/daily handler that 13
 -- creates, so running it earlier means 13 quietly puts the populate-only
 -- version back and the whole post-load chain is dropped with no error
@@ -509,8 +516,10 @@ PROMPT #      POST /oc/time/admin/jobs/populate/{periodId}
 PROMPT #   5. Point the VBCS service connection at this schema's ORDS base URL
 PROMPT #      (services/catalog.json -> backends.oc_time.servers[0].url).
 PROMPT #   6. Create sign-in accounts. OC_TIME_USER is empty after this install,
-PROMPT #      so nobody can log in yet. Either run 90_test_seed.sql for the demo
-PROMPT #      logins, or insert real ones:
+PROMPT #      so nobody can log in yet. 56_invite_logins.sql invites a named
+PROMPT #      cohort from OC_TIME_WORKER (edit the list in it); it is not part
+PROMPT #      of this installer because who gets an account is per-environment.
+PROMPT #      Or insert them directly:
 PROMPT #        INSERT INTO oc_time_user (employee_id, email, full_name, status)
 PROMPT #        VALUES ('RI2824','someone@rite.digital','Their Name','Invited');
 PROMPT #      An Invited user sets their own password at first sign-in via

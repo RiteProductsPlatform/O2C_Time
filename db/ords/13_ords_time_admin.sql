@@ -463,14 +463,30 @@ BEGIN
 
         FOR r IN (SELECT * FROM JSON_TABLE(v_body, '$.rows[*]'
                     COLUMNS (
+                      -- THESE PATHS ARE THE FEED'S COLUMN NAMES, NOT THE
+                      -- TABLE'S. Three of them were the table's and did not
+                      -- exist in the feed, so JSON_TABLE returned NULL with no
+                      -- error -- the sync reported Success on every row while
+                      -- silently carrying nothing:
+                      --
+                      --   $.PROJECT_ID    -> the feed sends FUSION_PROJECT_ID
+                      --   $.START_DATE    -> the feed sends PROJECT_START_DATE
+                      --   $.END_DATE      -> the feed sends PROJECT_END_DATE
+                      --
+                      -- FUSION_PROJECT_ID and PROJECT_START_DATE are NVL'd
+                      -- below, so they merely stayed null. PROJECT_END_DATE is
+                      -- deliberately NOT NVL'd (a project's end date must be
+                      -- able to clear), so it was actively wiped to null on
+                      -- every run. Keep these in step with
+                      -- extracts.BY_NAME['PROJECTS']['columns'].
                       project_number     VARCHAR2(60)  PATH '$.PROJECT_NUMBER',
                       project_name       VARCHAR2(240) PATH '$.PROJECT_NAME',
-                      fusion_project_id  VARCHAR2(50)  PATH '$.PROJECT_ID',
+                      fusion_project_id  VARCHAR2(50)  PATH '$.FUSION_PROJECT_ID',
                       customer_name      VARCHAR2(240) PATH '$.CUSTOMER_NAME',
                       project_manager_id VARCHAR2(50)  PATH '$.PROJECT_MANAGER_ID',
                       time_entry_enabled VARCHAR2(1)   PATH '$.TIME_ENTRY_ENABLED',
-                      start_date         VARCHAR2(10)  PATH '$.START_DATE',
-                      end_date           VARCHAR2(10)  PATH '$.END_DATE',
+                      start_date         VARCHAR2(10)  PATH '$.PROJECT_START_DATE',
+                      end_date           VARCHAR2(10)  PATH '$.PROJECT_END_DATE',
                       status             VARCHAR2(20)  PATH '$.STATUS')))
         LOOP
           BEGIN
@@ -940,18 +956,59 @@ BEGIN
                       employee_id     VARCHAR2(50)  PATH '$.EMPLOYEE_ID',
                       absence_date    VARCHAR2(10)  PATH '$.ABSENCE_DATE',
                       absence_type    VARCHAR2(100) PATH '$.ABSENCE_TYPE',
-                      absence_hours   NUMBER        PATH '$.DURATION_HOURS',
-                      approval_status VARCHAR2(30)  PATH '$.APPROVAL_STATUS')))
+                      -- TWO PRODUCERS POST HERE, and they disagree on the name.
+                      -- The BIP feed sends ABSENCE_HOURS; refreshAbsenceChain
+                      -- on PAGE-001 reads absence live from Fusion in the
+                      -- browser and sends DURATION_HOURS. This handler read
+                      -- only DURATION_HOURS, so combined with the NVL(...,0)
+                      -- that used to follow, every BIP-loaded absence landed at
+                      -- zero hours -- while the live path looked fine, which is
+                      -- why it went unnoticed.
+                      --
+                      -- Both are accepted rather than either renamed: the two
+                      -- callers deploy independently, and a loader that only
+                      -- understands the newer one silently degrades the other.
+                      absence_hours   NUMBER        PATH '$.ABSENCE_HOURS',
+                      duration_hours  NUMBER        PATH '$.DURATION_HOURS',
+                      approval_status VARCHAR2(30)  PATH '$.APPROVAL_STATUS',
+                      -- Read for the first time here. Fusion keeps a withdrawn
+                      -- absence APPROVED at the approval level and marks it
+                      -- ORA_WITHDRAWN at the absence level, so filtering on
+                      -- approval_status alone lets withdrawn leave through as
+                      -- real leave.
+                      absence_status  VARCHAR2(30)  PATH '$.ABSENCE_STATUS')))
         LOOP
           BEGIN
+            IF UPPER(NVL(r.absence_status,'X')) LIKE '%WITHDRAWN%' THEN
+              -- OC_TIME_ABSENCE has no status column, and it should not: a
+              -- withdrawn absence is not absence. Removing the row is what
+              -- makes the day revert to working time on the next populate.
+              DELETE FROM oc_time_absence
+               WHERE employee_id  = r.employee_id
+                 AND absence_date = TO_DATE(r.absence_date,'YYYY-MM-DD')
+                 AND absence_type = r.absence_type;
+            ELSE
             MERGE INTO oc_time_absence ab
             USING (SELECT r.employee_id AS eid,
                           TO_DATE(r.absence_date,'YYYY-MM-DD') AS ad,
-                          r.absence_type AS at FROM dual) s
+                          r.absence_type AS at,
+                          -- The feed carries hours only where Fusion happens to
+                          -- hold a day-level detail row -- about 1 in 11. For
+                          -- the rest the header says "1 day" and the day's
+                          -- length is the WORKER'S, not a global 8: several
+                          -- people here are on 9-hour days. The final NVL is a
+                          -- floor for a worker with no standard hours at all,
+                          -- since ABSENCE_HOURS is NOT NULL.
+                          COALESCE(r.absence_hours,
+                                   r.duration_hours,
+                                   (SELECT w.std_hours_per_day FROM oc_time_worker w
+                                     WHERE w.employee_id = r.employee_id),
+                                   8) AS hrs
+                     FROM dual) s
                ON (ab.employee_id = s.eid AND ab.absence_date = s.ad
                AND ab.absence_type = s.at)
              WHEN MATCHED THEN UPDATE
-                  SET ab.absence_hours    = NVL(r.absence_hours, 0),
+                  SET ab.absence_hours    = s.hrs,
                       ab.approval_status  = NVL(r.approval_status,'Approved'),
                       ab.fusion_synced_on = SYSTIMESTAMP,
                       ab.source_system    = 'FUSION',
@@ -962,10 +1019,10 @@ BEGIN
                   INSERT (employee_id, absence_date, absence_type, absence_hours,
                           approval_status, fusion_synced_on, source_system,
                           source_method, sync_job_run_id, created_by)
-                  VALUES (r.employee_id, TO_DATE(r.absence_date,'YYYY-MM-DD'),
-                          r.absence_type, NVL(r.absence_hours,0),
+                  VALUES (s.eid, s.ad, s.at, s.hrs,
                           NVL(r.approval_status,'Approved'), SYSTIMESTAMP,
                           'FUSION', 'BIP', v_job, v_actor);
+            END IF;
             v_ok := v_ok + 1;
           EXCEPTION WHEN OTHERS THEN
             v_err  := SUBSTR(SQLERRM, 1, 1000);

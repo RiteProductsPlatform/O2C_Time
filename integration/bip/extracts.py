@@ -493,25 +493,58 @@ ABSENCES = {
     "columns": ["EMPLOYEE_ID", "ABSENCE_DATE", "ABSENCE_TYPE", "ABSENCE_HOURS",
                 "APPROVAL_STATUS", "ABSENCE_STATUS"],
     "sql": """
-SELECT papf.person_number                    AS employee_id,
-       TO_CHAR(d.absence_date,'YYYY-MM-DD')  AS absence_date,
-       t.name                                AS absence_type,
-       d.duration                            AS absence_hours,
-       e.approval_status_cd                  AS approval_status,
-       e.absence_status_cd                   AS absence_status
-  FROM anc_per_abs_entries e
-  -- Day-level detail, not the header: RULE-008 needs one Leave row per DAY so
-  -- the grid can show it against the right column.
-  JOIN anc_per_abs_entry_dtls d
-    ON d.per_absence_entry_id = e.per_absence_entry_id
+-- ONE ROW PER DAY, GENERATED FROM THE HEADER'S DATE RANGE.
+--
+-- This used to INNER JOIN anc_per_abs_entry_dtls for its day-level rows, on the
+-- reasonable assumption that a multi-day absence is stored as one detail row
+-- per day. It is not, and the table is mostly empty: measured 17-Aug-2026 on
+-- this pod, 8,922 absence headers exist and only 988 have ANY detail row --
+-- 7,934 of them, 89%, have none at all. The inner join silently discarded every
+-- one of those, so the feed returned 4 rows out of thousands and absence
+-- reached the timesheet for almost nobody.
+--
+-- Nothing about that looked broken: the extract ran clean, the sync reported
+-- Success, and a person with no leave is indistinguishable from a person whose
+-- leave was dropped. It surfaced only when a real absence was booked on a known
+-- person and never appeared.
+--
+-- So the header is the source of truth for WHICH DAYS, and the detail is
+-- consulted only for hours where it happens to exist. The generator is capped
+-- at 366 -- an absence longer than a year is not a timesheet problem.
+SELECT papf.person_number                     AS employee_id,
+       TO_CHAR(x.absence_date,'YYYY-MM-DD')   AS absence_date,
+       t.name                                 AS absence_type,
+       -- NULL when there is no detail row. The loader falls back to the
+       -- worker's own STD_HOURS_PER_DAY rather than this extract inventing an
+       -- 8-hour day for people who do not work one.
+       d.duration                             AS absence_hours,
+       x.approval_status_cd                   AS approval_status,
+       -- Carried so a WITHDRAWN absence is distinguishable from an approved
+       -- one. A withdrawn entry may also vanish from the header table outright,
+       -- which the loader's retraction pass handles separately.
+       x.absence_status_cd                    AS absence_status
+  FROM (SELECT e.per_absence_entry_id,
+               e.person_id,
+               e.absence_type_id,
+               e.approval_status_cd,
+               e.absence_status_cd,
+               e.last_update_date,
+               e.start_date + gen.n           AS absence_date
+          FROM anc_per_abs_entries e
+          CROSS JOIN (SELECT LEVEL - 1 AS n FROM dual
+                       CONNECT BY LEVEL <= 366) gen
+         WHERE gen.n <= (e.end_date - e.start_date)) x
+  LEFT JOIN anc_per_abs_entry_dtls d
+    ON d.per_absence_entry_id = x.per_absence_entry_id
+   AND d.absence_date         = x.absence_date
   JOIN per_all_people_f papf
-    ON papf.person_id = e.person_id
-   AND d.absence_date BETWEEN papf.effective_start_date AND papf.effective_end_date
+    ON papf.person_id = x.person_id
+   AND x.absence_date BETWEEN papf.effective_start_date AND papf.effective_end_date
   LEFT JOIN anc_absence_types_vl t
-    ON t.absence_type_id = e.absence_type_id
- WHERE e.approval_status_cd = 'APPROVED'
-   AND d.absence_date >= ADD_MONTHS({ED}, -12)
-   AND d.absence_date <  ADD_MONTHS({ED},   3)
+    ON t.absence_type_id = x.absence_type_id
+ WHERE x.approval_status_cd = 'APPROVED'
+   AND x.absence_date >= ADD_MONTHS({ED}, -12)
+   AND x.absence_date <  ADD_MONTHS({ED},   3)
 """.replace("{ED}", ED),
 }
 
@@ -889,7 +922,11 @@ DELTA_ALIASES = {
     "PROJECTS":       {"p": 0, "ptl": 0, "pt": 0, "org": 1, "cpp": 0, "cust": 0},
     "TASKS":          {"e": 0, "etl": 0, "p": 0},
     "ALLOCATIONS":    {"pp": 0, "prj": 0, "papf": 1},
-    "ABSENCES":       {"e": 0, "d": 0, "papf": 1, "t": 0},
+    # 'e' is now inside the day-generating inline view and is not visible to the
+    # injected predicate; the view exposes LAST_UPDATE_DATE and is aliased 'x'.
+    # Same failure mode as the WORKER_SHIFTS note below -- a stale alias here
+    # produces ORA-00904 from a predicate that is not in the file.
+    "ABSENCES":       {"x": 0, "d": 0, "papf": 1, "t": 0},
     "CALENDAR":       {"ce": 0},
     "SHIFTS":         {"s": 0},
     "WORK_PATTERNS":  {"wp": 0, "wps": 0, "sh": 0},
