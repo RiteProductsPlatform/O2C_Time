@@ -336,6 +336,9 @@ PROMPT [n/m] 63_unallocated_entries.sql - clear rows seeded outside an allocatio
 PROMPT [n/m] 64_realign_editable_only.sql - closed months are adjusted, not rewritten
 @@64_realign_editable_only.sql
 
+PROMPT [n/m] 65_shift_name.sql - the shift strip shows a name, not a surrogate id
+@@65_shift_name.sql
+
 PROMPT [n/m] 45_daily_post_load.sql - what OIC calls after the feeds land
 @@45_daily_post_load.sql
 

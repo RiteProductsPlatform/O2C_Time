@@ -8,9 +8,17 @@ drift apart.
 Every object name and every column here was verified against a live Fusion pod
 (see integration/bip/README.md). Two corrections worth remembering:
 
-  * work schedules / shifts / work patterns live under HTS_, not ZMM_. On a
-    Fusion pod ZMM_SR_* is Service Request scheduling (CX), nothing to do with
-    HCM availability.
+  * shift and work-pattern REFERENCE data lives under HTS_. The PER-WORKER
+    ROSTER does not: it is PER_SCHEDULE_ASSIGNMENTS joined to
+    ZMM_SR_SCHEDULE_DTLS, with ZMM_SR_SHIFTS_VL as its shift dictionary.
+
+    This note used to say ZMM_SR_* was Service Request scheduling and nothing
+    to do with HCM availability. That is wrong on this pod and cost real time:
+    WORKER_SHIFTS was rewritten onto the ZMM_SR_* pair in Aug-2026 after
+    HTS_WORKERS_WITH_SHIFTS_V returned nothing usable, and HTS_SHIFTS_VL does
+    not contain the shift ids those schedules reference. TWO SHIFT
+    DICTIONARIES, one id space each -- join the HTS one to a ZMM_SR shift id
+    and you get no rows, which reads as missing data rather than a wrong join.
   * HR_ALL_ORGANIZATION_UNITS_F has no NAME column - the name is in the
     translated view HR_ALL_ORGANIZATION_UNITS_F_VL.
 
@@ -825,7 +833,25 @@ SELECT 'SHIFT'                                          AS layer,
        -- MERGE would have raised ORA-30926: a person can hold more than one
        -- schedule assignment, and a date more than one detail row.
        MAX(CASE WHEN d.shift_id IS NULL THEN 'N' ELSE 'Y' END) AS is_working_day,
-       TO_CHAR(MAX(d.shift_id))                         AS shift_code
+       -- THE NAME, not the id. This was TO_CHAR(MAX(d.shift_id)) and PAGE-001's
+       -- shift strip duly displayed "300000265863352" -- which resolves to
+       -- "8 hours a day" and was never looked up.
+       --
+       -- KEEP (DENSE_RANK LAST ORDER BY d.shift_id) rather than MAX(name), so
+       -- the name returned belongs to the SAME shift the id would have picked.
+       -- MAX over the names is alphabetical and would happily report one
+       -- shift's name against another's day when a date carries two rows.
+       --
+       -- The dictionary is ZMM_SR_SHIFTS_VL, NOT HTS_SHIFTS_VL. The SHIFTS
+       -- extract reads the latter and it does not contain these ids at all --
+       -- Workforce Scheduling and the ZMM_SR_* work-schedule family each keep
+       -- their own shift list. Joining the wrong one returns nothing and reads
+       -- as missing data.
+       --
+       -- LEFT JOIN: a detail row with a null shift_id is a non-working day and
+       -- must still produce its 'N' above.
+       MAX(sh.shift_name) KEEP (DENSE_RANK LAST ORDER BY d.shift_id)
+                                                        AS shift_code
   FROM per_schedule_assignments sa
   JOIN per_all_assignments_m paam
     ON paam.assignment_id = sa.resource_id
@@ -838,6 +864,10 @@ SELECT 'SHIFT'                                          AS layer,
     ON d.schedule_id = sa.schedule_id
    AND TRUNC(d.start_date_time) >= sa.start_date
    AND TRUNC(d.start_date_time) <= NVL(sa.end_date, DATE '4712-12-31')
+  -- The shift dictionary for THIS family. LEFT, because a detail row with no
+  -- shift_id is a rostered day off and still has to reach IS_WORKING_DAY = 'N'.
+  LEFT JOIN zmm_sr_shifts_vl sh
+    ON sh.shift_id = d.shift_id
  WHERE sa.resource_type = 'ASSIGN'
    -- The primary assignment only. Somebody carrying two schedules would
    -- otherwise contribute a row per schedule per day and the two could
@@ -987,7 +1017,10 @@ DELTA_ALIASES = {
     # Leaving it here produced ORA-00904 on "SS"."LAST_UPDATE_DATE" -- from a
     # predicate injected after the SQL, so the file looked correct and only the
     # pod disagreed.
-    "WORKER_SHIFTS":  {"d": 0, "sa": 0, "papf": 1},
+    # 'sh' is the shift dictionary added 17-Aug-2026 so the strip shows a
+    # name. Listed because renaming a shift must reach the cache; leaving it
+    # out means the display silently keeps the old name forever.
+    "WORKER_SHIFTS":  {"d": 0, "sa": 0, "papf": 1, "sh": 0},
     "EXP_TYPES":      {"etb": 0, "ettl": 0},
 }
 
