@@ -446,6 +446,12 @@ PROMPT [n/m] 68_allocation_merge_key.sql - one allocation per person per project
 PROMPT [n/m] 69_stale_allocations_and_september.sql - retire what PPM deleted
 @@69_stale_allocations_and_september.sql
 
+-- Corrects 69's generic pass, which retired live allocations on a stamp older
+-- than the feature that writes it. Must follow 69: it replaces that procedure
+-- and undoes what it ended.
+PROMPT [n/m] 70_undo_bad_retire.sql - the retirement needed an age guard too
+@@70_undo_bad_retire.sql
+
 -- A no-op on a fresh install: this installer never runs 90_test_seed.sql, so
 -- there is nothing stamped TEST_SEED to remove. It is here so an environment
 -- that WAS seeded converges on the same state as one that was not, rather than
