@@ -155,6 +155,23 @@ BEGIN
     note(v_back || ' day-row(s) restored');
   END;
 
+  -- ── 6. roles, from HCM and PPM ──────────────────────────────
+  -- APP_ROLE is DERIVED, never typed (db/59), and a snapshot is only true
+  -- until something moves. A project changing hands, a contractor converting,
+  -- somebody joining or leaving a project team -- all change the answer and
+  -- none of them touches OC_TIME_WORKER.APP_ROLE on its own.
+  --
+  -- Here rather than in 59 because this runs after the master feeds have
+  -- landed, which is the moment the inputs are current. Last in the chain
+  -- because it reads allocations, and step 2 above may have expired some.
+  DECLARE
+    v_roles NUMBER;
+  BEGIN
+    v_step := 'derive roles';
+    oc_time_derive_roles(p_actor, v_roles);
+    note(v_roles || ' role(s) changed');
+  END;
+
   o_summary := 'OK: ' || v_note;
 
 EXCEPTION WHEN OTHERS THEN

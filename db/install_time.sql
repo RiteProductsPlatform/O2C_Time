@@ -311,10 +311,17 @@ PROMPT [n/m] 43_approval_guards.sql - a manager may only decide what reached the
 PROMPT [n/m] 44_leave_and_allocation_retraction.sql - the sync can take things back
 @@44_leave_and_allocation_retraction.sql
 
--- OUT OF NUMERIC ORDER ON PURPOSE. 45's oc_time_daily_post_load calls
--- oc_time_restore_default_hours, which 61 creates, so 61 must exist first or
--- 45 compiles with PLS-00201 against a procedure that appears sixteen files
--- later. Runs its own backfill too, which is harmless on a fresh install.
+-- 61 IS OUT OF NUMERIC ORDER ON PURPOSE: 45's oc_time_daily_post_load calls
+-- oc_time_restore_default_hours, so it must exist first. It also calls
+-- oc_time_derive_roles, which 59 creates FURTHER DOWN -- deliberately, since
+-- 59 must run after 55 has purged the seeded projects it would otherwise
+-- derive roles from. So 45 lands INVALID on a first pass and the recompile
+-- block near the end repairs it, which is the documented purpose of that
+-- block and the same treatment 09 gets for 66. Anything still invalid after
+-- it is genuinely broken and the verification says so.
+--
+-- Re-running install_time.sql end to end is therefore always safe. Running
+-- 45 ON ITS OWN before 59 and 61 is not.
 PROMPT [n/m] 61_restore_default_hours.sql - withdrawing leave gives the day back
 @@61_restore_default_hours.sql
 
@@ -423,6 +430,12 @@ PROMPT [n/m] 54_payroll_country_alias.sql - their country names to ours
 -- ON ITS OWN before 66 is not -- it leaves salary stopping uncompilable.
 PROMPT [n/m] 66_payroll_window_per_country.sql - the cut-off belongs to the country
 @@66_payroll_window_per_country.sql
+
+-- After 23, which creates the trigger this replaces, and after 02 for
+-- OC_TIME_ALLOCATION.BILLING_STATUS. Its retag pass is a no-op until an
+-- ALLOCATIONS sync has actually loaded a non-billable assignment.
+PROMPT [n/m] 67_resource_billability.sql - a non-billable resource, not just a task
+@@67_resource_billability.sql
 
 -- A no-op on a fresh install: this installer never runs 90_test_seed.sql, so
 -- there is nothing stamped TEST_SEED to remove. It is here so an environment

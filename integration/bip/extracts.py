@@ -423,7 +423,7 @@ ALLOCATIONS = {
     "key": ["PROJECT_NUMBER", "EMPLOYEE_ID"],
     "columns": ["FUSION_PROJECT_ID", "PROJECT_NUMBER", "EMPLOYEE_ID",
                 "START_DATE", "END_DATE", "ALLOC_PCT", "CAP_HOURS",
-                "TRACK_TIME_FLAG", "STATUS"],
+                "TRACK_TIME_FLAG", "STATUS", "BILLING_STATUS"],
     "sql": """
 -- One row per project x employee. Both sides need collapsing first, and
 -- skipping either produces duplicates that violate UK_OC_TAL_ASSIGN:
@@ -468,6 +468,27 @@ SELECT pp.project_id                                   AS fusion_project_id,
        LEAST(NVL(MAX(asg.alloc_pct), 100), 100)        AS alloc_pct,
        MAX(asg.hours_per_day)                          AS cap_hours,
        MAX(pp.pjs_track_time)                          AS track_time_flag,
+       -- BILLABLE OR NOT, per person per project. PJT_PROJECT_RESOURCE
+       -- .ASSIGNMENT_TYPE, which is the "Assignment Type" field on the Update
+       -- Project Resource dialog. Values measured on this pod: BILLABLE 1,113,
+       -- NON-BILLABLE 157, null 6,357.
+       --
+       -- This is the resource-level answer the module never had. Task
+       -- billability (OC_TIME_TASK.BILLABLE_TYPE, from
+       -- PJF_PROJ_ELEMENTS_B.BILLABLE_FLAG) is a different axis: a task is
+       -- billable or not for everyone, this is billable or not for one person
+       -- on one project. Both are needed and neither substitutes.
+       --
+       -- 'Unbilled', not 'Non-billable' -- CHK_OC_TAL_BILLING allows only
+       -- ('Billable','Unbilled'), a different domain from OC_TIME_TASK's
+       -- ('Billable','Non-billable'). Two columns, two vocabularies; using the
+       -- task's words here fails ORA-02290 on every non-billable row.
+       --
+       -- NULL DEFAULTS TO BILLABLE, matching the column's own DEFAULT. 6,357
+       -- rows have no assignment type and calling them unbilled would make most
+       -- of the pod non-billable on a field nobody has filled in.
+       MAX(CASE WHEN UPPER(asg.assignment_type) LIKE 'NON%' THEN 'Unbilled'
+                ELSE 'Billable' END)                       AS billing_status,
        -- 'Ended', NOT 'Inactive'. CHK_OC_TAL_STATUS allows only
        -- ('Active','Ended') -- db/02_time_master.sql:235 -- so 'Inactive'
        -- fails ORA-02290 on every allocation whose end date has passed. The
@@ -507,6 +528,14 @@ SELECT pp.project_id                                   AS fusion_project_id,
                     person_id,
                     SUM(allocation)       AS alloc_pct,
                     MAX(hours_per_day)    AS hours_per_day,
+                    -- NON-BILLABLE WINS over BILLABLE when somebody holds two
+                    -- concurrent rows on one project. MAX() puts 'NON-BILLABLE'
+                    -- above 'BILLABLE' alphabetically, which is the answer we
+                    -- want, but by accident -- written out so it survives
+                    -- somebody renaming a code.
+                    MAX(CASE WHEN UPPER(assignment_type) LIKE 'NON%'
+                             THEN 'NON-BILLABLE' ELSE assignment_type END)
+                                          AS assignment_type,
                     -- Exposed so the incremental predicate can reach it.
                     -- Without this, changing only a percentage moves no date
                     -- the delta looks at and the change is never picked up.
