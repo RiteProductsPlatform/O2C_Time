@@ -453,7 +453,11 @@ SELECT pp.project_id                                   AS fusion_project_id,
        -- on the project without a stated split, and RULE-001 should see them
        -- at full load rather than at zero (which CHK_OC_TAL_PCT rejects too,
        -- since it requires alloc_pct > 0).
-       NVL(MAX(asg.alloc_pct), 100)                    AS alloc_pct,
+       -- LEAST(...,100) because CHK_OC_TAL_PCT requires 0 < pct <= 100 and the
+       -- SUM below can exceed it when somebody holds two concurrent rows on
+       -- one project. Capping loads the row; not capping fails that person's
+       -- whole allocation with ORA-02290 and tells nobody why.
+       LEAST(NVL(MAX(asg.alloc_pct), 100), 100)        AS alloc_pct,
        MAX(asg.hours_per_day)                          AS cap_hours,
        MAX(pp.pjs_track_time)                          AS track_time_flag,
        -- 'Ended', NOT 'Inactive'. CHK_OC_TAL_STATUS allows only
@@ -469,15 +473,42 @@ SELECT pp.project_id                                   AS fusion_project_id,
   JOIN per_all_people_f papf
     ON papf.person_id = pp.resource_source_id
    AND {ED} BETWEEN papf.effective_start_date AND papf.effective_end_date
+  -- PJT_PROJECT_RESOURCE, NOT PJR_ASSIGNMENT, and that difference is the whole
+  -- reason every allocation used to arrive at 100%.
+  --
+  -- This read PJR_ASSIGNMENT.BILLABLE_PERCENT, which is a Project Resource
+  -- MANAGEMENT record, created by staffing a resource request. Our projects
+  -- have none: measured 17-Aug-2026, PJR_ASSIGNMENT holds 4,289 rows across
+  -- 120 projects and ZERO for 444, 555 or PCS10034. So the LEFT JOIN never
+  -- matched, NVL(...,100) answered for everybody, and the feed carried exactly
+  -- one distinct value -- 100 -- which reads as data rather than as a
+  -- fallback. Setting real percentages in PPM changed nothing, twice.
+  --
+  -- The number on the "Manage Project Resources" cards is PROJECT TEAM
+  -- membership and lands in PJT_PROJECT_RESOURCE.ALLOCATION. Confirmed against
+  -- the screen: RI2824 shows 50 on 444, 25 on 555, 25 on PCS10034, and the
+  -- table holds exactly those three.
+  --
+  -- Joined on PERSON_ID, not RESOURCE_ID. The party's RESOURCE_ID is a
+  -- resource-management key, and using it is what made the old join miss even
+  -- on projects that did have assignments.
+  --
+  -- SUM as before: two concurrent rows on one project are a combined load and
+  -- RULE-001 cares about the total. Capped at the SELECT above.
   LEFT JOIN (SELECT project_id,
-                    resource_id,
-                    SUM(billable_percent) AS alloc_pct,
-                    MAX(hours_per_day)    AS hours_per_day
-               FROM pjr_assignment
-              WHERE {ED} BETWEEN start_date AND NVL(end_date, {ED})
-              GROUP BY project_id, resource_id) asg
+                    person_id,
+                    SUM(allocation)       AS alloc_pct,
+                    MAX(hours_per_day)    AS hours_per_day,
+                    -- Exposed so the incremental predicate can reach it.
+                    -- Without this, changing only a percentage moves no date
+                    -- the delta looks at and the change is never picked up.
+                    MAX(last_update_date) AS last_update_date
+               FROM pjt_project_resource
+              WHERE {ED} BETWEEN NVL(start_date_active, {ED})
+                             AND NVL(end_date_active,   {ED})
+              GROUP BY project_id, person_id) asg
     ON asg.project_id = pp.project_id
-   AND asg.resource_id = pp.resource_id
+   AND asg.person_id  = pp.resource_source_id
  WHERE pp.project_party_type = 'IN'   -- internal team member ('CO' = customer)
    AND {IN_SCOPE}
  GROUP BY pp.project_id, prj.segment1, papf.person_number
@@ -921,7 +952,11 @@ DELTA_ALIASES = {
                        "loc": 1, "org": 1, "expo": 1, "sup": 1, "mgr": 1},
     "PROJECTS":       {"p": 0, "ptl": 0, "pt": 0, "org": 1, "cpp": 0, "cust": 0},
     "TASKS":          {"e": 0, "etl": 0, "p": 0},
-    "ALLOCATIONS":    {"pp": 0, "prj": 0, "papf": 1},
+    # 'asg' is the PJT_PROJECT_RESOURCE aggregate and it MUST be here: an
+    # allocation percentage edited in PPM touches no date on the party, the
+    # project or the person, so without this an incremental run never sees it
+    # and the split silently stays at whatever was last loaded.
+    "ALLOCATIONS":    {"pp": 0, "prj": 0, "papf": 1, "asg": 0},
     # 'e' is now inside the day-generating inline view and is not visible to the
     # injected predicate; the view exposes LAST_UPDATE_DATE and is aliased 'x'.
     # Same failure mode as the WORKER_SHIFTS note below -- a stale alias here
