@@ -452,6 +452,11 @@ PROMPT [n/m] 69_stale_allocations_and_september.sql - retire what PPM deleted
 PROMPT [n/m] 70_undo_bad_retire.sql - the retirement needed an age guard too
 @@70_undo_bad_retire.sql
 
+-- 69 and 70 both tried to clear September by deleting WEEKS, which cascades the
+-- audit trail and is refused. Entries alone are enough; the week rows stay.
+PROMPT [n/m] 71_clear_september.sql - entries only, so the trail survives
+@@71_clear_september.sql
+
 -- A no-op on a fresh install: this installer never runs 90_test_seed.sql, so
 -- there is nothing stamped TEST_SEED to remove. It is here so an environment
 -- that WAS seeded converges on the same state as one that was not, rather than
