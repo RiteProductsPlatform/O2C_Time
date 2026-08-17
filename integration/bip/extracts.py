@@ -423,7 +423,8 @@ ALLOCATIONS = {
     "key": ["PROJECT_NUMBER", "EMPLOYEE_ID"],
     "columns": ["FUSION_PROJECT_ID", "PROJECT_NUMBER", "EMPLOYEE_ID",
                 "START_DATE", "END_DATE", "ALLOC_PCT", "CAP_HOURS",
-                "TRACK_TIME_FLAG", "STATUS", "BILLING_STATUS"],
+                "TRACK_TIME_FLAG", "STATUS", "BILLING_STATUS",
+                "FUSION_SYNCED_ON"],
     "sql": """
 -- One row per project x employee. Both sides need collapsing first, and
 -- skipping either produces duplicates that violate UK_OC_TAL_ASSIGN:
@@ -468,6 +469,21 @@ SELECT pp.project_id                                   AS fusion_project_id,
        LEAST(NVL(MAX(asg.alloc_pct), 100), 100)        AS alloc_pct,
        MAX(asg.hours_per_day)                          AS cap_hours,
        MAX(pp.pjs_track_time)                          AS track_time_flag,
+       -- STAMPED SO "NOT SENT" BECOMES VISIBLE. Nothing in the cache could
+       -- previously tell an allocation that PPM had DELETED from one it simply
+       -- had not changed: oc_time_expire_allocations retires by DATE only, and
+       -- the XML loader writes neither SYNC_JOB_RUN_ID (it is in its c_never
+       -- list) nor FUSION_SYNCED_ON (the feed never sent it). So a person taken
+       -- off a project kept an Active allocation for ever -- seven of them
+       -- across the cohort on 18-Aug-2026, which is what put four people above
+       -- 100%.
+       --
+       -- With every synced row carrying today's date, a row left behind by a
+       -- FULL load is one the feed no longer contains, and can be retired.
+       -- Only after a full load: an incremental stamps a handful and would make
+       -- everything else look deleted, which is why db/69 refuses to retire a
+       -- large fraction in one pass.
+       TO_CHAR({ED}, 'YYYY-MM-DD')                     AS fusion_synced_on,
        -- BILLABLE OR NOT, per person per project. PJT_PROJECT_RESOURCE
        -- .ASSIGNMENT_TYPE, which is the "Assignment Type" field on the Update
        -- Project Resource dialog. Values measured on this pod: BILLABLE 1,113,

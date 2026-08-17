@@ -440,6 +440,12 @@ PROMPT [n/m] 67_resource_billability.sql - a non-billable resource, not just a t
 PROMPT [n/m] 68_allocation_merge_key.sql - one allocation per person per project
 @@68_allocation_merge_key.sql
 
+-- The literal list in [1] is a one-off for this environment and finds nothing
+-- on a fresh install. [2] leaves behind the generic retirement, which is what
+-- keeps it from recurring.
+PROMPT [n/m] 69_stale_allocations_and_september.sql - retire what PPM deleted
+@@69_stale_allocations_and_september.sql
+
 -- A no-op on a fresh install: this installer never runs 90_test_seed.sql, so
 -- there is nothing stamped TEST_SEED to remove. It is here so an environment
 -- that WAS seeded converges on the same state as one that was not, rather than
