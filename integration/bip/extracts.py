@@ -542,18 +542,34 @@ ABSENCES = {
 -- So the header is the source of truth for WHICH DAYS, and the detail is
 -- consulted only for hours where it happens to exist. The generator is capped
 -- at 366 -- an absence longer than a year is not a timesheet problem.
+-- AGGREGATED TO THE KEY, which the day expansion above made necessary.
+-- OC_TIME_ABSENCE is unique on (employee, date, type) -- UK_OC_TABS_DAY -- and
+-- Fusion happily holds the same absence type over the same date more than
+-- once: measured 17-Aug-2026, 3,409 keys appeared twice or three times out of
+-- 3,977, and the duplicate rows were IDENTICAL in every column. Mostly
+-- 'Holiday UK' recorded repeatedly. Without this the load fails 6,806 rows on
+-- the unique key, or upserts each over the last depending on the loader.
 SELECT papf.person_number                     AS employee_id,
        TO_CHAR(x.absence_date,'YYYY-MM-DD')   AS absence_date,
        t.name                                 AS absence_type,
        -- NULL when there is no detail row. The loader falls back to the
        -- worker's own STD_HOURS_PER_DAY rather than this extract inventing an
-       -- 8-hour day for people who do not work one.
-       d.duration                             AS absence_hours,
-       x.approval_status_cd                   AS approval_status,
+       -- 8-hour day for people who do not work one. MAX, not SUM: two records
+       -- for one day are the same day recorded twice, not sixteen hours.
+       MAX(d.duration)                        AS absence_hours,
+       MAX(x.approval_status_cd)              AS approval_status,
        -- Carried so a WITHDRAWN absence is distinguishable from an approved
        -- one. A withdrawn entry may also vanish from the header table outright,
        -- which the loader's retraction pass handles separately.
-       x.absence_status_cd                    AS absence_status
+       --
+       -- WITHDRAWN ONLY IF EVERY CONTRIBUTING RECORD IS. If one of two
+       -- overlapping records is withdrawn and the other stands, the person is
+       -- still absent. Written out rather than left to MAX(), which happens to
+       -- give the right answer here purely because 'SUBMITTED' sorts after
+       -- 'ORA_WITHDRAWN' -- true today and not a reason.
+       CASE WHEN COUNT(CASE WHEN UPPER(NVL(x.absence_status_cd,'X'))
+                                 NOT LIKE '%WITHDRAWN%' THEN 1 END) > 0
+            THEN 'SUBMITTED' ELSE 'ORA_WITHDRAWN' END AS absence_status
   FROM (SELECT e.per_absence_entry_id,
                e.person_id,
                e.absence_type_id,
@@ -576,6 +592,7 @@ SELECT papf.person_number                     AS employee_id,
  WHERE x.approval_status_cd = 'APPROVED'
    AND x.absence_date >= ADD_MONTHS({ED}, -12)
    AND x.absence_date <  ADD_MONTHS({ED},   3)
+ GROUP BY papf.person_number, TO_CHAR(x.absence_date,'YYYY-MM-DD'), t.name
 """.replace("{ED}", ED),
 }
 
@@ -985,9 +1002,13 @@ DELTA_ALIASES = {
 # -- leaving the mode alone would have appended a SECOND WHERE and produced
 # ORA-00933. Whenever a WHERE is added to a base query, check this map.
 DELTA_MODE = {
-    "ALLOCATIONS": "before", "WORKER_SHIFTS": "before",
+    # ABSENCES joined these on 17-Aug-2026, when the day-expansion rewrite gave
+    # it a GROUP BY. Appended blindly the predicate lands AFTER the GROUP BY and
+    # the whole extract fails to parse.
+    "ALLOCATIONS": "before", "WORKER_SHIFTS": "before", "ABSENCES": "before",
 }
-DELTA_BEFORE = {"ALLOCATIONS": "GROUP BY", "WORKER_SHIFTS": "GROUP BY"}
+DELTA_BEFORE = {"ALLOCATIONS": "GROUP BY", "WORKER_SHIFTS": "GROUP BY",
+                "ABSENCES": "GROUP BY"}
 
 _EPOCH = "DATE '1900-01-01'"
 
