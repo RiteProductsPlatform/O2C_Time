@@ -437,6 +437,9 @@ PROMPT [n/m] 66_payroll_window_per_country.sql - the cut-off belongs to the coun
 PROMPT [n/m] 67_resource_billability.sql - a non-billable resource, not just a task
 @@67_resource_billability.sql
 
+PROMPT [n/m] 68_allocation_merge_key.sql - one allocation per person per project
+@@68_allocation_merge_key.sql
+
 -- A no-op on a fresh install: this installer never runs 90_test_seed.sql, so
 -- there is nothing stamped TEST_SEED to remove. It is here so an environment
 -- that WAS seeded converges on the same state as one that was not, rather than
