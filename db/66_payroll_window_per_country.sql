@@ -60,11 +60,19 @@ SET SERVEROUTPUT ON SIZE UNLIMITED
 DECLARE
   v_n NUMBER;
 BEGIN
+  -- EXISTENCE, NOT VALIDITY. The first version of this tested
+  -- status = 'VALID' and raised on a function that was present and merely
+  -- INVALID -- which is the normal state of a dependent object after any DDL,
+  -- because Oracle recompiles lazily. install_time.sql documents exactly this
+  -- ("a genuine error and a not-yet-touched object look identical in
+  -- USER_OBJECTS") and this script walked into it: the guard failed while
+  -- section [1] below then read the very view it claimed was missing.
   SELECT COUNT(*) INTO v_n FROM user_objects
-   WHERE object_name = 'OC_TIME_HOLD_RELEASE_DAYS' AND status = 'VALID';
+   WHERE object_name = 'OC_TIME_HOLD_RELEASE_DAYS'
+     AND object_type = 'FUNCTION';
   IF v_n = 0 THEN
     RAISE_APPLICATION_ERROR(-20099,
-      'OC_TIME_HOLD_RELEASE_DAYS is missing. Run 53_payroll_cutoff.sql first.');
+      'OC_TIME_HOLD_RELEASE_DAYS does not exist. Run 53_payroll_cutoff.sql first.');
   END IF;
   DBMS_OUTPUT.PUT_LINE('Schema OK: ' || SYS_CONTEXT('USERENV','CURRENT_SCHEMA'));
 END;
@@ -130,8 +138,15 @@ SELECT x.period_id,
 COLUMN window FORMAT A26
 SELECT w.period_name, w.country,
        TO_CHAR(w.payroll_cutoff,'DD-Mon-YY') AS cutoff,
-       TO_CHAR(w.window_from,'DD-Mon') || ' .. '
-         || TO_CHAR(w.window_to,'DD-Mon')    AS window,
+       -- WINDOW_FROM > WINDOW_TO IS AN EMPTY WINDOW, NOT AN ERROR, and it is
+       -- printed as such. SEP-2026 chains from 31-Aug while WINDOW_TO is capped
+       -- at today, so it read "31-Aug .. 17-Aug" -- which looks like a bug and
+       -- is the correct answer to "which days has this run examined": none, it
+       -- has not started. The BETWEEN predicates in the job match nothing on
+       -- such a row, so behaviour was always right; only the display lied.
+       CASE WHEN w.window_from > w.window_to THEN '(not started)'
+            ELSE TO_CHAR(w.window_from,'DD-Mon') || ' .. '
+              || TO_CHAR(w.window_to,'DD-Mon') END AS window,
        w.cutoff_passed,
        w.hold_release_days AS rel_days
   FROM v_oc_time_payroll_window w
@@ -140,6 +155,8 @@ SELECT w.period_name, w.country,
 PROMPT
 PROMPT CUTOFF_PASSED = N means this country's cut-off is still in the future and
 PROMPT salary stopping must hold nobody for it, however many weeks are defaulted.
+PROMPT '(not started)' means the window has not opened either -- both are true of
+PROMPT a future period and either alone is enough to hold nobody.
 
 PROMPT ============================================================
 PROMPT [3/5] Release holds opened before the cut-off moved
@@ -202,14 +219,21 @@ SELECT c.column_name, c.data_type, c.nullable
  ORDER BY c.column_id;
 
 PROMPT
-PROMPT If START/END columns exist, decide which defines the window:
+PROMPT SETTLED 17-Aug-2026, and the columns above are why. START_DATE, END_DATE
+PROMPT and PAYOUT_DATE all exist and this deliberately uses none of them:
 PROMPT
-PROMPT   chaining cut-offs  August = 27-Jul .. 30-Aug   contiguous, no date
-PROMPT                      is ever missed
-PROMPT   START_DATE/END     August = 01-Aug .. 30-Aug   27-31 July fall in no
-PROMPT                      run at all, since July's cut-off was 26-Jul
+PROMPT   chaining cut-offs  August = 27-Jul .. 30-Aug   contiguous
+PROMPT   START_DATE/END     August = 01-Aug .. 30-Aug   27-31 July examined by
+PROMPT                      no run at all, since July's cut-off was 26-Jul
 PROMPT
-PROMPT This file chains. Switching is one line in V_OC_TIME_PAYROLL_WINDOW.
+PROMPT Those five days are the argument. Every date has to be examined by
+PROMPT exactly one payroll run, and START_DATE leaves a gap after every cut-off
+PROMPT that falls before month end -- which is three of the four rows. A day
+PROMPT nobody checks is a day somebody is paid for without submitting.
+PROMPT
+PROMPT END_DATE and PAYOUT_DATE remain unread. If pay should be held against the
+PROMPT PAYOUT date rather than the cut-off, that changes when holds appear and
+PROMPT is one line here.
 
 PROMPT ============================================================
 PROMPT [5/5] Next
