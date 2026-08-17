@@ -318,6 +318,13 @@ PROMPT [n/m] 44_leave_and_allocation_retraction.sql - the sync can take things b
 PROMPT [n/m] 61_restore_default_hours.sql - withdrawing leave gives the day back
 @@61_restore_default_hours.sql
 
+-- Immediately after 61, which it replaces the body of. 61 creates the
+-- procedure and repairs days stranded at zero; 62 widens the same procedure to
+-- any prepopulated row that disagrees with its allocation. Signature unchanged,
+-- so ords/13 and 45 below bind to the widened version either way.
+PROMPT [n/m] 62_realign_alloc_hours.sql - an allocation change reaches built days
+@@62_realign_alloc_hours.sql
+
 PROMPT [n/m] 45_daily_post_load.sql - what OIC calls after the feeds land
 @@45_daily_post_load.sql
 
