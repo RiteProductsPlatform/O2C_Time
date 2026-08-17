@@ -330,6 +330,12 @@ PROMPT [n/m] 62_realign_alloc_hours.sql - an allocation change reaches built day
 PROMPT [n/m] 63_unallocated_entries.sql - clear rows seeded outside an allocation
 @@63_unallocated_entries.sql
 
+-- Last of the four, and it narrows the previous one: 62 realigns any date, 64
+-- restricts that to periods still editable, because a change past the delivery
+-- cut-off is an adjustment (RULE-007) and belongs to a person.
+PROMPT [n/m] 64_realign_editable_only.sql - closed months are adjusted, not rewritten
+@@64_realign_editable_only.sql
+
 PROMPT [n/m] 45_daily_post_load.sql - what OIC calls after the feeds land
 @@45_daily_post_load.sql
 
