@@ -1276,5 +1276,9 @@
   "my_timesheet_move_to": "Move to",
   "my_timesheet_move_the_hours": "Move the hours",
   "my_timesheet_project": "Project",
-  "sync_status_period_source_hint": "Periods are owned by the O2C main application and read live. Open and close them on its Period Control screen; changes appear here immediately."
+  "sync_status_period_source_hint": "Periods are owned by the O2C main application and read live. Open and close them on its Period Control screen; changes appear here immediately.",
+  "my_timesheet_pattern": "Pattern",
+  "@my_timesheet_pattern": {
+    "description": "RULE-011 week-level work pattern, read-only from HCM (which days of the week this person works)"
+  }
 }

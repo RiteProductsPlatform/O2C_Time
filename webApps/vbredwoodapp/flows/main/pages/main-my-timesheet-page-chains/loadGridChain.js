@@ -181,6 +181,11 @@ define([
 
         $page.variables.dayHeaders = headers;
 
+        // RULE-011 at week grain. The week row already carries it, so this
+        // costs no extra call -- it replaced a seven-cell day strip that
+        // repeated one value, and before that showed a raw shift id.
+        $page.variables.weekPattern = (week && week.pattern_name) || '';
+
         // ── The grid itself ───────────────────────────────────
         const gridResp = await Actions.callRest(context, {
           endpoint: 'oc_time/getWeekGrid',

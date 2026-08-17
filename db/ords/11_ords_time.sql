@@ -137,7 +137,14 @@ BEGIN
              advance_closure_flag, overridden_flag,
              has_reversal_flag, has_adjustment_flag,
              reject_reason, reject_remarks, submitted_on, approved_on,
-             days_total, days_pending, days_approved, days_rejected
+             days_total, days_pending, days_approved, days_rejected,
+             -- RULE-011 at week grain. Taken from here rather than from the
+             -- day feed because V_OC_TS_WEEK_PATTERN reads OC_TIME_CALENDAR
+             -- directly: a week with no entries yet still has a roster, and
+             -- the day feed is built from OC_TS_ENTRY and would show nothing.
+             (SELECT p.pattern_name FROM v_oc_ts_week_pattern p
+               WHERE p.ts_week_id = v_oc_ts_week_detail.ts_week_id)
+               AS pattern_name
         FROM v_oc_ts_week_detail
        WHERE employee_id = :employeeId
          AND period_id   = :periodId

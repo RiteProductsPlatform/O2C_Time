@@ -778,8 +778,12 @@ WORKER_SHIFTS = {
     "target": "OC_TIME_CALENDAR (SHIFT layer)",
     "integration": "INT-004",
     "key": ["SCOPE_KEY", "CAL_DATE"],
+    # PATTERN_NAME, not SHIFT_CODE. The alias IS the target column for the OIC
+    # XML loader, so renaming it here is what moves the value into the new
+    # column -- and leaves SHIFT_CODE meaning a shift, which the SHIFTS
+    # reference feed still loads.
     "columns": ["LAYER", "SCOPE_KEY", "CAL_DATE", "IS_WORKING_DAY",
-                "SHIFT_CODE"],
+                "PATTERN_NAME"],
     "sql": """
 -- The SHIFT layer: which days each worker is rostered on.
 --
@@ -833,25 +837,27 @@ SELECT 'SHIFT'                                          AS layer,
        -- MERGE would have raised ORA-30926: a person can hold more than one
        -- schedule assignment, and a date more than one detail row.
        MAX(CASE WHEN d.shift_id IS NULL THEN 'N' ELSE 'Y' END) AS is_working_day,
-       -- THE NAME, not the id. This was TO_CHAR(MAX(d.shift_id)) and PAGE-001's
-       -- shift strip duly displayed "300000265863352" -- which resolves to
-       -- "8 hours a day" and was never looked up.
+       -- THE PATTERN, not the shift, and not the shift's id.
        --
-       -- KEEP (DENSE_RANK LAST ORDER BY d.shift_id) rather than MAX(name), so
-       -- the name returned belongs to the SAME shift the id would have picked.
-       -- MAX over the names is alphabetical and would happily report one
-       -- shift's name against another's day when a date carries two rows.
+       -- This was TO_CHAR(MAX(d.shift_id)) and PAGE-001 duly displayed
+       -- "300000265863352". Resolving it to the SHIFT name ("8 hours a day")
+       -- was still the wrong answer: in Fusion terms a SHIFT is the standard
+       -- hours for a day and varies by location, while what the timesheet is
+       -- describing -- which days of the week somebody works -- is the
+       -- PATTERN. "O2C Sunday to Thursday" is the useful fact; "8 hours a day"
+       -- restates STD_HOURS_PER_DAY, which the worker row already carries.
        --
-       -- The dictionary is ZMM_SR_SHIFTS_VL, NOT HTS_SHIFTS_VL. The SHIFTS
-       -- extract reads the latter and it does not contain these ids at all --
-       -- Workforce Scheduling and the ZMM_SR_* work-schedule family each keep
-       -- their own shift list. Joining the wrong one returns nothing and reads
-       -- as missing data.
+       -- It is also the wrong GRAIN. A pattern belongs to the week, not the
+       -- day, so this value repeats across the seven days of a week and the UI
+       -- shows it once at week level rather than seven times in a strip.
        --
-       -- LEFT JOIN: a detail row with a null shift_id is a non-working day and
-       -- must still produce its 'N' above.
-       MAX(sh.shift_name) KEEP (DENSE_RANK LAST ORDER BY d.shift_id)
-                                                        AS shift_code
+       -- LISTAGG rather than MAX because a schedule may rotate: 94 patterns
+       -- across 111 schedules on this pod, up to 3 on one schedule. Both O2C
+       -- schedules hold exactly one, so this is a single name today. Where a
+       -- schedule really does rotate, naming all of its patterns is honest --
+       -- picking one would assert a rotation position nothing here computes.
+       LISTAGG(DISTINCT pt.pattern_name, ' / ')
+               WITHIN GROUP (ORDER BY pt.pattern_name)  AS pattern_name
   FROM per_schedule_assignments sa
   JOIN per_all_assignments_m paam
     ON paam.assignment_id = sa.resource_id
@@ -864,10 +870,18 @@ SELECT 'SHIFT'                                          AS layer,
     ON d.schedule_id = sa.schedule_id
    AND TRUNC(d.start_date_time) >= sa.start_date
    AND TRUNC(d.start_date_time) <= NVL(sa.end_date, DATE '4712-12-31')
-  -- The shift dictionary for THIS family. LEFT, because a detail row with no
-  -- shift_id is a rostered day off and still has to reach IS_WORKING_DAY = 'N'.
-  LEFT JOIN zmm_sr_shifts_vl sh
-    ON sh.shift_id = d.shift_id
+  -- The PATTERN behind the schedule. Joined from the schedule, not from the
+  -- day: a pattern is a weekly shape, and ZMM_SR_SCHEDULE_PATTERNS is where a
+  -- schedule states which one(s) it is built from.
+  --
+  -- Both LEFT. A schedule with no pattern rows, or a day with no shift, must
+  -- still produce its IS_WORKING_DAY answer above -- that is the column the
+  -- roster logic actually depends on, and losing a row to an inner join here
+  -- would turn a rostered day into a silent gap.
+  LEFT JOIN zmm_sr_schedule_patterns sp
+    ON sp.schedule_id = sa.schedule_id
+  LEFT JOIN zmm_sr_patterns_vl pt
+    ON pt.pattern_id = sp.pattern_id
  WHERE sa.resource_type = 'ASSIGN'
    -- The primary assignment only. Somebody carrying two schedules would
    -- otherwise contribute a row per schedule per day and the two could
@@ -1017,10 +1031,10 @@ DELTA_ALIASES = {
     # Leaving it here produced ORA-00904 on "SS"."LAST_UPDATE_DATE" -- from a
     # predicate injected after the SQL, so the file looked correct and only the
     # pod disagreed.
-    # 'sh' is the shift dictionary added 17-Aug-2026 so the strip shows a
-    # name. Listed because renaming a shift must reach the cache; leaving it
-    # out means the display silently keeps the old name forever.
-    "WORKER_SHIFTS":  {"d": 0, "sa": 0, "papf": 1, "sh": 0},
+    # 'sp'/'pt' are the schedule-to-pattern pair. Listed because RENAMING a
+    # pattern must reach the cache: it changes no date on the assignment or
+    # the detail rows, so without these an incremental run never sees it.
+    "WORKER_SHIFTS":  {"d": 0, "sa": 0, "papf": 1, "sp": 0, "pt": 0},
     "EXP_TYPES":      {"etb": 0, "ettl": 0},
 }
 

@@ -1,5 +1,5 @@
 {
-  "description": "PAGE-001 My Timesheet — weekly time entry per task per day, save draft / submit / correct & resubmit, plus the day-wise retro adjustment card on a closed month.",
+  "description": "PAGE-001 My Timesheet \u2014 weekly time entry per task per day, save draft / submit / correct & resubmit, plus the day-wise retro adjustment card on a closed month.",
   "variables": {
     "periodId": {
       "type": "number",
@@ -46,7 +46,7 @@
       "type": "string",
       "defaultValue": "",
       "input": "none",
-      "description": "FLD-003 — shown to the employee, base-location local time."
+      "description": "FLD-003 \u2014 shown to the employee, base-location local time."
     },
     "deliveryCutoff": {
       "type": "string",
@@ -74,7 +74,7 @@
       "type": "boolean",
       "defaultValue": false,
       "input": "none",
-      "description": "RULE-006 — a defaulted week is locked; only a manager can edit it."
+      "description": "RULE-006 \u2014 a defaulted week is locked; only a manager can edit it."
     },
     "defaultedBy": {
       "type": "string",
@@ -86,7 +86,7 @@
       "type": "boolean",
       "defaultValue": false,
       "input": "none",
-      "description": "RULE-019 — closed month still inside the backdating window."
+      "description": "RULE-019 \u2014 closed month still inside the backdating window."
     },
     "billableHours": {
       "type": "number",
@@ -108,7 +108,7 @@
       "type": "number",
       "defaultValue": 0,
       "input": "none",
-      "description": "FLD-015 / RULE-009 — automatic, never editable."
+      "description": "FLD-015 / RULE-009 \u2014 automatic, never editable."
     },
     "totalHours": {
       "type": "number",
@@ -164,7 +164,7 @@
       "type": "any[]",
       "defaultValue": [],
       "input": "none",
-      "description": "FLD-008 / FLD-011 — read-only shift and standard hours per day (RULE-011). The seven column headers for the current week: date, short day name, shift, standard hours, entered total, and whether the day is a working day."
+      "description": "FLD-008 / FLD-011 \u2014 read-only shift and standard hours per day (RULE-011). The seven column headers for the current week: date, short day name, shift, standard hours, entered total, and whether the day is a working day."
     },
     "projectOptionsArray": {
       "type": "any[]",
@@ -192,7 +192,7 @@
         "keyAttributes": "value",
         "data": "{{ $page.variables.taskOptionsArray }}"
       },
-      "description": "RULE-010 — the selected project's WBS plus the common non-billable tasks. Leave and Billing Loss are excluded server-side."
+      "description": "RULE-010 \u2014 the selected project's WBS plus the common non-billable tasks. Leave and Billing Loss are excluded server-side."
     },
     "newLineProjectId": {
       "type": "number",
@@ -226,7 +226,7 @@
       "type": "string",
       "defaultValue": "",
       "input": "none",
-      "description": "#5 — the employee must see the reason, the remarks AND the rejected dates."
+      "description": "#5 \u2014 the employee must see the reason, the remarks AND the rejected dates."
     },
     "rejectRemarks": {
       "type": "string",
@@ -317,13 +317,13 @@
       "type": "string",
       "defaultValue": "",
       "input": "none",
-      "description": "Outcome of the live Fusion leave read for the open week: running | ok | none | fail. Held separately from busy because a failure here must not stop the week opening — the hours are still correct, only the leave beside them may be stale (open point S-04)."
+      "description": "Outcome of the live Fusion leave read for the open week: running | ok | none | fail. Held separately from busy because a failure here must not stop the week opening \u2014 the hours are still correct, only the leave beside them may be stale (open point S-04)."
     },
     "fusionPersonId": {
       "type": "number",
       "defaultValue": null,
       "input": "none",
-      "description": "Fusion PersonId for the signed-in worker, resolved once from PersonNumber and cached for the session. /absences is keyed on this and returns 200 with zero items for a PersonNumber, which reads exactly like 'no leave'. Only needed because OC_TIME_WORKER does not store it — open point S-12."
+      "description": "Fusion PersonId for the signed-in worker, resolved once from PersonNumber and cached for the session. /absences is keyed on this and returns 200 with zero items for a PersonNumber, which reads exactly like 'no leave'. Only needed because OC_TIME_WORKER does not store it \u2014 open point S-12."
     },
     "showAllocation": {
       "type": "boolean",
@@ -387,6 +387,10 @@
         "data": "{{ $page.variables.chgTaskOptionsArray }}"
       },
       "description": "H8 - the tasks this line's own project offers. Same LOV as Add a line, so RULE-010 is applied once server-side; Leave is excluded by SELECTABLE_FLAG and can never appear here."
+    },
+    "weekPattern": {
+      "type": "string",
+      "defaultValue": ""
     }
   },
   "types": {

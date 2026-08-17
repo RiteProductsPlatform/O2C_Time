@@ -59,6 +59,20 @@
             </span>
           </oj-label-value>
 
+          <!-- RULE-011, at WEEK grain. This replaced a seven-cell day strip
+               that showed the same value in every cell -- and before that, a
+               surrogate shift id. A pattern is which days of the week somebody
+               works, so it is one fact about the week; repeated per day it
+               implied it could differ per day, which it cannot.
+               A SHIFT is the standard hours and is already shown, per day, on
+               the Standard/day row. -->
+          <oj-label-value>
+            <span slot="label" class="oj-label-nowrap"><oj-bind-text value="[[$application.translations.appBundle.my_timesheet_pattern]]"></oj-bind-text></span>
+            <span slot="value" class="oj-typography-body-md">
+              <oj-bind-text value="[[ $variables.weekPattern || '—' ]]"></oj-bind-text>
+            </span>
+          </oj-label-value>
+
         </oj-form-layout>
 
         <!-- FLD-005 / ACT-008 -->
@@ -242,26 +256,13 @@
             <span class="rw-ts-act" role="columnheader"></span>
           </div>
 
-          <!-- Shift: one per employee per day, read-only from HCM (RULE-011) -->
-          <div class="rw-ts-row rw-ts-sys" role="row">
-            <!-- The prototype makes this one label across Project+Task
-                 (colspan=2). Split across the two columns it read as though
-                 "from HCM, read-only" were the task on a line. -->
-            <span class="rw-ts-proj rw-ts-syslabel" role="rowheader">
-              <oj-bind-text value="[[$application.translations.appBundle.my_timesheet_shift]]"></oj-bind-text>
-              <span class="rw-ts-note"><oj-bind-text value="[[$application.translations.appBundle.my_timesheet_per_day_from_hcm_read_only]]"></oj-bind-text></span>
-            </span>
-            <span class="rw-ts-task"></span>
-            <oj-bind-for-each data="[[ $variables.dayHeaders ]]">
-              <template data-oj-as="day">
-                <span class="rw-grid-day" role="cell">
-                  <oj-bind-text value="[[ day.data.shiftCode || '—' ]]"></oj-bind-text>
-                </span>
-              </template>
-            </oj-bind-for-each>
-            <span class="rw-ts-tot" role="cell">—</span>
-            <span class="rw-ts-act" role="cell"></span>
-          </div>
+          <!-- The Shift day-strip that stood here is GONE, deliberately.
+               RULE-011 is still honoured -- it moved to the week header as
+               Pattern, which is its real grain.
+               It showed shiftCode in all seven cells: a surrogate id at first
+               ("300000265863352"), and even resolved to a name it was the same
+               value seven times, restating STD_HOURS_PER_DAY which the
+               Standard/day row below already gives per day. -->
 
           <!-- Entry lines -->
           <oj-bind-if test="[[ $variables.gridRows.length === 0 ]]">
