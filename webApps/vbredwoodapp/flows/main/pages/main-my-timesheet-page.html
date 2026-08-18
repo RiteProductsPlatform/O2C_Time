@@ -184,6 +184,16 @@
     <oj-bind-if test="[[ $variables.holdReopen ]]">
       <div class="oj-sm-padding-3x rw-notice rw-notice-warning" role="status">
         <oj-bind-text value="[[$application.translations.appBundle.my_timesheet_hold_reopen]]"></oj-bind-text>
+        <!-- Always shown while the window is open, rather than appearing the
+             moment a cell changes: a field that materialises under the cursor
+             mid-edit is worse than one that was there from the start. The
+             server only enforces it when something actually moved. -->
+        <oj-input-text class="oj-sm-margin-2x-top"
+                       label-hint="[[$application.translations.appBundle.my_timesheet_correction_reason]]"
+                       label-edge="top"
+                       value="{{ $variables.submitReason }}"
+                       placeholder="[[$application.translations.appBundle.my_timesheet_correction_reason_ph]]">
+        </oj-input-text>
       </div>
     </oj-bind-if>
 

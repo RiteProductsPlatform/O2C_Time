@@ -53,6 +53,15 @@ define([
       $page.variables.busy = true;
 
       try {
+        // PROC-007. A week under an open salary hold needs a reason IF the
+        // employee changed something -- and only then. Confirming the defaulted
+        // figures unchanged is the outcome the module wants and demanding a
+        // justification for it would be a toll on the correct behaviour.
+        //
+        // The server decides, not this chain: submit_week refuses with -20013
+        // and its own message if the reason is missing. Asking here is a
+        // courtesy so the employee is not bounced by a 400 after pressing
+        // Submit; the rule itself is in one place.
         const resp = await Actions.callRest(context, {
           endpoint: 'oc_time/submitWeek',
           uriParams: { id: weekId },
@@ -60,6 +69,8 @@ define([
             actor: $application.variables.currentEmail,
             traceId: $application.variables.traceId ||
                      $application.functions.newTraceId(),
+            reason: $page.variables.holdReopen
+                      ? ($page.variables.submitReason || null) : null,
           },
         });
 

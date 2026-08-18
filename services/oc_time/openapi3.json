@@ -3744,7 +3744,19 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ActorPayload"
+                "type": "object",
+                "properties": {
+                  "actor": {
+                    "type": "string"
+                  },
+                  "traceId": {
+                    "type": "string"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "description": "PROC-007. Required only when the week is under an open salary hold AND the employee changed hours; submit_week decides, and refuses with -20013 if it is missing. It becomes the reason on every adjustment raised."
+                  }
+                }
               }
             }
           }

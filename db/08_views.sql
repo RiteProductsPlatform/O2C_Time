@@ -534,7 +534,50 @@ SELECT 'D' || v.approval_id                       AS activity_id,
   FROM oc_ts_approval v
   JOIN oc_time_worker w   ON w.employee_id  = v.employee_id
   LEFT JOIN oc_time_worker act ON act.employee_id = v.actor_emp_id
- WHERE v.ts_week_id IS NOT NULL;
+ WHERE v.ts_week_id IS NOT NULL
+UNION ALL
+-- THE VERSION TRAIL, added 18-Aug-2026. OC_TS_WEEK_VERSION has recorded a
+-- numbered row for every event since db/38 and nothing displayed it, so the
+-- panel showed cell changes and manager decisions while the week's own history
+-- -- v1 Defaulted, v2 LateSubmission -- was invisible.
+--
+-- It is the row that answers "what state was this week in, and why", which the
+-- other two branches cannot: an audit row says a number moved, a decision row
+-- says somebody approved, and neither says the week went from Defaulted to
+-- Late Submission because the cut-off had passed.
+--
+-- NOTES carries the correction reason and the adjustment count on a
+-- salary-hold resubmission (submit_week), which is why this branch matters
+-- most on exactly the weeks somebody is disputing.
+SELECT 'V' || ver.version_id                      AS activity_id,
+       ver.ts_week_id,
+       'Version'                                  AS kind,
+       'WEEK'                                     AS scope,
+       wk.employee_id,
+       w2.employee_name,
+       CAST(NULL AS VARCHAR2(10 CHAR))            AS entry_date,
+       -- The event, with the version number, so the trail reads as a sequence
+       -- rather than a list of unrelated happenings.
+       'v' || ver.version_no || ' ' || ver.event_code  AS change_type,
+       CAST(NULL AS VARCHAR2(240 CHAR))           AS old_project_name,
+       CAST(NULL AS VARCHAR2(60 CHAR))            AS old_task_code,
+       CAST(NULL AS NUMBER)                       AS old_hours,
+       CAST(NULL AS VARCHAR2(240 CHAR))           AS new_project_name,
+       CAST(NULL AS VARCHAR2(60 CHAR))            AS new_task_code,
+       ver.total_hours                            AS new_hours,
+       CAST(NULL AS NUMBER)                       AS delta_hours,
+       -- The transition in words, then whatever the event recorded about it.
+       LTRIM(NVL(ver.from_submission,'-') || ' / ' || NVL(ver.from_approval,'-')
+             || '  ->  ' || NVL(ver.to_submission,'-') || ' / '
+             || NVL(ver.to_approval,'-')
+             || CASE WHEN ver.notes IS NOT NULL THEN '. ' || ver.notes END)
+                                                  AS change_reason,
+       NVL(vact.employee_name, ver.changed_by)    AS changed_by,
+       TO_CHAR(ver.changed_on,'YYYY-MM-DD HH24:MI:SS') AS changed_on
+  FROM oc_ts_week_version ver
+  JOIN oc_ts_week      wk  ON wk.ts_week_id  = ver.ts_week_id
+  JOIN oc_time_worker  w2  ON w2.employee_id = wk.employee_id
+  LEFT JOIN oc_time_worker vact ON vact.employee_id = ver.changed_by;
 
 PROMPT
 PROMPT ============================================================

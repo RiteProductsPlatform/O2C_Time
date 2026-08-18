@@ -1284,5 +1284,13 @@
   "my_timesheet_hold_reopen": "Part of your pay is held for this week because it was never submitted. Correct the hours below and submit — your manager approves it as usual. Anything you change is posted to accrual as an adjustment; hours you leave as they are simply release your pay.",
   "@my_timesheet_hold_reopen": {
     "description": "PROC-007 salary-hold correction window is open on this week"
+  },
+  "my_timesheet_correction_reason": "Reason for the correction",
+  "@my_timesheet_correction_reason": {
+    "description": "PROC-007. Required only if hours changed on a held week."
+  },
+  "my_timesheet_correction_reason_ph": "Only needed if you change the hours",
+  "@my_timesheet_correction_reason_ph": {
+    "description": "Placeholder for the salary-hold correction reason"
   }
 }

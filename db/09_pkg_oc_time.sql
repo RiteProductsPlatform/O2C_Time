@@ -123,10 +123,15 @@ CREATE OR REPLACE PACKAGE oc_time_pkg AS
     p_task_id    IN NUMBER,
     p_actor      IN VARCHAR2 DEFAULT 'VBCS_USER');
 
+  -- p_reason is REQUIRED when the week is under an open salary hold and the
+  -- employee has changed something: it is the "why" on every adjustment the
+  -- resubmission raises, and the manager approves on the strength of it.
+  -- Optional everywhere else, so ordinary in-period submission is unchanged.
   PROCEDURE submit_week(
     p_ts_week_id IN NUMBER,
     p_actor      IN VARCHAR2 DEFAULT 'VBCS_USER',
-    p_trace_id   IN VARCHAR2 DEFAULT NULL);
+    p_trace_id   IN VARCHAR2 DEFAULT NULL,
+    p_reason     IN VARCHAR2 DEFAULT NULL);
 
   -- Pull a submitted week back so the employee can correct it. Submitted only:
   -- once a manager has approved, undoing it is their decision (a send-back),
@@ -1246,8 +1251,15 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
   PROCEDURE submit_week(
     p_ts_week_id IN NUMBER,
     p_actor      IN VARCHAR2 DEFAULT 'VBCS_USER',
-    p_trace_id   IN VARCHAR2 DEFAULT NULL)
+    p_trace_id   IN VARCHAR2 DEFAULT NULL,
+    p_reason     IN VARCHAR2 DEFAULT NULL)
   IS
+    -- Salary-hold resubmission (PROC-007). Declared here rather than inside a
+    -- nested block so the count is available after the event fires, which is
+    -- where the adjustments have to be raised.
+    v_hold_open NUMBER := 0;
+    v_changed   NUMBER := 0;
+    v_adj       NUMBER := 0;
     v_emp      oc_ts_week.employee_id%TYPE;
     v_period   oc_ts_week.period_id%TYPE;
     v_status   oc_ts_week.week_status%TYPE;
@@ -1319,7 +1331,66 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
     -- and on the wrong side of 17:00. It also writes both axes, cascades to
     -- every day, raises the flag, keeps WEEK_STATUS in step, and leaves a
     -- numbered version behind.
+    -- ── SALARY-HOLD RESUBMISSION (PROC-007) ───────────────────
+    -- Is this week under an open hold, and did the person actually change
+    -- anything? Asked BEFORE the event so the answer describes the state they
+    -- submitted, and answered by the entry rows themselves: a cell nobody
+    -- touched is still ENTRY_TYPE 'Default', because save_entry promotes to
+    -- 'Actual' on edit.
+    --
+    -- The functional owner's rule, 18-Aug-2026: "if the employee submits data
+    -- without any changes to it then we don't send it as adjustment, but he
+    -- has reduced the hours or adding one more line for a new project and
+    -- adding some hours to it then it goes as adjustment". Unchanged hours were
+    -- already accrued when the month was confirmed, so there is no delta to
+    -- post -- and posting one would send a Reversal and an equal Adjustment
+    -- that cancel.
+    SELECT COUNT(*) INTO v_hold_open
+      FROM oc_ts_salary_hold_day d
+      JOIN oc_ts_salary_hold     h ON h.hold_id = d.hold_id
+     WHERE d.ts_week_id    = p_ts_week_id
+       AND d.day_status   IN ('Held','Rejected')
+       AND h.salary_status = 'Held';
+
+    IF v_hold_open > 0 THEN
+      SELECT COUNT(*) INTO v_changed
+        FROM oc_ts_entry e
+       WHERE e.ts_week_id = p_ts_week_id
+         AND e.is_leave   = 'N'
+         AND e.entry_type = 'Actual'
+         AND e.source    <> 'Prepopulated';
+
+      -- A REASON IS ONLY REQUIRED IF SOMETHING MOVED. Demanding one to confirm
+      -- the figures already on the screen would be a toll on the correct
+      -- behaviour -- the employee agreeing with the default is the outcome the
+      -- module wants, and it needs no justification.
+      IF v_changed > 0
+         AND (p_reason IS NULL OR LENGTH(TRIM(p_reason)) = 0) THEN
+        RAISE_APPLICATION_ERROR(-20013,
+          'You have changed hours on a week that is holding your pay. Give a '
+          || 'reason -- your manager approves the correction on the strength '
+          || 'of it.');
+      END IF;
+    END IF;
+
     oc_time_fire_event(p_ts_week_id, 'Submit', p_actor);
+
+    -- AFTER the event, so the adjustments sit under the version it wrote and
+    -- the trail reads in the order things happened.
+    IF v_hold_open > 0 AND v_changed > 0 THEN
+      oc_time_raise_late_adjustments(p_ts_week_id, p_reason, p_actor, v_adj);
+
+      -- The reason on the version row too. OC_TS_WEEK_VERSION is what somebody
+      -- reads to understand a week's history, and a version that says
+      -- "LateSubmission" without saying why sends them hunting through
+      -- OC_TS_ADJUSTMENT for it.
+      UPDATE oc_ts_week_version
+         SET notes = SUBSTR(NVL(notes || ' ', '') || v_adj
+                     || ' adjustment(s) raised: ' || p_reason, 1, 400)
+       WHERE ts_week_id = p_ts_week_id
+         AND version_no = (SELECT MAX(version_no) FROM oc_ts_week_version
+                            WHERE ts_week_id = p_ts_week_id);
+    END IF;
 
     -- What the engine does not own: who pressed the button, and clearing the
     -- previous rejection so a resubmission does not carry the old reason

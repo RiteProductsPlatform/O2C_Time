@@ -378,13 +378,31 @@ BEGIN
     p_module_name => 'oc.time', p_pattern => 'weeks/:id/submit', p_method => 'POST',
     p_source_type => ORDS.source_type_plsql,
     p_source => q'[
-      DECLARE v_status VARCHAR2(30);
+      DECLARE
+        v_status VARCHAR2(30);
+        v_adj    NUMBER;
       BEGIN
-        oc_time_pkg.submit_week(:id, NVL(:actor,'VBCS_USER'), :traceId);
+        -- :reason is required only when the week is under a salary hold AND
+        -- something changed -- submit_week decides that, not this handler, so
+        -- the rule lives in one place and a caller reaching ORDS directly meets
+        -- the identical refusal.
+        oc_time_pkg.submit_week(:id, NVL(:actor,'VBCS_USER'), :traceId, :reason);
         SELECT week_status INTO v_status FROM oc_ts_week WHERE ts_week_id = :id;
+
+        -- How many adjustments this submission raised, so the screen can say
+        -- "3 corrections sent for approval" rather than leaving the employee to
+        -- wonder whether a closed month accepted anything.
+        SELECT COUNT(*) INTO v_adj
+          FROM oc_ts_adjustment a
+          JOIN oc_ts_week w ON w.employee_id = a.employee_id
+         WHERE w.ts_week_id = :id
+           AND a.status     = 'Awaiting Approval'
+           AND a.work_date BETWEEN w.week_start AND w.week_end;
+
         COMMIT;
         :status_code := 200;
-        HTP.P('{"tsWeekId":' || :id || ',"weekStatus":"' || v_status || '"}');
+        HTP.P('{"tsWeekId":' || :id || ',"weekStatus":"' || v_status
+              || '","adjustmentsRaised":' || v_adj || '}');
       EXCEPTION WHEN OTHERS THEN
         ROLLBACK;
         :status_code := CASE WHEN SQLCODE BETWEEN -20033 AND -20001 THEN 400 ELSE 500 END;

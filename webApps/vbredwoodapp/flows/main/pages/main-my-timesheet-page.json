@@ -395,6 +395,10 @@
     "holdReopen": {
       "type": "boolean",
       "defaultValue": false
+    },
+    "submitReason": {
+      "type": "string",
+      "defaultValue": ""
     }
   },
   "types": {
