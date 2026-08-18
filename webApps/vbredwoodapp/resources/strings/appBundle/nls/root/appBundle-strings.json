@@ -684,6 +684,14 @@
   "@my_timesheet_status": {
     "description": "Status"
   },
+  "my_timesheet_your_status": "Your status",
+  "@my_timesheet_your_status": {
+    "description": "V4 submission axis — what the employee has done with the week"
+  },
+  "my_timesheet_manager_status": "Manager status",
+  "@my_timesheet_manager_status": {
+    "description": "V4 approval axis — what the manager has decided about the week"
+  },
   "my_timesheet_this_week_was_rejected": "⚠ This week was rejected — action needed.",
   "@my_timesheet_this_week_was_rejected": {
     "description": "This week was rejected —"

@@ -278,7 +278,14 @@
 
   /* Day columns are sized in ch so they track the font rather than a fixed
      pixel width, and the table scrolls inside its own container. */
-  .rw-grid-scroll { overflow-x:auto; width:100%; }
+  /* min-width:0 is load-bearing, not tidying. This sits inside .rw-right-panel
+     (flex) and .page-floating-card, and a flex item's default min-width is
+     auto, meaning "never shrink below your content". With a 1480px grid inside,
+     the container refused to shrink to the card, so overflow-x:auto had nothing
+     to scroll and .rw-main's overflow-x:hidden clipped the grid instead. Only
+     visible once the viewport was narrower than the grid, which is why it
+     showed at 100% zoom and not when zoomed out. */
+  .rw-grid-scroll { overflow-x:auto; width:100%; min-width:0; max-width:100%; }
 
   /* ── Why every table stopped short of its card ──
      oj-table is a custom element, and an unknown element defaults to
@@ -328,9 +335,14 @@
 
   /* The column widths are declared once and every row reuses these four class
      names — that is what guarantees the alignment. */
-  .rw-ts-proj  { flex:0 0 13rem; padding:8px; overflow:hidden;
+  /* Narrowed 18-Aug-2026. At 13/11rem plus 7 day columns at 8.5rem the grid
+     could not render below about 1480px, which is wider than the card at 100%
+     zoom on a laptop -- the reported "timesheet does not come at 100%". The
+     scroll fix above makes it reachable; these make it mostly unnecessary,
+     which is the better outcome for a grid people type into every day. */
+  .rw-ts-proj  { flex:0 0 11rem; padding:8px; overflow:hidden;
                  text-overflow:ellipsis; white-space:nowrap; }
-  .rw-ts-task  { flex:0 0 11rem; padding:8px; }
+  .rw-ts-task  { flex:0 0 9rem; padding:8px; }
   /* H8. The task is a button on an editable, non-leave line. It has to read as
      the task name it replaced, not as a control competing with Save draft --
      so no chrome, left aligned, inheriting the cell's type. The affordance is
@@ -342,7 +354,7 @@
                  white-space:normal; }
   .rw-ts-tot   { flex:0 0 5.5rem; padding:8px; text-align:center; }
   .rw-ts-act   { flex:0 0 3.5rem; padding:4px; text-align:center; }
-  .rw-ts .rw-grid-day { flex:1 1 0; min-width:8.5rem; padding:6px 8px; text-align:center; }
+  .rw-ts .rw-grid-day { flex:1 1 0; min-width:6.75rem; padding:6px 6px; text-align:center; }
 
   .rw-ts-head  { background:#f5f4f0; border-bottom:1px solid var(--rw-border); }
   .rw-ts-head > * { font-size:11px; font-weight:600; color:var(--rw-slate);

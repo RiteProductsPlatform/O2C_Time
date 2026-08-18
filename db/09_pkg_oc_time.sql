@@ -823,6 +823,12 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
     v_holiday  VARCHAR2(200);
     v_hours    NUMBER;
     v_task     NUMBER;
+    -- Absence apportionment (RULE-008). See the block that uses them.
+    v_pct_tot  NUMBER;
+    v_alloc_n  NUMBER;
+    v_seq      NUMBER;
+    v_left     NUMBER;
+    v_share    NUMBER;
   BEGIN
     v_job := start_job('Monthly Population', 'MonthlyPopulation',
                        p_period_id, NULL, p_employee_id, p_actor);
@@ -959,21 +965,88 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
         FROM oc_time_task
        WHERE task_type = 'COMMON' AND UPPER(task_code) = 'LEAVE';
 
-      FOR ab IN (SELECT ab.employee_id, ab.absence_date, ab.absence_hours,
-                        ab.absence_type,
-                        (SELECT MIN(al.project_id) FROM oc_time_allocation al
-                          WHERE al.employee_id = ab.employee_id
-                            AND al.status = 'Active') AS project_id
+      -- ── APPORTIONED ACROSS THE ALLOCATIONS (RULE-008) ────────
+      --
+      -- This used to send the whole day's leave to MIN(project_id) -- the
+      -- lowest-numbered project the person was on, chosen for no reason but
+      -- that it was first. RI2824 is 50% on 444, 25% on 555 and 25% on
+      -- PCS10034, so a day of leave charged 8 hours to 444 and nothing to the
+      -- other two. Every project's leave figure was wrong, and 444's manager
+      -- carried absence taken against work they do not own. It also made the
+      -- billing-loss number wrong on two projects out of three, because
+      -- RULE-009 derives loss from leave.
+      --
+      -- The day is now split by ALLOC_PCT, over the allocations that actually
+      -- cover the absence date -- not merely Active today, since somebody who
+      -- joined 555 on the 17th did not owe it leave on the 10th.
+      --
+      -- THE TOTAL IS NEVER ASSUMED TO BE 8, and it is not assumed to be 100%
+      -- either. The hours come from OC_TIME_ABSENCE, which the loader derives
+      -- from the worker's own STD_HOURS_PER_DAY -- several people here are on
+      -- 9-hour days and some patterns run 7.5 or 10. Percentages are divided by
+      -- their own SUM rather than by 100, so a person allocated 50% in total
+      -- still has their whole absence accounted for instead of half of it
+      -- vanishing.
+      --
+      -- ROUNDING GOES TO THE LAST ROW ON PURPOSE. Three shares of 7.5h at
+      -- 33.33% round to 2.50 each and sum to 7.50 by luck; 7.5h at 40/30/30
+      -- rounds to 3.00/2.25/2.25 and sums to 7.50, but 10h at 33/33/34 does
+      -- not. HOURS is NUMBER(6,2), so a residue of a cent-hour would leave the
+      -- leave total short of the standard day -- and the "zero out the seeded
+      -- work" step below tests absence >= standard, so a 0.01 shortfall would
+      -- silently leave 8 hours of work sitting beside 7.99 of leave. The last
+      -- allocation takes the remainder and the sum is exact by construction.
+      --
+      -- Aggregated per DAY, not per absence row. Two absence types on one date
+      -- are two OC_TIME_ABSENCE rows (UK is employee+date+type) but only one
+      -- cell per project in OC_TS_ENTRY, so iterating rows made the second type
+      -- overwrite the first rather than add to it. Summed here, with the
+      -- dominant type named on the row.
+      FOR ab IN (SELECT ab.employee_id, ab.absence_date,
+                        SUM(ab.absence_hours) AS absence_hours,
+                        MAX(ab.absence_type) KEEP (DENSE_RANK FIRST
+                            ORDER BY ab.absence_hours DESC) AS absence_type
                    FROM oc_time_absence ab
                   WHERE ab.absence_date BETWEEN v_start AND v_end
                     AND ab.approval_status = 'Approved'
-                    AND (p_employee_id IS NULL OR ab.employee_id = p_employee_id))
+                    AND (p_employee_id IS NULL OR ab.employee_id = p_employee_id)
+                  GROUP BY ab.employee_id, ab.absence_date)
       LOOP
-        IF ab.project_id IS NULL THEN CONTINUE; END IF;
+        SELECT NVL(SUM(al.alloc_pct),0), COUNT(*)
+          INTO v_pct_tot, v_alloc_n
+          FROM oc_time_allocation al
+         WHERE al.employee_id = ab.employee_id
+           AND al.status      = 'Active'
+           AND ab.absence_date BETWEEN al.start_date
+                               AND NVL(al.end_date, ab.absence_date);
+
+        -- No allocation covering the date: nothing to charge the leave to.
+        -- Skipped rather than parked on an arbitrary project, which is the
+        -- fault this block exists to remove.
+        IF v_pct_tot <= 0 OR v_alloc_n = 0 THEN CONTINUE; END IF;
+
         v_week := ensure_week(ab.employee_id, ab.absence_date, p_actor);
+        v_left := ab.absence_hours;
+        v_seq  := 0;
+
+        FOR al IN (SELECT al.project_id, al.alloc_pct
+                     FROM oc_time_allocation al
+                    WHERE al.employee_id = ab.employee_id
+                      AND al.status      = 'Active'
+                      AND ab.absence_date BETWEEN al.start_date
+                                          AND NVL(al.end_date, ab.absence_date)
+                    ORDER BY al.alloc_pct DESC, al.project_id)
+        LOOP
+          v_seq := v_seq + 1;
+          IF v_seq = v_alloc_n THEN
+            v_share := v_left;                       -- the remainder, exactly
+          ELSE
+            v_share := ROUND(ab.absence_hours * al.alloc_pct / v_pct_tot, 2);
+            v_left  := v_left - v_share;
+          END IF;
 
         MERGE INTO oc_ts_entry e
-        USING (SELECT v_week AS ts_week_id, ab.project_id AS project_id,
+        USING (SELECT v_week AS ts_week_id, al.project_id AS project_id,
                       v_task AS task_id, ab.absence_date AS entry_date FROM dual) s
            ON (e.ts_week_id = s.ts_week_id AND e.project_id = s.project_id
            AND e.task_id    = s.task_id    AND e.entry_date = s.entry_date
@@ -991,16 +1064,35 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
          -- came from Absence Management -- which is why the screen no longer
          -- needs a chip to say so.
          WHEN MATCHED THEN UPDATE
-              SET e.hours = ab.absence_hours, e.is_leave = 'Y',
+              SET e.hours = v_share, e.is_leave = 'Y',
                   e.absence_type = ab.absence_type, e.source = 'Absence',
                   e.updated_by = p_actor
          WHEN NOT MATCHED THEN
               INSERT (ts_week_id, project_id, task_id, entry_date, hours,
                       entry_type, is_leave, absence_type, source, created_by)
-              VALUES (v_week, ab.project_id, v_task, ab.absence_date,
-                      ab.absence_hours, 'Actual', 'Y', ab.absence_type,
+              VALUES (v_week, al.project_id, v_task, ab.absence_date,
+                      v_share, 'Actual', 'Y', ab.absence_type,
                       'Absence', p_actor);
-        v_upserted := v_upserted + 1;
+          v_upserted := v_upserted + 1;
+        END LOOP;
+
+        -- A LEAVE ROW LEFT BEHIND BY A CHANGED ALLOCATION IS STILL LEAVE to
+        -- every SUM() that reads it, so the old share has to go when the split
+        -- moves. Comes up on two ordinary events: somebody is taken off a
+        -- project, and somebody's percentage is re-cut so a project drops out
+        -- of the distribution entirely. Restricted to rows this job wrote
+        -- ('Absence'), so a manager's override is never swept up.
+        DELETE FROM oc_ts_entry e
+         WHERE e.ts_week_id = v_week
+           AND e.entry_date = ab.absence_date
+           AND e.is_leave   = 'Y'
+           AND e.source     = 'Absence'
+           AND NOT EXISTS (SELECT 1 FROM oc_time_allocation al2
+                            WHERE al2.employee_id = ab.employee_id
+                              AND al2.project_id  = e.project_id
+                              AND al2.status      = 'Active'
+                              AND ab.absence_date BETWEEN al2.start_date
+                                  AND NVL(al2.end_date, ab.absence_date));
 
         -- RULE-008: a full day of leave takes the whole day, so the work this
         -- job seeded from the allocation has to come back off.

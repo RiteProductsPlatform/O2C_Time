@@ -131,6 +131,15 @@ BEGIN
     p_source => q'[
       SELECT ts_week_id, week_index, week_start, week_end, week_range,
              week_status, locked_flag,
+             -- THE TWO V4 AXES. The feed returned only WEEK_STATUS, which
+             -- collapses them, so PAGE-001 could show one chip for two
+             -- independent facts -- and the collapse is lossy in the direction
+             -- that matters to the person reading it: "Not yet submitted" and
+             -- "Submitted, waiting on your manager" are the employee's problem
+             -- and the manager's problem respectively, and the single chip
+             -- could not say which. V_OC_TS_WEEK_DETAIL has carried both since
+             -- 15-Aug; only this SELECT had not caught up.
+             submission_status, approval_status,
              billable_hours, non_billable_hours, leave_hours,
              billing_loss_hours, total_hours, standard_hours,
              defaulted_flag, defaulted_by, late_submission_flag,

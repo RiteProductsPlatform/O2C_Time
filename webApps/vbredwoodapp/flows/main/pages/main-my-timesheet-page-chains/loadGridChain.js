@@ -37,6 +37,11 @@ define([
           // $application.functions.weekFlags rather than restating each flag.
           $page.variables.weekRow          = week;
           $page.variables.weekStatus       = week.week_status;
+          // The two V4 axes, shown separately in the header. NVL'd rather than
+          // left undefined: a week created before the axes were populated has
+          // nulls, and an empty chip reads as a loading failure.
+          $page.variables.submissionStatus = week.submission_status || 'NotYetSubmitted';
+          $page.variables.approvalStatus   = week.approval_status   || 'Pending';
           $page.variables.weekRange        = week.week_range;
           $page.variables.locked           = week.locked_flag === 'Y';
           $page.variables.defaultedBy      = (week.defaulted_by || '').toUpperCase();

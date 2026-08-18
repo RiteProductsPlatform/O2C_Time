@@ -48,13 +48,31 @@
             </span>
           </oj-label-value>
 
-          <!-- FLD-004 week status. The status text is always rendered, so the
-               capsule colour is a reinforcement and never the only signal. -->
+          <!-- FLD-004, SPLIT INTO THE TWO V4 AXES 18-Aug-2026.
+               One chip showed WEEK_STATUS, which collapses SUBMISSION_STATUS
+               and APPROVAL_STATUS into a single word. They are independent and
+               they belong to different people: the first says what the employee
+               has done, the second what the manager has decided. Collapsed, the
+               screen could not distinguish "you have not sent this yet" from
+               "you sent it and nobody has looked" -- and only the first is
+               something the person reading it can act on.
+               The status text is always rendered, so the capsule colour is a
+               reinforcement and never the only signal. -->
           <oj-label-value>
-            <span slot="label" class="oj-label-nowrap"><oj-bind-text value="[[$application.translations.appBundle.my_timesheet_status]]"></oj-bind-text></span>
+            <span slot="label" class="oj-label-nowrap"><oj-bind-text value="[[$application.translations.appBundle.my_timesheet_your_status]]"></oj-bind-text></span>
             <span slot="value">
-              <span :class="[[ $application.functions.statusClass($variables.weekStatus) ]]">
-                <oj-bind-text value="[[ $variables.weekStatus ]]"></oj-bind-text>
+              <span :class="[[ $application.functions.statusClass($variables.submissionStatus) ]]">
+                <oj-bind-text value="[[ $page.functions.submissionLabel($variables.submissionStatus) ]]"></oj-bind-text>
+              </span>
+            </span>
+          </oj-label-value>
+
+          <oj-label-value>
+            <span slot="label" class="oj-label-nowrap"><oj-bind-text value="[[$application.translations.appBundle.my_timesheet_manager_status]]"></oj-bind-text></span>
+            <span slot="value">
+              <span :class="[[ $application.functions.statusClass($variables.approvalStatus) ]]"
+                    :title="[[ $page.functions.approvalHint($variables.submissionStatus, $variables.approvalStatus) ]]">
+                <oj-bind-text value="[[ $page.functions.approvalLabel($variables.approvalStatus) ]]"></oj-bind-text>
               </span>
             </span>
           </oj-label-value>
@@ -633,7 +651,7 @@
                   {"headerText":"Project","field":"projectName","weight":3},
                   {"headerText":"Client","field":"customerName","weight":2},
                   {"headerText":"Allocation %","field":"allocPct","width":140},
-                  {"headerText":"Billing","field":"billingStatus","width":110},
+                  {"headerText":"Billable status","field":"billingStatus","width":160},
                   {"headerText":"Role","field":"clientRole","weight":2},
                   {"headerText":"Approving manager","field":"approvingManagerName","weight":2}
                 ]'>

@@ -222,6 +222,54 @@ define([], () => {
     }
 
     /**
+     * SUBMISSION_STATUS in the employee's own words.
+     *
+     * The stored values are the engine's — NotYetSubmitted, LateSubmission —
+     * and they are camel-cased identifiers, not English. They are read here by
+     * the person the status is about, so they get sentences.
+     */
+    submissionLabel(s) {
+      const map = {
+        NotYetSubmitted: 'Not yet submitted',
+        Submitted: 'Submitted',
+        LateSubmission: 'Submitted late',
+        // Not "you did not submit". The weekly cut-off passed and the job
+        // filled the week in on their behalf, which is a thing that happened
+        // TO them; RULE-016 then holds pay on it, so the wording has to be
+        // accurate rather than accusing.
+        Defaulted: 'Defaulted at cut-off',
+      };
+      return map[s] || s || '—';
+    }
+
+    /** APPROVAL_STATUS in the employee's own words. */
+    approvalLabel(s) {
+      const map = {
+        Pending: 'Not yet decided',
+        Approved: 'Approved',
+        Rejected: 'Rejected',
+        ManagerDefaulted: 'Closed at delivery cut-off',
+      };
+      return map[s] || s || '—';
+    }
+
+    /**
+     * Why the manager axis reads as it does.
+     *
+     * 'Pending' is the value that needs explaining, because it means two
+     * different things depending on the other axis and the difference decides
+     * whether the employee has anything to do. A week nobody submitted is also
+     * Pending — the manager has not failed to act, they have not been asked.
+     */
+    approvalHint(submission, approval) {
+      if (approval !== 'Pending') { return ''; }
+      if (submission === 'NotYetSubmitted') {
+        return 'Nothing has reached your manager yet — submit the week first.';
+      }
+      return 'Your manager has this week and has not decided yet. Nothing further is needed from you.';
+    }
+
+    /**
      * Column class for the entered-hours total.
      *
      * RULE-003 is a cross-line rule, so a breach is reported on the column total

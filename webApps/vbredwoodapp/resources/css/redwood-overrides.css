@@ -37,28 +37,23 @@ oj-sp-smart-search-page [class*="content-container"] {
 }
 
 /* Every oj-table in the module is layout="fixed" with hard pixel column widths,
-   and JET adds a sort affordance inside the header cell. On the narrow numeric
-   columns -- Billable 110px, Non-bill 110px, Leave 85px -- the icon takes the
-   text below its own width and the label is clipped mid-word: BILLABL,
-   NON-BIL, LEAV. Reported on Team Approvals and Monthly Summary, but it was
-   every table on every page.
+   and JET adds a sort affordance inside the header cell, so the text gets less
+   room than the declared width. That clipped the narrow numeric headers to
+   BILLABL / NON-BIL / LEAV.
 
-   Wrapping rather than widening, because widening only moves the problem: the
-   headers are already as short as they can be while staying readable ("Non-bill"
-   cannot lose more letters), and the tables have no horizontal room to spare at
-   laptop width. Two short lines in a header is normal in Redwood.
+   THE FIRST FIX FOR THIS WAS WRONG AND MADE IT WORSE. It allowed wrapping with
+   overflow-wrap: break-word, which breaks INSIDE a word -- so a header with no
+   space in it split anyway and the summary grid read BILLIN/G, LEA/VE, TOT/AL,
+   NON-/BILLABLE. Trading a clipped word for a hyphenated one is not a fix.
 
-   line-height is set because the default assumes one line and two lines of it
-   overflow the header's own height, which clips the descenders instead. */
+   Headers stay on ONE line. The columns are widened instead, at the call sites,
+   which is what the original problem actually asked for -- there was never a
+   header short enough to fit 85px next to a sort icon. nowrap is declared here
+   rather than left to JET's default so that a later width change cannot quietly
+   reintroduce wrapping: if a header no longer fits, it clips visibly and gets
+   widened, instead of silently splitting mid-word. */
 .oj-table-column-header-text {
-  white-space: normal;
-  overflow-wrap: break-word;
-  line-height: 1.25;
-}
-
-.oj-table-column-header-cell {
-  height: auto;
-  vertical-align: bottom;
-  padding-top: 6px;
-  padding-bottom: 6px;
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: keep-all;
 }

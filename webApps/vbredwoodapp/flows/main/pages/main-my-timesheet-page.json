@@ -29,7 +29,19 @@
       "type": "string",
       "defaultValue": "Not yet submitted",
       "input": "none",
-      "description": "Read-only context shown above the grid."
+      "description": "Legacy collapsed status. Kept because chains still branch on it; the two axes below are what the header shows."
+    },
+    "submissionStatus": {
+      "type": "string",
+      "defaultValue": "NotYetSubmitted",
+      "input": "none",
+      "description": "V4 axis 1 — the employee's own state: NotYetSubmitted, Submitted, LateSubmission, Defaulted. Shown as 'Your status'."
+    },
+    "approvalStatus": {
+      "type": "string",
+      "defaultValue": "Pending",
+      "input": "none",
+      "description": "V4 axis 2 — the manager's state: Pending, Approved, Rejected, ManagerDefaulted. Shown as 'Manager status'. Independent of the axis above: Pending means 'nobody has decided', which is equally true of a week never submitted."
     },
     "weekRow": {
       "type": "any",
