@@ -457,6 +457,12 @@ PROMPT [n/m] 70_undo_bad_retire.sql - the retirement needed an age guard too
 PROMPT [n/m] 71_clear_september.sql - entries only, so the trail survives
 @@71_clear_september.sql
 
+-- After 66, which builds the payroll window it selects periods from. Creates
+-- OC_TIME_SALARY_JOB enabled, so salary stopping starts running unattended --
+-- the last part of the cut-off chain that was still manual.
+PROMPT [n/m] 72_salary_stopping_schedule.sql - salary stopping runs itself
+@@72_salary_stopping_schedule.sql
+
 -- A no-op on a fresh install: this installer never runs 90_test_seed.sql, so
 -- there is nothing stamped TEST_SEED to remove. It is here so an environment
 -- that WAS seeded converges on the same state as one that was not, rather than
