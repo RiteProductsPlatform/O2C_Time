@@ -425,10 +425,30 @@ BEGIN
   LOOP
     -- Everything is read as a string and converted on the way in. BIP emits
     -- dates as YYYY-MM-DD text; letting Oracle guess would depend on NLS.
+    --
+    -- TIMESTAMP ADDED 18-Aug-2026, and it was latent from the day the column
+    -- was. DATA_TYPE for a TIMESTAMP column is 'TIMESTAMP(6)', so it matched
+    -- neither branch and fell to the bare ELSE -- a VARCHAR2 '2026-08-18'
+    -- assigned straight into a TIMESTAMP, converted implicitly against
+    -- NLS_TIMESTAMP_FORMAT, which on ATP is 'DD-MON-RR HH.MI.SSXFF AM'.
+    -- ORA-01858, and it takes the whole feed down, not one column.
+    --
+    -- Nothing had hit it because FUSION_SYNCED_ON is the module's only
+    -- TIMESTAMP outside c_never, and the scan at line 418 only picks up a
+    -- column the XML actually carries -- so while no extract sent the element,
+    -- the branch was never reached. Deploying it makes the element real.
+    --
+    -- NULL on a bad format rather than a hard failure, matching the NUMBER
+    -- branch: an unstamped row reads as stale, and the age guard in
+    -- oc_time_retire_unsynced then REFUSES to retire anything. A conversion
+    -- fault therefore costs a refusal, not a purge.
     v_cols := v_cols || ',' || c.column_name || ' VARCHAR2(4000) PATH ''' || c.column_name || '''';
     v_src  := v_src  || ',' ||
       CASE
         WHEN c.data_type = 'DATE'   THEN 'TO_DATE(x.' || c.column_name || ',''YYYY-MM-DD'')'
+        WHEN c.data_type LIKE 'TIMESTAMP%'
+                                    THEN 'TO_TIMESTAMP(x.' || c.column_name ||
+                                         ' DEFAULT NULL ON CONVERSION ERROR,''YYYY-MM-DD'')'
         WHEN c.data_type = 'NUMBER' THEN 'TO_NUMBER(x.' || c.column_name ||
                                          ' DEFAULT NULL ON CONVERSION ERROR)'
         ELSE 'x.' || c.column_name
