@@ -24,7 +24,17 @@
     <div class="oj-flex oj-sm-flex-direction-column oj-sm-gap-2x oj-sm-padding-4x rw-metric">
 
       <div class="oj-flex oj-sm-justify-content-space-between oj-sm-align-items-start oj-sm-flex-wrap">
-        <oj-form-layout max-columns="4" direction="row" label-edge="top" class="oj-flex-item">
+
+        <!-- TWO GROUPS, NOT ONE GRID. These six fields shared a single
+             max-columns="4" form layout, and the two selects are far wider than
+             the four read-only facts — so every column sized to a select, the
+             facts sat in the middle of columns far too wide for them, and the
+             row wrapped 4 + 2 with a gap the width of a dropdown between "Select
+             week" and "Weekly cut-off". Splitting them lets each group align to
+             its own content: inputs you operate, then facts you read. -->
+        <div class="oj-flex oj-sm-flex-wrap oj-sm-gap-5x oj-flex-item">
+
+        <oj-form-layout max-columns="2" direction="row" label-edge="top">
 
           <oj-select-single label-hint="[[$application.translations.appBundle.common_month]]"
                             data="[[ $application.variables.periodOptions ]]"
@@ -39,6 +49,12 @@
                             item-text="label"
                             placeholder="[[$application.translations.appBundle.my_timesheet_select_week_2]]">
           </oj-select-single>
+
+        </oj-form-layout>
+
+        <!-- The read-only half: cut-off, both status axes and the pattern.
+             Four narrow facts on one row, sized to themselves. -->
+        <oj-form-layout max-columns="4" direction="row" label-edge="top">
 
           <!-- FLD-003 weekly cut-off, shown to the employee -->
           <oj-label-value>
@@ -92,6 +108,8 @@
           </oj-label-value>
 
         </oj-form-layout>
+
+        </div><!-- /the two aligned groups -->
 
         <!-- FLD-005 / ACT-008 -->
         <oj-button chroming="borderless" on-oj-action="[[ $listeners.showAllocation ]]">
@@ -633,7 +651,13 @@
   </div>
 
   <!-- ══════════════════ Allocation dialog (ACT-008) ══════════════════ -->
-  <oj-dialog id="allocDlg" dialog-title="[[$application.translations.appBundle.my_timesheet_my_allocation]]"
+  <!-- rw-dlg-wide because an oj-dialog sizes to its content and this one holds a
+       six-column table under layout="fixed". Left to itself it opened at about
+       half the needed width, clipped Billable status and Role, and pushed the
+       whole grid onto a horizontal scrollbar inside a box small enough that the
+       scrollbar was the first thing you saw. -->
+  <oj-dialog id="allocDlg" class="rw-dlg-wide"
+             dialog-title="[[$application.translations.appBundle.my_timesheet_my_allocation]]"
              cancel-behavior="icon">
     <div slot="body">
       <oj-bind-if test="[[ $variables.allocationWarning ]]">

@@ -287,6 +287,16 @@
      showed at 100% zoom and not when zoomed out. */
   .rw-grid-scroll { overflow-x:auto; width:100%; min-width:0; max-width:100%; }
 
+  /* An oj-dialog sizes to its content, which is fine for a form and wrong for a
+     table: a six-column grid under layout="fixed" reports a small intrinsic
+     width, so the dialog opened narrow and the table scrolled inside it. min()
+     rather than a flat rem so it still fits a laptop and a phone.
+     The inner table is released from the 100% floor that .oj-table-element
+     carries elsewhere -- inside a bounded dialog that floor is what forces the
+     scrollbar rather than preventing it. */
+  .rw-dlg-wide { min-width:min(64rem, 92vw); max-width:92vw; }
+  .rw-dlg-wide .oj-table-element { min-width:0 !important; }
+
   /* ── Why every table stopped short of its card ──
      oj-table is a custom element, and an unknown element defaults to
      display:inline, so it shrank to fit its content instead of filling the
