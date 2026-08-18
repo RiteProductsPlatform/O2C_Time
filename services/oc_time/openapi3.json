@@ -267,7 +267,7 @@
     "/oc/time/admin/accrual/pull/{periodYear}/{periodMonth}": {
       "get": {
         "operationId": "pullAccrual",
-        "summary": "THE ACCRUAL PULL \u2014 unprocessed interface rows for a month (INT-014)",
+        "summary": "THE ACCRUAL PULL — unprocessed interface rows for a month (INT-014)",
         "description": "Called by the O2C accrual application after month-end manager approval. Serves only unprocessed rows from successfully confirmed months, so the pull is resumable and never double-counts. The consumer must acknowledge each batch via ackAccrual.",
         "x-vb": {
           "actionHint": "getMany"
@@ -1222,7 +1222,7 @@
     "/oc/time/admin/sync/task": {
       "post": {
         "operationId": "syncTask",
-        "summary": "INT-002 master-data upsert. PPM WBS tasks, carrying EXPENDITURE_TYPE (POET\u2019s E). Load PROJECTS first - the FK is to project. Chunked: omit jobRunId on the first call, pass it back on later ones so the load is one job row; final=Y closes it. Bad rows go to OC_TIME_SYNC_FAILED rather than aborting the chunk.",
+        "summary": "INT-002 master-data upsert. PPM WBS tasks, carrying EXPENDITURE_TYPE (POET’s E). Load PROJECTS first - the FK is to project. Chunked: omit jobRunId on the first call, pass it back on later ones so the load is one job row; final=Y closes it. Bad rows go to OC_TIME_SYNC_FAILED rather than aborting the chunk.",
         "x-vb": {
           "actionHint": "create"
         },
@@ -1268,7 +1268,7 @@
     "/oc/time/admin/sync/worker": {
       "post": {
         "operationId": "syncWorker",
-        "summary": "INT-001 master-data upsert. HCM workers. APP_ROLE is never overwritten - it is this app\u2019s entitlement, not HCM\u2019s. Chunked: omit jobRunId on the first call, pass it back on later ones so the load is one job row; final=Y closes it. Bad rows go to OC_TIME_SYNC_FAILED rather than aborting the chunk.",
+        "summary": "INT-001 master-data upsert. HCM workers. APP_ROLE is never overwritten - it is this app’s entitlement, not HCM’s. Chunked: omit jobRunId on the first call, pass it back on later ones so the load is one job row; final=Y closes it. Bad rows go to OC_TIME_SYNC_FAILED rather than aborting the chunk.",
         "x-vb": {
           "actionHint": "create"
         },
@@ -3597,7 +3597,7 @@
       "get": {
         "operationId": "getTaskLov",
         "summary": "Task LOV: project WBS + the common non-billable tasks (RULE-010)",
-        "description": "Leave and Billing Loss are excluded \u2014 they are system-maintained (RULE-008, RULE-009).",
+        "description": "Leave and Billing Loss are excluded — they are system-maintained (RULE-008, RULE-009).",
         "x-vb": {
           "actionHint": "getMany"
         },
@@ -3789,7 +3789,7 @@
       "post": {
         "operationId": "revokeWeek",
         "summary": "Pull a submitted week back so the employee can correct it",
-        "description": "Submitted only. Once a manager has approved, undoing it is their send-back, not the employee\u2019s revoke \u2014 the package refuses with -20021. A closed period refuses with -20022; correct that through a backdated adjustment (RULE-019).",
+        "description": "Submitted only. Once a manager has approved, undoing it is their send-back, not the employee’s revoke — the package refuses with -20021. A closed period refuses with -20022; correct that through a backdated adjustment (RULE-019).",
         "parameters": [
           {
             "name": "id",
@@ -4117,7 +4117,7 @@
     "/oc/time/line/task": {
       "post": {
         "operationId": "changeLineTask",
-        "summary": "Move a timesheet line to a different task on the same project (H8). Refuses if that task already has a line \u2014 the hours are never merged silently. Leave lines cannot be moved (RULE-008).",
+        "summary": "Move a timesheet line to a different task on the same project (H8). Refuses if that task already has a line — the hours are never merged silently. Leave lines cannot be moved (RULE-008).",
         "x-vb": {
           "actionHint": "create"
         },
@@ -4170,11 +4170,59 @@
             }
           },
           "400": {
-            "description": "Refused \u2014 the rule's own message",
+            "description": "Refused — the rule's own message",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/oc/time/approval/days/{tsWeekId}/project/{projectId}": {
+      "get": {
+        "operationId": "getDayDetailByProject",
+        "summary": "Line-wise daily detail for ONE project (manager drill-down). The manager arrived from a single project and must see only that project’s days; the unscoped route lists every project in the week.",
+        "x-vb": {
+          "actionHint": "getMany"
+        },
+        "parameters": [
+          {
+            "name": "tsWeekId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "_t",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Cache-buster. A GET refreshed after a write must not be served from a browser 304."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Day lines",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Collection"
                 }
               }
             }
@@ -4423,7 +4471,7 @@
           },
           "workDate": {
             "type": "string",
-            "description": "YYYY-MM-DD \u2014 the affected day. Adjustments are day-wise."
+            "description": "YYYY-MM-DD — the affected day. Adjustments are day-wise."
           },
           "oldProjectId": {
             "type": "integer"

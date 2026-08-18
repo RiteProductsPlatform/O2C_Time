@@ -21,13 +21,22 @@ define([
     async run(context) {
       const { $page, $application } = context;
       const weekId = $page.variables.weekId;
+      // SCOPED TO THE PROJECT THE MANAGER CAME FROM. This called
+      // getDayDetail with the week id alone, and that endpoint has no project
+      // filter at all -- so opening week 3 of Saicharan from 444 listed a 444
+      // line AND a 555 line for every day of the week. Reported from the screen.
+      //
+      // The week still holds every project (OC_TS_WEEK is not split, by
+      // decision); only what is shown is narrowed, which is what makes the page
+      // right when two projects have different managers.
+      const projectId = $application.variables.selectedProjectId;
 
-      if (!weekId) { return; }
+      if (!weekId || !projectId) { return; }
 
       try {
         const resp = await Actions.callRest(context, {
-          endpoint: 'oc_time/getDayDetail',
-          uriParams: { tsWeekId: weekId, _t: Date.now() },
+          endpoint: 'oc_time/getDayDetailByProject',
+          uriParams: { tsWeekId: weekId, projectId: projectId, _t: Date.now() },
         });
 
         if (!resp.ok) {

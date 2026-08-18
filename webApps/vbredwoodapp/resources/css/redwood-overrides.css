@@ -35,3 +35,30 @@ oj-sp-smart-search-page [class*="content-container"] {
 .oc-time-grid .oj-text-field-container {
   --oj-text-field-height: 30px;
 }
+
+/* Every oj-table in the module is layout="fixed" with hard pixel column widths,
+   and JET adds a sort affordance inside the header cell. On the narrow numeric
+   columns -- Billable 110px, Non-bill 110px, Leave 85px -- the icon takes the
+   text below its own width and the label is clipped mid-word: BILLABL,
+   NON-BIL, LEAV. Reported on Team Approvals and Monthly Summary, but it was
+   every table on every page.
+
+   Wrapping rather than widening, because widening only moves the problem: the
+   headers are already as short as they can be while staying readable ("Non-bill"
+   cannot lose more letters), and the tables have no horizontal room to spare at
+   laptop width. Two short lines in a header is normal in Redwood.
+
+   line-height is set because the default assumes one line and two lines of it
+   overflow the header's own height, which clips the descenders instead. */
+.oj-table-column-header-text {
+  white-space: normal;
+  overflow-wrap: break-word;
+  line-height: 1.25;
+}
+
+.oj-table-column-header-cell {
+  height: auto;
+  vertical-align: bottom;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}

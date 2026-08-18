@@ -103,6 +103,13 @@ define([
           rejectReason: w.reject_reason || '',
           rejectRemarks: w.reject_remarks || '',
           projects: w.projects || '',
+          // THE HOURS ABOVE ARE NOW THIS PROJECT'S ONLY, but approve_week fires
+          // the event against the WEEK and cascades to every day in it -- so
+          // approving from 444 also approves this employee's 555 and PCS10034
+          // days. Scoping the figures without saying so would hide that rather
+          // than fix it, which is why the count is carried and shown.
+          otherProjects: w.other_projects || '',
+          otherProjectCount: w.other_project_count || 0,
         }));
 
         $page.variables.weeks = rows;

@@ -146,32 +146,93 @@ BEGIN
     p_module_name => 'oc.time.approval',
     p_pattern => 'weeks/:projectId/:periodId/:employeeId', p_method => 'GET',
     p_source_type => ORDS.source_type_collection_feed,
-    p_source => q'[
+    -- PROJECT-SCOPED FIGURES, 18-Aug-2026. :projectId used to be an EXISTS test
+    -- and nothing more -- "does this week touch 444?" -- while every number
+    -- returned came from V_OC_TS_WEEK_DETAIL, which aggregates the whole week.
+    -- So the 444 manager opening Saicharan's week 3 saw PROJECTS "444, 555" and
+    -- 40 billable hours when 444's share was 20. Reported from the screen.
+    --
+    -- The week itself is NOT split -- OC_TS_WEEK stays one row holding
+    -- everything, by decision. Only the presentation is scoped, which is what
+    -- makes the screen right when two projects have different managers.
+    --
+    -- WHAT STAYS WEEK-LEVEL, and it is not an oversight:
+    --   standard_hours       the person's capacity, from their work pattern
+    --   billing_loss_hours   GREATEST(0, standard - billable - leave), so it is
+    --                        capacity too. Divided per project it would report
+    --                        almost a full week of loss against every one
+    --   status, flags, locks the week is the unit of approval and of the
+    --                        cut-off; splitting these would invent a state the
+    --                        model cannot hold
+    --
+    -- OTHER_PROJECTS carries the honesty. approve_week fires the event against
+    -- the WEEK, so approving from 444 also approves this employee's 555 and
+    -- PCS10034 days -- scoping the display without saying so would hide that
+    -- rather than fix it. The page shows the count beside the week.
+    p_source => q'~
       SELECT d.ts_week_id, d.employee_id, d.employee_name, d.worker_type,
              d.week_index, d.week_start, d.week_end, d.week_range, d.week_status,
-             d.billable_hours, d.non_billable_hours, d.leave_hours,
-             d.billing_loss_hours, d.total_hours, d.standard_hours,
+             d.submission_status, d.approval_status,
+             pa.billable_hours, pa.non_billable_hours, pa.leave_hours,
+             d.billing_loss_hours, pa.total_hours, d.standard_hours,
              d.defaulted_flag, d.defaulted_by, d.late_submission_flag,
              d.advance_closure_flag,
              d.overridden_flag, d.locked_flag,
-             d.has_reversal_flag, d.has_adjustment_flag,
+             pa.has_reversal_flag, pa.has_adjustment_flag,
              d.reject_reason, d.reject_remarks,
              d.submitted_on, d.approved_by, d.approved_on,
-             d.days_total, d.days_pending, d.days_approved, d.days_rejected,
-             d.projects
+             pa.days_total, pa.days_pending, pa.days_approved, pa.days_rejected,
+             (SELECT p1.project_number FROM oc_time_project p1
+               WHERE p1.project_id = :projectId) AS projects,
+             (SELECT LISTAGG(DISTINCT p2.project_number, ', ')
+                       WITHIN GROUP (ORDER BY p2.project_number)
+                FROM oc_ts_entry e2
+                JOIN oc_time_project p2 ON p2.project_id = e2.project_id
+               WHERE e2.ts_week_id = d.ts_week_id
+                 AND e2.project_id <> :projectId) AS other_projects,
+             (SELECT COUNT(DISTINCT e3.project_id) FROM oc_ts_entry e3
+               WHERE e3.ts_week_id = d.ts_week_id
+                 AND e3.project_id <> :projectId) AS other_project_count
         FROM v_oc_ts_week_detail d
+        JOIN (SELECT e.ts_week_id,
+                     NVL(SUM(CASE WHEN e.billable_type = 'Billable'
+                                   AND e.is_leave = 'N' THEN e.hours END),0)
+                       AS billable_hours,
+                     NVL(SUM(CASE WHEN e.billable_type = 'Non-billable'
+                                   AND e.is_leave = 'N' THEN e.hours END),0)
+                       AS non_billable_hours,
+                     NVL(SUM(CASE WHEN e.is_leave = 'Y' THEN e.hours END),0)
+                       AS leave_hours,
+                     NVL(SUM(e.hours),0) AS total_hours,
+                     MAX(CASE WHEN e.entry_type = 'Reversal'   THEN 'Y' ELSE 'N' END)
+                       AS has_reversal_flag,
+                     MAX(CASE WHEN e.entry_type = 'Adjustment' THEN 'Y' ELSE 'N' END)
+                       AS has_adjustment_flag,
+                     COUNT(DISTINCT e.entry_date) AS days_total,
+                     COUNT(DISTINCT CASE WHEN e.day_status = 'Pending'
+                                         THEN e.entry_date END) AS days_pending,
+                     COUNT(DISTINCT CASE WHEN e.day_status = 'Approved'
+                                         THEN e.entry_date END) AS days_approved,
+                     COUNT(DISTINCT CASE WHEN e.day_status = 'Rejected'
+                                         THEN e.entry_date END) AS days_rejected
+                FROM oc_ts_entry e
+               WHERE e.project_id = :projectId
+                 AND e.ts_week_id IN (SELECT w.ts_week_id FROM oc_ts_week w
+                                       WHERE w.employee_id = :employeeId
+                                         AND w.period_id   = :periodId)
+               GROUP BY e.ts_week_id) pa
+          ON pa.ts_week_id = d.ts_week_id
        WHERE d.employee_id = :employeeId
          AND d.period_id   = :periodId
-         AND EXISTS (SELECT 1 FROM oc_ts_entry e
-                      WHERE e.ts_week_id = d.ts_week_id
-                        AND e.project_id = :projectId)
        ORDER BY d.week_index
-    ]');
+    ~');
   COMMIT;
 END;
 /
 
 -- ── GET days/:tsWeekId  (line-wise daily view) ───────────────
+-- Kept unscoped: the employee's own view and the CSV export both want the whole
+-- week. The manager's drill-down uses the project-scoped template below.
 BEGIN
   ORDS.DEFINE_TEMPLATE(p_module_name => 'oc.time.approval', p_pattern => 'days/:tsWeekId');
   ORDS.DEFINE_HANDLER(
@@ -187,6 +248,42 @@ BEGIN
         FROM v_oc_ts_day_detail
        WHERE ts_week_id = :tsWeekId
        ORDER BY entry_date, project_name, task_code
+    ]');
+  COMMIT;
+END;
+/
+
+-- ── GET days/:tsWeekId/project/:projectId  (PAGE-005 drill-down) ──
+-- The manager arrived from ONE project and must see that project's days. The
+-- unscoped template above listed every project in the week, so opening week 3
+-- of Saicharan from 444 showed a 444 line and a 555 line for every day.
+--
+-- A SEPARATE TEMPLATE rather than an optional bind on the one above. ORDS binds
+-- query parameters by name, so :projectId would resolve to NULL when absent and
+-- "AND (:projectId IS NULL OR project_id = :projectId)" would read as
+-- unfiltered -- which is the right answer only if the parameter was genuinely
+-- omitted, and indistinguishable from a page that meant to send it and did not.
+-- Silent-NULL is the trap already recorded twice in CLAUDE.md (an undeclared
+-- BIP bind, and JSON_TABLE on a wrong PATH). A distinct route cannot be got
+-- wrong by omission: either it is called or it is not.
+BEGIN
+  ORDS.DEFINE_TEMPLATE(p_module_name => 'oc.time.approval',
+                       p_pattern => 'days/:tsWeekId/project/:projectId');
+  ORDS.DEFINE_HANDLER(
+    p_module_name => 'oc.time.approval',
+    p_pattern => 'days/:tsWeekId/project/:projectId',
+    p_method => 'GET',
+    p_source_type => ORDS.source_type_collection_feed,
+    p_source => q'[
+      SELECT ts_entry_id, entry_date, day_name,
+             project_id, project_name, task_id, task_code, task_name,
+             hours, entry_type, billable_type, unbilled_reason,
+             shift_code, standard_hours, is_leave, absence_type,
+             day_status, reject_reason, reject_remarks, source
+        FROM v_oc_ts_day_detail
+       WHERE ts_week_id = :tsWeekId
+         AND project_id = :projectId
+       ORDER BY entry_date, task_code
     ]');
   COMMIT;
 END;
