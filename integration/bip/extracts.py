@@ -106,7 +106,8 @@ WORKERS = {
     "columns": ["FUSION_PERSON_ID", "EMPLOYEE_ID", "EMPLOYEE_NAME", "EMAIL",
                 "WORKER_TYPE", "BASE_COUNTRY", "STD_HOURS_PER_DAY",
                 "MANAGER_EMP_ID", "LEGAL_EMPLOYER", "EXPENDITURE_ORG",
-                "HIRE_DATE", "TERMINATION_DATE", "STATUS"],
+                "HIRE_DATE", "TERMINATION_DATE", "STATUS",
+                "FUSION_SYNCED_ON"],
     "sql": """
 -- person_id as well as person_number. OC_TIME_WORKER.FUSION_PERSON_ID has
 -- existed since 02_time_master.sql:34 and nothing has ever written to it,
@@ -180,7 +181,12 @@ SELECT papf.person_id                                    AS fusion_person_id,
        TO_CHAR(pos.actual_termination_date,'YYYY-MM-DD') AS termination_date,
        CASE WHEN pos.actual_termination_date IS NULL
              OR pos.actual_termination_date >= {ED}
-            THEN 'Active' ELSE 'Terminated' END          AS status
+            THEN 'Active' ELSE 'Terminated' END          AS status,
+       -- Same stamp, same reason: a person purged from HCM stayed Active here
+       -- for ever. 7793 was deleted upstream and still carried allocations and
+       -- timesheet rows, so they appeared on the manager's Monthly Summary as
+       -- somebody to approve.
+       TO_CHAR({ED}, 'YYYY-MM-DD')                       AS fusion_synced_on
   FROM per_all_people_f papf
   JOIN per_all_assignments_m paam
     ON paam.person_id = papf.person_id
@@ -253,7 +259,8 @@ PROJECTS = {
     "key": ["PROJECT_NUMBER"],
     "columns": ["FUSION_PROJECT_ID", "PROJECT_NUMBER", "PROJECT_NAME", "PROJECT_TYPE",
                 "CUSTOMER_NAME", "STATUS", "PROJECT_START_DATE", "PROJECT_END_DATE",
-                "ORGANIZATION", "PROJECT_MANAGER_ID", "TIME_ENTRY_ENABLED"],
+                "ORGANIZATION", "PROJECT_MANAGER_ID", "TIME_ENTRY_ENABLED",
+                "FUSION_SYNCED_ON"],
     "sql": """
 -- Fusion's id. NOT our PROJECT_ID -- that is a local identity key.
 SELECT p.project_id                            AS fusion_project_id,
@@ -330,7 +337,13 @@ SELECT p.project_id                            AS fusion_project_id,
                           WHERE tp.project_id = p.project_id
                             AND tp.project_party_type = 'IN'
                             AND tp.pjs_track_time = 'Y')
-            THEN 'Y' ELSE 'N' END              AS time_entry_enabled
+            THEN 'Y' ELSE 'N' END              AS time_entry_enabled,
+       -- Stamped so "no longer in the feed" is detectable. A project that
+       -- leaves scope -- completed, or its last time-tracking party removed --
+       -- kept its PROJECT_MANAGER_ID for ever, because the loader NVLs it, and
+       -- so kept appearing on that manager's landing page. 666 did exactly
+       -- that: absent from this feed entirely and still listed for RI9001.
+       TO_CHAR({ED}, 'YYYY-MM-DD')             AS fusion_synced_on
   FROM pjf_projects_all_b p
   JOIN pjf_projects_all_tl ptl
     ON ptl.project_id = p.project_id AND ptl.language = USERENV('LANG')
