@@ -44,18 +44,27 @@
 -- -20026 family entirely. CHK_OC_TSSH_REL requires RELEASED_BY on a released
 -- row, so the actor is recorded and the SOX constraint is met, not bypassed.
 --
--- THE ONE QUESTION THIS COULD NOT ANSWER FOR ITSELF, now answered. The risk was
--- that Alan James or User Rite SHOULD be on a time-tracking project and nobody
--- ever ticked PJS_TRACK_TIME in PPM -- in which case the hold is legitimate and
--- releasing it lets unrecorded time through payroll. Confirmed 18-Aug-2026:
--- both are demo/test accounts on the pod, not payroll employees. All four
--- release. Had the answer gone the other way, only the two zero-hour rows
--- would have been touched and PPM fixed first.
+-- WHAT ACTUALLY RELEASED, 18-Aug-2026: two rows, 7897 and RI2985. Not four.
 --
--- Worth noting separately, because it is a PPM hygiene point and not a bug
--- here: 7781 held an allocation to 555, a live time-tracking project. A test
--- account was staffed onto real work. The allocation is already retired by
--- db/75 and nothing further is needed, but it is how these hours came to exist.
+-- 57 and 7781 still hold LIVE ALLOCATIONS -- 1 and 3 -- so the second guard
+-- excluded them, correctly: somebody on a project has something to record, and
+-- the fact that db/76 removed their June and July rows says those particular
+-- entries had no allocation covering their dates, not that the person is
+-- unstaffed. A hold on a staffed employee is a real hold.
+--
+-- Confirmed by the owner the same day: User Rite is a demo account that STAYS,
+-- non-billable only, so leaving it held is also the wanted outcome. Alan James
+-- is likewise a pod demo account. Neither needs further action; if either is
+-- ever to be released, unstaff it in PPM first and the rule here will do it.
+--
+-- THE MUCH LARGER NUMBER THIS SURFACED, and it is not a fault of this script.
+-- 241 holds remain, 110,435 default hours, almost all of it the Fusion demo
+-- population -- Dave Brown 1,520h, Anne Hamilton 1,600h, Amy Marlin 1,120h.
+-- They are staffed to the 49 time-tracking projects, they were prepopulated,
+-- nobody submitted, the cut-off defaulted them and the job held their pay.
+-- Every step is correct. It is only that the pod ships ~230 people who will
+-- never submit anything, and PAGE-007 shows all of them, which buries the
+-- dozen real testers. Worth deciding before UAT; nothing here changes it.
 --
 -- Idempotent -- an already-Released hold is not matched twice.
 -- Depends on: time/05, 09, 75, 76.
@@ -87,11 +96,22 @@ SELECT h.employee_id, wk.employee_name, pe.period_name,
        h.weeks_defaulted AS wks, h.default_hours AS def_hrs,
        (SELECT COUNT(*) FROM oc_time_allocation al
          WHERE al.employee_id = h.employee_id AND al.status = 'Active') AS allocs,
+       -- BOTH tests, because the UPDATE below applies both. The first version
+       -- of this column asked only "has timesheet rows" and printed
+       -- "release" against Alan James and User Rite, who have 1 and 3 live
+       -- allocations and were therefore never going to be touched. Two rows
+       -- released where the report promised four, and the report was the
+       -- wrong half -- a preview that does not share the predicate of the
+       -- statement it previews is worse than no preview.
        CASE WHEN EXISTS (SELECT 1 FROM oc_ts_week w
                            JOIN oc_ts_entry e ON e.ts_week_id = w.ts_week_id
                           WHERE w.employee_id = h.employee_id
                             AND w.period_id   = h.period_id)
             THEN 'has hours - LEAVE HELD'
+            WHEN EXISTS (SELECT 1 FROM oc_time_allocation al
+                          WHERE al.employee_id = h.employee_id
+                            AND al.status      = 'Active')
+            THEN 'on a project - LEAVE HELD'
             ELSE 'nothing behind it - release' END AS verdict
   FROM oc_ts_salary_hold h
   JOIN oc_time_worker wk ON wk.employee_id = h.employee_id
