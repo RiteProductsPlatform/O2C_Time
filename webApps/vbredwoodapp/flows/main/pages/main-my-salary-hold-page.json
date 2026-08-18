@@ -89,7 +89,7 @@
         {
           "chain": "openWeekChain",
           "parameters": {
-            "row": "{{ cell.row }}"
+            "row": "{{ $current.row }}"
           }
         }
       ]
