@@ -19,78 +19,87 @@
   </div>
 
   <oj-bind-if test="[[ $variables.loaded && $variables.holdRows.length > 0 ]]">
-    <div class="rw-ts">
 
-      <!-- Flex rows with ARIA roles, not <table>. An oj-bind-for-each inside
-           <tbody> is invalid HTML: the parser foster-parents it out of the
-           table and the generated cells render as a run of text above it while
-           the static headers collapse into one column. -->
-      <div class="rw-ts-head" role="row">
-        <span class="rw-ts-proj" role="columnheader">Date</span>
-        <span class="rw-ts-task" role="columnheader">Month</span>
-        <span class="rw-ts-tot"  role="columnheader">Expected</span>
-        <span class="rw-ts-tot"  role="columnheader">Submitted</span>
-        <span class="rw-ts-sub"  role="columnheader">Status</span>
-        <span class="rw-ts-act"  role="columnheader">Action</span>
-      </div>
+    <!-- oj-table, not hand-built flex rows. The previous version borrowed the
+         TIMESHEET GRID's column classes -- rw-ts-proj, rw-ts-task, rw-ts-tot,
+         rw-ts-act -- which are sized for a seven-day grid, so six headers of
+         the wrong widths overflowed and Status and Action wrapped onto lines of
+         their own under the others.
+         The classes were never wrong for the grid; they were wrong HERE, and
+         copying them was the mistake. A table that owns its own columns cannot
+         drift like that.
 
-      <oj-bind-for-each data="[[ $variables.holdRows ]]">
-        <template data-oj-as="row">
-          <div class="rw-ts-row" role="row">
+         CELL.ROW, NOT CELL.DATA. An oj-table cell template exposes the row as
+         cell.row -- writing cell.data resolves to undefined, renders empty and
+         still shows the right ROW COUNT, which reads as a data problem rather
+         than a binding one. 288 bindings across this app were once wrong this
+         way. -->
+    <oj-table id="holdTable"
+              aria-label="Dates holding part of your pay"
+              data="[[ $variables.holdADP ]]"
+              class="oj-sm-width-full"
+              display="grid"
+              horizontal-grid-visible="enabled"
+              vertical-grid-visible="disabled"
+              scroll-policy="loadMoreOnScroll"
+              columns='[
+                {"headerText":"Date",      "field":"workDate",      "template":"dateCell",   "resizable":"enabled"},
+                {"headerText":"Month",     "field":"periodName",    "resizable":"enabled"},
+                {"headerText":"Expected",  "field":"expectedHours", "template":"expCell",    "headerClassName":"oj-sm-text-align-end", "className":"oj-sm-text-align-end"},
+                {"headerText":"Submitted", "field":"correctedHours","template":"subCell",    "headerClassName":"oj-sm-text-align-end", "className":"oj-sm-text-align-end"},
+                {"headerText":"Status",    "field":"dayStatus",     "template":"statusCell", "resizable":"enabled"},
+                {"headerText":"",          "template":"actionCell", "sortable":"disabled"}
+              ]'>
 
-            <span class="rw-ts-proj" role="cell">
-              <oj-bind-text value="[[ $application.functions.fmtDate(row.data.workDate) ]]"></oj-bind-text>
-              <span class="rw-ts-sys">
-                <oj-bind-text value="[[ row.data.dayName ]]"></oj-bind-text>
-              </span>
+      <template slot="dateCell" data-oj-as="cell">
+        <div>
+          <oj-bind-text value="[[ $application.functions.fmtDate(cell.row.workDate) ]]"></oj-bind-text>
+          <span class="rw-ts-sys oj-sm-margin-1x-start">
+            <oj-bind-text value="[[ cell.row.dayName ]]"></oj-bind-text>
+          </span>
+        </div>
+      </template>
+
+      <template slot="expCell" data-oj-as="cell">
+        <oj-bind-text value="[[ $application.functions.fmtHours(cell.row.expectedHours) ]]"></oj-bind-text>
+      </template>
+
+      <template slot="subCell" data-oj-as="cell">
+        <oj-bind-text value="[[ $application.functions.fmtHoursBlank(cell.row.correctedHours) ]]"></oj-bind-text>
+      </template>
+
+      <template slot="statusCell" data-oj-as="cell">
+        <div class="oj-flex oj-sm-flex-direction-column oj-sm-gap-1x">
+          <span :class="[[ $page.functions.dayStatusClass(cell.row.dayStatus) ]]">
+            <oj-bind-text value="[[ cell.row.dayStatus ]]"></oj-bind-text>
+          </span>
+          <span class="rw-ts-note">
+            <oj-bind-text value="[[ $page.functions.dayStatusHint(
+                                      cell.row.dayStatus, cell.row.windowOpen) ]]"></oj-bind-text>
+          </span>
+          <!-- A rejection without its reason is just a refusal (RULE-013). -->
+          <oj-bind-if test="[[ cell.row.rejectRemarks ]]">
+            <span class="rw-ts-note">
+              <oj-bind-text value="[[ cell.row.rejectRemarks ]]"></oj-bind-text>
             </span>
+          </oj-bind-if>
+        </div>
+      </template>
 
-            <span class="rw-ts-task" role="cell">
-              <oj-bind-text value="[[ row.data.periodName ]]"></oj-bind-text>
-            </span>
+      <template slot="actionCell" data-oj-as="cell">
+        <!-- Only a row still inside its window gets a button. The server
+             refuses the rest anyway; offering it would be a refusal waiting to
+             happen. -->
+        <oj-bind-if test="[[ $page.functions.canReopen(cell.row.windowOpen) ]]">
+          <oj-button chroming="callToAction"
+                     :aria-label="[[ $page.functions.reopenLabel(cell.row.workDate) ]]"
+                     on-oj-action="[[ $listeners.openWeek ]]">
+            <span>Open week</span>
+          </oj-button>
+        </oj-bind-if>
+      </template>
 
-            <span class="rw-ts-tot" role="cell">
-              <oj-bind-text value="[[ $application.functions.fmtHours(row.data.expectedHours) ]]"></oj-bind-text>
-            </span>
-
-            <span class="rw-ts-tot" role="cell">
-              <oj-bind-text value="[[ $application.functions.fmtHoursBlank(row.data.correctedHours) ]]"></oj-bind-text>
-            </span>
-
-            <span class="rw-ts-sub" role="cell">
-              <span :class="[[ $page.functions.dayStatusClass(row.data.dayStatus) ]]">
-                <oj-bind-text value="[[ row.data.dayStatus ]]"></oj-bind-text>
-              </span>
-              <span class="rw-ts-note">
-                <oj-bind-text value="[[ $page.functions.dayStatusHint(
-                                          row.data.dayStatus, row.data.windowOpen) ]]"></oj-bind-text>
-              </span>
-              <!-- A rejection without its reason is just a refusal (RULE-013). -->
-              <oj-bind-if test="[[ row.data.rejectRemarks ]]">
-                <span class="rw-ts-note">
-                  <oj-bind-text value="[[ row.data.rejectRemarks ]]"></oj-bind-text>
-                </span>
-              </oj-bind-if>
-            </span>
-
-            <span class="rw-ts-act" role="cell">
-              <!-- Only a row still inside its window gets a button. The server
-                   refuses the rest anyway; offering it would be a refusal
-                   waiting to happen. -->
-              <oj-bind-if test="[[ $page.functions.canReopen(row.data.windowOpen) ]]">
-                <oj-button chroming="callToAction"
-                           :aria-label="[[ $page.functions.reopenLabel(row.data.workDate) ]]"
-                           on-oj-action="[[ $listeners.openWeek ]]">
-                  <span>Open week</span>
-                </oj-button>
-              </oj-bind-if>
-            </span>
-
-          </div>
-        </template>
-      </oj-bind-for-each>
-
-    </div>
+    </oj-table>
   </oj-bind-if>
 
   <oj-bind-if test="[[ $variables.loaded && $variables.holdRows.length === 0 ]]">
