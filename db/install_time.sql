@@ -463,6 +463,11 @@ PROMPT [n/m] 71_clear_september.sql - entries only, so the trail survives
 PROMPT [n/m] 72_salary_stopping_schedule.sql - salary stopping runs itself
 @@72_salary_stopping_schedule.sql
 
+-- Supersedes 72's scheduling. 72 still supplies V_OC_TIME_SALARY_DUE and
+-- oc_time_run_salary_due; 73 splits the cadences and owns both jobs.
+PROMPT [n/m] 73_cutoff_cadence.sql - each cut-off runs at its own cadence
+@@73_cutoff_cadence.sql
+
 -- A no-op on a fresh install: this installer never runs 90_test_seed.sql, so
 -- there is nothing stamped TEST_SEED to remove. It is here so an environment
 -- that WAS seeded converges on the same state as one that was not, rather than
