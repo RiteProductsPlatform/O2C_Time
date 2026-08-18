@@ -1165,6 +1165,39 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
     resolve_day(v_emp, p_project_id, p_entry_date,
                 v_shift, v_std, v_working, v_holiday);
 
+    -- PROMOTE A DEFAULT ROW FIRST, so the MERGE below finds it.
+    --
+    -- The MERGE matches 'Actual' alone, which was safe only because nothing
+    -- could reach it on a defaulted week: defaulting locks the week and every
+    -- other caller edits one that is already Actual. The salary-hold keyhole in
+    -- assert_editable changed that -- it is the first path that reaches
+    -- save_entry on a week whose rows are 'Default', which is precisely the
+    -- correction flow PROC-007 exists for.
+    --
+    -- Unmatched, the INSERT below adds an Actual BESIDE the Default, and
+    -- UK_OC_TSE_CELL includes ENTRY_TYPE so the database allows the pair. A day
+    -- holding 8 defaulted hours, corrected to 4 would end up with 12 --
+    -- validate_day only refuses past 24. CLAUDE.md states the invariant it
+    -- breaks: "Default is not a counterpart; it IS that Actual under another
+    -- name, and the two must never both exist."
+    --
+    -- A SEPARATE UPDATE, not a widened ON clause. Matching
+    -- entry_type IN ('Actual','Default') and setting entry_type in the same
+    -- MERGE raises ORA-38104: a column in the ON clause cannot be updated.
+    --
+    -- The promotion is meaningful, not just mechanical: the row stops being
+    -- what the job assumed and becomes what the person says. So the 'Default'
+    -- rows still standing after a resubmission are exactly the untouched ones,
+    -- which is the baseline the adjustment rule compares against.
+    UPDATE oc_ts_entry
+       SET entry_type = 'Actual',
+           updated_by = p_actor
+     WHERE ts_week_id = p_ts_week_id
+       AND project_id = p_project_id
+       AND task_id    = p_task_id
+       AND entry_date = TRUNC(p_entry_date)
+       AND entry_type = 'Default';
+
     MERGE INTO oc_ts_entry e
     USING (SELECT p_ts_week_id AS ts_week_id, p_project_id AS project_id,
                   p_task_id AS task_id, TRUNC(p_entry_date) AS entry_date

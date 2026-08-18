@@ -468,6 +468,9 @@ PROMPT [n/m] 72_salary_stopping_schedule.sql - salary stopping runs itself
 PROMPT [n/m] 73_cutoff_cadence.sql - each cut-off runs at its own cadence
 @@73_cutoff_cadence.sql
 
+PROMPT [n/m] 74_late_submit_adjustment.sql - a late resubmit adjusts only if it changed
+@@74_late_submit_adjustment.sql
+
 -- A no-op on a fresh install: this installer never runs 90_test_seed.sql, so
 -- there is nothing stamped TEST_SEED to remove. It is here so an environment
 -- that WAS seeded converges on the same state as one that was not, rather than
