@@ -89,13 +89,29 @@ define([
           // ISO dates compare correctly as strings, so no parsing is needed.
           const futureWeek = String(week.week_start || '').substring(0, 10) > refIso;
 
+          // THE SALARY-HOLD KEYHOLE (PROC-007). A week under an open hold is
+          // editable even though it is locked, defaulted and in a closed
+          // month -- that is the whole point of the correction window, and
+          // assert_editable has allowed it server-side since 10-Aug. The screen
+          // did not know, so it rendered the week read-only with no Submit and
+          // told the employee to ask their manager. They were being refused a
+          // correction the database would have accepted.
+          //
+          // Still never a future week: a hold cannot justify filling in a week
+          // that has not happened, which is the one gate assert_editable keeps
+          // ahead of the keyhole too.
+          const holdOpen = week.hold_reopen_flag === 'Y';
+          $page.variables.holdReopen = holdOpen;
+
           $page.variables.editable =
-            periodOk && stateOk && week.locked_flag !== 'Y' && !futureWeek;
+            (holdOpen && !futureWeek)
+            || (periodOk && stateOk && week.locked_flag !== 'Y' && !futureWeek);
 
           // Why it is read-only, so the screen can say so instead of leaving the
           // user to discover it by pressing a button that fails.
           $page.variables.lockedReason =
               futureWeek                ? 'future'
+            : holdOpen                  ? ''
             : week.locked_flag === 'Y'  ? 'locked'
             : !periodOk                 ? 'period'
             : !stateOk                  ? week.week_status

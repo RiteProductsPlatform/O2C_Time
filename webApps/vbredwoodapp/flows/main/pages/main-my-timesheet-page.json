@@ -391,6 +391,10 @@
     "weekPattern": {
       "type": "string",
       "defaultValue": ""
+    },
+    "holdReopen": {
+      "type": "boolean",
+      "defaultValue": false
     }
   },
   "types": {

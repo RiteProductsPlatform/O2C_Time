@@ -144,7 +144,27 @@ BEGIN
              -- the day feed is built from OC_TS_ENTRY and would show nothing.
              (SELECT p.pattern_name FROM v_oc_ts_week_pattern p
                WHERE p.ts_week_id = v_oc_ts_week_detail.ts_week_id)
-               AS pattern_name
+               AS pattern_name,
+             -- PROC-007. The salary-hold keyhole in assert_editable reopens a
+             -- locked, closed-period week when a hold is open against it -- and
+             -- the screen had no way to know, so it rendered the week
+             -- read-only with no Submit and told the employee to ask their
+             -- manager. The server would have accepted the submission; the UI
+             -- simply never offered it.
+             --
+             -- Same three conditions as assert_editable, deliberately: a Held
+             -- or Rejected day, on a hold that is still Held, inside the
+             -- window. If they ever disagree the screen would offer a button
+             -- the server refuses, which is worse than not offering it.
+             (SELECT CASE WHEN COUNT(*) > 0 THEN 'Y' ELSE 'N' END
+                FROM oc_ts_salary_hold_day d
+                JOIN oc_ts_salary_hold     h ON h.hold_id = d.hold_id
+               WHERE d.ts_week_id   = v_oc_ts_week_detail.ts_week_id
+                 AND d.day_status  IN ('Held','Rejected')
+                 AND h.salary_status = 'Held'
+                 AND (h.window_expires_on IS NULL
+                   OR TRUNC(SYSDATE) <= h.window_expires_on))
+               AS hold_reopen_flag
         FROM v_oc_ts_week_detail
        WHERE employee_id = :employeeId
          AND period_id   = :periodId

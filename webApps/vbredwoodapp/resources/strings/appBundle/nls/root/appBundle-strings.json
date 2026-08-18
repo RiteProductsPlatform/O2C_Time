@@ -1280,5 +1280,9 @@
   "my_timesheet_pattern": "Pattern",
   "@my_timesheet_pattern": {
     "description": "RULE-011 week-level work pattern, read-only from HCM (which days of the week this person works)"
+  },
+  "my_timesheet_hold_reopen": "Part of your pay is held for this week because it was never submitted. Correct the hours below and submit — your manager approves it as usual. Anything you change is posted to accrual as an adjustment; hours you leave as they are simply release your pay.",
+  "@my_timesheet_hold_reopen": {
+    "description": "PROC-007 salary-hold correction window is open on this week"
   }
 }

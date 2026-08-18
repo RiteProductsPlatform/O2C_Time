@@ -164,7 +164,7 @@
 
     <!-- Locked by the weekly cut-off. The employee cannot edit it; a manager
          can. Saying which is the difference between a dead end and a next step. -->
-    <oj-bind-if test="[[ $variables.lockedReason === 'locked' ]]">
+    <oj-bind-if test="[[ $variables.lockedReason === 'locked' && !$variables.holdReopen ]]">
       <div class="oj-sm-padding-3x rw-notice" role="status">
         <oj-bind-text value="[[$application.translations.appBundle.my_timesheet_week_locked]]"></oj-bind-text>
       </div>
@@ -176,10 +176,21 @@
       </div>
     </oj-bind-if>
 
+    <!-- PROC-007. Three read-only notices above stand down when this is on,
+         and they had to: "ask your manager to correct it", "this month is
+         closed" and "auto-submitted and locked" were all true and all the wrong
+         instruction. The window exists precisely so this person can fix it
+         themselves, and a screen that says otherwise wastes the window. -->
+    <oj-bind-if test="[[ $variables.holdReopen ]]">
+      <div class="oj-sm-padding-3x rw-notice rw-notice-warning" role="status">
+        <oj-bind-text value="[[$application.translations.appBundle.my_timesheet_hold_reopen]]"></oj-bind-text>
+      </div>
+    </oj-bind-if>
+
     <!-- Closed, but the backdating window (RULE-019) may still be open. Saying
          so turns a dead end into the next step: the retro adjustment is exactly
          the route for correcting a closed month. -->
-    <oj-bind-if test="[[ $variables.periodState === 'Closed' ]]">
+    <oj-bind-if test="[[ $variables.periodState === 'Closed' && !$variables.holdReopen ]]">
       <div class="oj-sm-padding-3x rw-notice" role="status">
         <oj-bind-text value="[[ $page.functions.closedPeriodMessage(
                                   $application.variables.adjustmentAllowed) ]]"></oj-bind-text>
@@ -189,7 +200,7 @@
     <!-- A defaulted week locks only when the EMPLOYEE missed the weekly cut-off.
          If the manager missed the delivery cut-off the week is still theirs to
          approve and the employee is not at fault, so the wording differs. -->
-    <oj-bind-if test="[[ $variables.locked ]]">
+    <oj-bind-if test="[[ $variables.locked && !$variables.holdReopen ]]">
       <div class="oj-sm-padding-3x rw-notice rw-notice-warning" role="status">
         <oj-bind-text value="[[$application.translations.appBundle.my_timesheet_this_week_was_auto_submitted_with_default_ho]]"></oj-bind-text>
       </div>

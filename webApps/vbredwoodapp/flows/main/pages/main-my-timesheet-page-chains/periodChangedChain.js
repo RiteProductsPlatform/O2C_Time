@@ -116,8 +116,26 @@ define([
                     String(today.getMonth() + 1).padStart(2, '0') + '-' +
                     String(today.getDate()).padStart(2, '0');
 
+        // A WEEK ASKED FOR BY NAME WINS. Salary on Hold navigates here with
+        // $application.variables.selectedWeekId set to the week behind the date
+        // somebody clicked, and nothing read it back -- so "Open week" on
+        // 01-Jun landed on the LAST week of June, because no June week contains
+        // today and the fallback below takes weeks[length - 1]. The date they
+        // clicked was nowhere on the screen they arrived at.
+        //
+        // Matched against THIS month's weeks rather than trusted blindly: the
+        // id belongs to whichever month it was set from, and a stale one must
+        // not stop the month picker working.
+        //
+        // Cleared once used, so changing month afterwards goes back to the
+        // ordinary "current week, else the last one" behaviour rather than
+        // snapping back to the held week for ever.
+        const asked = $application.variables.selectedWeekId;
+        const wanted = asked ? weeks.find((w) => w.ts_week_id === asked) : null;
+        if (wanted) { $application.variables.selectedWeekId = null; }
+
         const current = weeks.find((w) => w.week_start <= iso && w.week_end >= iso);
-        const pick = current || weeks[weeks.length - 1];
+        const pick = wanted || current || weeks[weeks.length - 1];
 
         // Assigning weekId fires loadGridChain. If the same week is reselected
         // the value does not change and the chain would not fire, so reload
