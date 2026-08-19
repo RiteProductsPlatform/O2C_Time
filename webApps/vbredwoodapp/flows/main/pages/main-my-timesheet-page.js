@@ -237,6 +237,22 @@ define([], () => {
     }
 
     /**
+     * Fusion's approvalStatusCd, mapped for OC_TIME_ABSENCE.
+     *
+     * Three answers, not two. Approved and not-approved are both statements;
+     * absent is neither, and must be passed on as absent so the handler's
+     * NVL(...,'Approved') can decide. Returning 'Pending' for a field Fusion
+     * never sent asserts something nobody said, and the assertion deletes
+     * leave -- see the call site.
+     */
+    approvalOf(cd) {
+      if (cd === undefined || cd === null || String(cd).trim() === '') {
+        return null;
+      }
+      return String(cd).toUpperCase() === 'APPROVED' ? 'Approved' : 'Pending';
+    }
+
+    /**
      * SUBMISSION_STATUS in the employee's own words.
      *
      * The stored values are the engine's — NotYetSubmitted, LateSubmission —
@@ -566,9 +582,28 @@ define([], () => {
             ABSENCE_TYPE: String(x.absenceType || 'Leave').trim() || 'Leave',
             // CHK_OC_TABS_HRS caps the column at 24
             DURATION_HOURS: Math.round(Math.min(perDay * std, 24) * 100) / 100,
-            APPROVAL_STATUS:
-              String(x.approvalStatusCd).toUpperCase() === 'APPROVED'
-                ? 'Approved' : 'Pending',
+            // NULL WHEN FUSION DID NOT SAY, NOT 'Pending'.
+            //
+            // This read String(x.approvalStatusCd).toUpperCase() === 'APPROVED'
+            // ? 'Approved' : 'Pending' -- so a missing field became
+            // String(undefined) === 'UNDEFINED', which is not 'APPROVED', which
+            // became a positive claim that the absence is NOT approved.
+            //
+            // That claim is destructive. v_oc_ts_leave_share only counts
+            // Approved absences, so the retract half of oc_time_sync_leave sees
+            // no share behind the leave rows, deletes them with an AbsenceSync
+            // audit row saying the absence was withdrawn -- which nobody did --
+            // and db/80 then hands the worked hours back. One page load and the
+            // leave is gone from the timesheet while Fusion still shows it.
+            //
+            // The handler already does the right thing with a null:
+            // NVL(r.approval_status,'Approved'). Silence has to stay silence so
+            // that default can apply. A real non-approved status still maps to
+            // Pending and still blocks -- that part was never wrong.
+            // this.approvalOf, not $page.functions.approvalOf: inside a page
+            // module method $page does not exist. It is how the CHAIN reaches
+            // this module, not how the module reaches itself.
+            APPROVAL_STATUS: this.approvalOf(x.approvalStatusCd),
             // WITHDRAWAL IS NOT VISIBLE IN approvalStatusCd. Fusion leaves a
             // withdrawn absence APPROVED there and marks it ORA_WITHDRAWN in
             // absenceStatusCd, so on approval status alone a cancelled leave

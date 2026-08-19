@@ -941,11 +941,32 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
              -- as the Actual it offsets. Default is not a counterpart though;
              -- it IS that Actual under another name, and the two must never
              -- both exist.
+             --
+             -- AND NOT BY TASK EITHER, for the same reason one step further
+             -- out. This tested e.task_id = v_task -- the DEFAULT task -- so
+             -- the moment the employee moved a line to another task
+             -- (oc_time_change_line_task UPDATEs task_id), the guard stopped
+             -- seeing its own row and seeded the default task again. The
+             -- employee got two lines on one project, 4 hours each, and the
+             -- second one reappeared on every page load because
+             -- refreshAbsenceChain calls runPopulation. Reported 19-Aug from
+             -- the screen: "move means we are updating, not adding a new line".
+             --
+             -- The right question is not "is the default task seeded" but "is
+             -- this project seeded for this day". One allocation seeds one
+             -- line per working day; which task it ends up on is the
+             -- employee's business.
+             --
+             -- IS_LEAVE='N' keeps the previous behaviour on a leave day. Leave
+             -- rows are Actual too, so without this a day that already carries
+             -- leave would read as seeded and never get its worked line -- and
+             -- the half-day case genuinely needs one. A full day is seeded and
+             -- then zeroed, exactly as before.
              WHERE NOT EXISTS (SELECT 1 FROM oc_ts_entry e
                                 WHERE e.ts_week_id = v_week
                                   AND e.project_id = a.project_id
-                                  AND e.task_id    = v_task
                                   AND e.entry_date = v_date
+                                  AND e.is_leave   = 'N'
                                   AND e.entry_type IN ('Actual','Default'));
             v_upserted := v_upserted + SQL%ROWCOUNT;
           END;
