@@ -297,6 +297,19 @@
   .rw-dlg-wide { min-width:min(64rem, 92vw); max-width:92vw; }
   .rw-dlg-wide .oj-table-element { min-width:0 !important; }
 
+  /* The month and week pickers sit in a flex row beside the My allocation
+     link, and a flex item's default min-width lets it shrink to its content --
+     which for an oj-select-single is the field chrome, not the text inside it.
+     So they collapsed to about 7rem and truncated their own values: "AUG-20:"
+     and "Week 4 (". The label above was wider than the control below it.
+
+     flex-shrink:0 stops the row stealing their width, and the min-width is
+     sized to the longest real value rather than a guess -- the week reads
+     "Week 4  (17-Aug to 23-Aug)", which is the widest thing either picker has
+     to hold. */
+  .oc-ts-pickers { flex:0 0 auto; }
+  .oc-ts-pickers oj-select-single { min-width:15.5rem; }
+
   /* ── Why every table stopped short of its card ──
      oj-table is a custom element, and an unknown element defaults to
      display:inline, so it shrank to fit its content instead of filling the
