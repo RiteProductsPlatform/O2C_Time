@@ -1394,6 +1394,58 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
       validate_day(p_ts_week_id, d.entry_date);
     END LOOP;
 
+    -- ── A DAY MUST ADD UP TO ITS STANDARD HOURS ──────────────
+    -- Review 18-Aug-2026: "The time entered against any of the projects task
+    -- put together for a day should equal to that standard hours. If it is not
+    -- there, show a warning message" -- corrected moments later to "error
+    -- message, not a warning".
+    --
+    -- AT SUBMIT, NOT AT SAVE, and that is a judgement rather than the literal
+    -- wording. The ask was made about saving, but no day can be built up to
+    -- eight hours without passing through four: enforcing it on Save draft
+    -- would make the grid impossible to fill in a project at a time, and would
+    -- refuse the perfectly ordinary act of stopping halfway. Submit is the
+    -- moment the employee asserts the week is complete, so it is the moment the
+    -- assertion can be checked. validate_day keeps the per-save rules -- 24
+    -- hours, and no work on a full leave day.
+    --
+    -- The scenario that prompted it is the one to keep in mind: apply leave,
+    -- cancel it, and the work rows come back at zero. Total 0 against a
+    -- standard of 8, and nothing previously said so.
+    --
+    -- Zero-standard days are skipped -- weekend, holiday, or a non-working day
+    -- in the person's pattern. There is no standard to reach, and RULE-012
+    -- still lets them book time there voluntarily.
+    --
+    -- Driven off the entries rather than the calendar, so a working day with no
+    -- rows at all is not seen. That does not arise in practice: populate writes
+    -- a row per allocation per working day and the zero-out step sets hours to
+    -- zero rather than deleting, so the row survives to be counted.
+    DECLARE
+      v_offend VARCHAR2(1000);
+    BEGIN
+      SELECT LISTAGG(TO_CHAR(d.entry_date,'DD-Mon') || ' has '
+                     || TRIM(TO_CHAR(d.booked,'FM9990.99')) || ' of '
+                     || TRIM(TO_CHAR(d.std,'FM9990.99')), '; ')
+               WITHIN GROUP (ORDER BY d.entry_date)
+        INTO v_offend
+        FROM (SELECT e.entry_date,
+                     SUM(e.hours)          AS booked,
+                     MAX(e.standard_hours) AS std
+                FROM oc_ts_entry e
+               WHERE e.ts_week_id = p_ts_week_id
+                 AND e.entry_type IN ('Actual','Default')
+               GROUP BY e.entry_date) d
+       WHERE NVL(d.std,0) > 0
+         AND NVL(d.booked,0) <> d.std;
+
+      IF v_offend IS NOT NULL THEN
+        RAISE_APPLICATION_ERROR(-20028,
+          'Each day must add up to its standard hours before the week can be '
+          || 'submitted. ' || v_offend || '.');
+      END IF;
+    END;
+
     -- RULE-007 (lateness) IS NO LONGER DECIDED HERE. It was computed inline --
     -- SYSDATE against NEXT_DAY(week_end, cutday) -- reading the hour only and
     -- dropping the minutes, so a 17:30 cut-off behaved as 17:00. The engine's

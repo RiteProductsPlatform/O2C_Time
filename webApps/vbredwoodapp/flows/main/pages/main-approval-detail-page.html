@@ -132,7 +132,7 @@
                       columns='[
                         {"headerText":"","field":"tsWeekId","template":"pickCell","width":44,"sortable":"disabled"},
                         {"headerText":"Week","field":"weekIndex","template":"weekCell","weight":2,"minWidth":190},
-                        {"headerText":"Projects","field":"projects","template":"projCell","weight":2,"minWidth":150},
+                        {"headerText":"Projects","field":"projects","weight":2,"minWidth":110},
                         {"headerText":"Billable","field":"billableHours","template":"billCell","width":125},
                         {"headerText":"Non-billable","field":"nonBillableHours","template":"nonBillCell","width":165},
                         {"headerText":"Leave","field":"leaveHours","template":"leaveCell","width":110},
@@ -143,23 +143,11 @@
                         {"headerText":"","field":"tsWeekId","template":"actionCell","width":100,"sortable":"disabled"}
                       ]'>
 
-              <!-- The project this screen is scoped to, plus a warning when the
-                   week carries others. The figures in this row are 444's alone,
-                   but approve_week cascades to every day in the week, so
-                   approving here also settles the employee's 555 and PCS10034
-                   days. Showing the count is what keeps the scoped view honest
-                   instead of merely tidy. -->
-              <template slot="projCell" data-oj-as="cell">
-                <span>
-                  <oj-bind-text value="[[ cell.row.projects ]]"></oj-bind-text>
-                  <oj-bind-if test="[[ cell.row.otherProjectCount > 0 ]]">
-                    <span class="rw-flag rw-flag-defaulted"
-                          title="[[ $page.functions.otherProjectsHint(cell.row.otherProjects) ]]">
-                      <oj-bind-text value="[[ '+' + cell.row.otherProjectCount + ' other' ]]"></oj-bind-text>
-                    </span>
-                  </oj-bind-if>
-                </span>
-              </template>
+              <!-- The "+n other" chip was removed 19-Aug on request. It flagged
+                   that approve_week settles the employee's OTHER projects too,
+                   since OC_TS_WEEK carries one APPROVAL_STATUS. That is still
+                   true and is now unsaid on this screen; the version trail
+                   records which projects a week covered. -->
 
               <template slot="pickCell" data-oj-as="cell">
                 <!-- A settled week has nothing to decide, so it cannot be ticked.

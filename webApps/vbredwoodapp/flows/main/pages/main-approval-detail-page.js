@@ -85,22 +85,6 @@ define([], () => {
       return 'Show ' + n + (n === 1 ? ' change' : ' changes');
     }
 
-    /**
-     * Tooltip for the "+n other" chip on a week that spans projects.
-     *
-     * The figures on this screen are scoped to the project the manager opened,
-     * but approve_week fires the event against the WEEK and cascades to every
-     * day in it — there is one APPROVAL_STATUS per week, not one per project.
-     * So approving here settles the employee's hours on the other projects too,
-     * and this is the only place that says so.
-     */
-    otherProjectsHint(otherProjects) {
-      if (!otherProjects) { return ''; }
-      return 'This week also has hours on ' + otherProjects +
-             '. Approving or rejecting it here applies to those too — ' +
-             'the week is approved as a whole.';
-    }
-
 
     /** True when the date is ticked — drives the daily checkbox. */
     isDateSelected(selectedDates, entryDate) {

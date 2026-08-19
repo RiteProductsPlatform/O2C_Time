@@ -23,18 +23,22 @@
     <!-- ══════════════════ Selectors + cut-off ══════════════════ -->
     <div class="oj-flex oj-sm-flex-direction-column oj-sm-gap-2x oj-sm-padding-4x rw-metric">
 
-      <div class="oj-flex oj-sm-justify-content-space-between oj-sm-align-items-start oj-sm-flex-wrap">
+      <!-- TWO ROWS, NOT TWO COLUMNS.
+           These six fields first shared one max-columns="4" grid: every column
+           sized to a dropdown and the four short facts wrapped 4 + 2 with a
+           dropdown-width hole in the middle. Splitting them into two groups
+           side by side fixed the alignment and created a worse problem — six
+           things now fitted on one line, so the flex row compressed the two
+           selects until "AUG-2026" and "Week 4 (17-Aug to 23-Aug)" were both
+           cut off. The controls got squeezed by the labels.
+           Stacked instead: the things you operate on the first row with the
+           allocation link, the things you read on the second. Nothing competes
+           for width with anything of a different kind. -->
+      <div class="oj-flex oj-sm-flex-direction-column oj-sm-gap-3x">
 
-        <!-- TWO GROUPS, NOT ONE GRID. These six fields shared a single
-             max-columns="4" form layout, and the two selects are far wider than
-             the four read-only facts — so every column sized to a select, the
-             facts sat in the middle of columns far too wide for them, and the
-             row wrapped 4 + 2 with a gap the width of a dropdown between "Select
-             week" and "Weekly cut-off". Splitting them lets each group align to
-             its own content: inputs you operate, then facts you read. -->
-        <div class="oj-flex oj-sm-flex-wrap oj-sm-gap-5x oj-flex-item">
+        <div class="oj-flex oj-sm-justify-content-space-between oj-sm-align-items-end oj-sm-flex-wrap oj-sm-gap-4x">
 
-        <oj-form-layout max-columns="2" direction="row" label-edge="top">
+        <oj-form-layout max-columns="2" direction="row" label-edge="top" class="oc-ts-pickers">
 
           <oj-select-single label-hint="[[$application.translations.appBundle.common_month]]"
                             data="[[ $application.variables.periodOptions ]]"
@@ -52,8 +56,15 @@
 
         </oj-form-layout>
 
-        <!-- The read-only half: cut-off, both status axes and the pattern.
-             Four narrow facts on one row, sized to themselves. -->
+        <!-- FLD-005 / ACT-008 -->
+        <oj-button chroming="borderless" on-oj-action="[[ $listeners.showAllocation ]]">
+          <span slot="startIcon" class="oj-ux-ico-information-s"></span>
+          <span><oj-bind-text value="[[$application.translations.appBundle.my_timesheet_my_allocation]]"></oj-bind-text></span>
+        </oj-button>
+
+        </div><!-- /row 1: what you operate -->
+
+        <!-- Row 2: what you read — cut-off, both status axes, the pattern. -->
         <oj-form-layout max-columns="4" direction="row" label-edge="top">
 
           <!-- FLD-003 weekly cut-off, shown to the employee -->
@@ -109,14 +120,7 @@
 
         </oj-form-layout>
 
-        </div><!-- /the two aligned groups -->
-
-        <!-- FLD-005 / ACT-008 -->
-        <oj-button chroming="borderless" on-oj-action="[[ $listeners.showAllocation ]]">
-          <span slot="startIcon" class="oj-ux-ico-information-s"></span>
-          <span><oj-bind-text value="[[$application.translations.appBundle.my_timesheet_my_allocation]]"></oj-bind-text></span>
-        </oj-button>
-      </div>
+      </div><!-- /the two stacked rows -->
 
       <!-- The 6 workflow flags. Independent of status and several can be set at
            once, so they render as a row of chips, each carrying the explanation
