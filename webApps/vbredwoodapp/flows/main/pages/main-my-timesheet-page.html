@@ -534,21 +534,33 @@
          history - two accounts of the same week that can disagree is worse
          than one. -->
     <oj-bind-if test="[[ $variables.weekId ]]">
+      <!-- COLLAPSED BY DEFAULT 19-Aug, same reason as the manager's change
+           history. A week that has been through the cut-off job carries a line
+           per day per pass, so this reached forty-odd rows on an ordinary week
+           and buried the grid the employee actually came to fill in. -->
       <div class="oj-sm-padding-4x rw-metric">
-        <h2 class="oj-typography-heading-xs oj-sm-margin-0">
-          <oj-bind-text value="[[$application.translations.appBundle.my_timesheet_approval_workflow]]"></oj-bind-text>
-        </h2>
-        <p class="oj-typography-body-sm rw-metric-label oj-sm-margin-1x-top">
-          <oj-bind-text value="[[$application.translations.appBundle.my_timesheet_approval_workflow_sub]]"></oj-bind-text>
-        </p>
+        <div class="oj-flex oj-sm-align-items-center oj-sm-justify-content-space-between oj-sm-flex-wrap oj-sm-gap-2x">
+          <div>
+            <h2 class="oj-typography-heading-xs oj-sm-margin-0">
+              <oj-bind-text value="[[$application.translations.appBundle.my_timesheet_approval_workflow]]"></oj-bind-text>
+            </h2>
+            <p class="oj-typography-body-sm rw-metric-label oj-sm-margin-1x-top oj-sm-margin-0-bottom">
+              <oj-bind-text value="[[$application.translations.appBundle.my_timesheet_approval_workflow_sub]]"></oj-bind-text>
+            </p>
+          </div>
+          <oj-button chroming="outlined" on-oj-action="[[ $listeners.toggleActivity ]]">
+            <span slot="startIcon" :class="[[ $variables.showActivity ? 'oj-ux-ico-chevron-up' : 'oj-ux-ico-chevron-down' ]]"></span>
+            <span><oj-bind-text value="[[ $page.functions.activityToggleLabel($variables.showActivity, $variables.activityRows) ]]"></oj-bind-text></span>
+          </oj-button>
+        </div>
 
-        <oj-bind-if test="[[ $variables.activityRows.length === 0 ]]">
+        <oj-bind-if test="[[ $variables.showActivity && $variables.activityRows.length === 0 ]]">
           <div class="oj-typography-body-sm rw-metric-label oj-sm-margin-2x-top" role="status">
             <oj-bind-text value="[[$application.translations.appBundle.my_timesheet_no_activity_yet]]"></oj-bind-text>
           </div>
         </oj-bind-if>
 
-        <oj-bind-if test="[[ $variables.activityRows.length > 0 ]]">
+        <oj-bind-if test="[[ $variables.showActivity && $variables.activityRows.length > 0 ]]">
           <div class="rw-wf oj-sm-margin-2x-top">
             <oj-bind-for-each data="[[ $variables.activityRows ]]">
               <template>

@@ -390,9 +390,13 @@
                   <oj-bind-if test="[[ cell.row.entryType === 'Adjustment' ]]">
                     <span class="rw-flag rw-flag-adjustment"><oj-bind-text value="[[$application.translations.appBundle.approval_detail_adjustment]]"></oj-bind-text></span>
                   </oj-bind-if>
-                  <oj-bind-if test="[[ cell.row.entryType === 'Default' ]]">
-                    <span class="rw-flag rw-flag-defaulted"><oj-bind-text value="[[$application.translations.appBundle.approval_detail_default_hours]]"></oj-bind-text></span>
-                  </oj-bind-if>
+                  <!-- The per-day "Default hours" chip was removed 19-Aug. The
+                       week already carries Defaulted as its status and as a
+                       flag, so repeating it on all five days said nothing new
+                       and crowded out Reversal and Adjustment, which are
+                       per-day facts and the only reason this column exists.
+                       ENTRY_TYPE = 'Default' is still written and still drives
+                       the accrual hand-off (INT-014); it is simply not shown. -->
                 </span>
               </template>
 
@@ -442,19 +446,34 @@
       </div>
 
       <!-- ══════════════════ Change history (REP-007 / NFR-010) ══════════════════ -->
+      <!-- COLLAPSED BY DEFAULT 19-Aug. This ran to a full screen of rows on any
+           week that had been touched more than once, and it sits below the
+           thing the manager came here to do — so the approve/reject controls
+           were pushed off-screen by an audit trail nobody had asked to see.
+           It is evidence, wanted on demand, not context wanted always. -->
       <div class="oj-sm-padding-4x rw-metric">
-        <h2 class="oj-typography-heading-xs oj-sm-margin-0"><oj-bind-text value="[[$application.translations.appBundle.approval_detail_change_history]]"></oj-bind-text></h2>
-        <p class="oj-typography-body-sm rw-metric-label oj-sm-margin-1x-top">
-          <oj-bind-text value="[[$application.translations.appBundle.approval_detail_every_manager_correction_and_retro_adjustmen]]"></oj-bind-text>
-        </p>
+        <div class="oj-flex oj-sm-align-items-center oj-sm-justify-content-space-between oj-sm-flex-wrap oj-sm-gap-2x">
+          <div>
+            <h2 class="oj-typography-heading-xs oj-sm-margin-0"><oj-bind-text value="[[$application.translations.appBundle.approval_detail_change_history]]"></oj-bind-text></h2>
+            <p class="oj-typography-body-sm rw-metric-label oj-sm-margin-1x-top oj-sm-margin-0-bottom">
+              <oj-bind-text value="[[$application.translations.appBundle.approval_detail_every_manager_correction_and_retro_adjustmen]]"></oj-bind-text>
+            </p>
+          </div>
+          <!-- The count is on the button, so the manager can tell an untouched
+               week from a heavily corrected one without opening anything. -->
+          <oj-button chroming="outlined" on-oj-action="[[ $listeners.toggleHistory ]]">
+            <span slot="startIcon" :class="[[ $variables.showHistory ? 'oj-ux-ico-chevron-up' : 'oj-ux-ico-chevron-down' ]]"></span>
+            <span><oj-bind-text value="[[ $page.functions.historyToggleLabel($variables.showHistory, $variables.auditRows) ]]"></oj-bind-text></span>
+          </oj-button>
+        </div>
 
-        <oj-bind-if test="[[ $variables.auditRows.length === 0 ]]">
+        <oj-bind-if test="[[ $variables.showHistory && $variables.auditRows.length === 0 ]]">
           <div class="oj-typography-body-sm rw-metric-label oj-sm-margin-2x-top" role="status">
             <oj-bind-text value="[[$application.translations.appBundle.approval_detail_nothing_has_been_changed_on_this_week]]"></oj-bind-text>
           </div>
         </oj-bind-if>
 
-        <oj-bind-if test="[[ $variables.auditRows.length > 0 ]]">
+        <oj-bind-if test="[[ $variables.showHistory && $variables.auditRows.length > 0 ]]">
           <div class="rw-grid-scroll oj-sm-margin-3x-top">
             <oj-table aria-label="Change history for this week"
                       data="[[ $variables.auditADP ]]"

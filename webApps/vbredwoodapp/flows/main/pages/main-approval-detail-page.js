@@ -72,6 +72,20 @@ define([], () => {
     }
 
     /**
+     * Label for the change-history toggle.
+     *
+     * Carries the count, so an untouched week and a heavily corrected one are
+     * distinguishable without opening either — which is most of the value the
+     * panel had when it was always expanded, at none of the height.
+     */
+    historyToggleLabel(open, rows) {
+      const n = (rows && rows.length) || 0;
+      if (open) { return 'Hide history'; }
+      if (n === 0) { return 'No changes'; }
+      return 'Show ' + n + (n === 1 ? ' change' : ' changes');
+    }
+
+    /**
      * Tooltip for the "+n other" chip on a week that spans projects.
      *
      * The figures on this screen are scoped to the project the manager opened,

@@ -141,6 +141,12 @@
       "defaultValue": "",
       "input": "none",
       "description": "FLD-003 — the weekly cut-off, shown beside the WEEKS list. The delivery cut-off belongs at month level (PAGE-003); this is the one that governs a week."
+    },
+    "showHistory": {
+      "type": "boolean",
+      "defaultValue": false,
+      "input": "none",
+      "description": "Change history is collapsed until asked for: it runs to a screenful on a corrected week and sits below the approve/reject controls."
     }
   },
   "types": {
@@ -425,6 +431,13 @@
             "entryDate": "{{ $current.row.entryDate }}",
             "picked": "{{ $event.detail.value }}"
           }
+        }
+      ]
+    },
+    "toggleHistory": {
+      "chains": [
+        {
+          "chain": "toggleHistoryChain"
         }
       ]
     }

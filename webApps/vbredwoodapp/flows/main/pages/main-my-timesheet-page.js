@@ -222,6 +222,21 @@ define([], () => {
     }
 
     /**
+     * Label for the approval-workflow toggle.
+     *
+     * The count is on the button because it is the one thing worth knowing
+     * without opening the panel: "nothing has happened to this week yet" and
+     * "this week has been round the houses" are different situations and the
+     * employee should be able to tell them apart at a glance.
+     */
+    activityToggleLabel(open, rows) {
+      const n = (rows && rows.length) || 0;
+      if (open) { return 'Hide history'; }
+      if (n === 0) { return 'No activity yet'; }
+      return 'Show ' + n + (n === 1 ? ' entry' : ' entries');
+    }
+
+    /**
      * SUBMISSION_STATUS in the employee's own words.
      *
      * The stored values are the engine's — NotYetSubmitted, LateSubmission —
