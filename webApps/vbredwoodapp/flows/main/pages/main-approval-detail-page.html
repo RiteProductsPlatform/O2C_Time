@@ -139,7 +139,8 @@
                         {"headerText":"Billing loss","field":"billingLossHours","template":"lossCell","width":150},
                         {"headerText":"Total","field":"totalHours","template":"totalCell","width":110},
                         {"headerText":"Days","field":"daysApproved","template":"daysCell","width":130},
-                        {"headerText":"Status","field":"weekStatus","template":"statusCell","weight":2,"minWidth":190},
+                        {"headerText":"Employee status","field":"submissionStatus","template":"empStatusCell","weight":2,"minWidth":200},
+                        {"headerText":"Manager status","field":"approvalStatus","template":"mgrStatusCell","weight":2,"minWidth":200},
                         {"headerText":"","field":"tsWeekId","template":"actionCell","width":100,"sortable":"disabled"}
                       ]'>
 
@@ -199,10 +200,19 @@
                 </span>
               </template>
 
-              <template slot="statusCell" data-oj-as="cell">
+              <!-- THE TWO V4 AXES, SPLIT 19-Aug.
+                   Review: "Isn't there manager status and employee status, or
+                   is it just one status?" — "I think for both, you can show
+                   both." This column showed WEEK_STATUS, which collapses them,
+                   so the manager could not tell a week nobody had sent from one
+                   sitting with them undecided. The employee's own page was
+                   already split; this is the other half of the same ask.
+                   The flags stay on the employee side, because that is what
+                   they describe: how the hours got there. -->
+              <template slot="empStatusCell" data-oj-as="cell">
                 <span>
-                  <span :class="[[ $application.functions.statusClass(cell.row.weekStatus) ]]">
-                    <oj-bind-text value="[[ cell.row.weekStatus ]]"></oj-bind-text>
+                  <span :class="[[ $application.functions.statusClass(cell.row.submissionStatus) ]]">
+                    <oj-bind-text value="[[ $page.functions.submissionLabel(cell.row.submissionStatus) ]]"></oj-bind-text>
                   </span>
                   <!-- The 6 flags, derived from the raw row so this page and the
                        employee's own page always say the same thing. -->
@@ -213,6 +223,13 @@
                       </span>
                     </template>
                   </oj-bind-for-each>
+                </span>
+              </template>
+
+              <template slot="mgrStatusCell" data-oj-as="cell">
+                <span :class="[[ $application.functions.statusClass(cell.row.approvalStatus) ]]"
+                      :title="[[ $page.functions.approvalHint(cell.row.submissionStatus, cell.row.approvalStatus) ]]">
+                  <oj-bind-text value="[[ $page.functions.approvalLabel(cell.row.approvalStatus) ]]"></oj-bind-text>
                 </span>
               </template>
 
@@ -341,7 +358,7 @@
                         {"headerText":"Hours","field":"hours","template":"hoursCell","width":90},
                         {"headerText":"Type","field":"billableType","template":"typeCell","width":130},
                         {"headerText":"Shift","field":"shiftCode","width":90},
-                        {"headerText":"Day status","field":"dayStatus","template":"dayStatusCell","width":140},
+                        {"headerText":"Manager status","field":"dayStatus","template":"dayStatusCell","width":170},
                         {"headerText":"Source","field":"source","width":100},
                         {"headerText":"","field":"tsEntryId","template":"actionCell","width":110,"sortable":"disabled"}
                       ]'>
@@ -409,10 +426,22 @@
                 </span>
               </template>
 
+              <!-- "Day status" renamed to Manager status 19-Aug.
+                   Review: "the top we are showing employee status ... then why
+                   are you showing day status here? It should be manager status,
+                   right?" — and "follow consistent naming convention, otherwise
+                   it leads to confusion. Don't call it a day status."
+                   The column always held the approval decision; DAY_STATUS is
+                   written from APPROVAL_STATUS by the engine, one statement for
+                   the whole week, so a day can never disagree with its week.
+                   The name said "the state of this day", which invited the
+                   reading that a day could be approved on its own — and
+                   day-level approval was retired in V4. Same values, in the
+                   words the rest of the module uses. -->
               <template slot="dayStatusCell" data-oj-as="cell">
                 <span :class="[[ $application.functions.statusClass(cell.row.dayStatus) ]]"
                       :title="[[ $page.functions.rejectTitle(cell.row) ]]">
-                  <oj-bind-text value="[[ cell.row.dayStatus ]]"></oj-bind-text>
+                  <oj-bind-text value="[[ $page.functions.approvalLabel(cell.row.dayStatus) ]]"></oj-bind-text>
                 </span>
               </template>
 

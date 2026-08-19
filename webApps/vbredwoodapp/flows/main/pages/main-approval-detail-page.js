@@ -72,6 +72,57 @@ define([], () => {
     }
 
     /**
+     * SUBMISSION_STATUS in plain words.
+     *
+     * DUPLICATED FROM main-my-timesheet-page.js ON PURPOSE, and it is worth
+     * knowing why rather than "fixing" it later. A page module is loaded per
+     * page and cannot import another page's module; the shared home would be
+     * $application.functions, which is where statusClass and weekFlags already
+     * live. Moving these there is the right call the moment a third page needs
+     * them — with two, the indirection costs more than the repetition. What
+     * must not happen is the two copies drifting: the manager and the employee
+     * reading different words for the same stored value is the exact confusion
+     * the review asked us to remove.
+     */
+    submissionLabel(s) {
+      const map = {
+        NotYetSubmitted: 'Not yet submitted',
+        Submitted: 'Submitted',
+        LateSubmission: 'Submitted late',
+        Defaulted: 'Defaulted at cut-off',
+      };
+      return map[s] || s || '—';
+    }
+
+    /** APPROVAL_STATUS in plain words. Also used for the day-level column, which
+     *  carries the same values written from the week by the engine. */
+    approvalLabel(s) {
+      const map = {
+        Pending: 'Not yet submitted',
+        Approved: 'Approved',
+        Rejected: 'Rejected',
+        ManagerDefaulted: 'Closed at delivery cut-off',
+      };
+      return map[s] || s || '—';
+    }
+
+    /**
+     * Why the manager column reads as it does.
+     *
+     * 'Pending' covers two situations that look identical and mean opposite
+     * things: nothing has reached the manager, or it has and they have not
+     * decided. Only the second is theirs to act on, and since the rename the
+     * label cannot tell them apart — so this must.
+     */
+    approvalHint(submission, approval) {
+      if (approval !== 'Pending') { return ''; }
+      if (submission === 'NotYetSubmitted') {
+        return 'Nothing has reached you for this week — the employee has not submitted it.';
+      }
+      return 'Waiting on you. The employee has submitted this week and no decision has been taken.';
+    }
+
+    /**
      * Label for the change-history toggle.
      *
      * Carries the count, so an untouched week and a heavily corrected one are

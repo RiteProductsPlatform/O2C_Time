@@ -87,10 +87,12 @@ EXCEPTION WHEN OTHERS THEN
 END;
 /
 
+-- ONE LITERAL, NOT AN EXPRESSION. COMMENT ON ... IS takes a quoted string and
+-- nothing else -- no concatenation, no bind, no function. The || form raises
+-- ORA-00933 "SQL command not properly ended", which points at the statement
+-- rather than at the operator and reads like a typo somewhere else entirely.
 COMMENT ON COLUMN oc_ts_entry.pre_leave_hours IS
-  'The hours this cell held before full-day leave displaced them. Restored '
-  || 'verbatim when the absence is withdrawn, then cleared. NULL means nothing '
-  || 'is being held aside.';
+  'Hours this cell held before full-day leave displaced them. Restored verbatim when the absence is withdrawn, then cleared. NULL means nothing is held aside.';
 
 PROMPT ============================================================
 PROMPT [2/4] OC_TIME_LEAVE_DISPLACE — put the day aside, or give it back
@@ -295,7 +297,42 @@ END;
 SHOW ERRORS
 
 PROMPT ============================================================
-PROMPT [4/4] Verification
+PROMPT [4/5] Settle the days that are already wrong
+PROMPT ============================================================
+
+-- Defining the procedure changes nothing that has already happened. Every day
+-- carrying a full day of leave AND worked hours was written before this script
+-- existed and stays that way until something looks at it -- which is why the
+-- first run reported 2 rather than 0.
+--
+-- Displacement only, not the whole sync: retract and apply are about which
+-- leave rows should exist and they are already correct after db/79. This is
+-- the one pass that has never run.
+--
+-- Anything put aside here is recoverable in the ordinary way: withdraw the
+-- absence and the next page load gives it back.
+DECLARE
+  v_from DATE; v_to DATE; v_aside NUMBER; v_back NUMBER;
+BEGIN
+  SELECT MIN(entry_date), MAX(entry_date) INTO v_from, v_to FROM oc_ts_entry;
+
+  IF v_from IS NULL THEN
+    DBMS_OUTPUT.PUT_LINE('  No timesheet entries; nothing to settle.');
+  ELSE
+    -- oc_time_leave_displace does NOT commit -- only oc_time_sync_leave does,
+    -- and that is deliberate so a caller can wrap both halves. Committed here
+    -- because this block is the caller.
+    oc_time_leave_displace(v_from, v_to, NULL, 'DISPLACE_80', v_aside, v_back);
+    COMMIT;
+    DBMS_OUTPUT.PUT_LINE('  ' || TO_CHAR(v_from,'DD-Mon-YY') || ' to '
+      || TO_CHAR(v_to,'DD-Mon-YY') || ': ' || v_aside
+      || ' work row(s) put aside, ' || v_back || ' given back.');
+  END IF;
+END;
+/
+
+PROMPT ============================================================
+PROMPT [5/5] Verification
 PROMPT ============================================================
 
 COLUMN employee_id FORMAT A10
