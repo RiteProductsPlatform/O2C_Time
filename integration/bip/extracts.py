@@ -436,7 +436,7 @@ ALLOCATIONS = {
     "key": ["PROJECT_NUMBER", "EMPLOYEE_ID"],
     "columns": ["FUSION_PROJECT_ID", "PROJECT_NUMBER", "EMPLOYEE_ID",
                 "START_DATE", "END_DATE", "ALLOC_PCT", "CAP_HOURS",
-                "TRACK_TIME_FLAG", "STATUS", "BILLING_STATUS",
+                "TRACK_TIME_FLAG", "STATUS", "BILLING_STATUS", "CLIENT_ROLE",
                 "FUSION_SYNCED_ON"],
     "sql": """
 -- One row per project x employee. Both sides need collapsing first, and
@@ -482,6 +482,21 @@ SELECT pp.project_id                                   AS fusion_project_id,
        LEAST(NVL(MAX(asg.alloc_pct), 100), 100)        AS alloc_pct,
        MAX(asg.hours_per_day)                          AS cap_hours,
        MAX(pp.pjs_track_time)                          AS track_time_flag,
+       -- THE PERSON'S ROLE ON THIS PROJECT. Review 18-Aug: "along with it I
+       -- need to bring roles also for this particular person. What is the role?
+       -- That is also missing." It is on the party, one join away, and the
+       -- PROJECTS extract has always used the same pair to find the Project
+       -- Manager -- so this was reachable the whole time and simply never
+       -- selected. Project Manager, Architect Principal, Engineer, Developer,
+       -- Business Analyst are what PPM's Manage Project Resources cards show.
+       --
+       -- KEEP (DENSE_RANK FIRST ...) rather than MAX(): a person can hold more
+       -- than one role on a project over time, and MAX would answer
+       -- alphabetically -- "Architect Principal" beating a current "Engineer"
+       -- for ever. Ordering by end_date_active DESC with NULLS FIRST takes the
+       -- OPEN-ENDED party row first, which is the role they hold now.
+       MAX(r.name) KEEP (DENSE_RANK FIRST
+           ORDER BY pp.end_date_active DESC NULLS FIRST)  AS client_role,
        -- STAMPED SO "NOT SENT" BECOMES VISIBLE. Nothing in the cache could
        -- previously tell an allocation that PPM had DELETED from one it simply
        -- had not changed: oc_time_expire_allocations retires by DATE only, and
@@ -531,6 +546,12 @@ SELECT pp.project_id                                   AS fusion_project_id,
   JOIN per_all_people_f papf
     ON papf.person_id = pp.resource_source_id
    AND {ED} BETWEEN papf.effective_start_date AND papf.effective_end_date
+  -- LEFT, not JOIN. A party with no role is still an allocation and still has
+  -- time to record; making the role compulsory here would drop those people out
+  -- of the feed entirely and look like a missing allocation rather than a
+  -- missing role.
+  LEFT JOIN pjt_project_roles_vl r
+    ON r.project_role_id = pp.project_role_id
   -- PJT_PROJECT_RESOURCE, NOT PJR_ASSIGNMENT, and that difference is the whole
   -- reason every allocation used to arrive at 100%.
   --

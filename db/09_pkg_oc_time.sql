@@ -3284,6 +3284,7 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
       period, period_year, period_month, confirm_id,
       employee_id, employee_name, worker_type,
       project_number, project_name, customer_name, revenue_model,
+      client_role,
       wbs_task, wbs_task_name, work_date,
       billable_hours, non_billable_hours, leave_hours, unbilled_reason,
       entry_type, flag, action_date,
@@ -3291,6 +3292,13 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
     SELECT v_pname, v_year, v_month, v_confirm,
            w.employee_id, wk.employee_name, wk.worker_type,
            p.project_number, p.project_name, p.customer_name, p.revenue_model,
+           -- The person's role on this project, copied at confirmation.
+           -- A SCALAR SUBQUERY, not a join: OC_TIME_ALLOCATION can hold more
+           -- than one row per person per project across date ranges, and a
+           -- join would multiply every entry into the interface.
+           (SELECT MAX(al.client_role) FROM oc_time_allocation al
+             WHERE al.employee_id = w.employee_id
+               AND al.project_id  = e.project_id),
            t.task_code, t.task_name, e.entry_date,
            CASE WHEN e.billable_type = 'Billable'     AND e.is_leave = 'N'
                 THEN e.hours ELSE 0 END,
@@ -3451,6 +3459,7 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
           period, period_year, period_month, confirm_id,
           employee_id, employee_name, worker_type,
           project_number, project_name, customer_name, revenue_model,
+          client_role,
           wbs_task, wbs_task_name, work_date,
           billable_hours, non_billable_hours, leave_hours, unbilled_reason,
           entry_type, flag, action_date,
@@ -3458,6 +3467,9 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
         SELECT pe.period_name, pe.period_year, pe.period_month, c.confirm_id,
                w.employee_id, wk.employee_name, wk.worker_type,
                p.project_number, p.project_name, p.customer_name, p.revenue_model,
+               (SELECT MAX(al.client_role) FROM oc_time_allocation al
+                 WHERE al.employee_id = w.employee_id
+                   AND al.project_id  = e.project_id),
                t.task_code, t.task_name, e.entry_date,
                CASE WHEN e.billable_type = 'Billable'     AND e.is_leave = 'N'
                     THEN e.hours ELSE 0 END,
