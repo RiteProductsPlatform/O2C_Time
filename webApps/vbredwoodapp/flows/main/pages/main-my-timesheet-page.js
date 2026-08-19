@@ -242,10 +242,23 @@ define([], () => {
       return map[s] || s || '—';
     }
 
-    /** APPROVAL_STATUS in the employee's own words. */
+    /**
+     * APPROVAL_STATUS in the employee's own words.
+     *
+     * 'Pending' reads as "Not yet submitted", matching the status matrix, where
+     * the manager axis was renamed on 19-Aug — 'Pending' sounded like the
+     * manager was sitting on something when, on most weeks, nothing had reached
+     * them. The STORED value is unchanged; this is a label only.
+     *
+     * It costs one thing, and approvalHint below is what pays it: on a week the
+     * employee HAS submitted, "Manager status: Not yet submitted" is not what a
+     * reader expects — the week was submitted, it is the manager's decision
+     * that is outstanding. The tooltip says which of the two situations this is,
+     * because the label alone can no longer distinguish them.
+     */
     approvalLabel(s) {
       const map = {
-        Pending: 'Not yet decided',
+        Pending: 'Not yet submitted',
         Approved: 'Approved',
         Rejected: 'Rejected',
         ManagerDefaulted: 'Closed at delivery cut-off',
@@ -256,17 +269,19 @@ define([], () => {
     /**
      * Why the manager axis reads as it does.
      *
-     * 'Pending' is the value that needs explaining, because it means two
-     * different things depending on the other axis and the difference decides
-     * whether the employee has anything to do. A week nobody submitted is also
-     * Pending — the manager has not failed to act, they have not been asked.
+     * Load-bearing since the rename. 'Pending' covers two situations that look
+     * identical on the chip and mean opposite things to the person reading it:
+     * nothing has reached the manager, or the manager has it and has not
+     * decided. Only the first is something the employee can act on, and the
+     * label can no longer tell them apart — so this must.
      */
     approvalHint(submission, approval) {
       if (approval !== 'Pending') { return ''; }
       if (submission === 'NotYetSubmitted') {
         return 'Nothing has reached your manager yet — submit the week first.';
       }
-      return 'Your manager has this week and has not decided yet. Nothing further is needed from you.';
+      return 'Submitted. Your manager has this week and has not decided yet — ' +
+             'nothing further is needed from you.';
     }
 
     /**
