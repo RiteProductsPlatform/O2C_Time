@@ -823,6 +823,8 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
     v_holiday  VARCHAR2(200);
     v_hours    NUMBER;
     v_task     NUMBER;
+    -- Which billability of task this allocation should be seeded onto.
+    v_want     oc_time_task.billable_type%TYPE;
     -- Absence apportionment (RULE-008). See the block that uses them.
     v_pct_tot  NUMBER;
     v_alloc_n  NUMBER;
@@ -845,6 +847,13 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
     -- no allocation row covered the date.
     FOR a IN (SELECT al.allocation_id, al.employee_id, al.project_id, al.alloc_pct,
                      al.start_date, al.end_date,
+                     -- Review 18-Aug: "for non-billable people by default it
+                     -- should show the non-billable task". This is the fact
+                     -- that decides it -- BILLING_STATUS is per person per
+                     -- project, from PPM's assignment type, and is a different
+                     -- axis from OC_TIME_TASK.BILLABLE_TYPE, which is per task
+                     -- for everyone. Both are needed and neither substitutes.
+                     al.billing_status,
                      w.worker_type
                 FROM oc_time_allocation al
                 JOIN oc_time_worker     w ON w.employee_id = al.employee_id
@@ -856,22 +865,53 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
     LOOP
       v_read := v_read + 1;
       BEGIN
-        -- The default task is the project's first chargeable WBS task. Without
-        -- one there is nothing to charge to, which is a failed record rather
-        -- than a hard stop (PROC-001 exception paths).
+        -- The default task matches how this person is engaged on this project:
+        -- an Unbilled resource is seeded onto a non-billable task, a Billable
+        -- one onto a billable task. Two different vocabularies meet here --
+        -- CHK_OC_TAL_BILLING allows ('Billable','Unbilled') and the task column
+        -- allows ('Billable','Non-billable') -- so the mapping is explicit
+        -- rather than a comparison.
+        --
+        -- FALLING BACK IS THE POINT, not a safety net. Most projects on this
+        -- pod carry no non-billable WBS task yet: the single-level task
+        -- structure that gives every project both was agreed in the same
+        -- conversation and has not been built in PPM. Until it is, an Unbilled
+        -- resource finds nothing to match and lands on the billable task
+        -- exactly as before -- so this changes nothing anywhere the data does
+        -- not yet support it, and starts working the day the tasks arrive.
+        v_want := CASE WHEN a.billing_status = 'Unbilled'
+                       THEN 'Non-billable' ELSE 'Billable' END;
+        -- READ FROM THE LOV, NOT FROM OC_TIME_TASK.
+        --
+        -- This selected straight from the table with its own copy of the LOV's
+        -- rules -- task_type='WBS', chargeable, billable -- and the copy was
+        -- already incomplete: it omitted SELECTABLE_FLAG, which is what keeps
+        -- Leave and Billing Loss out of the picker (RULE-008 / RULE-009). A
+        -- project whose first chargeable billable task happened to be
+        -- system-owned would have been seeded onto a line nobody could change.
+        --
+        -- Selecting from V_OC_TS_TASK_LOV makes that class of bug impossible
+        -- rather than fixed: populate can only ever seed something the employee
+        -- can also pick, because it is reading the picker. The comment below
+        -- has always asserted the two agree; now they cannot disagree.
+        --
+        -- It also delivers the review item today. The LOV already carries the
+        -- COMMON non-billable tasks against every project, so an Unbilled
+        -- resource has a non-billable task to land on right now, without
+        -- waiting for the single-level project task structure agreed in the
+        -- same conversation. When that arrives and the project's own
+        -- non-billable WBS tasks appear, the ORDER BY prefers them
+        -- automatically -- WBS before Common -- and nothing here changes.
         BEGIN
           SELECT task_id INTO v_task
-            FROM (SELECT task_id FROM oc_time_task
-                   WHERE project_id = a.project_id
-                     AND task_type  = 'WBS'
-                     AND status     = 'Active'
-                     -- Same pair as the LOV. Seeding a line onto a task the
-                     -- employee cannot then select in the picker would be a
-                     -- grid they can see and not change.
-                     AND chargeable_flag = 'Y'
-                     AND billable_type   = 'Billable'
-                   -- task_code, not task_id. SORT_ORDER is never populated - the
-                   -- extract does not carry it and the sync does not set it - so
+            FROM (SELECT task_id FROM v_oc_ts_task_lov
+                   WHERE project_id    = a.project_id
+                     AND billable_type = v_want
+                   -- The project's own task before the shared one, then by WBS
+                   -- number.
+                   --
+                   -- task_code, not task_id. SORT_ORDER is never populated -- the
+                   -- extract does not carry it and the sync does not set it -- so
                    -- every task sits at the default 100 and the tie-break decided
                    -- the answer. task_id is the local identity column, so "the
                    -- first chargeable task" actually meant "whichever row the
@@ -879,13 +919,19 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
                    -- Leave; on another project it was Development. Ordering by
                    -- the WBS number makes it the first task in the BREAKDOWN,
                    -- and matches how V_OC_TS_TASK_LOV already orders.
-                   ORDER BY sort_order, task_code, task_id)
+                   ORDER BY CASE WHEN task_group = 'WBS' THEN 0 ELSE 1 END,
+                            sort_order, task_code, task_id)
            WHERE ROWNUM = 1;
         EXCEPTION WHEN NO_DATA_FOUND THEN
+          -- Nothing of the wanted billability. Only reachable for a Billable
+          -- resource on a project with no billable task at all, since the
+          -- COMMON non-billable tasks are always present for the Unbilled
+          -- case. Left as a failed record, as it always was.
           fail_record(v_job, 'ALLOCATION',
                       'proj=' || a.project_id || ';emp=' || a.employee_id,
                       a.employee_id,
-                      'Project has no chargeable WBS task to pre-populate against.',
+                      'Project has no selectable ' || v_want
+                      || ' task to pre-populate against.',
                       'NO_WBS_TASK');
           v_failed := v_failed + 1;
           CONTINUE;
