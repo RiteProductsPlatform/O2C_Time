@@ -29,7 +29,22 @@ define([
 
       const cells = $page.variables.dirtyCells || [];
 
-      if (!cells.length) {
+      // COUNTED NOW, BEFORE ANYTHING IS CLEARED.
+      //
+      // `cells` is a REFERENCE to $page.variables.dirtyCells, not a copy. The
+      // success path sets that variable to [] and then read cells.length
+      // afterwards — and VB empties the underlying observable array in place
+      // rather than swapping it, so by the time the message was built the
+      // local was empty too. Result: "0 entries saved" as a CONFIRMATION,
+      // after a save that had worked, on a page still showing the new hours.
+      //
+      // Reported twice. The first fix corrected which number to trust — server
+      // over client — and left the aliasing, so the same words came back from a
+      // different direction. Reading a count after clearing its source is the
+      // actual defect; taking a copy of the number is the fix.
+      const sent = cells.length;
+
+      if (!sent) {
         // Accurate but easy to misread: after removing a line there is
         // legitimately nothing to save, because Remove deletes the entries
         // server-side straight away rather than queueing a change. Saying so
@@ -88,7 +103,7 @@ define([
               summary: 'Nothing was saved',
               message: (resp.body && resp.body.error)
                 ? resp.body.error
-                : 'The server stored none of the ' + cells.length + ' changed '
+                : 'The server stored none of the ' + sent + ' changed '
                   + 'cells and gave no reason. Your hours are still on screen — '
                   + 'please report this rather than retyping them.',
               severity: 'error',
@@ -96,7 +111,7 @@ define([
               displayMode: 'transient',
             });
           } else {
-            const n = (saved === null ? cells.length : saved);
+            const n = (saved === null ? sent : saved);
             await Actions.fireNotificationEvent(context, {
               summary: 'Draft saved',
               message: n + (n === 1 ? ' entry saved.' : ' entries saved.'),
