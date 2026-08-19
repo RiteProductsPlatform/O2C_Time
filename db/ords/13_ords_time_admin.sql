@@ -1653,7 +1653,8 @@ BEGIN
     p_method => 'GET',
     p_source_type => ORDS.source_type_collection_feed,
     p_source => q'[
-      SELECT entry_date, billable_hours, non_billable_hours, is_leave, remarks
+      SELECT entry_date, client_role, billable_hours, non_billable_hours,
+             is_leave, remarks
         FROM v_oc_ts_o2c_push_line
        WHERE confirm_id = :confirmId
          AND employee_id = :employeeId

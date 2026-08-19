@@ -336,6 +336,16 @@ CREATE OR REPLACE VIEW v_oc_ts_o2c_push_line AS
 SELECT i.confirm_id,
        i.employee_id,
        i.project_number,
+       -- OC_ACCRUAL_LINE.CLIENT_ROLE, which the main application has always had
+       -- and we have never filled. Added 19-Aug with the column on the
+       -- interface -- same name, same VARCHAR2(120 CHAR), so the push maps
+       -- straight across with no translation.
+       --
+       -- Safe in the GROUP BY: the role is one value per employee per project,
+       -- so grouping by it cannot split a day into two lines. If it ever did,
+       -- that would mean one person held two roles on one project on one day,
+       -- and two lines would be the correct answer rather than a bug.
+       i.client_role,
        TO_CHAR(i.work_date,'YYYY-MM-DD')      AS entry_date,
        ROUND(SUM(i.billable_hours), 2)        AS billable_hours,
        ROUND(SUM(i.non_billable_hours), 2)    AS non_billable_hours,
@@ -347,7 +357,8 @@ SELECT i.confirm_id,
        LISTAGG(DISTINCT i.entry_type, ',')
          WITHIN GROUP (ORDER BY i.entry_type)   AS remarks
   FROM xx_o2c_timesheet_accrual_if i
- GROUP BY i.confirm_id, i.employee_id, i.project_number, i.work_date;
+ GROUP BY i.confirm_id, i.employee_id, i.project_number, i.client_role,
+          i.work_date;
 
 PROMPT
 PROMPT ============================================================
