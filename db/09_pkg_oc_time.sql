@@ -673,6 +673,34 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
       RAISE_APPLICATION_ERROR(-20003, 'Cannot enter more than 24 hours in a day.');
     END IF;
 
+    -- A DAY CANNOT EXCEED THE PERSON'S SHIFT. Asked 20-Aug: "shift hrs is the
+    -- standard hrs and we also need to put a rule that a person cannot enter
+    -- hours more than the standard hrs for his which is his shift hrs".
+    --
+    -- Sibling of -20028, which requires each day to EQUAL its standard before
+    -- the week may be submitted. That one fires at submit and only then, so
+    -- until now somebody could type 12 hours against an 8-hour shift, save it,
+    -- and be told days later. This refuses at save, where the person can still
+    -- see which cell they are fixing.
+    --
+    -- ONLY WHERE A STANDARD EXISTS, the same guard -20028 uses, so the two
+    -- cannot disagree. A zero standard is a weekend or a holiday: there is no
+    -- shift to exceed, and capping at zero would refuse genuine weekend work.
+    --
+    -- v_total INCLUDES LEAVE, deliberately. Half a day of leave against an
+    -- 8-hour shift leaves 4 hours workable, not 8 -- counting only worked hours
+    -- would let the day reach 12.
+    IF v_std > 0 AND v_total > v_std THEN
+      RAISE_APPLICATION_ERROR(-20029,
+        'A day cannot hold more than the ' || TRIM(TO_CHAR(v_std,'FM9990.99'))
+        || ' hours of this person''s shift. '
+        || TO_CHAR(TRUNC(p_entry_date),'DD-Mon')
+        || ' now has ' || TRIM(TO_CHAR(v_total,'FM9990.99'))
+        || CASE WHEN v_leave > 0
+                THEN ', including ' || TRIM(TO_CHAR(v_leave,'FM9990.99'))
+                     || ' of leave' END || '.');
+    END IF;
+
     -- RULE-008: a day wholly taken by leave carries no worked hours.
     --
     -- Without this the grid happily held 8h of work beside 8h of leave on the

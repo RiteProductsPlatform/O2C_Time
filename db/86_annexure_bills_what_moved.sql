@@ -102,46 +102,28 @@ END;
 /
 
 PROMPT ============================================================
-PROMPT [1/5] V_OC_TS_LLC_ANNEXURE bills what actually moved
+PROMPT [1/5] V_OC_TS_LLC_ANNEXURE - superseded, see db/88
 PROMPT ============================================================
 
--- Built over V_OC_TS_LLC rather than over the table, so LOSS_HOURS keeps its
--- one definition. CUSTOMER_NAME is the only thing the view does not carry.
-CREATE OR REPLACE VIEW v_oc_ts_llc_annexure AS
-SELECT l.llc_id,
-       l.project_id,
-       l.project_number,
-       l.project_name,
-       p.customer_name,
-       l.revenue_model,
-       l.period_id,
-       l.period_name,
-       l.absent_employee_id,
-       l.absent_employee_name,
-       l.absence_date,
-       l.absence_type,
-       -- WHAT IS BILLED: the hours oc_time_cover_billing actually moved onto a
-       -- billable task. This was ABSENCE_HOURS, which is four times the figure
-       -- for a 25% allocation and is not a claim any timesheet supports.
-       l.cover_hours_billed AS covered_billed_hours,
-       -- BOTH KEPT AS CONTEXT, because an appendix that says "2 hours billed"
-       -- with nothing beside it cannot be checked. These let a reader see the
-       -- whole absence, the share at stake, and the part recovered.
-       l.absence_hours,
-       l.loss_hours,
-       l.cover_employee_id,
-       l.cover_employee_name,
-       l.llc_status,
-       l.billed_flag,
-       l.approved_by,
-       l.approved_on
-  FROM v_oc_ts_llc l
-  JOIN oc_time_project p ON p.project_id = l.project_id
- WHERE l.llc_status = 'Approved'
-   -- THE HOURS, NOT THE FLAG. BILLED_FLAG says the manager approved; this says
-   -- hours moved. llc 4 has the first without the second and was on the invoice
-   -- claiming 8.
-   AND NVL(l.cover_hours_billed, 0) > 0;
+-- THIS SECTION DELIBERATELY DOES NOTHING NOW.
+--
+-- It rebuilt the annexure to bill COVER_HOURS_BILLED instead of ABSENCE_HOURS,
+-- which was right about which of the two was wrong and wrong about the premise
+-- underneath both. Decided 20-Aug: the annexure carries NO hours at all. The
+-- covering colleague's time stays unbilled, the absentee's leave stays in the
+-- leave column, and the invoice's hours come from the monthly summary, which
+-- coverage does not touch. The annexure is a statement of who covered whom.
+--
+-- Running this file after db/88 would put an hours column back on an invoice
+-- appendix that must not have one.
+--
+-- The live definition is db/88_coverage_is_a_statement.sql [3/7], with the
+-- printed sentence in [4/7].
+
+BEGIN
+  DBMS_OUTPUT.PUT_LINE('  Left alone. The live definition is db/88 [3/7].');
+END;
+/
 
 PROMPT ============================================================
 PROMPT [2/5] OC_TIME_COVER_BILLING - superseded, see db/87
@@ -202,61 +184,19 @@ PROMPT billing is what did not happen. Rewriting one to agree with the other
 PROMPT would destroy the only evidence that they ever differed.
 
 PROMPT ============================================================
-PROMPT [4/5] Retry the rows the employee gate had refused
+PROMPT [4-5/5] Superseded by db/88 - nothing to do
 PROMPT ============================================================
 
-DECLARE
-  v_h   NUMBER;
-  v_msg VARCHAR2(400);
-  v_n   NUMBER := 0;
+-- The remaining sections of this file retried oc_time_cover_billing and then
+-- reported COVER_HOURS_BILLED. Neither exists in that form any more: the
+-- procedure raises -20033 and the annexure has no hours column, because
+-- coverage moves no hours. Left inert so the file stays re-runnable, which is
+-- the convention every script here follows.
+--
+-- What this file's earlier sections found is still true and still worth
+-- reading; it is only the actions that were built on a retracted premise.
+
 BEGIN
-  FOR r IN (SELECT llc_id
-              FROM oc_ts_leave_loss_cover
-             WHERE llc_status = 'Approved'
-               AND billed_flag = 'Y'
-               AND cover_hours_billed IS NULL
-             ORDER BY llc_id)
-  LOOP
-    BEGIN
-      oc_time_cover_billing(r.llc_id, 'Y', 'FIX_86', v_h, v_msg);
-      DBMS_OUTPUT.PUT_LINE('  llc ' || r.llc_id || ': ' || v_msg);
-      v_n := v_n + 1;
-    EXCEPTION WHEN OTHERS THEN
-      DBMS_OUTPUT.PUT_LINE('  llc ' || r.llc_id || ': NOT COMPLETED - '
-                           || SUBSTR(SQLERRM,1,200));
-    END;
-  END LOOP;
-  IF v_n = 0 THEN
-    DBMS_OUTPUT.PUT_LINE('  Nothing outstanding.');
-  END IF;
-  COMMIT;
+  DBMS_OUTPUT.PUT_LINE('  Superseded by db/88. Nothing to do.');
 END;
 /
-
-PROMPT ============================================================
-PROMPT [5/5] Verification
-PROMPT ============================================================
-
-COLUMN proj FORMAT A10
-SELECT l.llc_id, l.project_number AS proj, l.absence_date AS on_date,
-       l.absent_employee_name AS absent,
-       l.absence_hours, l.loss_hours,
-       NVL(l.cover_employee_name,'(none)') AS cover,
-       l.llc_status,
-       NVL(TO_CHAR(l.cover_hours_billed),'-') AS billed_hrs
-  FROM v_oc_ts_llc l
- ORDER BY l.project_number, l.absence_date;
-
-PROMPT
-PROMPT And what the invoice would now carry. COVERED_BILLED_HOURS is the
-PROMPT recovered figure; ABSENCE_HOURS and LOSS_HOURS sit beside it so the
-PROMPT appendix can be checked rather than taken on trust.
-
-SELECT project_number, absence_date, absent_employee_name,
-       absence_hours, loss_hours, covered_billed_hours
-  FROM v_oc_ts_llc_annexure
- ORDER BY project_number, absence_date;
-
-PROMPT
-PROMPT A row that is Approved but recovered nothing is correctly ABSENT from
-PROMPT that second result. Section [3/5] listed those, with the reason.

@@ -146,367 +146,46 @@ PROMPT Where TASK_BILL and LINE_BILL differ, LINE_BILL is the answer and
 PROMPT LINE_REASON says why. That is the column every total downstream uses.
 
 PROMPT ============================================================
-PROMPT [2/4] OC_TIME_COVER_BILLING sees a defaulted week's hours
+PROMPT [2/4] OC_TIME_COVER_BILLING - retired, see db/88
 PROMPT ============================================================
 
-CREATE OR REPLACE PROCEDURE oc_time_cover_billing(
-  p_llc_id  IN  NUMBER,
-  p_apply   IN  VARCHAR2,          -- 'Y' bill the cover, 'N' put it back
-  p_actor   IN  VARCHAR2 DEFAULT 'VBCS_USER',
-  o_hours   OUT NUMBER,
-  o_message OUT VARCHAR2)
-IS
-  v_project   NUMBER;
-  v_period    NUMBER;
-  v_date      DATE;
-  v_absent    VARCHAR2(50);
-  v_cover     VARCHAR2(50);
-  v_already   NUMBER;
-  v_loss      NUMBER;
-  v_week      NUMBER;
-  v_wstatus   VARCHAR2(40);
-  v_pstatus   VARCHAR2(20);
-  v_confirmed NUMBER;
-  v_src_entry NUMBER;
-  v_src_type  VARCHAR2(20);
-  v_nb_task   NUMBER;
-  v_bill_task NUMBER;
-  v_avail     NUMBER;
-  v_dup       NUMBER;
+-- THIS SECTION DELIBERATELY DOES NOTHING NOW.
+--
+-- Everything it fixed was real -- the entry_type='Default' blindness, the
+-- promotion, the UK_OC_TSE_CELL collision, the same-task refusal -- and none of
+-- it was a leave-loss problem. All four were consequences of db/84's premise
+-- that covering somebody makes the COVER's hours billable, and on 20-Aug the
+-- functional owner retracted it: "those hours need to go as billed for those
+-- employee - this is wrong". A rule that touches no entries cannot hit any of
+-- those four.
+--
+-- Running this after db/88 would restore an hour-moving procedure whose whole
+-- premise has been withdrawn, and it would do so quietly.
+--
+-- The live definition is db/88_coverage_is_a_statement.sql [5/7], where
+-- oc_time_cover_billing raises -20033 and oc_time_approve_cover records the
+-- fact without moving anything.
+
 BEGIN
-  o_hours := 0;
-
-  SELECT project_id, period_id, absence_date, absent_employee_id,
-         cover_employee_id, NVL(cover_hours_billed, 0)
-    INTO v_project, v_period, v_date, v_absent, v_cover, v_already
-    FROM oc_ts_leave_loss_cover WHERE llc_id = p_llc_id;
-
-  IF v_cover IS NULL THEN
-    o_message := 'No covering colleague assigned yet.';
-    RETURN;
-  END IF;
-
-  v_week := oc_time_pkg.ensure_week(v_cover, v_date, p_actor);
-
-  -- ── THE MANAGER'S WINDOW (db/86) ───────────────────────────
-  -- NOT assert_editable: that is the EMPLOYEE's gate and its LOCKED_FLAG branch
-  -- refuses a defaulted week with the words "Only a manager can edit a
-  -- defaulted timesheet" -- which is precisely who is calling.
-  SELECT week_status INTO v_wstatus FROM oc_ts_week WHERE ts_week_id = v_week;
-
-  IF v_wstatus IN ('Approved','Overridden and approved','Closed') THEN
-    RAISE_APPLICATION_ERROR(-20007,
-      'The covering colleague''s week has already been approved, so their '
-      || 'hours cannot be moved. Revoke the approval first, or raise this as '
-      || 'an adjustment.');
-  END IF;
-
-  SELECT status INTO v_pstatus FROM oc_time_period WHERE period_id = v_period;
-
-  IF v_pstatus <> 'Open' THEN
-    RAISE_APPLICATION_ERROR(-20007,
-      'This month is ' || v_pstatus || ' and its hours can no longer be moved.');
-  END IF;
-
-  SELECT COUNT(*) INTO v_confirmed FROM oc_ts_month_confirm
-   WHERE project_id = v_project AND period_id = v_period;
-
-  IF v_confirmed > 0 THEN
-    RAISE_APPLICATION_ERROR(-20007,
-      'This month has already been confirmed to accrual for this project. '
-      || 'These hours were sent as non-billable and changing them now would '
-      || 'put the timesheet out of step with what was sent -- raise an '
-      || 'adjustment instead.');
-  END IF;
-
-  -- ── PUT IT BACK ────────────────────────────────────────────
-  -- Both rows are 'Actual' by the time anything has been billed: the source was
-  -- promoted on the way in. So this path needs no Default handling.
-  IF UPPER(p_apply) <> 'Y' THEN
-    IF v_already <= 0 THEN
-      o_message := 'Nothing had been billed for this coverage.';
-      RETURN;
-    END IF;
-
-    -- e.billable_type on both, for the reason given at the source lookup below.
-    SELECT MIN(e.task_id) INTO v_bill_task
-      FROM oc_ts_entry e
-     WHERE e.ts_week_id = v_week AND e.entry_date = v_date
-       AND e.project_id = v_project AND e.is_leave = 'N'
-       AND e.entry_type = 'Actual'
-       AND e.billable_type = 'Billable' AND e.hours >= v_already;
-
-    SELECT MIN(e.task_id) INTO v_nb_task
-      FROM oc_ts_entry e
-     WHERE e.ts_week_id = v_week AND e.entry_date = v_date
-       AND e.project_id = v_project AND e.is_leave = 'N'
-       AND e.entry_type = 'Actual'
-       AND e.billable_type = 'Non-billable';
-
-    IF v_bill_task IS NULL OR v_nb_task IS NULL THEN
-      o_message := 'The billed hours are no longer where they were put; '
-                || 'nothing moved back. Check the day by hand.';
-      RETURN;
-    END IF;
-
-    UPDATE oc_ts_entry SET hours = hours - v_already, updated_by = p_actor
-     WHERE ts_week_id = v_week AND entry_date = v_date
-       AND project_id = v_project AND task_id = v_bill_task
-       AND entry_type = 'Actual';
-
-    UPDATE oc_ts_entry SET hours = hours + v_already, updated_by = p_actor
-     WHERE ts_week_id = v_week AND entry_date = v_date
-       AND project_id = v_project AND task_id = v_nb_task
-       AND entry_type = 'Actual';
-
-    UPDATE oc_ts_leave_loss_cover
-       SET cover_hours_billed = NULL, updated_by = p_actor
-     WHERE llc_id = p_llc_id;
-
-    o_hours   := v_already;
-    o_message := v_already || ' hour(s) returned to non-billable.';
-    RETURN;
-  END IF;
-
-  -- ── BILL IT ────────────────────────────────────────────────
-  IF v_already > 0 THEN
-    o_message := 'Already billed ' || v_already || ' hour(s) for this coverage.';
-    RETURN;
-  END IF;
-
-  -- READ, DO NOT RECOMPUTE (db/85). The screen shows LOSS_HOURS and this moves
-  -- LOSS_HOURS, so the manager cannot approve one number and get another.
-  SELECT loss_hours INTO v_loss FROM v_oc_ts_llc WHERE llc_id = p_llc_id;
-
-  IF NVL(v_loss,0) <= 0 THEN
-    o_message := 'The absent colleague has no allocated hours on this project '
-              || 'for that day, so there is no loss to recover.';
-    RETURN;
-  END IF;
-
-  -- ── WHERE THE HOURS COME FROM ──────────────────────────────
-  -- 'Default' AS WELL AS 'Actual'. run_weekly_defaulting retags a prepopulated
-  -- row to Default when it fills the week in for the employee, and those hours
-  -- are just as real -- llc 4 refused for want of 8 non-billable hours that
-  -- were sitting right there under the other tag.
-  --
-  -- One row picked explicitly rather than MIN(task_id) over a set, because the
-  -- promotion below has to name the row it is promoting. Actual first: if the
-  -- person has typed something, that is the row to spend.
-  BEGIN
-    -- e.billable_type, NOT t.billable_type. TRG_OC_TSE_DERIVE (db/23) lets a
-    -- LINE REASON beat the task, so the two disagree whenever the person's
-    -- assignment is non-billable on a billable WBS task -- which is Kishore on
-    -- 555 exactly. Reading the task's answer made this find nothing and report
-    -- "no non-billable hours" about 8 hours that are non-billable.
-    --
-    -- The entry's column is the authority everywhere else too: it is what
-    -- V_OC_TS_MONTH_SUMMARY totals and what confirm_month sends to accrual. A
-    -- rule that reads the task instead is reading an input, not the answer.
-    SELECT ts_entry_id, task_id, entry_type, hours
-      INTO v_src_entry, v_nb_task, v_src_type, v_avail
-      FROM (SELECT e.ts_entry_id, e.task_id, e.entry_type, e.hours
-              FROM oc_ts_entry e
-             WHERE e.ts_week_id = v_week AND e.entry_date = v_date
-               AND e.project_id = v_project AND e.is_leave = 'N'
-               AND e.entry_type IN ('Actual','Default')
-               AND e.billable_type = 'Non-billable'
-               AND e.hours > 0
-             ORDER BY CASE e.entry_type WHEN 'Actual' THEN 0 ELSE 1 END,
-                      e.hours DESC, e.task_id)
-     WHERE ROWNUM = 1;
-  EXCEPTION WHEN NO_DATA_FOUND THEN
-    o_message := 'The covering colleague has no non-billable hours on this '
-              || 'project that day, so there is nothing to convert.';
-    RETURN;
-  END;
-
-  -- Never move more than they actually have, which is also why the annexure
-  -- bills COVER_HOURS_BILLED and not LOSS_HOURS -- they are allowed to differ.
-  v_loss := LEAST(v_loss, v_avail);
-  IF v_loss <= 0 THEN
-    o_message := 'No non-billable hours available to convert.';
-    RETURN;
-  END IF;
-
-  SELECT MIN(task_id) INTO v_bill_task
-    FROM (SELECT task_id FROM v_oc_ts_task_lov
-           WHERE project_id = v_project AND billable_type = 'Billable'
-           ORDER BY sort_order, task_code, task_id)
-   WHERE ROWNUM = 1;
-
-  IF v_bill_task IS NULL THEN
-    o_message := 'This project has no billable task to move the hours onto.';
-    RETURN;
-  END IF;
-
-  -- ── REFUSE RATHER THAN QUIETLY ACHIEVE NOTHING ─────────────
-  -- Measured on 555, 20-Aug: the source line and the chosen billable task are
-  -- THE SAME TASK. 01.01.111 Offshore is Billable at TASK level and the entry
-  -- is Non-billable only because UNBILLED_REASON = 'Non-billable Assignment'
-  -- sits on the line -- TRG_OC_TSE_DERIVE (db/23) lets a line reason beat the
-  -- task, so OC_TS_ENTRY.BILLABLE_TYPE and OC_TIME_TASK.BILLABLE_TYPE disagree
-  -- and this procedure was reading the task's.
-  --
-  -- Left unguarded the MERGE matches the source row itself: minus v_loss then
-  -- plus v_loss, day unchanged, reason still on the line, nothing billable
-  -- created -- and COVER_HOURS_BILLED stamped anyway. The annexure would then
-  -- invoice hours that never became billable, which is worse than any refusal.
-  --
-  -- Moving the hours cannot fix this, because what makes them non-billable is
-  -- the reason and not the task. The mechanism has to change, and that is a
-  -- decision about the WBS and the accrual, not something to infer here.
-  IF v_bill_task = v_nb_task THEN
-    o_message := 'These hours are already on a billable task ('
-      || (SELECT task_code FROM oc_time_task WHERE task_id = v_nb_task)
-      || '). They are non-billable because the line carries the reason "'
-      || NVL((SELECT unbilled_reason FROM oc_ts_entry
-               WHERE ts_entry_id = v_src_entry), '(none)')
-      || '", which comes from the assignment and not from the task, so moving '
-      || 'them elsewhere would not make them billable. Nothing was changed.';
-    RETURN;
-  END IF;
-
-  oc_time_ctx.set_reason('Leave-loss coverage approved: ' || v_loss
-                         || 'h billed for covering ' || v_absent
-                         || ' on ' || TO_CHAR(v_date,'DD-Mon-YY'));
-
-  -- ── PROMOTE BEFORE SPLITTING ───────────────────────────────
-  -- A SEPARATE STATEMENT, not a wider MERGE. UK_OC_TSE_CELL includes
-  -- ENTRY_TYPE, so a Default row and an Actual row can coexist on one cell:
-  -- decrementing 'Actual' while MERGEing a new 'Actual' would leave the
-  -- defaulted 8 untouched and add 2 beside it, giving a 10-hour day against a
-  -- standard of 8. Exactly the double count e2ec95e found in save_entry.
-  IF v_src_type = 'Default' THEN
-    SELECT MAX(ts_entry_id) INTO v_dup
-      FROM oc_ts_entry
-     WHERE ts_week_id = v_week AND project_id = v_project
-       AND task_id = v_nb_task AND entry_date = v_date
-       AND entry_type = 'Actual';
-
-    IF v_dup IS NULL THEN
-      -- SOURCE = 'Manager' as well, so the audit row the decrement writes says
-      -- Override rather than accusing the defaulting job of an edit.
-      UPDATE oc_ts_entry
-         SET entry_type = 'Actual', source = 'Manager', updated_by = p_actor
-       WHERE ts_entry_id = v_src_entry;
-    ELSE
-      -- An Actual row already holds this cell, so promotion would raise
-      -- ORA-00001. Fold the defaulted hours into it and leave the Default row
-      -- at zero. NOT deleted -- OC_TS_AUDIT rows point at it, and db/78 is the
-      -- record of what removing an audited entry costs.
-      UPDATE oc_ts_entry SET hours = hours + v_avail, updated_by = p_actor
-       WHERE ts_entry_id = v_dup;
-      UPDATE oc_ts_entry SET hours = 0, updated_by = p_actor
-       WHERE ts_entry_id = v_src_entry;
-      v_src_entry := v_dup;
-    END IF;
-  END IF;
-
-  UPDATE oc_ts_entry SET hours = hours - v_loss, updated_by = p_actor
-   WHERE ts_entry_id = v_src_entry;
-
-  -- MERGE, not INSERT: the cover may already have billable hours on this
-  -- project that day from their own work, and a second row would break
-  -- UK_OC_TSE_CELL.
-  MERGE INTO oc_ts_entry e
-  USING (SELECT v_week AS wk, v_project AS pid, v_bill_task AS tid,
-                v_date AS d FROM dual) s
-     ON (e.ts_week_id = s.wk AND e.project_id = s.pid
-     AND e.task_id = s.tid AND e.entry_date = s.d AND e.entry_type = 'Actual')
-   WHEN MATCHED THEN UPDATE
-        SET e.hours = e.hours + v_loss, e.updated_by = p_actor
-   WHEN NOT MATCHED THEN
-        INSERT (ts_week_id, project_id, task_id, entry_date, hours,
-                entry_type, is_leave, source, created_by)
-        VALUES (s.wk, s.pid, s.tid, s.d, v_loss, 'Actual', 'N',
-                'Manager', p_actor);
-
-  oc_time_ctx.clear;
-
-  UPDATE oc_ts_leave_loss_cover
-     SET cover_hours_billed = v_loss, updated_by = p_actor
-   WHERE llc_id = p_llc_id;
-
-  o_hours   := v_loss;
-  o_message := v_loss || ' hour(s) moved to a billable task for ' || v_cover
-            || ' on ' || TO_CHAR(v_date,'DD-Mon-YY')
-            || CASE WHEN v_src_type = 'Default'
-                    THEN ' (defaulted hours promoted to Actual).' ELSE '.' END;
-EXCEPTION WHEN OTHERS THEN
-  oc_time_ctx.clear;
-  RAISE;
-END oc_time_cover_billing;
-/
-SHOW ERRORS
-
-PROMPT ============================================================
-PROMPT [3/4] Retry the rows both earlier guards had refused
-PROMPT ============================================================
-
-DECLARE
-  v_h   NUMBER;
-  v_msg VARCHAR2(400);
-  v_n   NUMBER := 0;
-BEGIN
-  FOR r IN (SELECT llc_id
-              FROM oc_ts_leave_loss_cover
-             WHERE llc_status = 'Approved'
-               AND billed_flag = 'Y'
-               AND cover_hours_billed IS NULL
-             ORDER BY llc_id)
-  LOOP
-    BEGIN
-      oc_time_cover_billing(r.llc_id, 'Y', 'FIX_87', v_h, v_msg);
-      DBMS_OUTPUT.PUT_LINE('  llc ' || r.llc_id || ': ' || v_msg);
-      v_n := v_n + 1;
-    EXCEPTION WHEN OTHERS THEN
-      DBMS_OUTPUT.PUT_LINE('  llc ' || r.llc_id || ': NOT COMPLETED - '
-                           || SUBSTR(SQLERRM,1,200));
-    END;
-  END LOOP;
-  IF v_n = 0 THEN
-    DBMS_OUTPUT.PUT_LINE('  Nothing outstanding.');
-  END IF;
-  COMMIT;
+  DBMS_OUTPUT.PUT_LINE('  Left alone. The live definition is db/88 [5/7].');
 END;
 /
 
+
 PROMPT ============================================================
-PROMPT [4/4] Verification
+PROMPT [3-4/4] Superseded by db/88 - nothing to do
 PROMPT ============================================================
 
-PROMPT
-PROMPT The day that was split. Non-billable and billable must still add up to
-PROMPT the standard day, because this splits and does not move.
+-- The remaining sections of this file retried oc_time_cover_billing and then
+-- reported COVER_HOURS_BILLED. Neither exists in that form any more: the
+-- procedure raises -20033 and the annexure has no hours column, because
+-- coverage moves no hours. Left inert so the file stays re-runnable, which is
+-- the convention every script here follows.
+--
+-- What this file's earlier sections found is still true and still worth
+-- reading; it is only the actions that were built on a retracted premise.
 
-COLUMN task FORMAT A26
-SELECT cw.employee_name AS cover,
-       TO_CHAR(e.entry_date,'DD-Mon') AS on_date,
-       t.task_code || ' ' || t.task_name AS task,
-       t.billable_type AS task_bill, e.billable_type AS line_bill,
-       e.entry_type, e.source, e.hours
-  FROM oc_ts_leave_loss_cover l
-  JOIN oc_time_worker cw ON cw.employee_id = l.cover_employee_id
-  JOIN oc_ts_week  w ON w.employee_id = l.cover_employee_id
-                    AND l.absence_date BETWEEN w.week_start AND w.week_end
-  JOIN oc_ts_entry e ON e.ts_week_id = w.ts_week_id
-                    AND e.entry_date = l.absence_date
-                    AND e.project_id = l.project_id
-                    AND e.is_leave   = 'N'
-  JOIN oc_time_task t ON t.task_id = e.task_id
- WHERE l.cover_hours_billed IS NOT NULL
- ORDER BY cw.employee_name, e.entry_date, e.billable_type DESC;
-
-PROMPT
-PROMPT And the invoice appendix, which was empty until the hours existed.
-
-SELECT project_number, absence_date, absent_employee_name,
-       absence_hours, loss_hours, covered_billed_hours
-  FROM v_oc_ts_llc_annexure
- ORDER BY project_number, absence_date;
-
-PROMPT
-PROMPT The covering colleague's week is still Defaulted with its salary hold
-PROMPT intact. The employee did not submit, and that stays true whatever a
-PROMPT manager records about who covered somebody else's leave.
+BEGIN
+  DBMS_OUTPUT.PUT_LINE('  Superseded by db/88. Nothing to do.');
+END;
+/

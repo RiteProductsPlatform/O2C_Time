@@ -1069,18 +1069,18 @@ BEGIN
              absence_date, absence_day, absence_type,
              -- BOTH, and they mean different things. ABSENCE_HOURS is the
              -- whole absence as Absence Management recorded it; LOSS_HOURS is
-             -- this project's share of it, which for a 25% allocation on an
-             -- 8-hour day is 2. PAGE-006 is a per-project screen, so it shows
-             -- LOSS_HOURS and keeps ABSENCE_HOURS as the sub-line -- showing
-             -- only the absence overstated 555's loss fourfold, reported from
-             -- the screen 20-Aug.
+             -- this project's share of it -- allocation x shift x the fraction
+             -- of the day the absence took -- which for a 25% allocation on an
+             -- 8-hour shift is 2. PAGE-006 is a per-project screen, so it shows
+             -- LOSS_HOURS and keeps ABSENCE_HOURS as the sub-line.
+             --
+             -- SCREEN ONLY. Coverage moves no hours and puts no number on the
+             -- invoice; the annexure names people and dates, and the invoice's
+             -- hours come from the monthly summary. This tells the manager how
+             -- much capacity they are covering, nothing more.
              absence_hours, loss_hours,
              cover_employee_id, cover_employee_name,
              llc_status, billed_flag,
-             -- What actually moved to a billable task, so the headline total
-             -- reports the recovery instead of assuming it. Null until the
-             -- coverage is approved.
-             cover_hours_billed,
              assigned_by, assigned_on, approved_by, approved_on, remarks
         FROM v_oc_ts_llc
        WHERE project_id = :projectId
@@ -1219,26 +1219,23 @@ BEGIN
     p_method => 'POST',
     p_source_type => ORDS.source_type_plsql,
     p_source => q'[
-      DECLARE
-        v_billed NUMBER;
       BEGIN
-        -- OC_TIME_APPROVE_COVER, not OC_TIME_PKG.APPROVE_COVER. The package
-        -- procedure sets BILLED_FLAG and stops; the wrapper also moves the
-        -- cover's hours onto a billable task (db/84). Wired here 20-Aug --
-        -- until now the screen set a flag saying the loss was recovered while
-        -- the hours behind it stayed non-billable, so the response below was
-        -- reporting "billed":true about something that had not happened.
+        -- OC_TIME_APPROVE_COVER, not OC_TIME_PKG.APPROVE_COVER. The wrapper
+        -- adds the one guard PROC-006 states -- coverage is recorded before the
+        -- finance cut-off, so a confirmed month refuses.
+        --
+        -- IT MOVES NO HOURS, and nor does anything else. Between 20-Aug and
+        -- 20-Aug this endpoint returned "hoursBilled", read back from a column
+        -- db/84 wrote when it shifted the cover's time onto a billable task.
+        -- That premise was retracted by the functional owner: the covering
+        -- colleague's hours stay unbilled, the absentee's leave stays in the
+        -- leave column, and the coverage is a statement of who covered whom in
+        -- the invoice annexure. Reporting an hours figure here would invite
+        -- exactly the reading that caused the trouble.
         oc_time_approve_cover(:id, :actorEmpId, NVL(:actor,'VBCS_USER'));
 
-        -- Reported from the row rather than assumed. Zero hours is a real
-        -- outcome -- the cover may have had nothing non-billable on that
-        -- project that day -- and the screen should be able to say so.
-        SELECT NVL(cover_hours_billed, 0) INTO v_billed
-          FROM oc_ts_leave_loss_cover WHERE llc_id = :id;
-
         COMMIT; :status_code := 200;
-        HTP.P('{"llcId":' || :id || ',"llcStatus":"Approved","hoursBilled":'
-              || TO_CHAR(v_billed) || '}');
+        HTP.P('{"llcId":' || :id || ',"llcStatus":"Approved"}');
       EXCEPTION WHEN OTHERS THEN
         ROLLBACK;
         :status_code := CASE WHEN SQLCODE BETWEEN -20033 AND -20001 THEN 400 ELSE 500 END;

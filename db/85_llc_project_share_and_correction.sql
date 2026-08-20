@@ -96,72 +96,27 @@ END;
 /
 
 PROMPT ============================================================
-PROMPT [1/6] V_OC_TS_LLC gains LOSS_HOURS, the project's share
+PROMPT [1/6] V_OC_TS_LLC - superseded, see db/88
 PROMPT ============================================================
 
-CREATE OR REPLACE VIEW v_oc_ts_llc AS
-SELECT l.llc_id,
-       l.project_id,
-       p.project_number,
-       p.project_name,
-       p.revenue_model,
-       p.leave_loss_flag,
-       p.project_manager_id,
-       l.period_id,
-       pe.period_name,
-       l.absent_employee_id,                                -- FLD-060
-       aw.employee_name AS absent_employee_name,            -- FLD-061
-       TO_CHAR(l.absence_date,'YYYY-MM-DD') AS absence_date, -- FLD-062
-       TO_CHAR(l.absence_date,'DY')         AS absence_day,
-       l.absence_type,
-       l.absence_hours,                                     -- FLD-063
-       -- THE PROJECT'S SHARE OF THAT ABSENCE, and the module's one definition
-       -- of it -- oc_time_cover_billing reads this column rather than keeping
-       -- its own copy of the arithmetic.
-       --
-       -- The standard day is the one the timesheet actually used for that date
-       -- (a work pattern can vary it) and falls back to the worker's own
-       -- STD_HOURS_PER_DAY, never a global 8: several people here are on nine.
-       --
-       -- Rounded to the quarter CHK_OC_TSE_QUARTER requires, then capped at the
-       -- absence itself -- a 100% allocation against a half day loses the half
-       -- day, not a whole one.
-       LEAST(
-         ROUND(
-           NVL((SELECT MAX(al.alloc_pct)
-                  FROM oc_time_allocation al
-                 WHERE al.employee_id = l.absent_employee_id
-                   AND al.project_id  = l.project_id
-                   AND al.status      = 'Active'
-                   AND l.absence_date BETWEEN al.start_date
-                                          AND NVL(al.end_date, l.absence_date)), 0)
-           * NVL((SELECT MAX(e.standard_hours)
-                    FROM oc_ts_entry e
-                    JOIN oc_ts_week  w ON w.ts_week_id = e.ts_week_id
-                   WHERE w.employee_id = l.absent_employee_id
-                     AND e.entry_date  = l.absence_date),
-                 aw.std_hours_per_day)
-           / 100 * 4) / 4,
-         l.absence_hours)                     AS loss_hours,
-       l.cover_employee_id,                                 -- FLD-064
-       cw.employee_name AS cover_employee_name,
-       l.llc_status,                                        -- FLD-065
-       l.billed_flag,
-       -- What actually moved to a billable task. NULL means nothing has, which
-       -- is a different statement from zero and the screen renders it as such.
-       l.cover_hours_billed,
-       l.assigned_by,
-       TO_CHAR(l.assigned_on,'YYYY-MM-DD HH24:MI') AS assigned_on,
-       l.approved_by,
-       TO_CHAR(l.approved_on,'YYYY-MM-DD HH24:MI') AS approved_on,
-       l.remarks
-  FROM oc_ts_leave_loss_cover l
-  JOIN oc_time_project p  ON p.project_id   = l.project_id
-                         AND p.revenue_model   = 'FCP'
-                         AND p.leave_loss_flag = 'Y'
-  JOIN oc_time_period  pe ON pe.period_id    = l.period_id
-  JOIN oc_time_worker  aw ON aw.employee_id  = l.absent_employee_id
-  LEFT JOIN oc_time_worker cw ON cw.employee_id = l.cover_employee_id;
+-- THIS SECTION DELIBERATELY DOES NOTHING NOW.
+--
+-- It introduced LOSS_HOURS, which was right, with a LEAST(..., absence_hours)
+-- cap, which was not: the absence loader derives its hours from the worker's
+-- STD_HOURS_PER_DAY, so a person on a 9.5-hour shift has a full day of leave
+-- recorded as 8 and the cap clipped their loss back to 8. db/88 takes the
+-- FRACTION of a day from the absence and applies it to the SHIFT standard,
+-- which gives 9.50 for that person and leaves the 25%-of-8 case at 2.00.
+--
+-- Sections [2/6] and [3/6] below are still live: OC_TIME_CTX and the audit
+-- capture trigger have nothing to do with leave loss.
+--
+-- The live definition is db/88_coverage_is_a_statement.sql [2/7].
+
+BEGIN
+  DBMS_OUTPUT.PUT_LINE('  Left alone. The live definition is db/88 [2/7].');
+END;
+/
 
 PROMPT ============================================================
 PROMPT [2/6] OC_TIME_CTX — the reason, carried into the audit INSERT
@@ -285,69 +240,19 @@ END;
 
 
 PROMPT ============================================================
-PROMPT [5/6] Complete the rows approved before the billing was wired
+PROMPT [5-6/6] Superseded by db/88 - nothing to do
 PROMPT ============================================================
 
-DECLARE
-  v_h   NUMBER;
-  v_msg VARCHAR2(400);
-  v_n   NUMBER := 0;
+-- The remaining sections of this file retried oc_time_cover_billing and then
+-- reported COVER_HOURS_BILLED. Neither exists in that form any more: the
+-- procedure raises -20033 and the annexure has no hours column, because
+-- coverage moves no hours. Left inert so the file stays re-runnable, which is
+-- the convention every script here follows.
+--
+-- What this file's earlier sections found is still true and still worth
+-- reading; it is only the actions that were built on a retracted premise.
+
 BEGIN
-  FOR r IN (SELECT llc_id
-              FROM oc_ts_leave_loss_cover
-             WHERE llc_status = 'Approved'
-               AND billed_flag = 'Y'
-               AND cover_hours_billed IS NULL
-             ORDER BY llc_id)
-  LOOP
-    BEGIN
-      oc_time_cover_billing(r.llc_id, 'Y', 'FIX_85', v_h, v_msg);
-      DBMS_OUTPUT.PUT_LINE('  llc ' || r.llc_id || ': ' || v_msg);
-      v_n := v_n + 1;
-    EXCEPTION WHEN OTHERS THEN
-      -- A week that has since locked, or a cover whose non-billable line has
-      -- gone, is reported and skipped: one unfinishable row must not stop the
-      -- rest, and inventing the hours would be worse than saying so.
-      DBMS_OUTPUT.PUT_LINE('  llc ' || r.llc_id || ': NOT COMPLETED - '
-                           || SUBSTR(SQLERRM,1,200));
-    END;
-  END LOOP;
-  IF v_n = 0 THEN
-    DBMS_OUTPUT.PUT_LINE('  Nothing to complete.');
-  END IF;
-  COMMIT;
+  DBMS_OUTPUT.PUT_LINE('  Superseded by db/88. Nothing to do.');
 END;
 /
-
-PROMPT ============================================================
-PROMPT [6/6] Verification
-PROMPT ============================================================
-
-COLUMN absent FORMAT A22
-COLUMN cover  FORMAT A22
-COLUMN proj   FORMAT A10
-SELECT l.llc_id, l.project_number AS proj,
-       TO_CHAR(TO_DATE(l.absence_date,'YYYY-MM-DD'),'DD-Mon') AS on_date,
-       l.absent_employee_name AS absent,
-       l.absence_hours, l.loss_hours,
-       NVL(l.cover_employee_name,'(none)') AS cover,
-       l.llc_status, l.billed_flag,
-       NVL(TO_CHAR(l.cover_hours_billed),'-') AS billed_hrs
-  FROM v_oc_ts_llc l
- ORDER BY l.project_number, l.absence_date, l.absent_employee_name;
-
-PROMPT
-PROMPT LOSS_HOURS is the project's share and is what PAGE-006 now shows.
-PROMPT ABSENCE_HOURS stays the whole absence. For a 25% allocation on an
-PROMPT 8-hour day those read 2.00 and 8.00 respectively.
-
-PROMPT
-PROMPT Any Approved row still showing BILLED_HRS as a dash could not be
-PROMPT completed; section [5/6] printed the reason for each one above.
-
-PROMPT
-PROMPT NEXT: run db/86_annexure_bills_what_moved.sql, then
-PROMPT db/09_pkg_oc_time.sql. 86 stops the invoice annexure billing the whole
-PROMPT absence and gives the billing a manager's guard instead of the
-PROMPT employee's; 09 recompiles override_approve, and the Apply correction
-PROMPT button stays broken until it is.

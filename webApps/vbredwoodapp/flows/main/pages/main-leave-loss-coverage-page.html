@@ -70,10 +70,12 @@
         </div>
         <div class="oj-flex-item">
           <div class="rw-metric-value"><oj-bind-text value="[[ $application.functions.fmtHours($variables.billedHours) ]]"></oj-bind-text></div>
-          <div class="rw-metric-label"><oj-bind-text value="[[$application.translations.appBundle.leave_loss_coverage_hours_recovered_as_billed]]"></oj-bind-text></div>
-          <!-- Approved coverage where no hours actually moved. Shown rather
-               than absorbed into a lower total, because the two look identical
-               on the tile and need different actions. -->
+          <!-- CAPACITY, NOT BILLING. Coverage moves no hours; this is how much
+               of the month's lost capacity has been covered, which is the
+               manager's own measure of whether they are on top of it. -->
+          <div class="rw-metric-label">Capacity covered (hrs)</div>
+          <!-- Uncovered absences. Mandatory to cover on FCP, so this is an
+               exception count rather than a resting state. -->
           <oj-bind-if test="[[ $variables.unbilledApproved > 0 ]]">
             <div class="oj-typography-body-xs rw-metric-label">
               <oj-bind-text value="[[ $page.functions.unbilledNote($variables.unbilledApproved) ]]"></oj-bind-text>

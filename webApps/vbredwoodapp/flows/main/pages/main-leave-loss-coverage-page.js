@@ -39,41 +39,35 @@ define([], () => {
     }
 
     /**
-     * What the Billed chip says.
+     * What the annexure chip says.
      *
-     * BILLED_FLAG and COVER_HOURS_BILLED can disagree, and the disagreement is
-     * the interesting case: a row approved before the billing was wired carries
-     * the flag with nothing moved. Saying "Billed" there is a claim about money
-     * that is not true.
+     * NOT an hours figure, and not the word "billed". Approving coverage moves
+     * nothing: it records that this colleague covered this absence, and that
+     * statement is what reaches the invoice annexure (REP-002). The chip said
+     * "2.00h billed" for one afternoon on 20-Aug and that reading -- that
+     * covering somebody makes their hours billable -- is exactly what the
+     * functional owner retracted.
      */
     billedLabel(row) {
       if (!row) { return ''; }
-      const h = row.coverHoursBilled;
-      if (h === null || h === undefined) { return 'Not billed'; }
-      return Number(h).toFixed(2) + 'h billed';
+      return 'On annexure';
     }
 
     billedClass(row) {
-      const h = row && row.coverHoursBilled;
-      return (h === null || h === undefined)
-        ? 'rw-flag rw-flag-defaulted'
-        : 'rw-flag rw-flag-adjustment';
+      return 'rw-flag rw-flag-adjustment';
     }
 
     billedTitle(row) {
-      const h = row && row.coverHoursBilled;
-      return (h === null || h === undefined)
-        ? 'Approved, but no hours moved to a billable task — the covering '
-          + 'colleague had no non-billable hours on this project that day, or '
-          + 'their week had already locked.'
-        : 'Moved to a billable task and carried to the invoice annexure (REP-002).';
+      return 'Named in the invoice annexure (REP-002) as covering this '
+           + 'absence. No hours change: the covering colleague\'s time stays '
+           + 'unbilled and the absence stays in the leave column.';
     }
 
-    /** Names the gap between coverage approved and hours actually recovered. */
+    /** Names absences nobody has been assigned to cover. */
     unbilledNote(n) {
       const c = Number(n) || 0;
-      return c + (c === 1 ? ' approved cover recovered no hours'
-                          : ' approved covers recovered no hours');
+      return c + (c === 1 ? ' absence still has no cover'
+                          : ' absences still have no cover');
     }
 
     /** Accessible name for a row's approve button. */

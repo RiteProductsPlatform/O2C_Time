@@ -56,13 +56,6 @@ define([
           // 20-Aug-2026 and overstated the loss fourfold.
           absenceHours: l.absence_hours || 0,
           lossHours: l.loss_hours || 0,
-          // null until the coverage is approved AND the hours actually moved.
-          // Kept null rather than defaulted to 0: "nothing has been billed" and
-          // "zero was billable" are different answers and the row renders them
-          // differently.
-          coverHoursBilled: (l.cover_hours_billed === null
-                          || l.cover_hours_billed === undefined)
-            ? null : Number(l.cover_hours_billed),
           coverEmployeeId: l.cover_employee_id || '',
           coverEmployeeName: l.cover_employee_name || '',
           llcStatus: l.llc_status,
@@ -80,24 +73,27 @@ define([
         $page.variables.assignedCount = rows.filter((r) => r.llcStatus === 'Assigned').length;
         $page.variables.approvedCount = rows.filter((r) => r.llcStatus === 'Approved').length;
 
-        // WHAT ACTUALLY MOVED, not what was absent.
+        // CAPACITY COVERED, and it is not a billing figure.
         //
-        // This summed absenceHours over the billed rows, so a single approved
-        // cover on a 25% allocation reported 8.00 hours recovered when 2.00
-        // had been converted to billable. It also counted rows approved before
-        // db/84 was wired, where BILLED_FLAG was set and no hours moved at all
-        // -- the tile asserted a recovery that had not happened.
+        // This summed absenceHours over the billed rows, then briefly summed
+        // the hours db/84 moved onto a billable task. Both were wrong in the
+        // same direction: coverage moves no hours at all. The covering
+        // colleague's time stays unbilled and the absentee's leave stays in the
+        // leave column, so nothing here changes what anybody is billed.
         //
-        // COVER_HOURS_BILLED is written by oc_time_cover_billing at the moment
-        // it moves the hours, so summing it cannot claim more than was done.
+        // The total is still worth showing -- it is how much of the month's
+        // lost capacity has been covered, which is the manager's own measure of
+        // whether they are on top of it -- so it sums LOSS_HOURS over approved
+        // rows and the label says capacity, not billing.
         $page.variables.billedHours = rows
-          .reduce((sum, r) => sum + (Number(r.coverHoursBilled) || 0), 0);
+          .filter((r) => r.llcStatus === 'Approved')
+          .reduce((sum, r) => sum + (Number(r.lossHours) || 0), 0);
 
-        // Approved, flagged billed, and yet nothing moved. Worth surfacing
-        // rather than showing a quietly low total: it means the cover had no
-        // non-billable hours that day, or the week had already locked.
+        // "there should always be a eligible person to cover in FCP and this is
+        // mandatory" (20-Aug), so an uncovered absence is an exception rather
+        // than a resting state and the count is surfaced beside the total.
         $page.variables.unbilledApproved = rows.filter(
-          (r) => r.llcStatus === 'Approved' && r.coverHoursBilled === null).length;
+          (r) => !r.coverEmployeeId).length;
 
       } catch (e) {
         // JET aborts in-flight requests on re-render; that is not a failure.
