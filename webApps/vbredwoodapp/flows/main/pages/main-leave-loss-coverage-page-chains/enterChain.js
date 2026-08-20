@@ -70,9 +70,17 @@ define([
         });
       }
 
-      // Set last: it triggers loadLinesChain once the project may already be set.
+      // Set last: assigning periodId fires its onValueChanged, which now runs
+      // the LIVE HR pull rather than just re-reading our own table -- the parity
+      // with My Timesheet that was asked for, where opening a week reads Fusion
+      // for that week. refreshHrAbsenceChain pulls once per project-month and
+      // finishes by rebuilding and reloading the lines, so there is nothing to
+      // chain here afterwards.
+      //
+      // When periodId is already the value we want, no change event fires, so
+      // the pull has to be asked for explicitly.
       if ($page.variables.periodId === periodId) {
-        await Actions.callChain(context, { chain: 'loadLinesChain' });
+        await Actions.callChain(context, { chain: 'refreshHrAbsenceChain' });
       } else {
         $page.variables.periodId = periodId;
       }

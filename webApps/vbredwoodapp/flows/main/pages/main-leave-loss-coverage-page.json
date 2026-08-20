@@ -7,7 +7,7 @@
       "onValueChanged": {
         "chains": [
           {
-            "chain": "loadLinesChain"
+            "chain": "refreshHrAbsenceChain"
           }
         ]
       }
@@ -18,7 +18,7 @@
       "onValueChanged": {
         "chains": [
           {
-            "chain": "loadLinesChain"
+            "chain": "refreshHrAbsenceChain"
           }
         ]
       }
@@ -117,6 +117,10 @@
     "unbilledApproved": {
       "type": "number",
       "defaultValue": 0
+    },
+    "lastPull": {
+      "type": "string",
+      "defaultValue": ""
     }
   },
   "types": {
@@ -167,7 +171,7 @@
     "generate": {
       "chains": [
         {
-          "chain": "refreshHrAbsenceChain"
+          "chain": "forceHrRefreshChain"
         }
       ]
     },

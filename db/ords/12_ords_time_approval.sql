@@ -33,7 +33,7 @@
 --   GET  adjustments/:managerId                  retro adjustments to approve
 --   POST adjustments/:id/approve                 approve a retro adjustment
 --   GET  llc/:projectId/:periodId                leave-loss absentee lines
---   POST llc/generate                            build the absentee list
+--   POST llc/generate                            rebuild the absentee list (add + retract)
 --   GET  llc/roster/:projectId/:periodId         who the live HR read must ask about
 --   GET  llc/cover/:projectId/:absenceDate       eligible cover LOV
 --   POST llc/:id/assign                          assign a cover
@@ -1098,12 +1098,27 @@ BEGIN
     p_method => 'POST',
     p_source_type => ORDS.source_type_plsql,
     p_source => q'[
-      DECLARE v_n NUMBER;
+      DECLARE
+        v_n   NUMBER;
+        v_rem NUMBER;
+        v_orp NUMBER;
       BEGIN
+        -- RETRACT FIRST. "Rebuild the absentee list" has to mean both halves:
+        -- generate_llc_lines only ever INSERTs, so before db/96 a withdrawn
+        -- absence left its coverage line standing -- assignable, and if already
+        -- Approved, on the invoice annexure naming somebody as covering a day
+        -- nobody was away. Open and Assigned lines go; Approved ones are a
+        -- manager's decision and are only counted, having already dropped off
+        -- the annexure.
+        oc_time_retract_llc(:projectId, :periodId,
+                            NVL(:actor,'VBCS_USER'), v_rem, v_orp);
+
         v_n := oc_time_pkg.generate_llc_lines(:projectId, :periodId,
                                               NVL(:actor,'VBCS_USER'));
         COMMIT; :status_code := 200;
-        HTP.P('{"linesCreated":' || v_n || '}');
+        HTP.P('{"linesCreated":' || v_n
+              || ',"linesRemoved":' || v_rem
+              || ',"approvedOrphans":' || v_orp || '}');
       EXCEPTION WHEN OTHERS THEN
         ROLLBACK;
         :status_code := CASE WHEN SQLCODE BETWEEN -20033 AND -20001 THEN 400 ELSE 500 END;

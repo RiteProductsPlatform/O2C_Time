@@ -60,6 +60,20 @@ define([
       const periodId  = $page.variables.periodId;
       if (!projectId || !periodId) { return; }
 
+      // ONCE PER PROJECT-MONTH, and this guard is why the live pull can sit on
+      // page load at all. enterChain settles projectId and periodId separately
+      // and each assignment fires onValueChanged, so without it opening the
+      // page would read the whole team out of Fusion twice.
+      //
+      // The button clears lastPull first (forceHrRefreshChain), so asking again
+      // by hand always asks.
+      const key = projectId + '|' + periodId;
+      if ($page.variables.lastPull === key) {
+        await Actions.callChain(context, { chain: 'loadLinesChain' });
+        return;
+      }
+      $page.variables.lastPull = key;
+
       $page.variables.busy = true;
 
       let fusionNote = null;   // set when the live half could not complete
