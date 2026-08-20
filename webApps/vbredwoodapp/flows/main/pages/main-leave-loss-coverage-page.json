@@ -113,6 +113,10 @@
       "defaultValue": "",
       "input": "none",
       "description": "Body text for the confirmation dialog. window.confirm cannot be used - SES blocks browser globals in chains (knowledge/14 §7)."
+    },
+    "unbilledApproved": {
+      "type": "number",
+      "defaultValue": 0
     }
   },
   "types": {
@@ -163,7 +167,7 @@
     "generate": {
       "chains": [
         {
-          "chain": "generateLinesChain"
+          "chain": "refreshHrAbsenceChain"
         }
       ]
     },

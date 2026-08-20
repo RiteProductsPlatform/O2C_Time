@@ -237,22 +237,6 @@ define([], () => {
     }
 
     /**
-     * Fusion's approvalStatusCd, mapped for OC_TIME_ABSENCE.
-     *
-     * Three answers, not two. Approved and not-approved are both statements;
-     * absent is neither, and must be passed on as absent so the handler's
-     * NVL(...,'Approved') can decide. Returning 'Pending' for a field Fusion
-     * never sent asserts something nobody said, and the assertion deletes
-     * leave -- see the call site.
-     */
-    approvalOf(cd) {
-      if (cd === undefined || cd === null || String(cd).trim() === '') {
-        return null;
-      }
-      return String(cd).toUpperCase() === 'APPROVED' ? 'Approved' : 'Pending';
-    }
-
-    /**
      * SUBMISSION_STATUS in the employee's own words.
      *
      * The stored values are the engine's — NotYetSubmitted, LateSubmission —
@@ -532,95 +516,13 @@ define([], () => {
       return 'Change the task on the ' + (taskName || 'this') + ' line';
     }
 
-    absenceToRows(items, employeeId, from, to, stdHoursPerDay) {
-      // EVERY Date HERE IS PINNED TO UTC -- the 'Z' suffix and the setUTCDate
-      // walk below are both load-bearing, not tidiness.
-      //
-      // These are CALENDAR DATES, not instants. Without the 'Z', JavaScript
-      // parses '2026-08-14T00:00:00' in the BROWSER's zone, and toISOString()
-      // then converts to UTC: at UTC+5:30 that is 2026-08-13T18:30Z, and
-      // substring(0,10) yields '2026-08-13'. Leave applied for Friday landed
-      // on Thursday -- measured 12-Aug-2026, and the shift is silent because
-      // every date involved is still a valid date.
-      //
-      // The failure is timezone-dependent, which is what makes it nasty: it
-      // never appears for a viewer at or behind UTC, so it cannot be
-      // reproduced from London and is guaranteed from India.
-      const std = Number(stdHoursPerDay) || 8;
-      const lo = new Date(from + 'T00:00:00Z');
-      const hi = new Date(to + 'T00:00:00Z');
-      const out = [];
+    // absenceToRows and approvalOf USED TO LIVE HERE. They moved to
+    // resources/js/absence.js on 20-Aug-2026 when PAGE-006 needed the same
+    // three things -- the Fusion query, the day expansion and the status
+    // mapping -- and each of those had already been wrong once. Two copies of
+    // a rule that has a history of being wrong is two chances to fix only one
+    // of them.
 
-      (items || []).forEach((x) => {
-        const s = new Date(String(x.startDate).substring(0, 10) + 'T00:00:00Z');
-        const e = new Date(String(x.endDate).substring(0, 10) + 'T00:00:00Z');
-        if (isNaN(s) || isNaN(e)) { return; }
-
-        const whole = Math.round((e - s) / 86400000) + 1;
-        const days = Number(x.duration) || whole;
-        const perDay = whole ? days / whole : 0;
-
-        const start = s > lo ? s : lo;
-        const end = e < hi ? e : hi;
-
-        // setUTCDate / getUTCDate, not setDate / getDate. The local-zone pair
-        // would walk the calendar in the browser's zone while toISOString()
-        // reads it back in UTC, reintroducing the same off-by-one on the
-        // second and later days of a multi-day absence.
-        for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
-          out.push({
-            EMPLOYEE_ID: employeeId,
-            ABSENCE_DATE: d.toISOString().substring(0, 10),
-            // TRIMMED. Fusion returns "Earned leave " with a trailing space on
-            // this pod -- measured 12-Aug-2026, and invisible everywhere it is
-            // displayed because both the Fusion screen and the grid collapse
-            // it. Untrimmed it reaches OC_TIME_ABSENCE.ABSENCE_TYPE and then
-            // OC_TS_ENTRY.ABSENCE_TYPE, where nothing compares it today and
-            // the first thing that does -- a lookup join, a report filter, a
-            // GROUP BY against 'Earned leave' -- fails silently and looks like
-            // missing data rather than a whitespace mismatch.
-            ABSENCE_TYPE: String(x.absenceType || 'Leave').trim() || 'Leave',
-            // CHK_OC_TABS_HRS caps the column at 24
-            DURATION_HOURS: Math.round(Math.min(perDay * std, 24) * 100) / 100,
-            // NULL WHEN FUSION DID NOT SAY, NOT 'Pending'.
-            //
-            // This read String(x.approvalStatusCd).toUpperCase() === 'APPROVED'
-            // ? 'Approved' : 'Pending' -- so a missing field became
-            // String(undefined) === 'UNDEFINED', which is not 'APPROVED', which
-            // became a positive claim that the absence is NOT approved.
-            //
-            // That claim is destructive. v_oc_ts_leave_share only counts
-            // Approved absences, so the retract half of oc_time_sync_leave sees
-            // no share behind the leave rows, deletes them with an AbsenceSync
-            // audit row saying the absence was withdrawn -- which nobody did --
-            // and db/80 then hands the worked hours back. One page load and the
-            // leave is gone from the timesheet while Fusion still shows it.
-            //
-            // The handler already does the right thing with a null:
-            // NVL(r.approval_status,'Approved'). Silence has to stay silence so
-            // that default can apply. A real non-approved status still maps to
-            // Pending and still blocks -- that part was never wrong.
-            // this.approvalOf, not $page.functions.approvalOf: inside a page
-            // module method $page does not exist. It is how the CHAIN reaches
-            // this module, not how the module reaches itself.
-            APPROVAL_STATUS: this.approvalOf(x.approvalStatusCd),
-            // WITHDRAWAL IS NOT VISIBLE IN approvalStatusCd. Fusion leaves a
-            // withdrawn absence APPROVED there and marks it ORA_WITHDRAWN in
-            // absenceStatusCd, so on approval status alone a cancelled leave
-            // reads as an approved one and the day stays blocked.
-            //
-            // absenceStatusCd was already being REQUESTED in the chain's
-            // fields list and then dropped on the floor here. Passing it on is
-            // what lets sync/absence delete the cached row -- which is the
-            // "leave cancelled in Fusion leaves its row behind" gap the chain
-            // documents as scenario 23.
-            ABSENCE_STATUS: String(x.absenceStatusCd || '').toUpperCase(),
-          });
-        }
-      });
-
-      return out;
-    }
 
 
     /**

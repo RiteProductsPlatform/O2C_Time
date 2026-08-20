@@ -71,6 +71,14 @@
         <div class="oj-flex-item">
           <div class="rw-metric-value"><oj-bind-text value="[[ $application.functions.fmtHours($variables.billedHours) ]]"></oj-bind-text></div>
           <div class="rw-metric-label"><oj-bind-text value="[[$application.translations.appBundle.leave_loss_coverage_hours_recovered_as_billed]]"></oj-bind-text></div>
+          <!-- Approved coverage where no hours actually moved. Shown rather
+               than absorbed into a lower total, because the two look identical
+               on the tile and need different actions. -->
+          <oj-bind-if test="[[ $variables.unbilledApproved > 0 ]]">
+            <div class="oj-typography-body-xs rw-metric-label">
+              <oj-bind-text value="[[ $page.functions.unbilledNote($variables.unbilledApproved) ]]"></oj-bind-text>
+            </div>
+          </oj-bind-if>
         </div>
       </div>
     </div>
@@ -101,12 +109,12 @@
                     horizontal-grid-visible="enabled"
                     selection-mode='{"row": "none", "column": "none"}'
                     columns='[
-                      {"headerText":"Absent employee","field":"absentEmployeeName","weight":2,"minWidth":180},
-                      {"headerText":"Date","field":"absenceDate","template":"dateCell","width":140},
+                      {"headerText":"Absent employee","field":"absentEmployeeName","weight":2,"minWidth":170},
+                      {"headerText":"Date","field":"absenceDate","template":"dateCell","width":130},
                       {"headerText":"Absence","field":"absenceType","width":130},
-                      {"headerText":"Hours","field":"absenceHours","template":"hoursCell","width":85},
-                      {"headerText":"Covered by","field":"coverEmployeeName","template":"coverCell","weight":2,"minWidth":180},
-                      {"headerText":"Status","field":"llcStatus","template":"statusCell","width":150},
+                      {"headerText":"Hours lost","field":"lossHours","template":"hoursCell","width":120},
+                      {"headerText":"Covered by","field":"coverEmployeeName","template":"coverCell","weight":2,"minWidth":170},
+                      {"headerText":"Status","field":"llcStatus","template":"statusCell","width":200},
                       {"headerText":"","field":"llcId","template":"actionCell","width":170,"sortable":"disabled"}
                     ]'>
 
@@ -119,8 +127,19 @@
               </span>
             </template>
 
+            <!-- THE PROJECT'S SHARE LEADS. This showed absenceHours, so Sam's
+                 8-hour day of leave read as an 8-hour loss to 555 when he is
+                 allocated 25% there and the loss is 2. The whole absence stays
+                 on the second line because the manager still needs to know it
+                 was a full day off, and because "2.00" with no context invites
+                 the question this answers. -->
             <template slot="hoursCell" data-oj-as="cell">
-              <span><oj-bind-text value="[[ $application.functions.fmtHours(cell.row.absenceHours) ]]"></oj-bind-text></span>
+              <span>
+                <oj-bind-text value="[[ $application.functions.fmtHours(cell.row.lossHours) ]]"></oj-bind-text>
+                <div class="oj-typography-body-xs rw-metric-label">
+                  <oj-bind-text value="[[ $page.functions.absenceNote(cell.row) ]]"></oj-bind-text>
+                </div>
+              </span>
             </template>
 
             <template slot="coverCell" data-oj-as="cell">
@@ -139,8 +158,15 @@
                 <span :class="[[ $application.functions.outcomeClass(cell.row.llcStatus) ]]">
                   <oj-bind-text value="[[ cell.row.llcStatus ]]"></oj-bind-text>
                 </span>
+                <!-- The chip used to say only "Billed", which was true of the
+                     flag and not always of the hours: a row approved before the
+                     billing was wired carries the flag with nothing moved. It
+                     now states the quantity, or says plainly that none moved. -->
                 <oj-bind-if test="[[ cell.row.billedFlag === 'Y' ]]">
-                  <span class="rw-flag rw-flag-adjustment" title="On the invoice annexure (REP-002)."><oj-bind-text value="[[$application.translations.appBundle.common_billed]]"></oj-bind-text></span>
+                  <span :class="[[ $page.functions.billedClass(cell.row) ]]"
+                        :title="[[ $page.functions.billedTitle(cell.row) ]]">
+                    <oj-bind-text value="[[ $page.functions.billedLabel(cell.row) ]]"></oj-bind-text>
+                  </span>
                 </oj-bind-if>
               </span>
             </template>

@@ -2203,19 +2203,38 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
 
     assert_not_self(v_emp, p_actor_emp_id);
 
+    -- THE REASON GOES IN BEFORE THE WRITE, NOT AFTER IT.
+    --
+    -- This used to stamp the reason onto the audit row afterwards:
+    --
+    --   UPDATE oc_ts_audit SET change_reason = p_reason, trace_id = p_trace_id
+    --    WHERE audit_id = (SELECT MAX(audit_id) ...);
+    --
+    -- and db/19 had already made OC_TS_AUDIT append-only, with a BEFORE UPDATE
+    -- OR DELETE trigger that raises -20026 unconditionally. So ACT-016 failed
+    -- on every call from the day db/19 was applied -- measured against ORDS
+    -- SIT on 20-Aug, 400 "OC_TS_AUDIT is append-only". The trigger is
+    -- STATEMENT level, so it fires even when the WHERE matches nothing: there
+    -- was no input for which this succeeded.
+    --
+    -- Neither side gives way. A trail that can be rewritten is not a trail,
+    -- and a correction with no reason is not one either. The reason is
+    -- therefore handed to the capture trigger through OC_TIME_CTX (db/85) and
+    -- lands in the INSERT it was always meant to be part of.
+    oc_time_ctx.set_reason(p_reason, p_trace_id);
+
     UPDATE oc_ts_entry
        SET hours      = p_new_hours,
            source     = 'Manager',       -- drives the audit capture
            updated_by = p_actor
      WHERE ts_entry_id = p_ts_entry_id;
 
-    validate_day(v_week, v_date);
+    -- Cleared as soon as the capture has run. The global outlives the
+    -- statement but must not outlive the call, or the next write on this
+    -- session inherits a reason nobody gave for it.
+    oc_time_ctx.clear;
 
-    -- Record the manager's stated reason against the audit row just written.
-    UPDATE oc_ts_audit
-       SET change_reason = p_reason, trace_id = p_trace_id
-     WHERE audit_id = (SELECT MAX(audit_id) FROM oc_ts_audit
-                        WHERE ts_entry_id = p_ts_entry_id);
+    validate_day(v_week, v_date);
 
     UPDATE oc_ts_week
        SET overridden_flag = 'Y', updated_by = p_actor
@@ -2223,6 +2242,13 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
 
     log_event(v_week, v_emp, NULL, v_period, 'DAY', v_date,
               'Override', NULL, p_reason, p_actor_emp_id, p_trace_id);
+  EXCEPTION WHEN OTHERS THEN
+    -- validate_day raises RULE-003 on a day that would now exceed 24 hours,
+    -- and that is a normal refusal rather than a fault. ORDS rolls the
+    -- transaction back; the context is session state and would not be rolled
+    -- back with it.
+    oc_time_ctx.clear;
+    RAISE;
   END override_approve;
 
 

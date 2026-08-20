@@ -3,9 +3,11 @@
 define([
   'vb/action/actionChain',
   'vb/action/actions',
+  'resources/js/absence',
 ], (
   ActionChain,
-  Actions
+  Actions,
+  Absence
 ) => {
   'use strict';
 
@@ -64,7 +66,7 @@ define([
           const who = await Actions.callRest(context, {
             endpoint: 'fa_hcm/getWorkers',
             uriParams: {
-              q: "PersonNumber='" + empId + "'",
+              q: Absence.workerQuery(empId),
               limit: 1, onlyData: true, fields: 'PersonNumber,PersonId',
             },
           });
@@ -89,25 +91,18 @@ define([
         }
 
         // ── 2. the live read ─────────────────────────────────────
-        // ';', NEVER ' AND '. This comment said the opposite until 12-Aug-2026
-        // and the opposite was wrong: measured against the pod, every ' AND '
-        // combination returns 500 while the same predicates joined by ';'
-        // return 200. Single predicates work either way, which is what makes
-        // the wrong version look plausible right up until you use two.
-        //
-        //   personId=<id> AND endDate>='2026-08-10'        500
-        //   personId=<id>;endDate>='2026-08-10'            200
-        //
-        // The test is OVERLAP, not containment: a leave that started last week
-        // and runs into this one still puts leave on these days.
+        // The query is built in resources/js/absence.js, which is also where
+        // the ' and ' / ';' story is written down. Short version: this file
+        // sent ';' and asserted in a comment that ' AND ' returns 500. Both
+        // halves were wrong when re-measured on 20-Aug-2026 — the ';' form
+        // 400s and had been failing silently into the warn path below ever
+        // since, leaving the last-known leave on screen.
         const res = await Actions.callRest(context, {
           endpoint: 'fa_hcm/getAbsences',
           uriParams: {
-            q: 'personId=' + personId
-               + ";endDate>='" + from + "';startDate<='" + to + "'",
+            q: Absence.absenceQuery(personId, from, to),
             limit: 100, onlyData: true,
-            fields: 'startDate,endDate,duration,absenceType,'
-                    + 'absenceStatusCd,approvalStatusCd',
+            fields: Absence.ABSENCE_FIELDS,
           },
         });
 
@@ -116,7 +111,7 @@ define([
             $page.functions.absenceDiagnosis(res.status, 'absence read'));
         }
 
-        const rows = $page.functions.absenceToRows(
+        const rows = Absence.absenceToRows(
           (res.body && res.body.items) || [], empId, from, to,
           $application.variables.stdHoursPerDay);
 

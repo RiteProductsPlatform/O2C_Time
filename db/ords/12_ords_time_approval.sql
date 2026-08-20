@@ -34,6 +34,7 @@
 --   POST adjustments/:id/approve                 approve a retro adjustment
 --   GET  llc/:projectId/:periodId                leave-loss absentee lines
 --   POST llc/generate                            build the absentee list
+--   GET  llc/roster/:projectId/:periodId         who the live HR read must ask about
 --   GET  llc/cover/:projectId/:absenceDate       eligible cover LOV
 --   POST llc/:id/assign                          assign a cover
 --   POST llc/:id/approve                         approve the coverage
@@ -1065,9 +1066,21 @@ BEGIN
       SELECT llc_id, project_id, project_number, project_name, revenue_model,
              leave_loss_flag, period_id, period_name,
              absent_employee_id, absent_employee_name,
-             absence_date, absence_day, absence_type, absence_hours,
+             absence_date, absence_day, absence_type,
+             -- BOTH, and they mean different things. ABSENCE_HOURS is the
+             -- whole absence as Absence Management recorded it; LOSS_HOURS is
+             -- this project's share of it, which for a 25% allocation on an
+             -- 8-hour day is 2. PAGE-006 is a per-project screen, so it shows
+             -- LOSS_HOURS and keeps ABSENCE_HOURS as the sub-line -- showing
+             -- only the absence overstated 555's loss fourfold, reported from
+             -- the screen 20-Aug.
+             absence_hours, loss_hours,
              cover_employee_id, cover_employee_name,
              llc_status, billed_flag,
+             -- What actually moved to a billable task, so the headline total
+             -- reports the recovery instead of assuming it. Null until the
+             -- coverage is approved.
+             cover_hours_billed,
              assigned_by, assigned_on, approved_by, approved_on, remarks
         FROM v_oc_ts_llc
        WHERE project_id = :projectId
@@ -1098,6 +1111,59 @@ BEGIN
               REPLACE(REPLACE(SQLERRM,'ORA-'||LTRIM(TO_CHAR(ABS(SQLCODE)))||': ',''),'"','\"')
               || '"}');
       END;
+    ]');
+  COMMIT;
+END;
+/
+
+-- GET llc/roster/:projectId/:periodId
+--
+-- WHO THE LIVE HR READ HAS TO ASK ABOUT. PAGE-006's "Refresh absences from HR"
+-- used to call llc/generate straight away, which reads OC_TIME_ABSENCE -- our
+-- CACHE. So leave applied in Fusion did not appear until either the nightly
+-- feed ran or the absent person happened to open their own timesheet, and on
+-- 20-Aug a real absence booked for RI2894 was invisible to their manager for
+-- exactly that reason. The page now reads Fusion first, the same way PAGE-001
+-- does, and this answers the question that read has to start from.
+--
+-- ANCHORED ON THE ALLOCATION, not on OC_TS_WEEK. V_OC_TS_MONTH_SUMMARY joins
+-- through OC_TS_ENTRY, so it can only list people who already have timesheet
+-- rows -- and someone newly allocated, or absent before anything was populated
+-- for them, is precisely who gets missed. Allocation is the statement that
+-- this person is on this project.
+--
+-- STD_HOURS_PER_DAY travels with each row because a Fusion absence header is
+-- measured in DAYS. Turning half a day into hours needs that person's own
+-- standard day; several people here are on nine and a global 8 would
+-- understate their leave.
+BEGIN
+  ORDS.DEFINE_TEMPLATE(p_module_name => 'oc.time.approval',
+                       p_pattern => 'llc/roster/:projectId/:periodId');
+  ORDS.DEFINE_HANDLER(
+    p_module_name => 'oc.time.approval',
+    p_pattern => 'llc/roster/:projectId/:periodId', p_method => 'GET',
+    p_source_type => ORDS.source_type_collection_feed,
+    p_source => q'[
+      SELECT al.employee_id,
+             w.employee_name,
+             NVL(w.std_hours_per_day, 8) AS std_hours_per_day,
+             al.alloc_pct, al.billing_status,
+             -- The window travels with the roster so the page needs one call,
+             -- not two, and cannot pair this month's people with last month's
+             -- dates.
+             TO_CHAR(pe.start_date,'YYYY-MM-DD') AS window_from,
+             TO_CHAR(pe.end_date,  'YYYY-MM-DD') AS window_to
+        FROM oc_time_allocation al
+        JOIN oc_time_worker  w  ON w.employee_id = al.employee_id
+        JOIN oc_time_period  pe ON pe.period_id  = :periodId
+       WHERE al.project_id = :projectId
+         AND al.status     = 'Active'
+         -- OVERLAP, not containment: an allocation that ended mid-month still
+         -- had days in it, and leave taken on those days is still this
+         -- project's loss.
+         AND al.start_date          <= pe.end_date
+         AND NVL(al.end_date, pe.end_date) >= pe.start_date
+       ORDER BY w.employee_name
     ]');
   COMMIT;
 END;

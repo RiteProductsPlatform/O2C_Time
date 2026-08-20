@@ -1898,6 +1898,54 @@
         }
       }
     },
+    "/oc/time/approval/llc/roster/{projectId}/{periodId}": {
+      "get": {
+        "operationId": "getLlcRoster",
+        "summary": "Everyone allocated to the project in this period, with their standard day - the starting point for the live HR absence read",
+        "x-vb": {
+          "actionHint": "getMany"
+        },
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "periodId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "_t",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Cache-buster. A GET refreshed after a write must not be served from a browser 304."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Allocated colleagues",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Collection"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/oc/time/approval/llc/{id}/approve": {
       "post": {
         "operationId": "approveCover",
