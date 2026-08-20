@@ -1153,10 +1153,26 @@ BEGIN
     p_method => 'POST',
     p_source_type => ORDS.source_type_plsql,
     p_source => q'[
+      DECLARE
+        v_billed NUMBER;
       BEGIN
-        oc_time_pkg.approve_cover(:id, :actorEmpId, NVL(:actor,'VBCS_USER'));
+        -- OC_TIME_APPROVE_COVER, not OC_TIME_PKG.APPROVE_COVER. The package
+        -- procedure sets BILLED_FLAG and stops; the wrapper also moves the
+        -- cover's hours onto a billable task (db/84). Wired here 20-Aug --
+        -- until now the screen set a flag saying the loss was recovered while
+        -- the hours behind it stayed non-billable, so the response below was
+        -- reporting "billed":true about something that had not happened.
+        oc_time_approve_cover(:id, :actorEmpId, NVL(:actor,'VBCS_USER'));
+
+        -- Reported from the row rather than assumed. Zero hours is a real
+        -- outcome -- the cover may have had nothing non-billable on that
+        -- project that day -- and the screen should be able to say so.
+        SELECT NVL(cover_hours_billed, 0) INTO v_billed
+          FROM oc_ts_leave_loss_cover WHERE llc_id = :id;
+
         COMMIT; :status_code := 200;
-        HTP.P('{"llcId":' || :id || ',"llcStatus":"Approved","billed":true}');
+        HTP.P('{"llcId":' || :id || ',"llcStatus":"Approved","hoursBilled":'
+              || TO_CHAR(v_billed) || '}');
       EXCEPTION WHEN OTHERS THEN
         ROLLBACK;
         :status_code := CASE WHEN SQLCODE BETWEEN -20033 AND -20001 THEN 400 ELSE 500 END;
