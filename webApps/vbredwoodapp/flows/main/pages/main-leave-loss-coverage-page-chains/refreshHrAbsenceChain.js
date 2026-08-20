@@ -33,9 +33,9 @@ define([
    *   5  oc_time/generateLlc   turn the absences into coverage lines
    *   6  loadLinesChain        show them
    *
-   * TWO CALLS TO FUSION, NOT TWO PER PERSON. Both resources accept IN lists —
-   * measured on the pod, PersonNumber IN (7 numbers) and personId IN (7 ids)
-   * with the date window both return 200 with exactly the right rows. A
+   * TWO CALLS TO FUSION, NOT TWO PER PERSON. Both resources accept IN lists,
+   * and they must be written WITHOUT the space -- IN(a,b), not IN (a,b) --
+   * because a `q` containing a space does not survive the VB proxy. A
    * per-person loop would have made this scale with headcount for no reason.
    *
    * HOP 4 POSTS FOR EVERY PERSON ON THE ROSTER, including the ones Fusion
@@ -151,15 +151,19 @@ define([
           + empIds.length + ' colleagues could be matched to a person there.');
       }
 
-      // ── 3. the live read, in one call ──────────────────────────
+      // ── 3. the live read, in one call ────────────────────────
+      // BY PERSON ONLY, no date predicate: a `q` containing a space does not
+      // survive the VB proxy and a `q` containing ';' does not survive Fusion,
+      // so no multi-predicate form works on both paths. The window is applied
+      // per person in absenceToRows below.
+      //
+      // This therefore asks for the whole team's whole absence history, hence
+      // 1000 -- a team-sized question rather than a month-sized one.
       const res = await Actions.callRest(context, {
         endpoint: 'fa_hcm/getAbsences',
         uriParams: {
-          q: Absence.absenceQuery(personIds, from, to),
-          // One month, one project team. 500 is far above any real answer and
-          // well below the point where the response gets slow; a truncated
-          // read would look exactly like cancelled leave and retract it.
-          limit: 500, onlyData: true,
+          q: Absence.absenceQuery(personIds),
+          limit: 1000, onlyData: true,
           fields: Absence.ABSENCE_FIELDS,
         },
       });
@@ -167,6 +171,16 @@ define([
       if (!res.ok) {
         throw new Error('Fusion refused the absence read (HTTP ' + res.status
           + '). Leave was not refreshed.');
+      }
+
+      // A SHORT READ IS WORSE THAN NO READ HERE. Hop 4 posts one windowed claim
+      // per person and the handler deletes what it was not sent inside that
+      // window -- so a truncated list would retract live leave for whoever fell
+      // off the end, silently, for the whole team at once.
+      if (Absence.wasTruncated(res.body)) {
+        throw new Error('Fusion returned only part of this team\'s absence '
+          + 'history, so nothing was refreshed rather than risk removing leave '
+          + 'that is still live. The read limit needs raising.');
       }
 
       const items = (res.body && res.body.items) || [];

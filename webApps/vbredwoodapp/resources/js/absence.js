@@ -31,44 +31,49 @@ define([], () => {
   return {
 
     /**
-     * The Fusion `q` for an absence read.
+     * The Fusion `q` for an absence read. NO SPACES, AND NO DATE PREDICATE.
      *
-     * ' and ', NOT ';'. THIS IS THE REVERSE OF WHAT THIS CODE SAID UNTIL TODAY.
+     * THREE MEASUREMENTS, TWO PATHS, AND THEY DISAGREE BECAUSE THEY ARE NOT THE
+     * SAME REQUEST.
      *
-     * refreshAbsenceChain carried a measured-looking comment asserting that
-     * ' AND ' returns 500 and ';' returns 200, dated 12-Aug-2026. Re-measured
-     * against the same pod on 20-Aug, every combination is the other way round:
+     * The browser reaches Fusion through the VB `fa` backend, which is a
+     * server-side proxy. Direct curl does not. Measured 20-Aug against the same
+     * pod on the same day:
      *
-     *   personId=<id>;endDate>='2026-08-01';startDate<='2026-08-31'      400
-     *   personId=<id> and endDate>='2026-08-01' and startDate<='2026-08-31'  200
-     *   personId IN (<id>,<id>) and endDate>=... and startDate<=...          200
+     *                                          direct   via the VB proxy
+     *   personId=<id>;endDate>='…';…             400          200
+     *   personId=<id> and endDate>='…' and …     200          500
      *
-     * URL-encoded or raw, the ';' form fails identically, so this is Fusion's
-     * ViewCriteria parser and not a transport artefact. A single predicate
-     * works either way, which is what made the wrong version look right for as
-     * long as it did.
+     * Neither column is wrong. A `q` containing a SPACE does not survive the
+     * proxy, and a `q` containing a `;` does not survive Fusion's ViewCriteria
+     * parser -- `;` is a matrix-parameter separator, so the proxy path almost
+     * certainly delivers only `q=personId=<id>` and Fusion answers 200 with the
+     * person's ENTIRE absence history. That 200 is why the `;` version looked
+     * healthy for weeks: absenceToRows clamps to the window afterwards, so the
+     * screen was right while the query was not.
      *
-     * The consequence was invisible rather than loud: the chain treats a failed
-     * read as non-fatal by design, so every live refresh had been quietly
-     * warning and leaving the last-known leave on screen.
+     * A comment here asserted the second row as a universal fact on 12-Aug and
+     * I overwrote it with the first on 20-Aug. Both of us measured one path and
+     * wrote it down as the truth.
      *
-     * The window test is OVERLAP, not containment — leave that began before
-     * the window and runs into it still puts leave on these days.
+     * SO THE PREDICATE FILTERS BY PERSON ONLY, and by a form with no space in
+     * it -- `IN(a,b)`, not `IN (a,b)`. The window is applied in absenceToRows,
+     * which was already clamping every generated day to it, so nothing about
+     * the result changes. The date predicate was an optimisation; it was never
+     * what made the answer correct.
      *
-     * Verify after any change by asking for a window that must be empty
-     * (September, here) and checking that it really is: a predicate Fusion
-     * ignores returns 200 with everything in it, which reads as success.
+     * The cost is that Fusion returns the whole history for the people asked
+     * about. That is fine for a person or a project team, and wasTruncated()
+     * below is what keeps it honest when it is not.
      */
-    absenceQuery(personIds, from, to) {
+    absenceQuery(personIds) {
       const ids = (Array.isArray(personIds) ? personIds : [personIds])
         .filter((x) => x !== undefined && x !== null && x !== '');
       if (!ids.length) { return null; }
 
-      const who = ids.length === 1
+      return ids.length === 1
         ? 'personId=' + ids[0]
-        : 'personId IN (' + ids.join(',') + ')';
-
-      return who + " and endDate>='" + from + "' and startDate<='" + to + "'";
+        : 'personId IN(' + ids.join(',') + ')';
     },
 
     /** The `q` that resolves employee numbers to Fusion PersonIds in one call. */
@@ -76,8 +81,32 @@ define([], () => {
       const ids = (Array.isArray(employeeIds) ? employeeIds : [employeeIds])
         .filter(Boolean);
       if (!ids.length) { return null; }
-      if (ids.length === 1) { return "PersonNumber='" + ids[0] + "'"; }
-      return 'PersonNumber IN (' + ids.map((e) => "'" + e + "'").join(',') + ')';
+      // IN(...), not IN (...) -- same no-space rule as above.
+      return ids.length === 1
+        ? "PersonNumber='" + ids[0] + "'"
+        : 'PersonNumber IN(' + ids.map((e) => "'" + e + "'").join(',') + ')';
+    },
+
+    /**
+     * Did Fusion have more rows than it gave us?
+     *
+     * THIS IS A CORRECTNESS GUARD, NOT A NICETY. Both callers post the result
+     * as a WINDOWED CLAIM -- employeeId + windowFrom + windowTo, meaning "these
+     * are ALL the absences this person has between these dates" -- and the
+     * handler deletes anything inside that window it was not sent. That is what
+     * makes a cancelled leave retract.
+     *
+     * A truncated read is indistinguishable from a cancellation. Hitting the
+     * limit and posting anyway would delete real, current leave and hand the
+     * worked hours back, exactly as if HR had withdrawn it. So a short read
+     * must abort the post, not proceed with what it happened to get.
+     *
+     * `hasMore` survives onlyData=true -- checked, since the flag being
+     * stripped by that parameter is precisely the kind of thing that would make
+     * this guard silently useless.
+     */
+    wasTruncated(body) {
+      return !!(body && body.hasMore === true);
     },
 
     /**

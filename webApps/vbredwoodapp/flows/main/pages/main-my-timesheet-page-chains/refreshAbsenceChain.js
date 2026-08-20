@@ -90,18 +90,25 @@ define([
           $page.variables.fusionPersonId = personId;
         }
 
-        // ── 2. the live read ─────────────────────────────────────
-        // The query is built in resources/js/absence.js, which is also where
-        // the ' and ' / ';' story is written down. Short version: this file
-        // sent ';' and asserted in a comment that ' AND ' returns 500. Both
-        // halves were wrong when re-measured on 20-Aug-2026 — the ';' form
-        // 400s and had been failing silently into the warn path below ever
-        // since, leaving the last-known leave on screen.
+        // ── 2. the live read ───────────────────────────────────────
+        // BY PERSON ONLY. The window is applied below, in absenceToRows, which
+        // was always clamping to it anyway.
+        //
+        // resources/js/absence.js carries the measurements. Short version: a
+        // `q` with a SPACE in it does not survive the VB proxy (500, which is
+        // what the screen reported on 21-Aug) and a `q` with a ';' does not
+        // survive Fusion's parser (400). There is no multi-predicate form that
+        // works on both paths, so the date predicate goes and the window is
+        // applied in the browser -- which is where it was being applied anyway.
+        //
+        // limit 500 rather than 100, because this now asks for the person's
+        // whole absence history. A short read is dangerous rather than merely
+        // incomplete; see the hasMore check below.
         const res = await Actions.callRest(context, {
           endpoint: 'fa_hcm/getAbsences',
           uriParams: {
-            q: Absence.absenceQuery(personId, from, to),
-            limit: 100, onlyData: true,
+            q: Absence.absenceQuery(personId),
+            limit: 500, onlyData: true,
             fields: Absence.ABSENCE_FIELDS,
           },
         });
@@ -109,6 +116,17 @@ define([
         if (!res.ok) {
           return this.warn(context,
             $page.functions.absenceDiagnosis(res.status, 'absence read'));
+        }
+
+        // A TRUNCATED READ MUST NOT BE POSTED. Hop 3 sends a windowed claim and
+        // the handler deletes what it was not sent inside that window, so a
+        // short read is indistinguishable from cancelled leave and would delete
+        // leave that is still live.
+        if (Absence.wasTruncated(res.body)) {
+          return this.warn(context,
+            'Fusion returned only part of this person\'s absence history, so '
+            + 'leave was not refreshed rather than risk removing leave that is '
+            + 'still live. The hours below are unchanged.');
         }
 
         const rows = Absence.absenceToRows(
