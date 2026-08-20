@@ -43,11 +43,31 @@
 -- 555 is the Capacity project on this pod, so it is the one FCP project and
 -- the only place leave-loss coverage will ever be testable.
 --
--- WHICH RATE CARD. A project can hold several -- Draft, PendingL1, PendingL2,
--- Approved, Rejected, Cancelled, Superseded, across versions. Only Approved is
--- a commercial fact; the rest are somebody's work in progress. Highest
--- VERSION_NO among the Approved ones, and if a project has none, REVENUE_MODEL
--- is left alone rather than guessed at.
+-- WHICH RATE CARD — REWRITTEN 20-Aug, because the first version found nothing.
+--
+-- It joined on OC_RATE_CARD.PROJECT_ID and took Approved only. Both halves were
+-- wrong for this data, and the run proved it: three projects linked, zero
+-- models set, "(no approved card)" on every row.
+--
+--   PROJECT_ID is nullable by design -- the schema calls it a "project anchor,
+--   set only in the accrual-bundled mode", so a standalone card carries none.
+--   The main application's own LOV never uses it: v_oc_project_with_rc joins by
+--   CLIENT_ID, and oc.lov/opportunities resolves the model by client and
+--   OPPORTUNITY_NAME. So the anchor is the exception, not the key.
+--
+--   APPROVED-ONLY was my own rule, not theirs. The opportunities endpoint
+--   orders by CASE WHEN status='Approved' THEN 0 ELSE 1 END, version_no DESC --
+--   it PREFERS approved and falls back to the latest of anything. A project
+--   being estimated has a real model on a Draft card, and refusing to read it
+--   leaves leave-loss switched off for a project everyone can see is Capacity.
+--
+-- So: project anchor when set, otherwise the opportunity name against the
+-- project name; approved first, then highest version. Their resolution, not
+-- one invented here -- which is also why it will keep agreeing with what the
+-- Project Master screen shows.
+--
+-- CARD_STATUS is on the section-2 preview for exactly this reason: if the model
+-- arrives off a Draft card, that is worth seeing rather than discovering later.
 --
 -- Idempotent. Depends on: time/02.
 -- Needs, as O2C_DEV:  GRANT SELECT ON oc_project   TO o2c_time;
@@ -126,12 +146,18 @@ SELECT t.project_number || '  ' || t.project_name        AS ours,
   FROM oc_time_project t
   LEFT JOIN oc_main_project_src m
          ON UPPER(TRIM(m.project_name)) = UPPER(TRIM(t.project_name))
-  LEFT JOIN (SELECT r.project_id, r.revenue_model, r.status, r.version_no,
-                    ROW_NUMBER() OVER (PARTITION BY r.project_id
-                                       ORDER BY r.version_no DESC) AS rn
-               FROM oc_main_ratecard_src r
-              WHERE r.status = 'Approved') rc
-         ON rc.project_id = m.project_id AND rc.rn = 1
+  LEFT JOIN (SELECT r.project_id, r.opportunity_name, r.revenue_model,
+                    r.status, r.version_no,
+                    ROW_NUMBER() OVER (
+                      PARTITION BY NVL(TO_CHAR(r.project_id),
+                                       UPPER(TRIM(r.opportunity_name)))
+                      ORDER BY CASE WHEN r.status = 'Approved' THEN 0 ELSE 1 END,
+                               r.version_no DESC) AS rn
+               FROM oc_main_ratecard_src r) rc
+         ON rc.rn = 1
+        AND (rc.project_id = m.project_id
+             OR (rc.project_id IS NULL
+                 AND UPPER(TRIM(rc.opportunity_name)) = UPPER(TRIM(m.project_name))))
  WHERE t.status = 'Active'
    AND EXISTS (SELECT 1 FROM oc_time_allocation al
                 WHERE al.project_id = t.project_id AND al.status = 'Active')
@@ -186,23 +212,31 @@ DECLARE
 BEGIN
   UPDATE oc_time_project t
      SET t.revenue_model =
-           (SELECT CASE rc.revenue_model
-                     WHEN 'Labor / T&M' THEN 'T&M'
-                     WHEN 'Capacity'    THEN 'FCP'
-                     ELSE rc.revenue_model
-                   END
-              FROM (SELECT r.project_id, r.revenue_model,
-                           ROW_NUMBER() OVER (PARTITION BY r.project_id
-                                              ORDER BY r.version_no DESC) AS rn
-                      FROM oc_main_ratecard_src r
-                     WHERE r.status = 'Approved') rc
-             WHERE rc.project_id = t.main_project_id AND rc.rn = 1),
+           (SELECT MAX(CASE rc.revenue_model
+                         WHEN 'Labor / T&M' THEN 'T&M'
+                         WHEN 'Capacity'    THEN 'FCP'
+                         ELSE rc.revenue_model
+                       END) KEEP (DENSE_RANK FIRST ORDER BY rc.rn)
+              FROM (SELECT r.project_id, r.opportunity_name, r.revenue_model,
+                           ROW_NUMBER() OVER (
+                             PARTITION BY NVL(TO_CHAR(r.project_id),
+                                              UPPER(TRIM(r.opportunity_name)))
+                             ORDER BY CASE WHEN r.status = 'Approved' THEN 0 ELSE 1 END,
+                                      r.version_no DESC) AS rn
+                      FROM oc_main_ratecard_src r) rc
+             WHERE rc.rn = 1
+               AND (rc.project_id = t.main_project_id
+                    OR (rc.project_id IS NULL
+                        AND UPPER(TRIM(rc.opportunity_name)) =
+                            UPPER(TRIM(t.project_name))))),
          t.updated_by = 'MAIN_LINK_81',
          t.updated_on = SYSTIMESTAMP
    WHERE t.main_project_id IS NOT NULL
      AND EXISTS (SELECT 1 FROM oc_main_ratecard_src r
                   WHERE r.project_id = t.main_project_id
-                    AND r.status = 'Approved');
+                     OR (r.project_id IS NULL
+                         AND UPPER(TRIM(r.opportunity_name)) =
+                             UPPER(TRIM(t.project_name))));
   v_m := SQL%ROWCOUNT;
 
   -- LEAVE_LOSS_FLAG follows the model, and only FCP can carry it. Set rather
