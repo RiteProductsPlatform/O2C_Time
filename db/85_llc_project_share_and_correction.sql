@@ -252,188 +252,37 @@ END;
 SHOW ERRORS
 
 PROMPT ============================================================
-PROMPT [4/6] OC_TIME_COVER_BILLING reads LOSS_HOURS instead of recomputing
+PROMPT [4/6] OC_TIME_COVER_BILLING - superseded, see db/86
 PROMPT ============================================================
 
-CREATE OR REPLACE PROCEDURE oc_time_cover_billing(
-  p_llc_id  IN  NUMBER,
-  p_apply   IN  VARCHAR2,          -- 'Y' bill the cover, 'N' put it back
-  p_actor   IN  VARCHAR2 DEFAULT 'VBCS_USER',
-  o_hours   OUT NUMBER,
-  o_message OUT VARCHAR2)
-IS
-  v_project   NUMBER;
-  v_date      DATE;
-  v_absent    VARCHAR2(50);
-  v_cover     VARCHAR2(50);
-  v_already   NUMBER;
-  v_loss      NUMBER;
-  v_week      NUMBER;
-  v_nb_task   NUMBER;
-  v_bill_task NUMBER;
-  v_avail     NUMBER;
+-- THIS SECTION DELIBERATELY DOES NOTHING NOW.
+--
+-- It created OC_TIME_COVER_BILLING guarded by oc_time_pkg.assert_editable,
+-- which is the EMPLOYEE's editability gate. Running this file after db/86
+-- would put that guard back, and the symptom would be llc rows refusing with
+-- "This week is locked. Only a manager can edit a defaulted timesheet." --
+-- a message aimed at the employee, raised at a manager doing the one thing it
+-- says a manager may do.
+--
+-- Commented out rather than deleted, for the same reason 01_time_reference.sql
+-- keeps UK_OC_TP_SINGLE_OPEN commented rather than removed: a re-run that
+-- silently restores a withdrawn rule is worse than a file with a hole in it.
+--
+-- The live definition is db/86_annexure_bills_what_moved.sql [2/5].
+
+DECLARE
+  v_n NUMBER;
 BEGIN
-  o_hours := 0;
-
-  SELECT project_id, absence_date, absent_employee_id, cover_employee_id,
-         NVL(cover_hours_billed, 0)
-    INTO v_project, v_date, v_absent, v_cover, v_already
-    FROM oc_ts_leave_loss_cover WHERE llc_id = p_llc_id;
-
-  IF v_cover IS NULL THEN
-    o_message := 'No covering colleague assigned yet.';
-    RETURN;
+  SELECT COUNT(*) INTO v_n FROM user_objects
+   WHERE object_name = 'OC_TIME_COVER_BILLING' AND object_type = 'PROCEDURE';
+  IF v_n = 0 THEN
+    DBMS_OUTPUT.PUT_LINE('  OC_TIME_COVER_BILLING does not exist yet - run db/86.');
+  ELSE
+    DBMS_OUTPUT.PUT_LINE('  Left alone. The live definition is db/86 [2/5].');
   END IF;
-
-  v_week := oc_time_pkg.ensure_week(v_cover, v_date, p_actor);
-
-  -- THE MANAGER'S WINDOW. Decided 20-Aug: coverage is settled before the
-  -- cut-off, so there is no adjustment path here. A locked week, a closed
-  -- period or a passed cut-off raises from assert_editable and the message
-  -- reaches the screen unchanged.
-  oc_time_pkg.assert_editable(v_week);
-
-  -- ── PUT IT BACK ────────────────────────────────────────────
-  IF UPPER(p_apply) <> 'Y' THEN
-    IF v_already <= 0 THEN
-      o_message := 'Nothing had been billed for this coverage.';
-      RETURN;
-    END IF;
-
-    SELECT MIN(e.task_id) INTO v_bill_task
-      FROM oc_ts_entry e JOIN oc_time_task t ON t.task_id = e.task_id
-     WHERE e.ts_week_id = v_week AND e.entry_date = v_date
-       AND e.project_id = v_project AND e.is_leave = 'N'
-       AND t.billable_type = 'Billable' AND e.hours >= v_already;
-
-    SELECT MIN(e.task_id) INTO v_nb_task
-      FROM oc_ts_entry e JOIN oc_time_task t ON t.task_id = e.task_id
-     WHERE e.ts_week_id = v_week AND e.entry_date = v_date
-       AND e.project_id = v_project AND e.is_leave = 'N'
-       AND t.billable_type = 'Non-billable';
-
-    IF v_bill_task IS NULL OR v_nb_task IS NULL THEN
-      o_message := 'The billed hours are no longer where they were put; '
-                || 'nothing moved back. Check the day by hand.';
-      RETURN;
-    END IF;
-
-    UPDATE oc_ts_entry SET hours = hours - v_already, updated_by = p_actor
-     WHERE ts_week_id = v_week AND entry_date = v_date
-       AND project_id = v_project AND task_id = v_bill_task
-       AND entry_type = 'Actual';
-
-    UPDATE oc_ts_entry SET hours = hours + v_already, updated_by = p_actor
-     WHERE ts_week_id = v_week AND entry_date = v_date
-       AND project_id = v_project AND task_id = v_nb_task
-       AND entry_type = 'Actual';
-
-    UPDATE oc_ts_leave_loss_cover
-       SET cover_hours_billed = NULL, updated_by = p_actor
-     WHERE llc_id = p_llc_id;
-
-    o_hours   := v_already;
-    o_message := v_already || ' hour(s) returned to non-billable.';
-    RETURN;
-  END IF;
-
-  -- ── BILL IT ────────────────────────────────────────────────
-  IF v_already > 0 THEN
-    o_message := 'Already billed ' || v_already || ' hour(s) for this coverage.';
-    RETURN;
-  END IF;
-
-  -- READ, DO NOT RECOMPUTE. The screen shows V_OC_TS_LLC.LOSS_HOURS and this
-  -- moves V_OC_TS_LLC.LOSS_HOURS, so the manager cannot approve one number and
-  -- get another. When the definition changes it changes in one place.
-  SELECT loss_hours INTO v_loss FROM v_oc_ts_llc WHERE llc_id = p_llc_id;
-
-  IF NVL(v_loss,0) <= 0 THEN
-    o_message := 'The absent colleague has no allocated hours on this project '
-              || 'for that day, so there is no loss to recover.';
-    RETURN;
-  END IF;
-
-  -- Where the hours come FROM: the cover's non-billable line on this project.
-  SELECT MIN(e.task_id), NVL(MAX(e.hours),0) INTO v_nb_task, v_avail
-    FROM oc_ts_entry e JOIN oc_time_task t ON t.task_id = e.task_id
-   WHERE e.ts_week_id = v_week AND e.entry_date = v_date
-     AND e.project_id = v_project AND e.is_leave = 'N'
-     AND e.entry_type = 'Actual'
-     AND t.billable_type = 'Non-billable';
-
-  IF v_nb_task IS NULL THEN
-    o_message := 'The covering colleague has no non-billable hours on this '
-              || 'project that day, so there is nothing to convert.';
-    RETURN;
-  END IF;
-
-  -- Never move more than they actually have. A cover with only 1 hour on the
-  -- project cannot recover a 2-hour loss, and inventing the difference would
-  -- put the day over its standard.
-  v_loss := LEAST(v_loss, v_avail);
-  IF v_loss <= 0 THEN
-    o_message := 'No non-billable hours available to convert.';
-    RETURN;
-  END IF;
-
-  -- Where the hours go TO: the project's first billable task, read from the LOV
-  -- so the employee can also see and change it.
-  SELECT MIN(task_id) INTO v_bill_task
-    FROM (SELECT task_id FROM v_oc_ts_task_lov
-           WHERE project_id = v_project AND billable_type = 'Billable'
-           ORDER BY sort_order, task_code, task_id)
-   WHERE ROWNUM = 1;
-
-  IF v_bill_task IS NULL THEN
-    o_message := 'This project has no billable task to move the hours onto.';
-    RETURN;
-  END IF;
-
-  -- The audit trail should say why these hours moved, and section [3/6] makes
-  -- that reachable: the capture trigger reads the context at INSERT time.
-  oc_time_ctx.set_reason('Leave-loss coverage approved: ' || v_loss
-                         || 'h billed for covering ' || v_absent
-                         || ' on ' || TO_CHAR(v_date,'DD-Mon-YY'));
-
-  UPDATE oc_ts_entry SET hours = hours - v_loss, updated_by = p_actor
-   WHERE ts_week_id = v_week AND entry_date = v_date
-     AND project_id = v_project AND task_id = v_nb_task
-     AND entry_type = 'Actual';
-
-  -- MERGE, not INSERT: the cover may already have billable hours on this
-  -- project that day from their own work, and a second row would break
-  -- UK_OC_TSE_CELL.
-  MERGE INTO oc_ts_entry e
-  USING (SELECT v_week AS wk, v_project AS pid, v_bill_task AS tid,
-                v_date AS d FROM dual) s
-     ON (e.ts_week_id = s.wk AND e.project_id = s.pid
-     AND e.task_id = s.tid AND e.entry_date = s.d AND e.entry_type = 'Actual')
-   WHEN MATCHED THEN UPDATE
-        SET e.hours = e.hours + v_loss, e.updated_by = p_actor
-   WHEN NOT MATCHED THEN
-        INSERT (ts_week_id, project_id, task_id, entry_date, hours,
-                entry_type, is_leave, source, created_by)
-        VALUES (s.wk, s.pid, s.tid, s.d, v_loss, 'Actual', 'N',
-                'Manager', p_actor);
-
-  oc_time_ctx.clear;
-
-  UPDATE oc_ts_leave_loss_cover
-     SET cover_hours_billed = v_loss, updated_by = p_actor
-   WHERE llc_id = p_llc_id;
-
-  o_hours   := v_loss;
-  o_message := v_loss || ' hour(s) moved to a billable task for ' || v_cover
-            || ' on ' || TO_CHAR(v_date,'DD-Mon-YY') || '.';
-EXCEPTION WHEN OTHERS THEN
-  -- A value left in the context would attach this reason to whatever the
-  -- session writes next.
-  oc_time_ctx.clear;
-  RAISE;
-END oc_time_cover_billing;
+END;
 /
-SHOW ERRORS
+
 
 PROMPT ============================================================
 PROMPT [5/6] Complete the rows approved before the billing was wired
@@ -497,6 +346,8 @@ PROMPT Any Approved row still showing BILLED_HRS as a dash could not be
 PROMPT completed; section [5/6] printed the reason for each one above.
 
 PROMPT
-PROMPT NEXT: run db/09_pkg_oc_time.sql. override_approve is edited there to
-PROMPT set OC_TIME_CTX instead of updating the append-only audit table, and
-PROMPT the Apply correction button stays broken until it is recompiled.
+PROMPT NEXT: run db/86_annexure_bills_what_moved.sql, then
+PROMPT db/09_pkg_oc_time.sql. 86 stops the invoice annexure billing the whole
+PROMPT absence and gives the billing a manager's guard instead of the
+PROMPT employee's; 09 recompiles override_approve, and the Apply correction
+PROMPT button stays broken until it is.
