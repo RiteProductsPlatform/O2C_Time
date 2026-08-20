@@ -2419,22 +2419,40 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
     v_project NUMBER;
     v_date    DATE;
     v_absent  VARCHAR2(50);
+    v_status  oc_ts_leave_loss_cover.llc_status%TYPE;
     v_ok      NUMBER;
     v_clash   NUMBER;
   BEGIN
-    SELECT project_id, absence_date, absent_employee_id
-      INTO v_project, v_date, v_absent
+    SELECT project_id, absence_date, absent_employee_id, llc_status
+      INTO v_project, v_date, v_absent, v_status
       FROM oc_ts_leave_loss_cover WHERE llc_id = p_llc_id;
+
+    -- AN APPROVED COVERAGE IS NOT REASSIGNABLE. Added 20-Aug alongside db/84,
+    -- which is what makes it matter: approval MOVES hours out of the cover's
+    -- non-billable line and records the quantity in COVER_HOURS_BILLED.
+    -- Reassigning would point that record at a different person while the
+    -- hours stayed moved for the first one -- billed time attributed to
+    -- somebody who never covered. Revoke the billing first, then reassign.
+    IF v_status = 'Approved' THEN
+      RAISE_APPLICATION_ERROR(-20014,
+        'This coverage is approved and its hours are already billed. Revoke it '
+        || 'before assigning somebody else.');
+    END IF;
 
     -- RULE-014: unbilled on the same project, not absent that day, not already
     -- assigned. Checked here as well as in the LOV so an API caller cannot
     -- bypass the filter.
+    --
+    -- The date range is checked too, not just al.status. Active says the
+    -- allocation has not ended; it says nothing about whether it had started,
+    -- and somebody who joins the project on the 17th cannot cover the 7th.
     SELECT COUNT(*) INTO v_ok
       FROM oc_time_allocation al
      WHERE al.project_id     = v_project
        AND al.employee_id    = p_cover_employee_id
        AND al.status         = 'Active'
-       AND al.billing_status = 'Unbilled';
+       AND al.billing_status = 'Unbilled'
+       AND v_date BETWEEN al.start_date AND NVL(al.end_date, v_date);
 
     -- Is the candidate themselves absent that day, or already covering someone
     -- else on it? EXISTS is a SQL construct and cannot appear in a PL/SQL IF
@@ -2442,8 +2460,14 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
     -- than COUNT(*) keeps the short-circuit: it stops at the first hit instead
     -- of counting every match.
     SELECT CASE WHEN EXISTS (SELECT 1 FROM oc_time_absence ab
-                              WHERE ab.employee_id  = p_cover_employee_id
-                                AND ab.absence_date = v_date)
+                              WHERE ab.employee_id     = p_cover_employee_id
+                                AND ab.absence_date    = v_date
+                                -- APPROVED only. This matched any absence row,
+                                -- so a REJECTED leave request blocked somebody
+                                -- who is demonstrably at work -- while
+                                -- generate_llc_lines requires Approved for the
+                                -- absentee. One rule, two halves, disagreeing.
+                                AND ab.approval_status = 'Approved')
                 THEN 1 ELSE 0 END
          + CASE WHEN EXISTS (SELECT 1 FROM oc_ts_leave_loss_cover c
                               WHERE c.cover_employee_id = p_cover_employee_id

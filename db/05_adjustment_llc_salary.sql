@@ -246,10 +246,34 @@ SELECT al.project_id,
  WHERE al.status         = 'Active'
    AND al.billing_status = 'Unbilled'
    AND w.status          = 'Active'
-   -- not absent that day
+   -- ON THE PROJECT ON THAT DAY, not merely on it now. Added 20-Aug.
+   -- al.status='Active' says the allocation has not ended; it says nothing
+   -- about whether it had started. RI2824's 555 allocation begins 17-Aug, so
+   -- without this the same person is offered as cover for 07-Aug -- exactly the
+   -- fault already fixed in populate, where ten days of 555 were seeded before
+   -- the allocation existed.
+   AND d.absence_date BETWEEN al.start_date
+                          AND NVL(al.end_date, d.absence_date)
+   -- not absent that day.
+   --
+   -- APPROVED absence only. This tested for any row, so a REJECTED leave
+   -- request removed somebody who is demonstrably at work -- and
+   -- generate_llc_lines requires Approved for the absentee, so the two halves
+   -- of one rule disagreed. Withdrawn leave never reaches here: the loader
+   -- deletes it.
    AND NOT EXISTS (SELECT 1 FROM oc_time_absence ab
-                    WHERE ab.employee_id  = al.employee_id
-                      AND ab.absence_date = d.absence_date)
+                    WHERE ab.employee_id     = al.employee_id
+                      AND ab.absence_date    = d.absence_date
+                      AND ab.approval_status = 'Approved')
+   -- a working day for THEM. Patterns differ -- 555 carries people on
+   -- Sunday-to-Thursday and Monday-to-Friday -- so somebody's day off is not
+   -- everybody's. Offering them wastes the manager's decision: the billing
+   -- move would then find no hours to convert.
+   AND NOT EXISTS (SELECT 1 FROM oc_time_calendar c2
+                    WHERE c2.layer          = 'SHIFT'
+                      AND c2.scope_key      = al.employee_id
+                      AND c2.cal_date       = d.absence_date
+                      AND c2.is_working_day = 'N')
    -- not already covering someone that day
    AND NOT EXISTS (SELECT 1 FROM oc_ts_leave_loss_cover c
                     WHERE c.cover_employee_id = al.employee_id
