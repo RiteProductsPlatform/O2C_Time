@@ -164,7 +164,7 @@
       "absentEmployeeName": "string",
       "absenceDate": "string",
       "absenceType": "string",
-      "coveredBilledHours": "number",
+      "absenceDay": "string",
       "coverEmployeeId": "string",
       "coverEmployeeName": "string",
       "approvedBy": "string",

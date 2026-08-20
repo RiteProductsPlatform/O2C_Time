@@ -206,39 +206,27 @@ SELECT c.confirm_id,
   JOIN oc_time_period      pe ON pe.period_id = c.period_id;
 
 PROMPT ============================================================
-PROMPT [4/5] V_OC_TS_LLC_ANNEXURE — invoice annexure (REP-002)
+PROMPT [4/5] V_OC_TS_LLC_ANNEXURE - superseded, see db/88 and db/89
 PROMPT ============================================================
 
--- Approved leave-loss coverage becomes BILLED absence hours for FCP projects
--- and flows with the invoice as an appendix (PROC-006). Only approved lines
--- appear — an assigned-but-unapproved cover is not billable.
-CREATE OR REPLACE VIEW v_oc_ts_llc_annexure AS
-SELECT l.llc_id,
-       l.project_id,
-       p.project_number,
-       p.project_name,
-       p.customer_name,
-       p.revenue_model,
-       l.period_id,
-       pe.period_name,
-       l.absent_employee_id,
-       aw.employee_name AS absent_employee_name,
-       TO_CHAR(l.absence_date,'YYYY-MM-DD') AS absence_date,
-       l.absence_type,
-       l.absence_hours  AS covered_billed_hours,
-       l.cover_employee_id,
-       cw.employee_name AS cover_employee_name,
-       l.llc_status,
-       l.billed_flag,
-       l.approved_by,
-       TO_CHAR(l.approved_on,'YYYY-MM-DD HH24:MI') AS approved_on
-  FROM oc_ts_leave_loss_cover l
-  JOIN oc_time_project p  ON p.project_id  = l.project_id
-  JOIN oc_time_period  pe ON pe.period_id  = l.period_id
-  JOIN oc_time_worker  aw ON aw.employee_id = l.absent_employee_id
-  LEFT JOIN oc_time_worker cw ON cw.employee_id = l.cover_employee_id
- WHERE l.llc_status  = 'Approved'
-   AND l.billed_flag = 'Y';
+-- THIS SECTION DELIBERATELY DOES NOTHING NOW.
+--
+-- It built the annexure with `l.absence_hours AS covered_billed_hours`, which
+-- billed the whole absence -- four times the loss for a 25% allocation, on the
+-- one document that reaches the client. Then it emerged that coverage bills
+-- nothing at all: the covering colleague's hours stay unbilled, the absentee's
+-- leave stays in the leave column, and the annexure names people and dates.
+--
+-- Running this file after db/88 would put an hours column back on an invoice
+-- appendix that must not have one, and would silently re-break the
+-- accrual/annexure endpoint and V_OC_TS_INVOICE_ANNEXURE_HDR with it.
+--
+-- The live definition is db/88_coverage_is_a_statement.sql [3/7].
+
+BEGIN
+  DBMS_OUTPUT.PUT_LINE('  Left alone. The live definition is db/88 [3/7].');
+END;
+/
 
 PROMPT ============================================================
 PROMPT [5/5] V_OC_TS_COMPLIANCE — status dashboard (REP-005)

@@ -297,14 +297,11 @@
                       {"headerText":"Date","field":"absenceDate","template":"aDateCell","width":130},
                       {"headerText":"Absence","field":"absenceType","width":130},
                       {"headerText":"Covered by","field":"coverEmployeeName","weight":2,"minWidth":170},
-                      {"headerText":"Billed hrs","field":"coveredBilledHours","template":"aHoursCell","width":125},
+                      {"headerText":"Day","field":"absenceDay","width":90},
                       {"headerText":"Approved","field":"approvedOn","width":160}
                     ]'>
             <template slot="aDateCell" data-oj-as="cell">
               <span><oj-bind-text value="[[ $application.functions.fmtDate(cell.row.absenceDate) ]]"></oj-bind-text></span>
-            </template>
-            <template slot="aHoursCell" data-oj-as="cell">
-              <span><oj-bind-text value="[[ $application.functions.fmtHours(cell.row.coveredBilledHours) ]]"></oj-bind-text></span>
             </template>
           </oj-table>
         </div>

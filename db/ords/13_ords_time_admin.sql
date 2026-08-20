@@ -1453,11 +1453,19 @@ BEGIN
     p_method => 'GET',
     p_source_type => ORDS.source_type_collection_feed,
     p_source => q'[
+      -- NO HOURS COLUMN, and that is the contract now. This selected
+      -- COVERED_BILLED_HOURS and BILLED_FLAG; db/88 removed both when the
+      -- functional owner retracted the idea that covering somebody makes their
+      -- hours billable, and this handler answered 403 -- ORDS's wording for a
+      -- feed whose SELECT will not resolve -- until it was redefined.
+      --
+      -- What the downstream gets is the fact: who covered whom, on what date,
+      -- approved by whom. It composes and prints the annexure itself.
       SELECT llc_id, project_number, project_name, customer_name, revenue_model,
              period_name, absent_employee_id, absent_employee_name,
-             absence_date, absence_type, covered_billed_hours,
+             absence_date, absence_day, absence_type,
              cover_employee_id, cover_employee_name,
-             llc_status, billed_flag, approved_by, approved_on
+             llc_status, approved_by, approved_on
         FROM v_oc_ts_llc_annexure
        WHERE period_id = :periodId
        ORDER BY project_name, absence_date, absent_employee_name

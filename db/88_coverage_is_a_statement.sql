@@ -237,29 +237,25 @@ SELECT l.llc_id,
    AND l.cover_employee_id IS NOT NULL;
 
 PROMPT ============================================================
-PROMPT [4/7] V_OC_TS_LLC_ANNEXURE_NOTE — the printed sentence
+PROMPT [4/7] V_OC_TS_LLC_ANNEXURE_NOTE - withdrawn, see db/89
 PROMPT ============================================================
 
--- One line per absentee per project month, which is the form asked for: "'Sam'
--- was absent on these days and he has been replaced by this person on one day
--- and some other or the same person on another day".
+-- THIS SECTION DELIBERATELY DOES NOTHING NOW, and it was wrong the same day it
+-- was written.
 --
--- Built as a view rather than left to the printing module so the wording is
--- fixed in one place. LISTAGG's 4000-character limit is not reachable here:
--- one absentee cannot have more days in a month than the month has.
-CREATE OR REPLACE VIEW v_oc_ts_llc_annexure_note AS
-SELECT project_id, project_number, project_name, customer_name,
-       period_id, period_name,
-       absent_employee_id, absent_employee_name,
-       COUNT(*) AS days_covered,
-       absent_employee_name || ' was absent on '
-         || LISTAGG(TO_CHAR(TO_DATE(absence_date,'YYYY-MM-DD'),'DD-Mon')
-                    || ' (covered by ' || cover_employee_name || ')', ', ')
-              WITHIN GROUP (ORDER BY absence_date)
-         || '.'                                    AS annexure_line
-  FROM v_oc_ts_llc_annexure
- GROUP BY project_id, project_number, project_name, customer_name,
-          period_id, period_name, absent_employee_id, absent_employee_name;
+-- It composed the printed sentence -- "Sam Joshuva S was absent on 07-Aug
+-- (covered by Kishore Krovvidi)." Told immediately after: "we will just assign
+-- and approve a person who is going to cover it from time module - annexure
+-- will be done by the down stream system, not in time module".
+--
+-- The wording, the layout and the language are the downstream system's to
+-- choose. We supply the facts in V_OC_TS_LLC_ANNEXURE and stop there. db/89
+-- drops the view.
+
+BEGIN
+  DBMS_OUTPUT.PUT_LINE('  Withdrawn. db/89 drops this view.');
+END;
+/
 
 PROMPT ============================================================
 PROMPT [5/7] Approving coverage records a fact, and moves nothing
@@ -375,13 +371,6 @@ COLUMN line FORMAT A96
 SELECT project_number, absent_employee_name, absence_date, cover_employee_name
   FROM v_oc_ts_llc_annexure
  ORDER BY project_number, absence_date;
-
-PROMPT
-PROMPT And the sentence the printing module takes.
-
-SELECT project_number, days_covered, annexure_line AS line
-  FROM v_oc_ts_llc_annexure_note
- ORDER BY project_number, absent_employee_name;
 
 PROMPT
 PROMPT NEXT: run db/09_pkg_oc_time.sql. validate_day gains -20029 there, the

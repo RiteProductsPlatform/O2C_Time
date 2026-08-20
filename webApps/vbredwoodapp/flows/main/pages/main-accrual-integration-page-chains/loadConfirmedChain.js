@@ -96,7 +96,11 @@ define([
               absentEmployeeName: a.absent_employee_name,
               absenceDate: a.absence_date,
               absenceType: a.absence_type || '—',
-              coveredBilledHours: a.covered_billed_hours || 0,
+              // NO HOURS. Coverage bills none -- the covering colleague's
+              // time stays unbilled and the absentee's leave stays in the leave
+              // column -- so this row is a statement of who covered whom, which
+              // is all the downstream system needs to print the annexure.
+              absenceDay: a.absence_day || '',
               coverEmployeeId: a.cover_employee_id || '',
               coverEmployeeName: a.cover_employee_name || '',
               approvedBy: a.approved_by || '',

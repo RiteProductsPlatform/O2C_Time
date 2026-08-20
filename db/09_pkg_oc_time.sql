@@ -692,12 +692,12 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
     -- would let the day reach 12.
     IF v_std > 0 AND v_total > v_std THEN
       RAISE_APPLICATION_ERROR(-20029,
-        'A day cannot hold more than the ' || TRIM(TO_CHAR(v_std,'FM9990.99'))
+        'A day cannot hold more than the ' || TRIM(TO_CHAR(v_std,'FM9990.00'))
         || ' hours of this person''s shift. '
         || TO_CHAR(TRUNC(p_entry_date),'DD-Mon')
-        || ' now has ' || TRIM(TO_CHAR(v_total,'FM9990.99'))
+        || ' now has ' || TRIM(TO_CHAR(v_total,'FM9990.00'))
         || CASE WHEN v_leave > 0
-                THEN ', including ' || TRIM(TO_CHAR(v_leave,'FM9990.99'))
+                THEN ', including ' || TRIM(TO_CHAR(v_leave,'FM9990.00'))
                      || ' of leave' END || '.');
     END IF;
 
@@ -1520,8 +1520,8 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
       v_offend VARCHAR2(1000);
     BEGIN
       SELECT LISTAGG(TO_CHAR(d.entry_date,'DD-Mon') || ' has '
-                     || TRIM(TO_CHAR(d.booked,'FM9990.99')) || ' of '
-                     || TRIM(TO_CHAR(d.std,'FM9990.99')), '; ')
+                     || TRIM(TO_CHAR(d.booked,'FM9990.00')) || ' of '
+                     || TRIM(TO_CHAR(d.std,'FM9990.00')), '; ')
                WITHIN GROUP (ORDER BY d.entry_date)
         INTO v_offend
         FROM (SELECT e.entry_date,
