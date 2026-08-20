@@ -121,6 +121,10 @@
     "lastPull": {
       "type": "string",
       "defaultValue": ""
+    },
+    "orphanCount": {
+      "type": "number",
+      "defaultValue": 0
     }
   },
   "types": {

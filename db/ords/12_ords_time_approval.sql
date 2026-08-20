@@ -1079,6 +1079,13 @@ BEGIN
              -- hours come from the monthly summary. This tells the manager how
              -- much capacity they are covering, nothing more.
              absence_hours, loss_hours,
+             -- 'N' when the absence behind this line has since been withdrawn.
+             -- Only an APPROVED line can be in that state: db/96 deletes the
+             -- Open and Assigned ones and keeps the approved, because that is a
+             -- manager's decision to revoke rather than ours to erase. The
+             -- annexure already drops it; the screen has to SAY so, or the
+             -- orphan is invisible and nobody revokes anything.
+             absence_exists,
              cover_employee_id, cover_employee_name,
              llc_status, billed_flag,
              assigned_by, assigned_on, approved_by, approved_on, remarks

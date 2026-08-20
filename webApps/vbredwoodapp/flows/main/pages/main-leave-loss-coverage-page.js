@@ -63,6 +63,22 @@ define([], () => {
            + 'unbilled and the absence stays in the leave column.';
     }
 
+    /**
+     * Names approved coverage whose absence has since been withdrawn.
+     *
+     * Worth a banner rather than only a row chip: it is already off the invoice
+     * annexure, so nothing is wrong downstream, but the record still says a
+     * colleague covered a day nobody was away and only a manager can undo that.
+     */
+    orphanNote(n) {
+      const c = Number(n) || 0;
+      return c === 1
+        ? '1 approved coverage is for an absence that has since been withdrawn. '
+          + 'It no longer reaches the invoice annexure — revoke it to tidy the record.'
+        : c + ' approved coverages are for absences that have since been withdrawn. '
+          + 'They no longer reach the invoice annexure — revoke them to tidy the record.';
+    }
+
     /** Names absences nobody has been assigned to cover. */
     unbilledNote(n) {
       const c = Number(n) || 0;

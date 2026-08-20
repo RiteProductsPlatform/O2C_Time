@@ -96,6 +96,12 @@
         </oj-button>
       </div>
 
+      <oj-bind-if test="[[ $variables.orphanCount > 0 ]]">
+        <div class="oj-sm-padding-3x oj-sm-margin-3x-bottom rw-notice rw-notice-warning" role="status">
+          <oj-bind-text value="[[ $page.functions.orphanNote($variables.orphanCount) ]]"></oj-bind-text>
+        </div>
+      </oj-bind-if>
+
       <oj-bind-if test="[[ $variables.lines.length === 0 && !$variables.busy ]]">
         <div class="oj-typography-body-sm rw-metric-label" role="status">
           <oj-bind-text value="[[$application.translations.appBundle.leave_loss_coverage_no_absence_records_this_period_use]]"></oj-bind-text>
@@ -169,6 +175,13 @@
                         :title="[[ $page.functions.billedTitle(cell.row) ]]">
                     <oj-bind-text value="[[ $page.functions.billedLabel(cell.row) ]]"></oj-bind-text>
                   </span>
+                </oj-bind-if>
+                <!-- The absence went away after this was approved. The row is
+                     kept on purpose and is already off the annexure; this is
+                     what tells the manager there is something to revoke. -->
+                <oj-bind-if test="[[ !cell.row.absenceExists ]]">
+                  <span class="rw-flag rw-flag-late"
+                        title="The absence was withdrawn in Absence Management after this coverage was approved. It no longer reaches the invoice annexure. Revoke it to tidy the record.">Absence withdrawn</span>
                 </oj-bind-if>
               </span>
             </template>

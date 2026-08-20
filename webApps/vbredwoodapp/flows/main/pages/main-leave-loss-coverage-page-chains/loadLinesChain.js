@@ -56,6 +56,8 @@ define([
           // 20-Aug-2026 and overstated the loss fourfold.
           absenceHours: l.absence_hours || 0,
           lossHours: l.loss_hours || 0,
+          // 'N' means the absence was withdrawn after this line was approved.
+          absenceExists: l.absence_exists !== 'N',
           coverEmployeeId: l.cover_employee_id || '',
           coverEmployeeName: l.cover_employee_name || '',
           llcStatus: l.llc_status,
@@ -94,6 +96,12 @@ define([
         // than a resting state and the count is surfaced beside the total.
         $page.variables.unbilledApproved = rows.filter(
           (r) => !r.coverEmployeeId).length;
+
+        // Approved coverage whose absence has since been withdrawn. It keeps
+        // its row deliberately -- a manager decided it -- and it is already off
+        // the annexure, but somebody has to revoke it, so it cannot be quiet.
+        $page.variables.orphanCount = rows.filter(
+          (r) => !r.absenceExists).length;
 
       } catch (e) {
         // JET aborts in-flight requests on re-render; that is not a failure.
