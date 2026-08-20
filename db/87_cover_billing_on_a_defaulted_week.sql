@@ -60,6 +60,28 @@
 -- open 'DailyChange on a Defaulted week clears DEFAULTED_BY' issue rather than
 -- widening it.
 --
+-- ── AND A FOURTH THING, FOUND BY RUNNING IT ──────────────────────────────
+--
+-- Two billability columns disagree, and this procedure was reading the wrong
+-- one. For entry 192346:
+--
+--   OC_TIME_TASK.BILLABLE_TYPE    Billable
+--   OC_TS_ENTRY.BILLABLE_TYPE     Non-billable
+--   OC_TS_ENTRY.UNBILLED_REASON   'Non-billable Assignment'
+--
+-- TRG_OC_TSE_DERIVE as db/23 rewrote it lets a LINE REASON beat the task: the
+-- hours are on a billable WBS task and are non-billable purely because
+-- Kishore's allocation to 555 is Unbilled. So MIN(billable task) picks
+-- 01.01.111 -- the task the hours are ALREADY on -- and the MERGE would have
+-- matched the source row: minus 2 then plus 2, day unchanged, reason still
+-- there, nothing billable created, COVER_HOURS_BILLED stamped 2 anyway.
+--
+-- "Move the hours to a billable task" is therefore the wrong mechanism on this
+-- project. It refuses with an explanation instead; picking a different WBS task
+-- would misstate where the work happened, and clearing the reason on the whole
+-- line would bill all 8 hours when 2 are owed. Which of those is right is a
+-- decision, and it is recorded as open rather than guessed at.
+--
 -- Idempotent. Supersedes db/86 [2/5]. Depends on: time/05, 08, 09, 84, 85, 86.
 --==============================================================
 SET DEFINE OFF
@@ -90,13 +112,19 @@ PROMPT ============================================================
 -- Printed BEFORE the change, so the retry in [3/4] can be read against it.
 COLUMN cover FORMAT A22
 COLUMN task  FORMAT A26
+COLUMN line_reason FORMAT A24
 SELECT l.llc_id,
        TO_CHAR(l.absence_date,'DD-Mon') AS on_date,
        cw.employee_name AS cover,
        NVL(t.task_code || ' ' || t.task_name, '(no line that day)') AS task,
-       NVL(t.billable_type,'-') AS bill_type,
-       NVL(e.entry_type,'-')    AS entry_type,
-       NVL(TO_CHAR(e.hours),'-') AS hours
+       -- BOTH columns, because they disagree and the disagreement is the point.
+       -- Showing only the task's answer is what made 01.01.111 read as Billable
+       -- when the line on it is Non-billable.
+       NVL(t.billable_type,'-')   AS task_bill,
+       NVL(e.billable_type,'-')   AS line_bill,
+       NVL(e.unbilled_reason,'-') AS line_reason,
+       NVL(e.entry_type,'-')      AS entry_type,
+       NVL(TO_CHAR(e.hours),'-')  AS hours
   FROM oc_ts_leave_loss_cover l
   JOIN oc_time_worker cw ON cw.employee_id = l.cover_employee_id
   LEFT JOIN oc_ts_week w ON w.employee_id = l.cover_employee_id
@@ -113,6 +141,9 @@ PROMPT
 PROMPT ENTRY_TYPE 'Default' is a row run_weekly_defaulting wrote on the
 PROMPT employee's behalf. Those hours are real and spendable; only the query
 PROMPT looking for them was too narrow.
+PROMPT
+PROMPT Where TASK_BILL and LINE_BILL differ, LINE_BILL is the answer and
+PROMPT LINE_REASON says why. That is the column every total downstream uses.
 
 PROMPT ============================================================
 PROMPT [2/4] OC_TIME_COVER_BILLING sees a defaulted week's hours
@@ -197,19 +228,20 @@ BEGIN
       RETURN;
     END IF;
 
+    -- e.billable_type on both, for the reason given at the source lookup below.
     SELECT MIN(e.task_id) INTO v_bill_task
-      FROM oc_ts_entry e JOIN oc_time_task t ON t.task_id = e.task_id
+      FROM oc_ts_entry e
      WHERE e.ts_week_id = v_week AND e.entry_date = v_date
        AND e.project_id = v_project AND e.is_leave = 'N'
        AND e.entry_type = 'Actual'
-       AND t.billable_type = 'Billable' AND e.hours >= v_already;
+       AND e.billable_type = 'Billable' AND e.hours >= v_already;
 
     SELECT MIN(e.task_id) INTO v_nb_task
-      FROM oc_ts_entry e JOIN oc_time_task t ON t.task_id = e.task_id
+      FROM oc_ts_entry e
      WHERE e.ts_week_id = v_week AND e.entry_date = v_date
        AND e.project_id = v_project AND e.is_leave = 'N'
        AND e.entry_type = 'Actual'
-       AND t.billable_type = 'Non-billable';
+       AND e.billable_type = 'Non-billable';
 
     IF v_bill_task IS NULL OR v_nb_task IS NULL THEN
       o_message := 'The billed hours are no longer where they were put; '
@@ -262,14 +294,23 @@ BEGIN
   -- promotion below has to name the row it is promoting. Actual first: if the
   -- person has typed something, that is the row to spend.
   BEGIN
+    -- e.billable_type, NOT t.billable_type. TRG_OC_TSE_DERIVE (db/23) lets a
+    -- LINE REASON beat the task, so the two disagree whenever the person's
+    -- assignment is non-billable on a billable WBS task -- which is Kishore on
+    -- 555 exactly. Reading the task's answer made this find nothing and report
+    -- "no non-billable hours" about 8 hours that are non-billable.
+    --
+    -- The entry's column is the authority everywhere else too: it is what
+    -- V_OC_TS_MONTH_SUMMARY totals and what confirm_month sends to accrual. A
+    -- rule that reads the task instead is reading an input, not the answer.
     SELECT ts_entry_id, task_id, entry_type, hours
       INTO v_src_entry, v_nb_task, v_src_type, v_avail
       FROM (SELECT e.ts_entry_id, e.task_id, e.entry_type, e.hours
-              FROM oc_ts_entry e JOIN oc_time_task t ON t.task_id = e.task_id
+              FROM oc_ts_entry e
              WHERE e.ts_week_id = v_week AND e.entry_date = v_date
                AND e.project_id = v_project AND e.is_leave = 'N'
                AND e.entry_type IN ('Actual','Default')
-               AND t.billable_type = 'Non-billable'
+               AND e.billable_type = 'Non-billable'
                AND e.hours > 0
              ORDER BY CASE e.entry_type WHEN 'Actual' THEN 0 ELSE 1 END,
                       e.hours DESC, e.task_id)
@@ -296,6 +337,33 @@ BEGIN
 
   IF v_bill_task IS NULL THEN
     o_message := 'This project has no billable task to move the hours onto.';
+    RETURN;
+  END IF;
+
+  -- ── REFUSE RATHER THAN QUIETLY ACHIEVE NOTHING ─────────────
+  -- Measured on 555, 20-Aug: the source line and the chosen billable task are
+  -- THE SAME TASK. 01.01.111 Offshore is Billable at TASK level and the entry
+  -- is Non-billable only because UNBILLED_REASON = 'Non-billable Assignment'
+  -- sits on the line -- TRG_OC_TSE_DERIVE (db/23) lets a line reason beat the
+  -- task, so OC_TS_ENTRY.BILLABLE_TYPE and OC_TIME_TASK.BILLABLE_TYPE disagree
+  -- and this procedure was reading the task's.
+  --
+  -- Left unguarded the MERGE matches the source row itself: minus v_loss then
+  -- plus v_loss, day unchanged, reason still on the line, nothing billable
+  -- created -- and COVER_HOURS_BILLED stamped anyway. The annexure would then
+  -- invoice hours that never became billable, which is worse than any refusal.
+  --
+  -- Moving the hours cannot fix this, because what makes them non-billable is
+  -- the reason and not the task. The mechanism has to change, and that is a
+  -- decision about the WBS and the accrual, not something to infer here.
+  IF v_bill_task = v_nb_task THEN
+    o_message := 'These hours are already on a billable task ('
+      || (SELECT task_code FROM oc_time_task WHERE task_id = v_nb_task)
+      || '). They are non-billable because the line carries the reason "'
+      || NVL((SELECT unbilled_reason FROM oc_ts_entry
+               WHERE ts_entry_id = v_src_entry), '(none)')
+      || '", which comes from the assignment and not from the task, so moving '
+      || 'them elsewhere would not make them billable. Nothing was changed.';
     RETURN;
   END IF;
 
@@ -416,7 +484,8 @@ COLUMN task FORMAT A26
 SELECT cw.employee_name AS cover,
        TO_CHAR(e.entry_date,'DD-Mon') AS on_date,
        t.task_code || ' ' || t.task_name AS task,
-       t.billable_type, e.entry_type, e.source, e.hours
+       t.billable_type AS task_bill, e.billable_type AS line_bill,
+       e.entry_type, e.source, e.hours
   FROM oc_ts_leave_loss_cover l
   JOIN oc_time_worker cw ON cw.employee_id = l.cover_employee_id
   JOIN oc_ts_week  w ON w.employee_id = l.cover_employee_id
@@ -427,7 +496,7 @@ SELECT cw.employee_name AS cover,
                     AND e.is_leave   = 'N'
   JOIN oc_time_task t ON t.task_id = e.task_id
  WHERE l.cover_hours_billed IS NOT NULL
- ORDER BY cw.employee_name, e.entry_date, t.billable_type DESC;
+ ORDER BY cw.employee_name, e.entry_date, e.billable_type DESC;
 
 PROMPT
 PROMPT And the invoice appendix, which was empty until the hours existed.
