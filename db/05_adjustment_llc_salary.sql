@@ -215,11 +215,26 @@ BEGIN EXECUTE IMMEDIATE 'CREATE INDEX ix_oc_tsllc_period ON oc_ts_leave_loss_cov
 EXCEPTION WHEN OTHERS THEN IF SQLCODE = -955 THEN NULL; ELSE RAISE; END IF; END;
 /
 -- RULE-014: a colleague cannot cover two absentees on the same day.
+--
+-- PARTIAL, and the CASE expressions are the whole point. Written plainly as
+-- (cover_employee_id, absence_date) this indexed the GAP rather than the cover:
+-- Oracle omits an entry only when EVERY key column is null, and ABSENCE_DATE is
+-- NOT NULL, so two rows awaiting a cover on one date collided as
+-- (NULL, 20-Aug). The rule it enforced was "only one person in the company may
+-- be uncovered on any given date", and generate_llc_lines -- a single
+-- INSERT ... SELECT -- lost its whole run to ORA-00001 the first time two
+-- people were off together. Latent since this file was written; surfaced
+-- 21-Aug-2026 on 555.
+--
+-- Collapsing both expressions to NULL when there is no cover leaves uncovered
+-- rows unindexed, and enforces the actual rule on the assigned ones. See db/95.
 BEGIN
-  EXECUTE IMMEDIATE q'[
+  EXECUTE IMMEDIATE q'~
     CREATE UNIQUE INDEX uk_oc_tsllc_cover_day
-      ON oc_ts_leave_loss_cover (cover_employee_id, absence_date)
-  ]';
+      ON oc_ts_leave_loss_cover (
+        CASE WHEN cover_employee_id IS NULL THEN NULL ELSE cover_employee_id END,
+        CASE WHEN cover_employee_id IS NULL THEN NULL ELSE absence_date      END)
+  ~';
 EXCEPTION WHEN OTHERS THEN IF SQLCODE = -955 THEN NULL; ELSE RAISE; END IF; END;
 /
 
