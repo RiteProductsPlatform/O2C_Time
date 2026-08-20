@@ -100,70 +100,23 @@ PROMPT ============================================================
 
 -- Called by oc_time_sync_leave for the window it is syncing. Split out rather
 -- than inlined so the two halves can be read, and tested, on their own.
-CREATE OR REPLACE PROCEDURE oc_time_leave_displace(
-  p_from        IN  DATE,
-  p_to          IN  DATE,
-  p_employee_id IN  VARCHAR2 DEFAULT NULL,
-  p_actor       IN  VARCHAR2 DEFAULT 'ABSENCE_SYNC',
-  o_put_aside   OUT NUMBER,
-  o_given_back  OUT NUMBER)
-IS
-BEGIN
-  -- ── PUT ASIDE ──────────────────────────────────────────────
-  -- A day whose leave covers the whole standard day carries no worked hours
-  -- (RULE-008). The value is remembered, not discarded.
-  UPDATE oc_ts_entry e
-     SET e.pre_leave_hours = e.hours,
-         e.hours           = 0,
-         e.updated_by      = p_actor,
-         e.updated_on      = SYSTIMESTAMP
-   WHERE e.is_leave        = 'N'
-     AND e.entry_type     IN ('Actual','Default')
-     AND e.hours           > 0
-     AND e.pre_leave_hours IS NULL
-     AND e.entry_date BETWEEN p_from AND p_to
-     AND EXISTS (SELECT 1 FROM oc_ts_week w
-                  WHERE w.ts_week_id = e.ts_week_id
-                    AND (p_employee_id IS NULL OR w.employee_id = p_employee_id))
-     -- Full-day leave on this cell's own date, in its own week. Compared
-     -- against the standard recorded on the day rather than the worker's
-     -- global figure, so a 9-hour day is judged against nine.
-     AND (SELECT NVL(SUM(l.hours),0) FROM oc_ts_entry l
-           WHERE l.ts_week_id = e.ts_week_id
-             AND l.entry_date = e.entry_date
-             AND l.is_leave   = 'Y')
-         >= (SELECT NVL(MAX(s.standard_hours),0) FROM oc_ts_entry s
-              WHERE s.ts_week_id = e.ts_week_id
-                AND s.entry_date = e.entry_date)
-     AND (SELECT NVL(MAX(s.standard_hours),0) FROM oc_ts_entry s
-           WHERE s.ts_week_id = e.ts_week_id
-             AND s.entry_date = e.entry_date) > 0;
-  o_put_aside := SQL%ROWCOUNT;
+-- SUPERSEDED BY db/94 [3/5]. DELIBERATELY NOT DEFINED HERE ANY MORE.
+--
+-- This version decided "was this a full day off" by summing the APPORTIONED
+-- LEAVE ENTRIES on the day and comparing that to the standard. It held only
+-- while the shares summed to the whole day, which db/94 stopped being true: a
+-- 50%-allocated person's share is half a day, so this test would leave their
+-- worked hours standing on a day they were provably absent.
+--
+-- db/94 asks OC_TIME_ABSENCE instead, which is where "away all day" is actually
+-- recorded. Re-running this file after it would restore the derived test and
+-- put worked hours back beside a full day of leave -- quietly, because the
+-- numbers all still add up to something plausible.
 
-  -- ── GIVE BACK ──────────────────────────────────────────────
-  -- The leave has gone from the day and the cell has not been touched since,
-  -- so what it held before is what it should hold now.
-  UPDATE oc_ts_entry e
-     SET e.hours           = e.pre_leave_hours,
-         e.pre_leave_hours = NULL,
-         e.updated_by      = p_actor,
-         e.updated_on      = SYSTIMESTAMP
-   WHERE e.pre_leave_hours IS NOT NULL
-     AND e.hours            = 0
-     AND e.is_leave         = 'N'
-     AND e.entry_date BETWEEN p_from AND p_to
-     AND EXISTS (SELECT 1 FROM oc_ts_week w
-                  WHERE w.ts_week_id = e.ts_week_id
-                    AND (p_employee_id IS NULL OR w.employee_id = p_employee_id))
-     AND NOT EXISTS (SELECT 1 FROM oc_ts_entry l
-                      WHERE l.ts_week_id = e.ts_week_id
-                        AND l.entry_date = e.entry_date
-                        AND l.is_leave   = 'Y'
-                        AND l.hours      > 0);
-  o_given_back := SQL%ROWCOUNT;
-END oc_time_leave_displace;
+BEGIN
+  DBMS_OUTPUT.PUT_LINE('  Left alone. The live definition is db/94 [3/5].');
+END;
 /
-SHOW ERRORS
 
 PROMPT ============================================================
 PROMPT [3/4] OC_TIME_SYNC_LEAVE calls it

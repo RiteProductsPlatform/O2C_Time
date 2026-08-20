@@ -161,6 +161,23 @@ PROMPT ============================================================
 PROMPT [4/7] OC_TIME_SYNC_LEAVE — one leave row, and it can be taken back
 PROMPT ============================================================
 
+-- ⚠ THIS IS THE OLDEST OF THREE COPIES OF OC_TIME_SYNC_LEAVE, AND THE ONLY ONE
+-- install_time.sql RUNS. Left working on purpose -- disabling it would leave a
+-- fresh install with no procedure at all -- but know what it does not do:
+--
+--   db/44 (here)  no apportionment, no displacement
+--   db/79 [3/4]   apportioned via V_OC_TS_LEAVE_SHARE; NO displacement
+--   db/80 [3/4]   apportioned AND calls oc_time_leave_displace  <- the live one
+--
+-- So RE-RUNNING THIS FILE ON A LIVE SCHEMA SILENTLY REVERTS BOTH: leave stops
+-- being split across a person's projects and a full day of leave starts sitting
+-- beside worked hours again. The procedure still exists, still succeeds and
+-- still reports rows applied, so nothing announces it.
+--
+-- Found 21-Aug-2026. db/79, db/80 and db/94 are not in install_time.sql at all,
+-- which is the other half of the same problem and needs its own pass -- a fresh
+-- environment currently gets this version and stops here.
+
 CREATE OR REPLACE PROCEDURE oc_time_sync_leave(
   p_from        IN DATE,
   p_to          IN DATE,
