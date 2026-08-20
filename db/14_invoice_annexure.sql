@@ -131,14 +131,22 @@ SELECT c.confirm_id,
        NVL(SUM(a.net_total_hours),0)                  AS net_total_hours,
        SUM(CASE WHEN a.has_correction_flag = 'Y' THEN 1 ELSE 0 END)
                                                       AS people_with_corrections,
-       -- Leave-loss coverage bills absence hours on an FCP project and travels
-       -- with the same invoice (PROC-006). Surfaced here so the cover sheet
-       -- reconciles against V_OC_TS_LLC_ANNEXURE instead of the two being
-       -- totalled by hand and quietly disagreeing.
-       NVL((SELECT SUM(l.covered_billed_hours)
+       -- Leave-loss coverage travels with the same invoice (PROC-006), and
+       -- surfacing it here is right: the cover sheet should reconcile against
+       -- V_OC_TS_LLC_ANNEXURE rather than the two being totalled by hand and
+       -- quietly disagreeing.
+       --
+       -- A COUNT, NOT HOURS. This was SUM(covered_billed_hours) until
+       -- 20-Aug-2026, when the functional owner retracted the idea that
+       -- coverage bills anything: the covering colleague's time stays unbilled
+       -- and the absentee's leave stays in the leave column. So every hour on
+       -- this cover sheet is ALREADY inside the four SUMs above, and a coverage
+       -- hours figure would count the same day twice into the same total.
+       -- "3 absences covered" is true; "6 hours billed" is not.
+       NVL((SELECT COUNT(*)
               FROM v_oc_ts_llc_annexure l
              WHERE l.project_id = c.project_id
-               AND l.period_id  = c.period_id),0)     AS llc_billed_hours,
+               AND l.period_id  = c.period_id),0)     AS llc_covered_days,
        c.confirm_type,
        c.confirmed_by,
        TO_CHAR(c.confirmed_on,'YYYY-MM-DD HH24:MI')   AS confirmed_on,

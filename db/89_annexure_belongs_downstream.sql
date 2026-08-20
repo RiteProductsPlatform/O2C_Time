@@ -33,8 +33,11 @@
 -- Fixed by re-running ords/13 after this.
 --
 --   1. ords/13 accrual/annexure  selects covered_billed_hours, billed_flag
---   2. db/14  V_OC_TS_INVOICE_ANNEXURE_HDR.LLC_BILLED_HOURS
---             sums covered_billed_hours -- so that view is INVALID as it stands
+--   2. db/14  V_OC_TS_INVOICE_ANNEXURE_HDR.LLC_BILLED_HOURS sums the column.
+--             NOT invalid, as this note first said -- db/14 has never been run
+--             on this schema, so the view is ABSENT. It is in install_time.sql
+--             though, so the fix belongs in db/14 itself; [2/4] only patches a
+--             schema where it is already built.
 --   3. VBCS   the Accrual Integration page renders a "Billed hrs" column
 --
 -- LLC_BILLED_HOURS IS REPLACED, NOT DELETED. The cover sheet was right to want
@@ -89,55 +92,64 @@ PROMPT ============================================================
 PROMPT [2/4] The cover sheet counts covered days, not billed hours
 PROMPT ============================================================
 
--- Only the LLC scalar subquery changes; every other column is db/14's.
-CREATE OR REPLACE VIEW v_oc_ts_invoice_annexure_hdr AS
-SELECT c.confirm_id,
-       c.project_id,
-       a.project_number,
-       a.project_name,
-       a.customer_name,
-       a.revenue_model,
-       a.period,
-       c.period_year,
-       c.period_month,
-       COUNT(DISTINCT a.employee_id)                  AS people,
-       NVL(SUM(a.actual_billable_hours),0)            AS actual_billable_hours,
-       NVL(SUM(a.actual_non_billable_hours),0)        AS actual_non_billable_hours,
-       NVL(SUM(a.actual_leave_hours),0)               AS actual_leave_hours,
-       NVL(SUM(a.reversal_billable_hours),0)          AS reversal_billable_hours,
-       NVL(SUM(a.adjustment_billable_hours),0)        AS adjustment_billable_hours,
-       NVL(SUM(a.net_billable_hours),0)               AS net_billable_hours,
-       NVL(SUM(a.net_non_billable_hours),0)           AS net_non_billable_hours,
-       NVL(SUM(a.net_leave_hours),0)                  AS net_leave_hours,
-       NVL(SUM(a.net_total_hours),0)                  AS net_total_hours,
-       SUM(CASE WHEN a.has_correction_flag = 'Y' THEN 1 ELSE 0 END)
-                                                      AS people_with_corrections,
-       -- WAS LLC_BILLED_HOURS, summing COVERED_BILLED_HOURS. db/14 was right
-       -- that coverage belongs on the cover sheet -- its own note says the
-       -- point is that the header reconciles against the lines rather than the
-       -- two being totalled by hand and quietly disagreeing.
-       --
-       -- It is a COUNT now, because there are no hours to total. Coverage moves
-       -- none: the covering colleague's time stays unbilled and the absentee's
-       -- leave stays in the leave column, so every hour on this cover sheet is
-       -- already in the four SUMs above. Adding an hours figure for coverage
-       -- would double-count the same day into the same total.
-       NVL((SELECT COUNT(*)
-              FROM v_oc_ts_llc_annexure l
-             WHERE l.project_id = c.project_id
-               AND l.period_id  = c.period_id),0)     AS llc_covered_days,
-       c.confirm_type,
-       c.confirmed_by,
-       TO_CHAR(c.confirmed_on,'YYYY-MM-DD HH24:MI')   AS confirmed_on,
-       c.accrual_status,
-       c.otl_status,
-       c.partner_status
-  FROM oc_ts_month_confirm c
-  JOIN v_oc_ts_invoice_annexure a ON a.confirm_id = c.confirm_id
- GROUP BY c.confirm_id, c.project_id, a.project_number, a.project_name,
-          a.customer_name, a.revenue_model, a.period, c.period_year,
-          c.period_month, c.period_id, c.confirm_type, c.confirmed_by,
-          c.confirmed_on, c.accrual_status, c.otl_status, c.partner_status;
+-- CORRECTED AT SOURCE IN db/14, AND ONLY PATCHED HERE IF IT IS INSTALLED.
+--
+-- The first version of this section rebuilt V_OC_TS_INVOICE_ANNEXURE_HDR
+-- unconditionally and failed with ORA-00942, because V_OC_TS_INVOICE_ANNEXURE
+-- does not exist on this schema: db/14 has never been run here. The header view
+-- was not INVALID, as the note at the top of this file first claimed -- it was
+-- ABSENT, which is exactly why [3/4] could report every object valid. Those two
+-- states look the same from a distance and are not the same thing.
+--
+-- db/14 IS in install_time.sql, so it will run one day, and an unconditional
+-- fix here would have left the wrong column to be recreated the moment it did.
+-- The LLC_BILLED_HOURS -> LLC_COVERED_DAYS change therefore lives in db/14
+-- itself. This section only re-applies it where the view is already built.
+DECLARE
+  v_n NUMBER;
+BEGIN
+  SELECT COUNT(*) INTO v_n FROM user_views
+   WHERE view_name = 'V_OC_TS_INVOICE_ANNEXURE';
+
+  IF v_n = 0 THEN
+    DBMS_OUTPUT.PUT_LINE('  db/14 is not installed here, so there is no cover '
+      || 'sheet to correct. Its source already says LLC_COVERED_DAYS.');
+    RETURN;
+  END IF;
+
+  EXECUTE IMMEDIATE q'~
+    CREATE OR REPLACE VIEW v_oc_ts_invoice_annexure_hdr AS
+    SELECT c.confirm_id, c.project_id, a.project_number, a.project_name,
+           a.customer_name, a.revenue_model, a.period,
+           c.period_year, c.period_month,
+           COUNT(DISTINCT a.employee_id)                  AS people,
+           NVL(SUM(a.actual_billable_hours),0)            AS actual_billable_hours,
+           NVL(SUM(a.actual_non_billable_hours),0)        AS actual_non_billable_hours,
+           NVL(SUM(a.actual_leave_hours),0)               AS actual_leave_hours,
+           NVL(SUM(a.reversal_billable_hours),0)          AS reversal_billable_hours,
+           NVL(SUM(a.adjustment_billable_hours),0)        AS adjustment_billable_hours,
+           NVL(SUM(a.net_billable_hours),0)               AS net_billable_hours,
+           NVL(SUM(a.net_non_billable_hours),0)           AS net_non_billable_hours,
+           NVL(SUM(a.net_leave_hours),0)                  AS net_leave_hours,
+           NVL(SUM(a.net_total_hours),0)                  AS net_total_hours,
+           SUM(CASE WHEN a.has_correction_flag = 'Y' THEN 1 ELSE 0 END)
+                                                          AS people_with_corrections,
+           NVL((SELECT COUNT(*) FROM v_oc_ts_llc_annexure l
+                 WHERE l.project_id = c.project_id
+                   AND l.period_id  = c.period_id),0)     AS llc_covered_days,
+           c.confirm_type, c.confirmed_by,
+           TO_CHAR(c.confirmed_on,'YYYY-MM-DD HH24:MI')   AS confirmed_on,
+           c.accrual_status, c.otl_status, c.partner_status
+      FROM oc_ts_month_confirm c
+      JOIN v_oc_ts_invoice_annexure a ON a.confirm_id = c.confirm_id
+     GROUP BY c.confirm_id, c.project_id, a.project_number, a.project_name,
+              a.customer_name, a.revenue_model, a.period, c.period_year,
+              c.period_month, c.period_id, c.confirm_type, c.confirmed_by,
+              c.confirmed_on, c.accrual_status, c.otl_status, c.partner_status
+  ~';
+  DBMS_OUTPUT.PUT_LINE('  V_OC_TS_INVOICE_ANNEXURE_HDR now counts covered days.');
+END;
+/
 
 PROMPT ============================================================
 PROMPT [3/4] Nothing left INVALID
@@ -195,9 +207,10 @@ SELECT project_number AS proj, absence_date, absence_day,
  ORDER BY project_number, absence_date;
 
 PROMPT
-PROMPT And the cover sheet's coverage figure, which is now a count of days.
+PROMPT And the cover sheet's coverage figure, if db/14 is installed here.
+PROMPT No rows at all means it is not, which is expected on this schema.
 
-COLUMN object_name FORMAT A34
+COLUMN column_name FORMAT A24
 SELECT column_name, data_type
   FROM user_tab_columns
  WHERE table_name = 'V_OC_TS_INVOICE_ANNEXURE_HDR'
@@ -205,9 +218,9 @@ SELECT column_name, data_type
  ORDER BY column_name;
 
 PROMPT
-PROMPT LLC_COVERED_DAYS should be the only row; LLC_BILLED_HOURS is gone.
-PROMPT Every hour on that cover sheet is already in its four SUMs, so a
-PROMPT coverage hours figure would count the same day twice.
+PROMPT If a row appears it must be LLC_COVERED_DAYS. Every hour on that cover
+PROMPT sheet is already in its four SUMs, so a coverage hours figure would
+PROMPT count the same day twice.
 
 PROMPT
 PROMPT NEXT: run db/ords/13_ords_time_admin.sql. Its accrual/annexure handler
