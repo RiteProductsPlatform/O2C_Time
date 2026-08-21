@@ -16,9 +16,9 @@ body{ color:var(--rw-ink-2); background:var(--rw-oyster); }
 .rw-brand{ font-size:16px; font-weight:700; color:#fff; letter-spacing:.01em; }
 .rw-brand small{ font-weight:600; font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:rgba(255,255,255,.45); margin-left:8px; }
 .rw-topbar-right{ display:flex; align-items:center; gap:12px; }
-.rw-role-switch{ display:flex; background:rgba(255,255,255,0.08); border-radius:6px; padding:2px; gap:2px; }
-.rw-role-btn{ border:none; background:transparent; color:rgba(255,255,255,0.65); font-size:11.5px; font-weight:700; padding:6px 12px; border-radius:5px; cursor:pointer; font-family:inherit; }
-.rw-role-btn.active{ background:#fff; color:#1a1c22; }
+.rw-signout{ background:transparent; border:none; color:rgba(255,255,255,0.72); font-size:19px; cursor:pointer; padding:4px 8px; line-height:1; border-radius:5px; }
+.rw-signout:hover{ background:rgba(255,255,255,0.12); color:#fff; }
+.rw-signout:focus-visible{ outline:2px solid #fff; outline-offset:1px; }
 .rw-user-badge{ display:flex; align-items:center; gap:8px; }
 .rw-user-avatar{ width:28px; height:28px; border-radius:50%; background:#1f6a4a; color:#fff; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; }
 .rw-user-name{ font-size:13px; font-weight:600; color:rgba(255,255,255,0.92); }
@@ -148,11 +148,6 @@ table.axis th[scope=row]{ text-align:left; font-family:ui-monospace,Consolas,mon
       <span class="rw-brand">O2C Timesheet<small>walkthrough</small></span>
     </div>
     <div class="rw-topbar-right">
-      <div class="rw-role-switch">
-        <button class="rw-role-btn active" onclick="setRole('Employee',this)">EMPLOYEE</button>
-        <button class="rw-role-btn" onclick="setRole('Manager',this)">MANAGER</button>
-        <button class="rw-role-btn" onclick="setRole('Admin',this)">FINANCE ADMIN</button>
-      </div>
       <div class="rw-user-badge">
         <div class="rw-user-avatar" id="userAvatar">SJ</div>
         <div style="display:flex;flex-direction:column;line-height:1.25">
@@ -160,6 +155,7 @@ table.axis th[scope=row]{ text-align:left; font-family:ui-monospace,Consolas,mon
           <span class="rw-user-role" id="userRoleTag">EMPLOYEE</span>
         </div>
       </div>
+      <button class="rw-signout" id="signOutBtn" onclick="signOut()" title="Sign out">&#8677;</button>
       <button class="rw-hamburger" onclick="toggleDrawer()" aria-label="Menu">&#9776;</button>
     </div>
   </div>
@@ -646,6 +642,7 @@ function setPeriod(k){ view.pk=k; view.widx=currentWeekIdx(k); go(view.screen); 
    ============================================================ */
 function renderLogin(){
   document.getElementById('sidebarNav').innerHTML='';
+  var so=document.getElementById('signOutBtn'); if(so) so.style.display='none';
   document.getElementById('userName').textContent='Not signed in';
   document.getElementById('userRoleTag').textContent='—';
   document.getElementById('userAvatar').textContent='—';
@@ -701,6 +698,7 @@ function signIn(id){
   }
 }
 function setUser(nm,tag){
+  var so=document.getElementById('signOutBtn'); if(so) so.style.display='';
   document.getElementById('userName').textContent=nm;
   document.getElementById('userRoleTag').textContent=tag;
   document.getElementById('userAvatar').textContent=
