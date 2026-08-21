@@ -150,44 +150,23 @@ SELECT e.ts_entry_id,
                            AND l.hours      > 0));
 
 PROMPT ============================================================
-PROMPT [3/4] Remember what has already been zeroed
+PROMPT [3/4] Remember what has already been zeroed - see db/99
 PROMPT ============================================================
 
--- db/09 stops populate forgetting from now on. This is the backlog: rows it
--- already zeroed, whose hours can be recovered because the allocation still
--- says what the day was worth.
-DECLARE
-  v_n NUMBER;
+-- THIS SECTION DELIBERATELY DOES NOTHING NOW, and it was wrong in a way worth
+-- keeping a note of.
+--
+-- It recovered only SOURCE = 'Prepopulated'. run_weekly_defaulting retags that
+-- to 'Job' the moment a week defaults, which had happened to both of the rows
+-- [1/4] had just listed -- so it matched nothing and reported "0 put-aside
+-- row(s) now remember their hours" as though there had been nothing to do.
+-- Two sections of the same script disagreed and neither noticed.
+--
+-- db/99 widens it to the job-written sources, leaves a person's own zero alone,
+-- and reports what it could not reach instead of counting silently.
+
 BEGIN
-  UPDATE oc_ts_entry e
-     SET e.pre_leave_hours =
-           (SELECT ROUND(NVL(e.standard_hours,0) * NVL(al.alloc_pct,100) / 100 * 4) / 4
-              FROM oc_time_allocation al
-              JOIN oc_ts_week w2 ON w2.ts_week_id = e.ts_week_id
-             WHERE al.employee_id = w2.employee_id
-               AND al.project_id  = e.project_id
-               AND al.status      = 'Active'
-               AND e.entry_date BETWEEN al.start_date
-                                AND NVL(al.end_date, e.entry_date)
-               AND ROWNUM = 1),
-         e.updated_by = 'FIX_97'
-   WHERE e.is_leave = 'N'
-     AND e.hours    = 0
-     AND e.pre_leave_hours IS NULL
-     AND e.source   = 'Prepopulated'
-     AND EXISTS (SELECT 1 FROM oc_ts_entry l
-                  WHERE l.ts_week_id = e.ts_week_id
-                    AND l.entry_date = e.entry_date
-                    AND l.is_leave   = 'Y'
-                    AND l.hours      > 0);
-  v_n := SQL%ROWCOUNT;
-
-  -- A row whose allocation has since gone gets NULL back rather than a guess.
-  UPDATE oc_ts_entry SET pre_leave_hours = NULL
-   WHERE pre_leave_hours = 0 AND updated_by = 'FIX_97';
-
-  DBMS_OUTPUT.PUT_LINE('  ' || v_n || ' put-aside row(s) now remember their hours.');
-  COMMIT;
+  DBMS_OUTPUT.PUT_LINE('  Superseded by db/99.');
 END;
 /
 
