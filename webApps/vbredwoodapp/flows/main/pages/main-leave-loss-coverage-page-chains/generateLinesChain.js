@@ -36,14 +36,30 @@ define([
         });
 
         if (resp.ok) {
-          const n = (resp.body && resp.body.linesCreated) || 0;
+          const b = resp.body || {};
+          const n = b.linesCreated || 0;
+          // A REMOVAL IS NEWS TOO. This reported linesCreated alone, so a
+          // withdrawn absence dropping off the list said "No new absences to
+          // cover" -- which is true, and reads as "nothing happened" at the
+          // exact moment something did. Reported 21-Aug, when a retracted
+          // 20-Aug line vanished with no explanation on screen.
+          const gone = b.linesRemoved || 0;
+          const orph = b.approvedOrphans || 0;
+
+          const said = [];
+          if (n)    { said.push(n + (n === 1 ? ' absence added' : ' absences added')); }
+          if (gone) { said.push(gone + (gone === 1 ? ' withdrawn absence removed'
+                                                   : ' withdrawn absences removed')); }
+          if (orph) { said.push(orph + (orph === 1
+                        ? ' approved cover now has no absence behind it'
+                        : ' approved covers now have no absence behind them')); }
+
           await Actions.fireNotificationEvent(context, {
-            summary: n === 0 ? 'Nothing new' : 'Absences added',
-            message: n === 0
-              ? 'No new absences to cover.'
-              : n + (n === 1 ? ' absence added.' : ' absences added.'),
-            severity: 'confirmation',
-            type: 'confirmation',
+            summary: said.length ? 'Absences refreshed' : 'Nothing changed',
+            message: said.length ? said.join(', ') + '.'
+                                 : 'No new or withdrawn absences.',
+            severity: orph ? 'warning' : 'confirmation',
+            type: orph ? 'warning' : 'confirmation',
             displayMode: 'transient',
           });
           await Actions.callChain(context, { chain: 'loadLinesChain' });

@@ -211,6 +211,156 @@ define([], () => {
       return out;
     },
 
+    /**
+     * Read HR for a whole project team and write what it says.
+     *
+     * WHY THIS IS HERE AND NOT IN A CHAIN. Three manager screens need it -- Leave
+     * Loss Coverage, Monthly Summary, and Approval Detail behind it -- and a VB
+     * action chain belongs to one page. Copying it three times is how the
+     * Fusion query came to be wrong in two places at once.
+     *
+     * IT EXISTS BECAUSE THE MANAGER CANNOT WAIT FOR THE EMPLOYEE. Every manager
+     * screen reads OC_TS_ENTRY, which is only current once somebody has synced
+     * the absence -- and until now the only things that did were the nightly
+     * feed and the ABSENT PERSON opening their own timesheet. So a manager
+     * approving a month could be looking at leave that HR changed days ago,
+     * with nothing on the screen to say so. Reported 21-Aug: leave withdrawn in
+     * Fusion, correct on the employee's timesheet, stale on every screen the
+     * manager works from.
+     *
+     * Two Fusion calls regardless of headcount -- both resources take IN lists,
+     * written without the space. The per-person POST is one each, and it goes
+     * for EVERYBODY on the roster including those Fusion returned nothing for:
+     * employeeId + windowFrom + windowTo makes it a claim rather than a list,
+     * and the handler deletes what it was not sent inside that window. Skip the
+     * empty ones and a withdrawal never retracts, because "no leave" and "we
+     * did not ask" would look the same.
+     *
+     * Returns {pulled, people, note}. `note` is non-null when the live half
+     * could not complete, and the caller decides how loudly to say so -- on
+     * PAGE-006 that is a warning beside a list rebuilt from cache, which is a
+     * better answer than refusing to show anything.
+     */
+    async pullForRoster(context, Actions, opts) {
+      const $application = context.$application;
+      const projectId = opts.projectId;
+      const periodId  = opts.periodId;
+
+      const roster = await Actions.callRest(context, {
+        endpoint: 'oc_time/getLlcRoster',
+        uriParams: { projectId: projectId, periodId: periodId, _t: Date.now() },
+      });
+
+      if (!roster.ok) {
+        return { pulled: 0, people: 0, note: 'Could not read the project team, '
+          + 'so leave was not refreshed from HR. '
+          + $application.functions.restError(roster) };
+      }
+
+      const people = (roster.body && roster.body.items) || [];
+      if (!people.length) {
+        return { pulled: 0, people: 0, note: null };   // nobody allocated: nothing to ask
+      }
+
+      const from = people[0].window_from;
+      const to   = people[0].window_to;
+      const empIds = people.map((p) => p.employee_id).filter(Boolean);
+
+      // PersonNumber -> PersonId, one call
+      const who = await Actions.callRest(context, {
+        endpoint: 'fa_hcm/getWorkers',
+        uriParams: {
+          q: this.workerQuery(empIds),
+          limit: 500, onlyData: true, fields: 'PersonNumber,PersonId',
+        },
+      });
+      // A FAILED CALL AND AN EMPTY RESULT ARE DIFFERENT THINGS: collapsing them
+      // reports a stale backend credential as "no such person in Fusion".
+      if (!who.ok) {
+        return { pulled: 0, people: people.length,
+          note: 'Fusion refused the worker lookup (HTTP ' + who.status + ').' };
+      }
+
+      const byNumber = {};
+      ((who.body && who.body.items) || []).forEach((w) => {
+        byNumber[String(w.PersonNumber)] = w.PersonId;
+      });
+
+      const personIds = empIds.map((e) => byNumber[e]).filter(Boolean);
+      if (!personIds.length) {
+        return { pulled: 0, people: people.length,
+          note: 'Fusion answered, but none of this project\'s ' + empIds.length
+            + ' colleagues could be matched to a person there.' };
+      }
+
+      // the live read, one call, by person only -- see absenceQuery
+      const res = await Actions.callRest(context, {
+        endpoint: 'fa_hcm/getAbsences',
+        uriParams: {
+          q: this.absenceQuery(personIds),
+          limit: 1000, onlyData: true,
+          fields: this.ABSENCE_FIELDS,
+        },
+      });
+
+      if (!res.ok) {
+        return { pulled: 0, people: people.length,
+          note: 'Fusion refused the absence read (HTTP ' + res.status + ').' };
+      }
+
+      // A SHORT READ IS WORSE THAN NO READ. The windowed claim would delete
+      // whatever fell off the end, for the whole team at once.
+      if (this.wasTruncated(res.body)) {
+        return { pulled: 0, people: people.length,
+          note: 'Fusion returned only part of this team\'s absence history, so '
+            + 'nothing was refreshed rather than risk removing leave that is '
+            + 'still live. The read limit needs raising.' };
+      }
+
+      // personId comes back a number and the map is keyed by string.
+      const byPerson = {};
+      ((res.body && res.body.items) || []).forEach((x) => {
+        const k = String(x.personId);
+        (byPerson[k] = byPerson[k] || []).push(x);
+      });
+
+      let sent = 0;
+      let failed = 0;
+
+      for (const p of people) {
+        const pid = byNumber[p.employee_id];
+        if (!pid) { continue; }          // unmatched: claim nothing about them
+
+        const rows = this.absenceToRows(
+          byPerson[String(pid)] || [], p.employee_id, from, to,
+          p.std_hours_per_day);
+
+        const sync = await Actions.callRest(context, {
+          endpoint: 'oc_time/syncAbsence',
+          body: {
+            actor: $application.variables.currentEmail || 'VBCS_USER',
+            final: 'Y',
+            traceId: $application.variables.traceId,
+            employeeId: p.employee_id,
+            windowFrom: from,
+            windowTo: to,
+            rows: rows,
+          },
+        });
+
+        if (sync.ok) { sent += 1; } else { failed += 1; }
+      }
+
+      return {
+        pulled: sent,
+        people: people.length,
+        note: failed
+          ? (sent + ' of ' + (sent + failed) + ' colleagues were refreshed; '
+             + 'the rest could not be saved.')
+          : null,
+      };
+    },
+
     /** The field list both reads need. absenceStatusCd is not optional — see above. */
     ABSENCE_FIELDS: 'personId,startDate,endDate,duration,absenceType,'
                   + 'absenceStatusCd,approvalStatusCd',

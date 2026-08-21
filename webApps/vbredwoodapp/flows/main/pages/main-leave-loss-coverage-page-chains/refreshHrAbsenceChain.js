@@ -24,27 +24,17 @@ define([
    * coverage list their manager works from. The button said it had refreshed
    * and it had, from the wrong place.
    *
-   * SIX HOPS, and the roster is the one that is easy to leave out:
+   * WHAT IT DOES, in order:
    *
-   *   1  llc/roster            who is allocated here, and the month's window
-   *   2  fa_hcm/getWorkers     PersonNumber -> PersonId, ALL of them in one call
-   *   3  fa_hcm/getAbsences    the live read, ALL of them in one call
-   *   4  oc_time/syncAbsence   per person, as a windowed claim
-   *   5  oc_time/generateLlc   turn the absences into coverage lines
-   *   6  loadLinesChain        show them
+   *   1  Absence.pullForRoster   read HR for the whole team and write it down
+   *   2  generateLinesChain      rebuild the coverage lines from what arrived
+   *   3  loadLinesChain          show them
    *
-   * TWO CALLS TO FUSION, NOT TWO PER PERSON. Both resources accept IN lists,
-   * and they must be written WITHOUT the space -- IN(a,b), not IN (a,b) --
-   * because a `q` containing a space does not survive the VB proxy. A
-   * per-person loop would have made this scale with headcount for no reason.
-   *
-   * HOP 4 POSTS FOR EVERY PERSON ON THE ROSTER, including the ones Fusion
-   * returned nothing for. That is not waste, it is the whole of scenario 23:
-   * employeeId + windowFrom + windowTo turns the payload from a list into a
-   * claim — "these are ALL the absences this person has between these dates" —
-   * and the handler deletes what it was not sent inside that window. Skip the
-   * empty ones and cancelled leave never retracts, because "no leave" and "we
-   * did not ask" would look identical.
+   * Step 1 lives in resources/js/absence.js because the Monthly Summary needs
+   * exactly the same thing and a VB action chain belongs to one page. It reads
+   * the roster, resolves the whole team's PersonIds in ONE Fusion call, reads
+   * every absence in ONE more, and posts a windowed claim per person -- see
+   * that module for why each of those is the way it is.
    *
    * FAILURE STILL REBUILDS FROM THE CACHE. If Fusion is unreachable the manager
    * is told so plainly and hop 5 still runs, so the button does at least what
@@ -79,27 +69,13 @@ define([
       let fusionNote = null;   // set when the live half could not complete
 
       try {
-        // ── 1. who is on this project, and over what dates ───────
-        const roster = await Actions.callRest(context, {
-          endpoint: 'oc_time/getLlcRoster',
-          uriParams: { projectId: projectId, periodId: periodId, _t: Date.now() },
+        // The roster read, the two Fusion calls and the per-person windowed
+        // claim all live in resources/js/absence.js, because the Monthly
+        // Summary needs exactly the same thing and a chain belongs to one page.
+        const out = await Absence.pullForRoster(context, Actions, {
+          projectId: projectId, periodId: periodId,
         });
-
-        const people = (roster.ok && roster.body && roster.body.items) || [];
-
-        if (!roster.ok) {
-          fusionNote = 'Could not read the project team, so leave was not '
-                     + 'refreshed from Fusion. '
-                     + $application.functions.restError(roster);
-        } else if (!people.length) {
-          fusionNote = 'Nobody is allocated to this project for this month, so '
-                     + 'there is no leave to read.';
-        } else {
-          const from = people[0].window_from;
-          const to   = people[0].window_to;
-
-          await this.pullFromFusion(context, people, from, to);
-        }
+        fusionNote = out.note;
 
       } catch (e) {
         if ($application.functions.isAbortError(e)) {
@@ -126,121 +102,6 @@ define([
       await Actions.callChain(context, { chain: 'generateLinesChain' });
     }
 
-    /**
-     * Hops 2 to 4. Throws on a transport failure; a REST call that answers with
-     * a status is handled here and reported through the thrown message, so the
-     * caller has one place to decide what a partial refresh means.
-     */
-    async pullFromFusion(context, people, from, to) {
-      const { $application } = context;
-
-      const empIds = people.map((p) => p.employee_id).filter(Boolean);
-
-      // ── 2. PersonNumber -> PersonId, in one call ───────────────
-      const who = await Actions.callRest(context, {
-        endpoint: 'fa_hcm/getWorkers',
-        uriParams: {
-          q: Absence.workerQuery(empIds),
-          limit: 500, onlyData: true, fields: 'PersonNumber,PersonId',
-        },
-      });
-
-      // A FAILED CALL AND AN EMPTY RESULT ARE DIFFERENT THINGS. Collapsing them
-      // reports a stale backend credential as "no such person in Fusion", which
-      // sends whoever reads it into HCM data instead of into the VB backend
-      // configuration — the same trap PAGE-001 documents.
-      if (!who.ok) {
-        throw new Error('Fusion refused the worker lookup (HTTP ' + who.status
-          + '). Leave was not refreshed.');
-      }
-
-      const byNumber = {};
-      ((who.body && who.body.items) || []).forEach((w) => {
-        byNumber[String(w.PersonNumber)] = w.PersonId;
-      });
-
-      const personIds = empIds.map((e) => byNumber[e]).filter(Boolean);
-      if (!personIds.length) {
-        throw new Error('Fusion answered, but none of this project’s '
-          + empIds.length + ' colleagues could be matched to a person there.');
-      }
-
-      // ── 3. the live read, in one call ────────────────────────
-      // BY PERSON ONLY, no date predicate: a `q` containing a space does not
-      // survive the VB proxy and a `q` containing ';' does not survive Fusion,
-      // so no multi-predicate form works on both paths. The window is applied
-      // per person in absenceToRows below.
-      //
-      // This therefore asks for the whole team's whole absence history, hence
-      // 1000 -- a team-sized question rather than a month-sized one.
-      const res = await Actions.callRest(context, {
-        endpoint: 'fa_hcm/getAbsences',
-        uriParams: {
-          q: Absence.absenceQuery(personIds),
-          limit: 1000, onlyData: true,
-          fields: Absence.ABSENCE_FIELDS,
-        },
-      });
-
-      if (!res.ok) {
-        throw new Error('Fusion refused the absence read (HTTP ' + res.status
-          + '). Leave was not refreshed.');
-      }
-
-      // A SHORT READ IS WORSE THAN NO READ HERE. Hop 4 posts one windowed claim
-      // per person and the handler deletes what it was not sent inside that
-      // window -- so a truncated list would retract live leave for whoever fell
-      // off the end, silently, for the whole team at once.
-      if (Absence.wasTruncated(res.body)) {
-        throw new Error('Fusion returned only part of this team\'s absence '
-          + 'history, so nothing was refreshed rather than risk removing leave '
-          + 'that is still live. The read limit needs raising.');
-      }
-
-      const items = (res.body && res.body.items) || [];
-
-      // Group by person. personId comes back as a number and the map is keyed
-      // by string, so both sides are stringified — an == would work and a ===
-      // would silently group nothing.
-      const byPerson = {};
-      items.forEach((x) => {
-        const k = String(x.personId);
-        (byPerson[k] = byPerson[k] || []).push(x);
-      });
-
-      // ── 4. post one windowed claim per person ──────────────────
-      let sent = 0;
-      let failed = 0;
-
-      for (const p of people) {
-        const pid = byNumber[p.employee_id];
-        if (!pid) { continue; }            // unmatched: say nothing about them
-
-        const rows = Absence.absenceToRows(
-          byPerson[String(pid)] || [], p.employee_id, from, to,
-          p.std_hours_per_day);
-
-        const sync = await Actions.callRest(context, {
-          endpoint: 'oc_time/syncAbsence',
-          body: {
-            actor: $application.variables.currentEmail || 'VBCS_USER',
-            final: 'Y',
-            traceId: $application.variables.traceId,
-            employeeId: p.employee_id,
-            windowFrom: from,
-            windowTo: to,
-            rows: rows,
-          },
-        });
-
-        if (sync.ok) { sent += 1; } else { failed += 1; }
-      }
-
-      if (failed) {
-        throw new Error(sent + ' of ' + (sent + failed)
-          + ' colleagues were refreshed; the rest could not be saved.');
-      }
-    }
   }
 
   return refreshHrAbsenceChain;
