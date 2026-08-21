@@ -3427,8 +3427,28 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
      WHERE w.period_id  = p_period_id
        AND e.project_id = p_project_id
        AND e.hours     <> 0
-       -- Only manager-approved data posts (INT-014).
-       AND e.day_status = 'Approved'
+       -- Only manager-approved data posts (INT-014) -- AND, ON ADVANCE CLOSURE,
+       -- the days the gate above has just accepted without approval.
+       --
+       -- This read day_status = 'Approved' alone, so the two halves of one
+       -- decision disagreed: the RULE-020 gate accepts a Pending month when the
+       -- confirm type is 'Advance closure', and then the payload refused every
+       -- day in it. The month confirmed, ACCRUAL_ROWS came out 0, and accrual
+       -- received an empty batch -- which reads as "this project had no time in
+       -- July" rather than "nobody approved it".
+       --
+       -- Advance closure exists precisely because the hours ARE real:
+       -- prepopulated, defaulted by a job when a cut-off passed, missing only
+       -- somebody's agreement. Confirming the month while withholding them says
+       -- the opposite.
+       --
+       -- Mirrors the gate exactly so the two cannot drift again: Approved
+       -- always, Pending only on advance closure, Rejected never -- a rejection
+       -- is a manager actively saying no, which is the opposite of the silence
+       -- advance closure overrides.
+       AND (e.day_status = 'Approved'
+            OR (p_confirm_type = 'Advance closure'
+                AND e.day_status = 'Pending'))
        AND NOT EXISTS (SELECT 1 FROM xx_o2c_timesheet_accrual_if i
                         WHERE i.confirm_id   = v_confirm
                           AND i.source_ts_id = e.ts_entry_id
