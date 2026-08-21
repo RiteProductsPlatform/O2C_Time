@@ -1201,8 +1201,20 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
         -- employee or a manager typed are theirs; if they conflict with a new
         -- absence that is a correction for a person to make, not for a
         -- scheduled job to silently erase.
+        -- REMEMBER WHAT IS BEING ZEROED. This set hours = 0 and nothing else,
+        -- while oc_time_leave_displace does the same job and keeps the value in
+        -- PRE_LEAVE_HOURS so a withdrawal can hand it back. The two also guard
+        -- each other out -- displace only fires on hours > 0 -- so whichever
+        -- ran first decided whether the hours survived. Populate first, and
+        -- they were simply gone: withdraw the leave and the give-back finds
+        -- nothing to give, leaving the person to retype hours that were correct
+        -- until an absence they did not keep.
+        --
+        -- Same column, same NULL guard as db/94's displace, so the second one
+        -- to run finds the value already recorded and leaves it alone.
         UPDATE oc_ts_entry e
-           SET e.hours = 0, e.updated_by = p_actor
+           SET e.pre_leave_hours = NVL(e.pre_leave_hours, e.hours),
+               e.hours = 0, e.updated_by = p_actor
          WHERE e.ts_week_id = v_week
            AND e.entry_date = ab.absence_date
            AND e.is_leave   = 'N'
