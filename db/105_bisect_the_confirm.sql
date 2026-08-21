@@ -25,10 +25,13 @@
 --
 -- The four, in the order confirm_month executes them:
 --
---   [2] the RULE-020 gate      SELECT COUNT(*), SUM(CASE...) FROM v_oc_ts_month_summary
---   [3] the header             MERGE INTO oc_ts_month_confirm
---   [4] the payload            INSERT INTO xx_o2c_timesheet_accrual_if SELECT ...
---   [5] the roll-up            UPDATE oc_ts_month_confirm SET (5 cols) = (SELECT 5 aggregates)
+--   [3]  the RULE-020 gate   SELECT COUNT(*), SUM(CASE...) FROM v_oc_ts_month_summary
+--   [4]  the header        MERGE INTO oc_ts_month_confirm
+--   [5a] the payload       INSERT INTO xx_o2c_timesheet_accrual_if SELECT ...
+--   [6a] the roll-up       UPDATE oc_ts_month_confirm SET (5 cols) = (SELECT 5 aggregates)
+--
+-- and after each of the two untested ones, [5b] / [6b] run a proposed rewrite,
+-- so a single run says both WHICH statement is wrong and WHETHER the fix works.
 --
 -- [5] is the one never yet tested. It is the only statement in the function
 -- that puts aggregates inside a MULTI-COLUMN SET whose subquery is correlated
@@ -70,7 +73,7 @@ PROMPT
 PROMPT (no rows = never confirmed, which is what we expect)
 
 PROMPT ============================================================
-PROMPT [2/7] .. [7/7] Each statement alone, then the proposed fix
+PROMPT [2] .. [6b] Each statement alone, and its proposed rewrite
 PROMPT ============================================================
 
 DECLARE
@@ -87,7 +90,9 @@ DECLARE
   v_err     VARCHAR2(500);
   v_type    VARCHAR2(30) := 'Normal';
   v_trace   VARCHAR2(64) := 'BISECT-105';
-  v_failed  VARCHAR2(10) := 'none';
+  v_failed  VARCHAR2(30) := 'none';
+  v_fixed   VARCHAR2(30) := 'none';
+  v_err2    VARCHAR2(500);
 BEGIN
   SELECT project_id INTO v_project FROM oc_time_project WHERE project_number = '555';
   SELECT period_id, period_year, period_month, period_name
@@ -149,8 +154,21 @@ BEGIN
   END;
 
   ----------------------------------------------------------------
-  -- [5/6] the payload INSERT  (db/103 cleared its SELECT; this runs the
-  --       whole statement, with the NOT EXISTS db/103 left out)
+  -- [5a] the payload INSERT, exactly as confirm_month has it.
+  --
+  -- db/103 did NOT clear this, though it was reported as having done so.
+  -- Its section 4 wrapped the SELECT in SELECT COUNT(*) FROM ( ... ), and
+  -- under a COUNT(*) Oracle is free to eliminate select-list expressions
+  -- nothing reads -- including the correlated MAX(client_role) subquery. So
+  -- that subquery may never have been evaluated by the test that supposedly
+  -- proved the statement good.
+  --
+  -- Which matters, because a CORRELATED SCALAR SUBQUERY CONTAINING AN
+  -- AGGREGATE is a known route to ORA-00979: the optimiser unnests it into a
+  -- grouped view, the correlation columns have to survive into that GROUP BY,
+  -- and this is the error when the transformation does not work out.
+  --
+  -- Handler does not re-raise, so every later section still runs.
   ----------------------------------------------------------------
   BEGIN
     INSERT INTO xx_o2c_timesheet_accrual_if (
@@ -204,16 +222,92 @@ BEGIN
                         WHERE i.confirm_id     = v_confirm
                           AND i.source_entry_id = e.ts_entry_id);
     v_rows := SQL%ROWCOUNT;
-    DBMS_OUTPUT.PUT_LINE('[5/6] payload INSERT  OK   rows=' || v_rows);
+    DBMS_OUTPUT.PUT_LINE('[5a] INSERT as-is       OK   rows=' || v_rows);
   EXCEPTION WHEN OTHERS THEN
     v_err := SQLERRM; v_failed := 'insert';
-    DBMS_OUTPUT.PUT_LINE('[5/6] payload INSERT  *** ' || SUBSTR(v_err,1,200));
-    RAISE;
+    DBMS_OUTPUT.PUT_LINE('[5a] INSERT as-is       *** ' || SUBSTR(v_err,1,220));
   END;
 
   ----------------------------------------------------------------
-  -- [6/6] the roll-up UPDATE  -- never yet tested in isolation.
-  --       Its handler does NOT re-raise, so [7/7] runs either way.
+  -- [5b] THE PROPOSED FIX for [5a]: the same INSERT with the correlated
+  --      aggregate subquery replaced by a LEFT JOIN onto a pre-grouped
+  --      inline view. There is nothing left to unnest, and one row per
+  --      employee+project is guaranteed by the GROUP BY -- which is what the
+  --      MAX() was there to ensure in the first place.
+  --
+  --      Skipped when [5a] worked, so the interface is not double-loaded.
+  ----------------------------------------------------------------
+  IF v_failed = 'insert' THEN
+    BEGIN
+      INSERT INTO xx_o2c_timesheet_accrual_if (
+        period, period_year, period_month, confirm_id,
+        employee_id, employee_name, worker_type,
+        project_number, project_name, customer_name, revenue_model,
+        main_project_id, main_project_number,
+        client_role, wbs_task, wbs_task_name, work_date,
+        billable_hours, non_billable_hours, leave_hours, unbilled_reason,
+        entry_type, flag, approved_date,
+        source_entry_id, source_adjustment_id, batch_id, trace_id)
+    SELECT v_pname, v_year, v_month, v_confirm,
+           w.employee_id, wk.employee_name, wk.worker_type,
+           p.project_number, p.project_name, p.customer_name, p.revenue_model,
+           p.main_project_id,
+           (SELECT m.project_number FROM oc_main_project_src m
+             WHERE m.project_id = p.main_project_id),
+           alr.client_role,
+           t.task_code, t.task_name, e.entry_date,
+           CASE WHEN e.billable_type = 'Billable'     AND e.is_leave = 'N'
+                THEN e.hours ELSE 0 END,
+           CASE WHEN e.billable_type = 'Non-billable' AND e.is_leave = 'N'
+                THEN e.hours ELSE 0 END,
+           CASE WHEN e.is_leave = 'Y' THEN e.hours ELSE 0 END,
+           e.unbilled_reason,
+           e.entry_type,
+           CASE
+             WHEN e.entry_type = 'Reversal'    THEN 'Reversal'
+             WHEN e.entry_type = 'Adjustment'  THEN 'Adjustment'
+             WHEN w.advance_closure_flag = 'Y' THEN 'Advance closure'
+             WHEN w.overridden_flag      = 'Y' THEN 'Overridden & approved'
+             WHEN w.defaulted_flag       = 'Y' THEN 'Defaulted'
+             WHEN w.late_submission_flag = 'Y' THEN 'Late submission'
+             ELSE NULL
+           END,
+           NVL(TRUNC(CAST(w.approved_on AS DATE)), TRUNC(SYSDATE)),
+           e.ts_entry_id, e.adjustment_id, v_batch, v_trace
+      FROM oc_ts_week      w
+      JOIN oc_ts_entry     e  ON e.ts_week_id  = w.ts_week_id
+      JOIN oc_time_project p  ON p.project_id  = e.project_id
+      JOIN oc_time_task    t  ON t.task_id     = e.task_id
+      JOIN oc_time_worker  wk ON wk.employee_id = w.employee_id
+      LEFT JOIN (SELECT employee_id, project_id, MAX(client_role) AS client_role
+                   FROM oc_time_allocation
+                  GROUP BY employee_id, project_id) alr
+             ON alr.employee_id = w.employee_id
+            AND alr.project_id  = e.project_id
+     WHERE w.period_id  = v_period
+       AND e.project_id = v_project
+       AND e.hours     <> 0
+       AND (e.day_status = 'Approved'
+            OR (v_type = 'Advance closure' AND e.day_status = 'Pending'))
+       AND NOT EXISTS (SELECT 1 FROM xx_o2c_timesheet_accrual_if i
+                        WHERE i.confirm_id     = v_confirm
+                          AND i.source_entry_id = e.ts_entry_id);
+      v_rows := SQL%ROWCOUNT;
+      DBMS_OUTPUT.PUT_LINE('[5b] INSERT rewritten   OK   rows=' || v_rows
+                        || '   <-- this rewrite is the fix');
+      v_fixed := 'insert';
+    EXCEPTION WHEN OTHERS THEN
+      v_err2 := SQLERRM;
+      DBMS_OUTPUT.PUT_LINE('[5b] INSERT rewritten   *** ' || SUBSTR(v_err2,1,220));
+    END;
+  ELSE
+    DBMS_OUTPUT.PUT_LINE('[5b] INSERT rewritten   -    skipped, [5a] worked');
+  END IF;
+
+  ----------------------------------------------------------------
+  -- [6a] the roll-up UPDATE as confirm_month has it: five aggregates inside a
+  --      multi-column SET whose subquery correlates back to the row being
+  --      updated. Also never tested alone. Does not re-raise either.
   ----------------------------------------------------------------
   BEGIN
     UPDATE oc_ts_month_confirm c
@@ -237,26 +331,17 @@ BEGIN
            c.accrual_pushed_on = SYSTIMESTAMP,
            c.accrual_message   = 'Interface table filled; batch ' || v_batch
      WHERE c.confirm_id = v_confirm;
-    DBMS_OUTPUT.PUT_LINE('[6/6] roll-up UPDATE  OK   rows=' || SQL%ROWCOUNT);
+    DBMS_OUTPUT.PUT_LINE('[6a] UPDATE as-is       OK   rows=' || SQL%ROWCOUNT);
   EXCEPTION WHEN OTHERS THEN
-    -- DELIBERATELY NOT RE-RAISED. If this is the guilty statement we still want
-    -- [7] to run, because [7] is the proposed replacement and one run should
-    -- answer both "which statement" and "does the fix work".
-    v_err := SQLERRM; v_failed := 'update';
-    DBMS_OUTPUT.PUT_LINE('[6/6] roll-up UPDATE  *** ' || SUBSTR(v_err,1,200));
+    IF v_failed = 'none' THEN v_err := SQLERRM; v_failed := 'update';
+    ELSE v_failed := v_failed || '+update'; END IF;
+    DBMS_OUTPUT.PUT_LINE('[6a] UPDATE as-is       *** ' || SUBSTR(SQLERRM,1,220));
   END;
 
   ----------------------------------------------------------------
-  -- [7/7] THE PROPOSED REWRITE of [6], tested here before it is
-  --       written into db/09.
-  --
-  -- Aggregate into locals first, then a plain single-column UPDATE. This
-  -- cannot raise ORA-00979 whatever the cause in [6] was, because the
-  -- aggregation happens in its own SELECT INTO with nothing else in the
-  -- select list, and the UPDATE that follows carries no subquery at all.
-  --
-  -- It also reads better: five aggregates buried inside a multi-column SET
-  -- were the reason this took three attempts to find.
+  -- [6b] THE PROPOSED FIX for [6a]: aggregate into locals, then a plain
+  --      single-column UPDATE carrying no subquery at all. Cannot raise
+  --      ORA-00979 whatever the cause was, and reads better besides.
   ----------------------------------------------------------------
   DECLARE
     v_ec NUMBER; v_bh NUMBER; v_nb NUMBER; v_lh NUMBER; v_ah NUMBER; v_ar NUMBER;
@@ -287,26 +372,28 @@ BEGIN
            accrual_pushed_on  = SYSTIMESTAMP,
            accrual_message    = 'Interface table filled; batch ' || v_batch
      WHERE confirm_id = v_confirm;
-
-    DBMS_OUTPUT.PUT_LINE('[7/7] REWRITE         OK   rows=' || SQL%ROWCOUNT
+    DBMS_OUTPUT.PUT_LINE('[6b] UPDATE rewritten   OK   rows=' || SQL%ROWCOUNT
                       || '  employees=' || v_ec || ' billable=' || v_bh
                       || ' nonbill=' || v_nb || ' leave=' || v_lh
-                      || ' adj=' || v_ah || ' iface_rows=' || v_ar);
+                      || ' adj=' || v_ah || ' iface=' || v_ar);
   EXCEPTION WHEN OTHERS THEN
-    v_err := SQLERRM;
-    DBMS_OUTPUT.PUT_LINE('[7/7] REWRITE         *** ' || SUBSTR(v_err,1,300));
+    DBMS_OUTPUT.PUT_LINE('[6b] UPDATE rewritten   *** ' || SUBSTR(SQLERRM,1,220));
   END;
 
   DBMS_OUTPUT.PUT_LINE(' ');
   IF v_failed = 'none' THEN
-    DBMS_OUTPUT.PUT_LINE('ALL FOUR SUCCEEDED individually. That would point at '
-                      || 'how confirm_month sequences them rather than at any '
-                      || 'one statement -- unexpected, and worth saying so.');
+    DBMS_OUTPUT.PUT_LINE('>>> ALL FOUR SUCCEEDED individually. Unexpected, and it '
+                      || 'would point at how confirm_month sequences them rather '
+                      || 'than at any one statement.');
   ELSE
-    DBMS_OUTPUT.PUT_LINE('>>> GUILTY STATEMENT: ' || v_failed);
+    DBMS_OUTPUT.PUT_LINE('>>> GUILTY: ' || v_failed);
     DBMS_OUTPUT.PUT_LINE('>>> ' || SUBSTR(v_err,1,300));
-    DBMS_OUTPUT.PUT_LINE('If [7/7] above reads OK, that rewrite is the fix and '
-                      || 'goes into db/09.');
+    IF v_fixed = 'insert' THEN
+      DBMS_OUTPUT.PUT_LINE('>>> AND THE FIX IS CONFIRMED: the LEFT JOIN rewrite in '
+                        || '[5b] loaded the interface. That goes into db/09.');
+    ELSE
+      DBMS_OUTPUT.PUT_LINE('>>> Whichever rewrite above reads OK is what goes into db/09.');
+    END IF;
   END IF;
   ROLLBACK;
   DBMS_OUTPUT.PUT_LINE('Rolled back - nothing was confirmed.');
