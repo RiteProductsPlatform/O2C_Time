@@ -3371,7 +3371,7 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
     INSERT INTO xx_o2c_timesheet_accrual_if (
       period, period_year, period_month, confirm_id,
       employee_id, employee_name, worker_type,
-      
+      project_number, project_name, customer_name, revenue_model,
       -- THEIR project code as well as Fusion's. Accrual keys on
       -- OC_PROJECT.PROJECT_NUMBER in the main application; PROJECT_NUMBER here is
       -- Fusion's ('555'), and handing them only that makes them name-match back to
@@ -3575,7 +3575,7 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
         INSERT INTO xx_o2c_timesheet_accrual_if (
           period, period_year, period_month, confirm_id,
           employee_id, employee_name, worker_type,
-          
+          project_number, project_name, customer_name, revenue_model,
           -- THEIR project code as well as Fusion's. Accrual keys on
           -- OC_PROJECT.PROJECT_NUMBER in the main application; PROJECT_NUMBER here is
           -- Fusion's ('555'), and handing them only that makes them name-match back to
