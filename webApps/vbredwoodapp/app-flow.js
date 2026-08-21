@@ -192,7 +192,39 @@ define(['oj-sp/spectra-shell/config/config'], function () {
      */
     restError(response) {
       const r = response || {};
-      const b = r.body || {};
+
+      // THE BODY MAY NOT HAVE BEEN PARSED, AND UNTIL 21-AUG-2026 THAT LOST
+      // EVERY BUSINESS-RULE MESSAGE IN THE MODULE.
+      //
+      // ORDS source_type_plsql handlers emit with HTP.P and set no content
+      // type, so a refusal comes back as text/html and VB hands the body over
+      // as a STRING rather than an object. b.error was therefore always
+      // undefined on exactly the responses that carry a reason, and this fell
+      // through to r.statusText -- so the screen said "Bad Request" while the
+      // server had said "A day cannot hold more than the 8.00 hours of this
+      // person's shift. 17-Aug now has 8.25."
+      //
+      // Reported against the Correct button, but it was never about that
+      // button: EVERY -20001..-20033 refusal reached the user as its HTTP
+      // status. The ORDS convention in CLAUDE.md says these map to 400 "with
+      // the rule's own message ... so the UI can toast it verbatim", and that
+      // was built at the PL/SQL end and never at the HTTP end.
+      //
+      // Parsed here rather than only fixed at the server, because a client that
+      // discards a message it was sent is wrong however the server labels it.
+      let b = r.body;
+      if (typeof b === 'string') {
+        const t = b.trim();
+        try {
+          b = JSON.parse(t);
+        } catch (e) {
+          // Not JSON. An ORDS error page is HTML and says nothing a user can
+          // act on, so it is discarded rather than toasted at them.
+          b = t && t.charAt(0) !== '<' ? { error: t } : {};
+        }
+      }
+      b = b || {};
+
       const msg = b.error || b.message || b.title || r.statusText || '';
 
       if (r.status === 401) return 'Your session has expired. Please sign in again.';

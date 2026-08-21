@@ -50,20 +50,10 @@ define([
       const periodId  = $page.variables.periodId;
       if (!projectId || !periodId) { return; }
 
-      // ONCE PER PROJECT-MONTH, and this guard is why the live pull can sit on
-      // page load at all. enterChain settles projectId and periodId separately
-      // and each assignment fires onValueChanged, so without it opening the
-      // page would read the whole team out of Fusion twice.
-      //
-      // The button clears lastPull first (forceHrRefreshChain), so asking again
-      // by hand always asks.
-      const key = projectId + '|' + periodId;
-      if ($page.variables.lastPull === key) {
-        await Actions.callChain(context, { chain: 'loadLinesChain' });
-        return;
-      }
-      $page.variables.lastPull = key;
-
+      // The once-per-project-month guard now lives inside pullForRoster, at
+      // APPLICATION scope, so it also covers the Monthly Summary and Approval
+      // Detail. A page-scoped marker carried it while this was the only
+      // caller; a page-scoped marker cannot see a pull another page just made.
       $page.variables.busy = true;
 
       let fusionNote = null;   // set when the live half could not complete
@@ -74,7 +64,9 @@ define([
         // Summary needs exactly the same thing and a chain belongs to one page.
         const out = await Absence.pullForRoster(context, Actions, {
           projectId: projectId, periodId: periodId,
+          force: $page.variables.forceNextPull,
         });
+        $page.variables.forceNextPull = false;
         fusionNote = out.note;
 
       } catch (e) {

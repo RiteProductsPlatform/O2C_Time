@@ -246,6 +246,20 @@ define([], () => {
       const projectId = opts.projectId;
       const periodId  = opts.periodId;
 
+      // ONCE PER PROJECT-MONTH, ACROSS PAGES. The marker is an APPLICATION
+      // variable, not a page one, so a manager who opens the Monthly Summary
+      // and then drills into Approval Detail and Leave Loss Coverage asks HR
+      // once, not three times -- and a deep link straight to any of them still
+      // asks. Page scope would have re-read the whole team on every hop.
+      //
+      // opts.force is the Refresh button saying "ask again", which is a
+      // different statement from "make sure you have asked".
+      const key = projectId + '|' + periodId;
+      if (!opts.force && $application.variables.absencePulledKey === key) {
+        return { pulled: 0, people: 0, note: null, skipped: true };
+      }
+      $application.variables.absencePulledKey = key;
+
       const roster = await Actions.callRest(context, {
         endpoint: 'oc_time/getLlcRoster',
         uriParams: { projectId: projectId, periodId: periodId, _t: Date.now() },

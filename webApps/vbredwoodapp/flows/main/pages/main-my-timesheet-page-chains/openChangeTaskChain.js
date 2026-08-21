@@ -38,8 +38,11 @@ define([
       if (!$page.variables.editable || !projectId || !taskId) { return; }
       if (row.isLeave === 'Y') { return; }
 
-      $page.variables.chgWeekId       = $page.variables.selectedWeekId
-                                     || $application.variables.selectedWeekId;
+      // APPLICATION scope. This read the PAGE variable of the same name first,
+      // which is not declared on this page and so was always undefined -- the
+      // || carried it, but the line read as though a page-level override
+      // existed. There is one week id and it lives at app scope.
+      $page.variables.chgWeekId = $application.variables.selectedWeekId;
       $page.variables.chgProjectId    = projectId;
       $page.variables.chgProjectName  = projectName || '';
       $page.variables.chgOldTaskId    = taskId;

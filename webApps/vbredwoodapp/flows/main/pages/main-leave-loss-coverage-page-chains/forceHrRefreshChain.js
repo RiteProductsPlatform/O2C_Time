@@ -26,7 +26,7 @@ define([
 
     async run(context) {
       const { $page } = context;
-      $page.variables.lastPull = '';
+      $page.variables.forceNextPull = true;
       await Actions.callChain(context, { chain: 'refreshHrAbsenceChain' });
     }
   }

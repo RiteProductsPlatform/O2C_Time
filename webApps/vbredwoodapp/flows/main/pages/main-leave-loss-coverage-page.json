@@ -118,13 +118,13 @@
       "type": "number",
       "defaultValue": 0
     },
-    "lastPull": {
-      "type": "string",
-      "defaultValue": ""
-    },
     "orphanCount": {
       "type": "number",
       "defaultValue": 0
+    },
+    "forceNextPull": {
+      "type": "boolean",
+      "defaultValue": false
     }
   },
   "types": {

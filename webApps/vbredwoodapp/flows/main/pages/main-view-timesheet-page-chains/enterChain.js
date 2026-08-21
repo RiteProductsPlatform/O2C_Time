@@ -52,6 +52,8 @@ define([
         const out = await Absence.pullForRoster(context, Actions, {
           projectId: $application.variables.selectedProjectId,
           periodId: periodId,
+          // Entering the page is "make sure you have asked". The Refresh button
+          // on the page is "ask again", and clears the marker itself.
         });
 
         if (out.note) {
