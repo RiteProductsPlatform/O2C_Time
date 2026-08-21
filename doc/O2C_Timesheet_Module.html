@@ -342,10 +342,16 @@ var TRANSITIONS = [
 ];
 
 var WEEKSTORE = {}, AUDIT = [], seqAudit = 1;
-function wkey(e,p,pk,i){ return e+'|'+p+'|'+pk+'|'+i; }
-function week(e,p,pk,i){
-  var k=wkey(e,p,pk,i);
-  if(!WEEKSTORE[k]) WEEKSTORE[k]={emp:e,proj:p,pk:pk,idx:i,sub:'NotYetSubmitted',appr:'Pending',
+
+/* THE WEEK IS ABOVE THE PROJECT. OC_TS_WEEK carries EMPLOYEE_ID,
+   PERIOD_ID and WEEK_INDEX and no project at all; the project lives
+   on the entry, in UK_OC_TSE_CELL (ts_week_id, project_id, task_id,
+   entry_date, entry_type). So one week holds lines for every project
+   the person is allocated to, and a day is the sum across them. */
+function wkey(e,pk,i){ return e+'|'+pk+'|'+i; }
+function week(e,pk,i){
+  var k=wkey(e,pk,i);
+  if(!WEEKSTORE[k]) WEEKSTORE[k]={emp:e,pk:pk,idx:i,sub:'NotYetSubmitted',appr:'Pending',
                                   flags:[],versions:[],locked:false,defaultedBy:null,entries:null};
   return WEEKSTORE[k];
 }
@@ -413,44 +419,56 @@ function currentWeekIdx(pk){
   return ws.length-1;
 }
 
-/* ---- prepopulated entries ---- */
-function buildEntries(e,p,pk,wi){
-  var w=wkr(e), wd=weeksOf(pk)[wi], pct=allocPct(e,p), task=proj(p).tasks[0].code;
-  var line={task:task,type:(w.billing==='Billable'?'Billable':'Non-billable'),
-            reason:(w.billing==='Billable'?'':'Bench'),hrs:[],shift:'Regular'};
-  var lv={task:'LEAVE',type:'Leave',reason:'',hrs:[],isLeave:true,shift:''};
-  var any=false;
-  wd.days.forEach(function(dy){
-    if(!worksOn(e,dy.dow)){ line.hrs.push(0); lv.hrs.push(0); return; }
-    var full=Math.round(w.std*pct/100*4)/4, l=leaveShare(e,dy.iso,p);
-    if(l>0) any=true;
-    line.hrs.push(Math.max(0,Math.round((full-l)*4)/4));
-    lv.hrs.push(l);
+/* ---- prepopulated entries, ACROSS ALL PROJECTS ---- */
+function buildEntries(e,pk,wi){
+  var w=wkr(e), wd=weeksOf(pk)[wi], out=[];
+  w.alloc.forEach(function(a){
+    var p=proj(a.p); if(!p) return;
+    var line={proj:a.p, task:p.tasks[0].code,
+              type:(w.billing==='Billable'?'Billable':'Non-billable'),
+              reason:(w.billing==='Billable'?'':'Bench'), hrs:[]};
+    var lv={proj:a.p, task:'LEAVE', type:'Leave', reason:'', hrs:[], isLeave:true};
+    var any=false;
+    wd.days.forEach(function(dy){
+      if(!worksOn(e,dy.dow)){ line.hrs.push(0); lv.hrs.push(0); return; }
+      var full=Math.round(w.std*a.pct/100*4)/4, l=leaveShare(e,dy.iso,a.p);
+      if(l>0) any=true;
+      line.hrs.push(Math.max(0,Math.round((full-l)*4)/4));
+      lv.hrs.push(l);
+    });
+    out.push(line);
+    if(any) out.push(lv);
   });
-  return any?[line,lv]:[line];
+  return out;
 }
-function entriesFor(e,p,pk,wi){
-  var w=week(e,p,pk,wi);
-  if(!w.entries) w.entries=buildEntries(e,p,pk,wi);
+function entriesFor(e,pk,wi){
+  var w=week(e,pk,wi);
+  if(!w.entries) w.entries=buildEntries(e,pk,wi);
   return w.entries;
+}
+/* A manager screen is project-scoped even though the week is not. */
+function linesFor(e,pk,wi,p){
+  return entriesFor(e,pk,wi).filter(function(l){ return !p || l.proj===p; });
 }
 function lineTotal(l){ var t=0; for(var i=0;i<l.hrs.length;i++) t+=num(l.hrs[i]); return t; }
 function dayTotal(ls,i){ var t=0; ls.forEach(function(l){ t+=num(l.hrs[i]); }); return t; }
-function weekTotals(e,p,pk,wi){
+function weekTotals(e,pk,wi,p){
   var b=0,n=0,l=0;
-  entriesFor(e,p,pk,wi).forEach(function(x){
+  linesFor(e,pk,wi,p).forEach(function(x){
     var t=lineTotal(x);
     if(x.isLeave) l+=t; else if(x.type==='Billable') b+=t; else n+=t;
   });
   return {b:b,n:n,l:l,t:b+n+l};
 }
-function monthTotals(e,p,pk){
-  var b=0,n=0,l=0,d=0;
+function monthTotals(e,pk,p){
+  var b=0,n=0,l=0,days={};
   weeksOf(pk).forEach(function(wd,i){
-    var t=weekTotals(e,p,pk,i); b+=t.b; n+=t.n; l+=t.l;
-    entriesFor(e,p,pk,i)[0].hrs.forEach(function(h,di){ if(num(h)>0) d++; });
+    var t=weekTotals(e,pk,i,p); b+=t.b; n+=t.n; l+=t.l;
+    linesFor(e,pk,i,p).forEach(function(ln){
+      ln.hrs.forEach(function(h,di){ if(num(h)>0) days[i+'|'+di]=1; });
+    });
   });
-  return {b:b,n:n,l:l,t:b+n+l,days:d};
+  return {b:b,n:n,l:l,t:b+n+l,days:Object.keys(days).length};
 }
 
 /* ---- leave loss coverage. LOSS is what the PROJECT lost. Assigning
@@ -647,9 +665,15 @@ function renderLogin(){
       '<p class="section-title" style="margin-bottom:14px">Sign in</p>'+
       '<p class="sm muted" style="margin-top:0">The module signs you in against its own user store. '+
       'What you get afterwards is decided by what you do on projects, not by a role somebody typed.</p>'+
-      '<div style="display:flex;flex-direction:column;gap:10px;margin-top:18px">'+
-        signInBtn('RI2824','Sam Joshuva S','Resource &middot; 25% on 555, Sun&ndash;Thu')+
-        signInBtn('RI9001','Navamani Solairajan','Manager &middot; runs all three projects')+
+      '<div style="display:flex;flex-direction:column;gap:8px;margin-top:16px;'+
+      'max-height:340px;overflow-y:auto">'+
+        WORKERS.map(function(w){
+          var r=derivedRole(w.id).replace('ROLE_TIME_','');
+          var sub=(r==='MANAGER'?'Manager &middot; runs all three projects':
+                   'Resource &middot; '+w.alloc.map(function(a){return a.pct+'% '+a.p;}).join(', '))+
+                  ' &middot; '+(w.pattern==='SUN_THU'?'Sun&ndash;Thu':'Mon&ndash;Fri');
+          return signInBtn(w.id,w.name,sub);
+        }).join('')+
         signInBtn('ADMIN','Finance Admin','Back office &middot; Setup and Operations only')+
       '</div>'+
       '<div class="note" style="margin-top:18px"><strong>Nothing is reachable while signed out.</strong> '+
@@ -689,9 +713,7 @@ function signOut(){ signedIn=false; view.screen='main-login'; renderLogin(); }
    ============================================================ */
 RENDER['main-my-timesheet']=function(){
   var e=wkr(me()), p=period(view.pk), ws=weeksOf(view.pk), wd=ws[view.widx];
-  var mine=e.alloc.map(function(a){return a.p;});
-  if(mine.indexOf(view.proj)<0) view.proj=mine[0];
-  var pid=view.proj, w=week(e.id,pid,view.pk,view.widx), lines=entriesFor(e.id,pid,view.pk,view.widx);
+  var w=week(e.id,view.pk,view.widx), lines=entriesFor(e.id,view.pk,view.widx);
   var editable = p.editable && !w.locked && w.appr!=='Approved';
 
   var h=pageBand('main-my-timesheet');
@@ -700,9 +722,6 @@ RENDER['main-my-timesheet']=function(){
     '<div><label class="fl">Month</label>'+periodSelect('setPeriod(this.value)')+'</div>'+
     '<div><label class="fl">Select week</label><select onchange="view.widx=+this.value;go(\'main-my-timesheet\')">'+
       ws.map(function(x,i){ return '<option value="'+i+'"'+(i===view.widx?' selected':'')+'>Week '+(i+1)+' &middot; '+x.label+'</option>'; }).join('')+
-    '</select></div>'+
-    '<div><label class="fl">Project</label><select onchange="view.proj=this.value;go(\'main-my-timesheet\')">'+
-      mine.map(function(x){ return '<option value="'+x+'"'+(x===pid?' selected':'')+'>'+proj(x).name+'</option>'; }).join('')+
     '</select></div>'+
     '<div style="flex:1"></div>'+
     '<button class="btn btn-outline" onclick="showAlloc()">My allocation</button>'+
@@ -714,11 +733,11 @@ RENDER['main-my-timesheet']=function(){
 
   h+='<div class="card"><div class="card-body"><div class="hdr-grid">'+
     hdrItem('Worker', e.name+' <span class="mono muted">'+e.id+'</span>')+
-    hdrItem('Work pattern', e.pattern==='SUN_THU'
+    hdrItem('Pattern', e.pattern==='SUN_THU'
       ? 'Sunday&ndash;Thursday <span class="chip chip-info">not Mon&ndash;Fri</span>'
       : 'Monday&ndash;Friday')+
-    hdrItem('Shift standard', e.std+' hrs/day')+
-    hdrItem('Allocation here', allocPct(e.id,pid)+'%')+
+    hdrItem('Standard / day', e.std+' hrs')+
+    hdrItem('Projects', e.alloc.map(function(a){ return a.p+' '+a.pct+'%'; }).join(' &middot; '))+
     hdrItem('Employee status', subChip(w.sub))+
     hdrItem('Manager status', apprChip(w.appr))+
     hdrItem('Flags', activeFlags(w).length?flagChips(w):'<span class="muted sm">none</span>')+
@@ -729,34 +748,32 @@ RENDER['main-my-timesheet']=function(){
   if(w.locked) h+='<div class="note bad"><strong>This week is locked.</strong> The weekly cut-off passed '+
     'before it was submitted, so it defaulted from the prepopulated hours and pay is held until it is submitted.</div>';
 
-  /* the grid */
+  /* THE GRID. Project | Task (WBS) | days | Total -- project on the LINE,
+     because OC_TS_WEEK has no project and UK_OC_TSE_CELL is
+     (ts_week_id, project_id, task_id, entry_date, entry_type). One week
+     carries every project the person is on, and the day total is the sum
+     across them. A project picker in the toolbar would hide exactly that. */
   h+='<div class="card"><div class="card-hd"><h3>Week '+(view.widx+1)+' &middot; '+wd.label+'</h3>'+
-    '<span class="sm muted">'+proj(pid).name+' &middot; '+proj(pid).model+'</span></div>'+
+    '<span class="sm muted">'+lines.length+' line(s) across '+e.alloc.length+' project(s)</span></div>'+
     '<div class="card-body tight"><div class="tbl-wrap"><table class="dt"><thead><tr>'+
-    '<th>Task (WBS)</th><th>Type</th><th>Shift</th><th>Unbilled reason</th>';
+    '<th>Project</th><th>Task (WBS)</th>';
   wd.days.forEach(function(dy){
     var off=!worksOn(e.id,dy.dow);
     h+='<th class="daycol'+(off?' wknd':'')+'">'+DOW[dy.dow]+'<br><span class="muted">'+pretty(dy.d)+'</span></th>';
   });
   h+='<th class="rt">Total</th></tr></thead><tbody>';
   lines.forEach(function(ln,li){
-    var isL=!!ln.isLeave;
-    h+='<tr'+(isL?' class="leaverow"':'')+'>';
+    var isL=!!ln.isLeave, pr=proj(ln.proj);
+    h+='<tr'+(isL?' class="leaverow"':'')+'>'+
+      '<td><strong>'+pr.id+'</strong><br><span class="sm muted">'+pr.name+'</span></td>';
     if(isL){
-      h+='<td><strong>Leave</strong> <span class="muted sm">from Fusion Absence</span></td>'+
-         '<td><span class="chip chip-nb">Leave</span></td><td>&mdash;</td>'+
-         '<td class="muted sm">apportioned by allocation</td>';
+      h+='<td><span class="chip chip-nb">Leave</span> <span class="muted sm">apportioned</span></td>';
     } else {
       h+='<td><select onchange="setTask('+li+',this.value)"'+(editable?'':' disabled')+'>'+
-        proj(pid).tasks.map(function(t){ return '<option value="'+t.code+'"'+(t.code===ln.task?' selected':'')+'>'+t.code+' &middot; '+t.name+'</option>'; }).join('')+'</select></td>'+
-        '<td><select onchange="setType('+li+',this.value)"'+(editable?'':' disabled')+'>'+
-        ['Billable','Non-billable'].map(function(t){ return '<option'+(t===ln.type?' selected':'')+'>'+t+'</option>'; }).join('')+'</select></td>'+
-        '<td><select onchange="curLines()['+li+'].shift=this.value"'+(editable?'':' disabled')+'>'+
-        ['Regular','Night','Early','Split'].map(function(t){ return '<option'+(t===ln.shift?' selected':'')+'>'+t+'</option>'; }).join('')+'</select></td>'+
-        '<td>'+(ln.type==='Non-billable'
-          ? '<select onchange="curLines()['+li+'].reason=this.value"'+(editable?'':' disabled')+'>'+
-            UNBILLED_REASONS.map(function(r){ return '<option'+(r===ln.reason?' selected':'')+'>'+r+'</option>'; }).join('')+'</select>'
-          : '<span class="muted sm">&mdash;</span>')+'</td>';
+        pr.tasks.map(function(t){ return '<option value="'+t.code+'"'+(t.code===ln.task?' selected':'')+'>'+t.code+' &middot; '+t.name+'</option>'; }).join('')+
+        '</select>'+
+        '<div class="sm muted" style="margin-top:3px">'+ln.type+
+        (ln.reason?' &middot; '+ln.reason:'')+'</div></td>';
     }
     ln.hrs.forEach(function(v,di){
       var off=!worksOn(e.id,wd.days[di].dow);
@@ -765,15 +782,18 @@ RENDER['main-my-timesheet']=function(){
     });
     h+='<td class="rt"><strong>'+f2(lineTotal(ln))+'</strong></td></tr>';
   });
-  h+='</tbody><tfoot><tr><td colspan="4">Day total</td>';
+  h+='</tbody><tfoot><tr><td colspan="2">Day total</td>';
   var g=0;
   wd.days.forEach(function(dy,di){ var t=dayTotal(lines,di); g+=t;
-    h+='<td class="daycol rt'+(!worksOn(e.id,dy.dow)?' wknd':'')+'">'+f2(t)+'</td>'; });
-  h+='<td class="rt">'+f2(g)+'</td></tr></tfoot></table></div></div>';
-  if(editable) h+='<div class="card-hd" style="border-top:1px solid var(--rw-border-2);border-bottom:none">'+
-    '<button class="btn btn-outline btn-sm" onclick="addLine()">Add line</button>'+
-    '<span class="sm muted">Quarter hours only. A day may not exceed your '+e.std+'-hour shift.</span></div>';
-  h+='</div>';
+    var over=t>e.std;
+    h+='<td class="daycol rt'+(!worksOn(e.id,dy.dow)?' wknd':'')+'"'+
+      (over?' style="color:var(--rw-danger);font-weight:700"':'')+'>'+f2(t)+'</td>'; });
+  h+='<td class="rt">'+f2(g)+'</td></tr></tfoot></table></div></div></div>';
+
+  if(e.alloc.length>1) h+='<div class="note"><strong>One day, two projects.</strong> '+
+    e.name.split(' ')[0]+' is '+e.alloc.map(function(a){return a.pct+'% on '+a.p;}).join(' and ')+
+    ', so the day arrives split and the Day total is the sum of the lines &mdash; not one project at a time. '+
+    'That is the grain of the module: the week belongs to the person, the project belongs to the line.</div>';
 
   if(e.pattern==='SUN_THU') h+='<div class="note"><strong>This person works Sunday to Thursday.</strong> '+
     'Friday is greyed out and Sunday is not. That is their HCM work pattern, confirmed intentional &mdash; '+
@@ -783,8 +803,8 @@ RENDER['main-my-timesheet']=function(){
   h+='</div>';
   document.getElementById('mainArea').innerHTML=h;
 };
-function curLines(){ return entriesFor(me(),view.proj,view.pk,view.widx); }
-function curWeek(){ return week(me(),view.proj,view.pk,view.widx); }
+function curLines(){ return entriesFor(me(),view.pk,view.widx); }
+function curWeek(){ return week(me(),view.pk,view.widx); }
 function setHrs(li,di,v){
   var e=wkr(me()), ls=curLines(), n=num(v); if(n<0) n=0;
   var q=Math.round(n*4)/4;
@@ -793,7 +813,8 @@ function setHrs(li,di,v){
   var tot=dayTotal(ls,di);
   if(tot>e.std){
     ls[li].hrs[di]=prev;
-    toast('A day cannot hold more than the '+f2(e.std)+" hours of this person's shift. That day would come to "+f2(tot)+'.',true);
+    toast('A day cannot hold more than the '+f2(e.std)+" hours of this person's shift. "+
+          'Across all lines that day would come to '+f2(tot)+'.',true);
   } else {
     var w=curWeek();
     if(w.appr==='Approved'||w.appr==='Rejected'){
@@ -804,15 +825,6 @@ function setHrs(li,di,v){
   go('main-my-timesheet');
 }
 function setTask(li,v){ curLines()[li].task=v; go('main-my-timesheet'); }
-function setType(li,v){ var l=curLines()[li]; l.type=v;
-  if(v==='Billable') l.reason=''; else if(!l.reason) l.reason=UNBILLED_REASONS[0];
-  go('main-my-timesheet'); }
-function addLine(){
-  var p=proj(view.proj);
-  curWeek().entries.push({task:p.tasks[0].code,type:'Billable',reason:'',shift:'Regular',
-    hrs:weeksOf(view.pk)[view.widx].days.map(function(){return 0;})});
-  go('main-my-timesheet');
-}
 function saveDraft(){ toast('Draft saved. You can keep editing until the weekly cut-off.'); }
 function submitWeek(){
   var w=curWeek(), e=wkr(me()), wd=weeksOf(view.pk)[view.widx], ls=curLines(), tot=0;
@@ -822,8 +834,9 @@ function submitWeek(){
   var late=TODAY>cut;
   var r=applyEvent(w,'Submit',{actor:e.name,late:late});
   if(!r.ok){ toast(r.err,true); return; }
-  toast(late ? 'Submitted after the weekly cut-off, so the week carries a Late submission flag. The week itself is still Submitted.'
-             : 'Week submitted. It is now with '+wkr(proj(view.proj).mgr).name+' for approval.');
+  var projs={}; ls.forEach(function(l){ projs[l.proj]=1; });
+  toast((late?'Submitted after the weekly cut-off, so the week carries a Late submission flag. ':'Week submitted. ')+
+        'One week, '+Object.keys(projs).length+' project(s), now with the approving manager.');
   go('main-my-timesheet');
 }
 function withdraw(){
@@ -859,7 +872,7 @@ function mgrProjects(){ return PROJECTS.filter(function(p){ return p.mgr===SELF.
 function projStatus(pid){
   var team=empsOn(pid), ws=weeksOf(view.pk), pend=0, rej=0, n=0;
   team.forEach(function(e){ ws.forEach(function(x,i){
-    var w=week(e.id,pid,view.pk,i); n++;
+    var w=week(e.id,view.pk,i); n++;
     if(w.appr==='Rejected') rej++;
     else if(w.appr!=='Approved') pend++;
   }); });
@@ -889,7 +902,7 @@ RENDER['main-team-approvals']=function(){
     '<th>Status</th><th></th></tr></thead><tbody>';
   mgrProjects().forEach(function(p){
     var team=empsOn(p.id), b=0,n=0,l=0;
-    team.forEach(function(e){ var t=monthTotals(e.id,p.id,view.pk); b+=t.b; n+=t.n; l+=t.l; });
+    team.forEach(function(e){ var t=monthTotals(e.id,view.pk,p.id); b+=t.b; n+=t.n; l+=t.l; });
     var st=projStatus(p.id);
     var cls={Confirmed:'chip-approved',Approved:'chip-approved',
              Pending:'chip-submitted',Rejected:'chip-rejected'}[st];
@@ -932,7 +945,7 @@ function showCutoffs(){
    ============================================================ */
 function empMonthStatus(eid,pid){
   var ws=weeksOf(view.pk), ap=0, rj=0;
-  ws.forEach(function(x,i){ var w=week(eid,pid,view.pk,i);
+  ws.forEach(function(x,i){ var w=week(eid,view.pk,i);
     if(w.appr==='Approved') ap++; else if(w.appr==='Rejected') rj++; });
   if(rj) return 'Rejected';
   return ap===ws.length ? 'Approved' : 'Pending';
@@ -982,9 +995,9 @@ RENDER['main-view-timesheet']=function(){
     '<th>Cap</th><th>Weeks</th><th>Month status</th><th></th></tr></thead><tbody>';
   var TB=0,TN=0,TL=0;
   team.forEach(function(e){
-    var t=monthTotals(e.id,pid,view.pk); TB+=t.b; TN+=t.n; TL+=t.l;
+    var t=monthTotals(e.id,view.pk,pid); TB+=t.b; TN+=t.n; TL+=t.l;
     var ms=empMonthStatus(e.id,pid), ap=0;
-    ws.forEach(function(x,i){ if(week(e.id,pid,view.pk,i).appr==='Approved') ap++; });
+    ws.forEach(function(x,i){ if(week(e.id,view.pk,i).appr==='Approved') ap++; });
     var cls={Approved:'chip-approved',Pending:'chip-submitted',Rejected:'chip-rejected'}[ms];
     var checked=view.sel.indexOf(e.id)>=0;
     h+='<tr><td><input type="checkbox"'+(checked?' checked':'')+' onchange="toggleSel(\''+e.id+'\')"></td>'+
@@ -1030,7 +1043,7 @@ function bulkApprove(){
   var pid=view.mgrProj, ws=weeksOf(view.pk), ok=0, fail=0, self=0;
   view.sel.forEach(function(eid){
     ws.forEach(function(x,i){
-      var w=week(eid,pid,view.pk,i);
+      var w=week(eid,view.pk,i);
       var r=applyEvent(w,'Approve',{actor:wkr(SELF.mgr).name});
       if(r.ok){ ok++; if(eid===SELF.mgr) self++; } else fail++;
     });
@@ -1058,7 +1071,7 @@ function bulkRejectGo(){
   var reason=document.getElementById('rjR').value, txt=document.getElementById('rjT').value;
   var pid=view.mgrProj, ws=weeksOf(view.pk), ok=0;
   view.sel.forEach(function(eid){ ws.forEach(function(x,i){
-    if(applyEvent(week(eid,pid,view.pk,i),'Reject',
+    if(applyEvent(week(eid,view.pk,i),'Reject',
         {actor:wkr(SELF.mgr).name,reason:reason+(txt?' — '+txt:'')}).ok) ok++; }); });
   view.sel=[]; closeModal();
   toast(ok+' week(s) rejected and reopened for the employee.');
@@ -1100,8 +1113,10 @@ RENDER['main-approval-detail']=function(){
     '<th class="rt">Leave</th><th class="rt">Billing loss</th><th class="rt">Total</th><th class="rt">Days</th>'+
     '<th>Employee status</th><th>Manager status</th><th></th></tr></thead><tbody>';
   ws.forEach(function(x,i){
-    var w=week(e.id,pid,view.pk,i), t=weekTotals(e.id,pid,view.pk,i);
-    var days=0; entriesFor(e.id,pid,view.pk,i)[0].hrs.forEach(function(v){ if(num(v)>0) days++; });
+    var w=week(e.id,view.pk,i), t=weekTotals(e.id,view.pk,i,pid);
+    var dset={}; linesFor(e.id,view.pk,i,pid).forEach(function(l){
+      l.hrs.forEach(function(v,di){ if(num(v)>0) dset[di]=1; }); });
+    var days=Object.keys(dset).length;
     var loss=0;
     LLC.forEach(function(r){ if(r.proj===pid && r.emp===e.id &&
       r.date>=iso(x.start) && r.date<=iso(x.end)) loss+=r.loss; });
@@ -1119,7 +1134,7 @@ RENDER['main-approval-detail']=function(){
 
   /* --- dates within one week --- */
   if(view.mgrWeek!==null){
-    var wi=view.mgrWeek, wd=ws[wi], w=week(e.id,pid,view.pk,wi), lines=entriesFor(e.id,pid,view.pk,wi);
+    var wi=view.mgrWeek, wd=ws[wi], w=week(e.id,view.pk,wi), lines=linesFor(e.id,view.pk,wi,pid);
     h+='<div class="card"><div class="card-hd"><h3>Dates &middot; Week '+(wi+1)+' &middot; '+wd.label+'</h3>'+
       '<button class="btn btn-ghost btn-sm" onclick="view.mgrWeek=null;go(\'main-approval-detail\')">All weeks</button>'+
       '</div><div class="card-body tight"><div class="tbl-wrap"><table class="dt"><thead><tr>'+
@@ -1147,7 +1162,7 @@ RENDER['main-approval-detail']=function(){
 
   /* --- version trail --- */
   var trail=[];
-  ws.forEach(function(x,i){ week(e.id,pid,view.pk,i).versions.forEach(function(v){
+  ws.forEach(function(x,i){ week(e.id,view.pk,i).versions.forEach(function(v){
     trail.push({wk:i+1,v:v}); }); });
   h+='<div class="card"><div class="card-hd"><h3>History</h3>'+
     '<span class="sm muted">every event, numbered and append-only</span></div><div class="card-body tight">';
@@ -1178,13 +1193,13 @@ function openWk(i){ view.mgrWeek=i; go('main-approval-detail'); }
 function selAllWeeks(){
   var pid=view.mgrProj, e=view.mgrEmp;
   view.sel=weeksOf(view.pk).map(function(x,i){return i;})
-    .filter(function(i){ return week(e,pid,view.pk,i).appr==='Pending'; });
+    .filter(function(i){ return week(e,view.pk,i).appr==='Pending'; });
   go('main-approval-detail');
 }
 function eachSelWeek(fn){
   var pid=view.mgrProj, e=view.mgrEmp, ok=0, err=null;
   view.sel.forEach(function(i){
-    var r=fn(week(e,pid,view.pk,i));
+    var r=fn(week(e,view.pk,i));
     if(r.ok) ok++; else err=r.err;
   });
   view.sel=[];
@@ -1244,7 +1259,7 @@ function confirmDialog(){
   var pid=view.mgrProj, p=proj(pid), ws=weeksOf(view.pk), team=empsOn(pid);
   var pend=0,total=0,defd=0;
   team.forEach(function(e){ ws.forEach(function(x,i){
-    var w=week(e.id,pid,view.pk,i); total++;
+    var w=week(e.id,view.pk,i); total++;
     if(w.appr!=='Approved') pend++;
     if(w.sub==='Defaulted') defd++; }); });
   var canNormal=(pend===0);
@@ -1288,14 +1303,14 @@ function confirmGo(){
   var cid=seqConfirm++, rows=0, hours=0, batch='O2CTIME-'+pid+'-'+pk;
   team.forEach(function(e){
     ws.forEach(function(x,wi){
-      var w=week(e.id,pid,pk,wi);
+      var w=week(e.id,pk,wi);
       /* THE PAYLOAD MIRRORS THE GATE. It filtered the entry's day status
          while the gate read the week's approval status, and the two had
          drifted: the month confirmed with zero rows and reported Success.
          Fixed 21-Aug — both now read the week. */
       var take=(w.appr==='Approved') || (type==='Advance closure' && w.appr==='Pending');
       if(!take) return;
-      entriesFor(e.id,pid,pk,wi).forEach(function(ln){
+      linesFor(e.id,pk,wi,pid).forEach(function(ln){
         ln.hrs.forEach(function(v,di){
           if(num(v)===0) return;
           var dy=x.days[di];
@@ -1670,8 +1685,8 @@ function seed(){
      approved by the manager -- the real state on the pod on 21-Aug. */
   weeksOf('JUL-2026').forEach(function(x,i){
     empsOn('555').forEach(function(e){
-      var w=week(e.id,'555','JUL-2026',i);
-      entriesFor(e.id,'555','JUL-2026',i);
+      var w=week(e.id,'JUL-2026',i);
+      entriesFor(e.id,'JUL-2026',i);
       applyEvent(w,'WeeklyCutoff',{actor:'SCHEDULER'});
       applyEvent(w,'Approve',{actor:'Navamani Solairajan'});
     });
@@ -1681,8 +1696,8 @@ function seed(){
   var cur=currentWeekIdx('AUG-2026');
   weeksOf('AUG-2026').forEach(function(x,i){
     empsOn('555').forEach(function(e){
-      var w=week(e.id,'555','AUG-2026',i);
-      entriesFor(e.id,'555','AUG-2026',i);
+      var w=week(e.id,'AUG-2026',i);
+      entriesFor(e.id,'AUG-2026',i);
       if(i<cur-1){ applyEvent(w,'Submit',{actor:e.name});
                    applyEvent(w,'Approve',{actor:'Navamani Solairajan'}); }
       else if(i===cur-1){
@@ -1693,7 +1708,6 @@ function seed(){
     });
   });
   /* Sam is on 444 too, so his own screen has something to switch to. */
-  weeksOf('AUG-2026').forEach(function(x,i){ entriesFor('RI2824','444','AUG-2026',i); });
 }
 seed();
 renderLogin();
