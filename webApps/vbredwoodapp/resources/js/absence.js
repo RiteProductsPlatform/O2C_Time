@@ -31,62 +31,46 @@ define([], () => {
   return {
 
     /**
-     * The Fusion `q` for an absence read. NO SPACES, AND NO DATE PREDICATE.
+     * The Fusion `q` for one person's absences. ONE PERSON, NO SPACES.
      *
-     * THREE MEASUREMENTS, TWO PATHS, AND THEY DISAGREE BECAUSE THEY ARE NOT THE
-     * SAME REQUEST.
+     * THERE IS NO BATCHED FORM THAT SURVIVES THE PROXY. The browser reaches
+     * Fusion through the VB `fa` backend, and a `q` containing a SPACE does not
+     * come out the other side intact -- measured three ways now:
      *
-     * The browser reaches Fusion through the VB `fa` backend, which is a
-     * server-side proxy. Direct curl does not. Measured 20-Aug against the same
-     * pod on the same day:
+     *                                            direct   via the VB proxy
+     *   personId=<id>;endDate>='…';…               400          200 (unfiltered)
+     *   personId=<id> and endDate>='…'             200          500
+     *   PersonNumber IN('a','b',…)                 200          200, matches nobody
      *
-     *                                          direct   via the VB proxy
-     *   personId=<id>;endDate>='…';…             400          200
-     *   personId=<id> and endDate>='…' and …     200          500
+     * That third row is this fix. `IN(...)` was written without the space after
+     * IN and still carries the one BEFORE it -- `PersonNumber IN(` -- which is
+     * all it takes. It came back 200 and matched none of the seven people on
+     * the project, so the Monthly Summary reported "none of this project's 7
+     * colleagues could be matched to a person there" while every one of them
+     * exists in Fusion.
      *
-     * Neither column is wrong. A `q` containing a SPACE does not survive the
-     * proxy, and a `q` containing a `;` does not survive Fusion's ViewCriteria
-     * parser -- `;` is a matrix-parameter separator, so the proxy path almost
-     * certainly delivers only `q=personId=<id>` and Fusion answers 200 with the
-     * person's ENTIRE absence history. That 200 is why the `;` version looked
-     * healthy for weeks: absenceToRows clamps to the window afterwards, so the
-     * screen was right while the query was not.
+     * Every space-free predicate works on both paths, and the only space-free
+     * predicate is a single equality. So the roster is read ONE PERSON AT A
+     * TIME. That is 2 Fusion calls each rather than 2 for the whole team, which
+     * is the price of the proxy and not a design choice; PAGE-001 has always
+     * paid it for one person.
      *
-     * A comment here asserted the second row as a universal fact on 12-Aug and
-     * I overwrote it with the first on 20-Aug. Both of us measured one path and
-     * wrote it down as the truth.
-     *
-     * SO THE PREDICATE FILTERS BY PERSON ONLY, and by a form with no space in
-     * it -- `IN(a,b)`, not `IN (a,b)`. The window is applied in absenceToRows,
-     * which was already clamping every generated day to it, so nothing about
-     * the result changes. The date predicate was an optimisation; it was never
-     * what made the answer correct.
-     *
-     * The cost is that Fusion returns the whole history for the people asked
-     * about. That is fine for a person or a project team, and wasTruncated()
-     * below is what keeps it honest when it is not.
+     * The obvious way to halve it is open point S-12: OC_TIME_WORKER does not
+     * store the Fusion PersonId, so every read pays for a lookup first. Store
+     * it and the worker call disappears.
      */
-    absenceQuery(personIds) {
-      const ids = (Array.isArray(personIds) ? personIds : [personIds])
-        .filter((x) => x !== undefined && x !== null && x !== '');
-      if (!ids.length) { return null; }
-
-      return ids.length === 1
-        ? 'personId=' + ids[0]
-        : 'personId IN(' + ids.join(',') + ')';
+    absenceQuery(personId) {
+      if (personId === undefined || personId === null || personId === '') {
+        return null;
+      }
+      return 'personId=' + personId;
     },
 
-    /** The `q` that resolves employee numbers to Fusion PersonIds in one call. */
-    workerQuery(employeeIds) {
-      const ids = (Array.isArray(employeeIds) ? employeeIds : [employeeIds])
-        .filter(Boolean);
-      if (!ids.length) { return null; }
-      // IN(...), not IN (...) -- same no-space rule as above.
-      return ids.length === 1
-        ? "PersonNumber='" + ids[0] + "'"
-        : 'PersonNumber IN(' + ids.map((e) => "'" + e + "'").join(',') + ')';
+    /** One employee number to one PersonId. Space-free, for the reason above. */
+    workerQuery(employeeId) {
+      if (!employeeId) { return null; }
+      return "PersonNumber='" + employeeId + "'";
     },
-
     /**
      * Did Fusion have more rows than it gave us?
      *
@@ -228,13 +212,13 @@ define([], () => {
      * Fusion, correct on the employee's timesheet, stale on every screen the
      * manager works from.
      *
-     * Two Fusion calls regardless of headcount -- both resources take IN lists,
-     * written without the space. The per-person POST is one each, and it goes
-     * for EVERYBODY on the roster including those Fusion returned nothing for:
-     * employeeId + windowFrom + windowTo makes it a claim rather than a list,
-     * and the handler deletes what it was not sent inside that window. Skip the
-     * empty ones and a withdrawal never retracts, because "no leave" and "we
-     * did not ask" would look the same.
+     * TWO FUSION CALLS PER PERSON, not two for the team. An IN list needs a
+     * space and no space survives the proxy -- see absenceQuery, where the
+     * measurements are. It goes for EVERYBODY on the roster including those
+     * Fusion returned nothing for: employeeId + windowFrom + windowTo makes the
+     * post a claim rather than a list, and the handler deletes what it was not
+     * sent inside that window. Skip the empty ones and a withdrawal never
+     * retracts, because "no leave" and "we did not ask" would look the same.
      *
      * Returns {pulled, people, note}. `note` is non-null when the live half
      * could not complete, and the caller decides how loudly to say so -- on
@@ -278,84 +262,79 @@ define([], () => {
 
       const from = people[0].window_from;
       const to   = people[0].window_to;
-      const empIds = people.map((p) => p.employee_id).filter(Boolean);
-
-      // PersonNumber -> PersonId, one call
-      const who = await Actions.callRest(context, {
-        endpoint: 'fa_hcm/getWorkers',
-        uriParams: {
-          q: this.workerQuery(empIds),
-          limit: 500, onlyData: true, fields: 'PersonNumber,PersonId',
-        },
-      });
-      // A FAILED CALL AND AN EMPTY RESULT ARE DIFFERENT THINGS: collapsing them
-      // reports a stale backend credential as "no such person in Fusion".
-      if (!who.ok) {
-        return { pulled: 0, people: people.length,
-          note: 'Fusion refused the worker lookup (HTTP ' + who.status + ').' };
-      }
-
-      const byNumber = {};
-      ((who.body && who.body.items) || []).forEach((w) => {
-        byNumber[String(w.PersonNumber)] = w.PersonId;
-      });
-
-      const personIds = empIds.map((e) => byNumber[e]).filter(Boolean);
-      if (!personIds.length) {
-        return { pulled: 0, people: people.length,
-          note: 'Fusion answered, but none of this project\'s ' + empIds.length
-            + ' colleagues could be matched to a person there.' };
-      }
-
-      // the live read, one call, by person only -- see absenceQuery
-      const res = await Actions.callRest(context, {
-        endpoint: 'fa_hcm/getAbsences',
-        uriParams: {
-          q: this.absenceQuery(personIds),
-          limit: 1000, onlyData: true,
-          fields: this.ABSENCE_FIELDS,
-        },
-      });
-
-      if (!res.ok) {
-        return { pulled: 0, people: people.length,
-          note: 'Fusion refused the absence read (HTTP ' + res.status + ').' };
-      }
-
-      // A SHORT READ IS WORSE THAN NO READ. The windowed claim would delete
-      // whatever fell off the end, for the whole team at once.
-      if (this.wasTruncated(res.body)) {
-        return { pulled: 0, people: people.length,
-          note: 'Fusion returned only part of this team\'s absence history, so '
-            + 'nothing was refreshed rather than risk removing leave that is '
-            + 'still live. The read limit needs raising.' };
-      }
-
-      // personId comes back a number and the map is keyed by string.
-      const byPerson = {};
-      ((res.body && res.body.items) || []).forEach((x) => {
-        const k = String(x.personId);
-        (byPerson[k] = byPerson[k] || []).push(x);
-      });
 
       let sent = 0;
       let failed = 0;
+      let unmatched = 0;
 
-      for (const p of people) {
-        const pid = byNumber[p.employee_id];
-        if (!pid) { continue; }          // unmatched: claim nothing about them
+      // ONE PERSON AT A TIME. See absenceQuery: no batched predicate survives
+      // the VB proxy, because every one of them needs a space.
+      for (const person of people) {
+        const empId = person.employee_id;
+        if (!empId) { continue; }
+
+        // PersonNumber -> PersonId
+        const who = await Actions.callRest(context, {
+          endpoint: 'fa_hcm/getWorkers',
+          uriParams: {
+            q: this.workerQuery(empId),
+            limit: 1, onlyData: true, fields: 'PersonNumber,PersonId',
+          },
+        });
+
+        // A FAILED CALL AND AN EMPTY RESULT ARE DIFFERENT THINGS. Collapsing
+        // them reports a stale backend credential as "no such person".
+        if (!who.ok) {
+          return { pulled: sent, people: people.length,
+            note: 'Fusion refused the worker lookup for ' + empId
+              + ' (HTTP ' + who.status + '). Leave was not fully refreshed.' };
+        }
+
+        const found = (who.body && who.body.items) || [];
+        if (!found.length) { unmatched += 1; continue; }
+        const personId = found[0].PersonId;
+
+        // the live read for this person
+        const res = await Actions.callRest(context, {
+          endpoint: 'fa_hcm/getAbsences',
+          uriParams: {
+            q: this.absenceQuery(personId),
+            limit: 500, onlyData: true,
+            fields: this.ABSENCE_FIELDS,
+          },
+        });
+
+        if (!res.ok) {
+          return { pulled: sent, people: people.length,
+            note: 'Fusion refused the absence read for ' + empId
+              + ' (HTTP ' + res.status + '). Leave was not fully refreshed.' };
+        }
+
+        // A SHORT READ MUST NOT BE POSTED: the windowed claim below would
+        // delete whatever fell off the end, which is indistinguishable from a
+        // cancellation.
+        if (this.wasTruncated(res.body)) {
+          return { pulled: sent, people: people.length,
+            note: 'Fusion returned only part of ' + empId + "'s absence history, "
+              + 'so nothing further was refreshed rather than risk removing '
+              + 'leave that is still live.' };
+        }
 
         const rows = this.absenceToRows(
-          byPerson[String(pid)] || [], p.employee_id, from, to,
-          p.std_hours_per_day);
+          (res.body && res.body.items) || [], empId, from, to,
+          person.std_hours_per_day);
 
+        // POSTED EVEN WHEN EMPTY. employeeId + windowFrom + windowTo makes this
+        // a claim rather than a list, and the handler deletes what it was not
+        // sent inside that window. Skip the empty ones and a withdrawal never
+        // retracts, because "no leave" and "we did not ask" would look alike.
         const sync = await Actions.callRest(context, {
           endpoint: 'oc_time/syncAbsence',
           body: {
             actor: $application.variables.currentEmail || 'VBCS_USER',
             final: 'Y',
             traceId: $application.variables.traceId,
-            employeeId: p.employee_id,
+            employeeId: empId,
             windowFrom: from,
             windowTo: to,
             rows: rows,
@@ -365,14 +344,20 @@ define([], () => {
         if (sync.ok) { sent += 1; } else { failed += 1; }
       }
 
-      return {
-        pulled: sent,
-        people: people.length,
-        note: failed
-          ? (sent + ' of ' + (sent + failed) + ' colleagues were refreshed; '
-             + 'the rest could not be saved.')
-          : null,
-      };
+      let note = null;
+      if (failed) {
+        note = sent + ' of ' + (sent + failed)
+             + ' colleagues were refreshed; the rest could not be saved.';
+      } else if (unmatched === people.length) {
+        note = 'Fusion answered, but none of this project\'s ' + people.length
+             + ' colleagues could be matched to a person there.';
+      } else if (unmatched) {
+        note = unmatched + ' of ' + people.length
+             + ' colleagues could not be matched to a person in Fusion; the '
+             + 'rest were refreshed.';
+      }
+
+      return { pulled: sent, people: people.length, note: note };
     },
 
     /** The field list both reads need. absenceStatusCd is not optional — see above. */
