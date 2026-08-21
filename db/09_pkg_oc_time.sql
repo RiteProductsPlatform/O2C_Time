@@ -853,11 +853,11 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
     v_task     NUMBER;
     -- Which billability of task this allocation should be seeded onto.
     v_want     oc_time_task.billable_type%TYPE;
-    -- Absence apportionment (RULE-008). See the block that uses them.
+    -- Absence handling (RULE-008). V_PCT_TOT and V_ALLOC_N survive only as the
+    -- "is this person allocated anywhere on that date" guard; the SHARE itself
+    -- comes from V_OC_TS_LEAVE_SHARE and is not computed here any more.
     v_pct_tot  NUMBER;
     v_alloc_n  NUMBER;
-    v_seq      NUMBER;
-    v_left     NUMBER;
     v_share    NUMBER;
   BEGIN
     v_job := start_job('Monthly Population', 'MonthlyPopulation',
@@ -1075,22 +1075,27 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
       -- cover the absence date -- not merely Active today, since somebody who
       -- joined 555 on the 17th did not owe it leave on the 10th.
       --
-      -- THE TOTAL IS NEVER ASSUMED TO BE 8, and it is not assumed to be 100%
-      -- either. The hours come from OC_TIME_ABSENCE, which the loader derives
-      -- from the worker's own STD_HOURS_PER_DAY -- several people here are on
-      -- 9-hour days and some patterns run 7.5 or 10. Percentages are divided by
-      -- their own SUM rather than by 100, so a person allocated 50% in total
-      -- still has their whole absence accounted for instead of half of it
-      -- vanishing.
+      -- THE SHARE IS READ, NOT RESTATED. This block used to work it out here:
+      -- percentages divided by their own SUM, and the rounding residue handed
+      -- to the last allocation so the shares summed exactly to the day. Both
+      -- were argued for at length in this comment and both were wrong, in the
+      -- same two ways db/94 corrected in V_OC_TS_LEAVE_SHARE.
       --
-      -- ROUNDING GOES TO THE LAST ROW ON PURPOSE. Three shares of 7.5h at
-      -- 33.33% round to 2.50 each and sum to 7.50 by luck; 7.5h at 40/30/30
-      -- rounds to 3.00/2.25/2.25 and sums to 7.50, but 10h at 33/33/34 does
-      -- not. HOURS is NUMBER(6,2), so a residue of a cent-hour would leave the
-      -- leave total short of the standard day -- and the "zero out the seeded
-      -- work" step below tests absence >= standard, so a 0.01 shortfall would
-      -- silently leave 8 hours of work sitting beside 7.99 of leave. The last
-      -- allocation takes the remainder and the sum is exact by construction.
+      -- Dividing by the SUM meant a 50%-allocated person had their whole
+      -- absence charged to their one project -- Santosh Kumar Kanala's day off
+      -- cost 555 eight hours when 555 only has four hours of him. Handing the
+      -- residue to the last row meant a person with ONE allocation took the
+      -- entire day through that branch regardless of the divisor, so fixing the
+      -- division alone would not have moved the number at all.
+      --
+      -- The copy is what made this urgent rather than merely wrong.
+      -- refreshAbsenceChain calls runPopulation after every live absence sync,
+      -- so opening a timesheet put the old figure straight back: 20-Aug read
+      -- 4.00 in db/94's verification and 8.00 again minutes later.
+      --
+      -- db/79 introduced the view saying "every consumer reads this instead of
+      -- restating the rule; that is the whole point of it existing". This
+      -- consumer never did.
       --
       -- Aggregated per DAY, not per absence row. Two absence types on one date
       -- are two OC_TIME_ABSENCE rows (UK is employee+date+type) but only one
@@ -1121,24 +1126,17 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
         IF v_pct_tot <= 0 OR v_alloc_n = 0 THEN CONTINUE; END IF;
 
         v_week := ensure_week(ab.employee_id, ab.absence_date, p_actor);
-        v_left := ab.absence_hours;
-        v_seq  := 0;
 
-        FOR al IN (SELECT al.project_id, al.alloc_pct
-                     FROM oc_time_allocation al
-                    WHERE al.employee_id = ab.employee_id
-                      AND al.status      = 'Active'
-                      AND ab.absence_date BETWEEN al.start_date
-                                          AND NVL(al.end_date, ab.absence_date)
-                    ORDER BY al.alloc_pct DESC, al.project_id)
+        -- One row per project, at the share the view says. A project whose
+        -- share rounds away to nothing is simply not returned, and the DELETE
+        -- below then clears any leave row standing behind it.
+        FOR al IN (SELECT ls.project_id, ls.share_hours
+                     FROM v_oc_ts_leave_share ls
+                    WHERE ls.employee_id  = ab.employee_id
+                      AND ls.absence_date = ab.absence_date
+                    ORDER BY ls.project_id)
         LOOP
-          v_seq := v_seq + 1;
-          IF v_seq = v_alloc_n THEN
-            v_share := v_left;                       -- the remainder, exactly
-          ELSE
-            v_share := ROUND(ab.absence_hours * al.alloc_pct / v_pct_tot, 2);
-            v_left  := v_left - v_share;
-          END IF;
+          v_share := al.share_hours;
 
         MERGE INTO oc_ts_entry e
         USING (SELECT v_week AS ts_week_id, al.project_id AS project_id,
