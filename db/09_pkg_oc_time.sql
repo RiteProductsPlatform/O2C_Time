@@ -528,7 +528,15 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
     -- LAYER is selected too, because what follows has to know whether the
     -- answer came from SHIFT or from something underneath it.
     BEGIN
-      SELECT layer, shift_code, NVL(std_hours, v_std), is_working_day, holiday_name
+      -- STD_HOURS IS TAKEN FROM THE SHIFT LAYER ONLY. Decided 21-Aug: "if shift
+      -- is there take shift hours, if shift is not there then default 8". A
+      -- lower layer still decides whether the day is WORKING -- public holidays
+      -- live on CORPORATE -- but it no longer answers how long the day is, so a
+      -- person without a roster is measured against their own standard rather
+      -- than their country's.
+      SELECT layer, shift_code,
+             CASE WHEN layer = 'SHIFT' THEN NVL(std_hours, v_std) ELSE v_std END,
+             is_working_day, holiday_name
         INTO v_layer, o_shift_code, o_std_hours, o_is_working, o_holiday_name
         FROM (SELECT c.layer, c.shift_code, c.std_hours, c.is_working_day,
                      c.holiday_name
@@ -583,7 +591,18 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
            AND c.scope_key = p_employee_id
            AND c.cal_date BETWEEN TRUNC(p_date) - 7 AND TRUNC(p_date) + 7;
 
-        IF v_rostered > 0 THEN
+        -- DENSE, not merely present. This read v_rostered > 0, so ONE stray
+        -- shift row made the whole fortnight around it non-working wherever the
+        -- feed was silent. Measured 21-Aug: four people on 555 had exactly two
+        -- July shift rows, 30 and 31 July, and lost 23-29 July to this -- about
+        -- 130 hours that never reached accrual, while a person with NO shift
+        -- rows at all would correctly have got the full month from CORPORATE.
+        --
+        -- A real weekly roster puts ten or more rows in a 15-day window. Five is
+        -- comfortably below that and far above the two that caused the loss, so
+        -- a genuine Sunday-to-Thursday roster still hides its Fridays and a
+        -- token handful of rows no longer speaks for days it says nothing about.
+        IF v_rostered >= 5 THEN
           o_shift_code   := NULL;
           o_std_hours    := 0;
           o_is_working   := 'N';
