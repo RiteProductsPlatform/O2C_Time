@@ -535,6 +535,11 @@ PROMPT [n/m] 59_derive_roles.sql - APP_ROLE from HCM worker type and PPM manager
 
 @@100_enable_scheduled_absence_sync.sql
 
+-- 101 puts the main application's project code on the accrual interface,
+-- and confirm_month is edited in db/09 to fill it -- which is the other
+-- reason the package is recompiled below.
+@@101_accrual_summaries_with_main_project.sql
+
 -- ── OC_TIME_PKG again, and it is not belt and braces ─────────
 --
 -- The package is compiled far above, before OC_TIME_CTX (85) and

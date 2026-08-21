@@ -3371,7 +3371,13 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
     INSERT INTO xx_o2c_timesheet_accrual_if (
       period, period_year, period_month, confirm_id,
       employee_id, employee_name, worker_type,
-      project_number, project_name, customer_name, revenue_model,
+      
+      -- THEIR project code as well as Fusion's. Accrual keys on
+      -- OC_PROJECT.PROJECT_NUMBER in the main application; PROJECT_NUMBER here is
+      -- Fusion's ('555'), and handing them only that makes them name-match back to
+      -- their own project list. Copied at confirmation like every other name on
+      -- this table, so a later re-link cannot restate a closed month.
+      main_project_id, main_project_number,
       client_role,
       wbs_task, wbs_task_name, work_date,
       billable_hours, non_billable_hours, leave_hours, unbilled_reason,
@@ -3380,6 +3386,9 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
     SELECT v_pname, v_year, v_month, v_confirm,
            w.employee_id, wk.employee_name, wk.worker_type,
            p.project_number, p.project_name, p.customer_name, p.revenue_model,
+           p.main_project_id,
+           (SELECT m.project_number FROM oc_main_project_src m
+             WHERE m.project_id = p.main_project_id),
            -- The person's role on this project, copied at confirmation.
            -- A SCALAR SUBQUERY, not a join: OC_TIME_ALLOCATION can hold more
            -- than one row per person per project across date ranges, and a
@@ -3546,7 +3555,13 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
         INSERT INTO xx_o2c_timesheet_accrual_if (
           period, period_year, period_month, confirm_id,
           employee_id, employee_name, worker_type,
-          project_number, project_name, customer_name, revenue_model,
+          
+          -- THEIR project code as well as Fusion's. Accrual keys on
+          -- OC_PROJECT.PROJECT_NUMBER in the main application; PROJECT_NUMBER here is
+          -- Fusion's ('555'), and handing them only that makes them name-match back to
+          -- their own project list. Copied at confirmation like every other name on
+          -- this table, so a later re-link cannot restate a closed month.
+          main_project_id, main_project_number,
           client_role,
           wbs_task, wbs_task_name, work_date,
           billable_hours, non_billable_hours, leave_hours, unbilled_reason,
@@ -3555,6 +3570,9 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
         SELECT pe.period_name, pe.period_year, pe.period_month, c.confirm_id,
                w.employee_id, wk.employee_name, wk.worker_type,
                p.project_number, p.project_name, p.customer_name, p.revenue_model,
+               p.main_project_id,
+               (SELECT m.project_number FROM oc_main_project_src m
+                 WHERE m.project_id = p.main_project_id),
                (SELECT MAX(al.client_role) FROM oc_time_allocation al
                  WHERE al.employee_id = w.employee_id
                    AND al.project_id  = e.project_id),
