@@ -1300,5 +1300,20 @@
   "my_timesheet_correction_reason_ph": "Only needed if you change the hours",
   "@my_timesheet_correction_reason_ph": {
     "description": "Placeholder for the salary-hold correction reason"
+  },
+  "view_timesheet_confirmed_but_nothing_sent": "Confirmed, but nothing was sent to accrual",
+  "@view_timesheet_confirmed_but_nothing_sent": {
+    "type": "text",
+    "description": "Confirmed, but nothing was sent to accrual"
+  },
+  "view_timesheet_nothing_sent_detail": "No interface rows were written, so accrual has nothing to collect and would read this project-month as having no time at all. Report this rather than treating the month as done — re-confirming is safe and will backfill once the cause is fixed.",
+  "@view_timesheet_nothing_sent_detail": {
+    "type": "text",
+    "description": "No interface rows were written, so accrual has nothing to co"
+  },
+  "view_timesheet_rows_status": "rows, status:",
+  "@view_timesheet_rows_status": {
+    "type": "text",
+    "description": "rows, status:"
   }
 }

@@ -63,13 +63,29 @@
     </div>
 
     <!-- ══════════════════ Confirmation state ══════════════════ -->
-    <oj-bind-if test="[[ $variables.alreadyConfirmed ]]">
+    <!-- Confirmed AND handed over. -->
+    <oj-bind-if test="[[ $variables.alreadyConfirmed && $page.functions.accrualHandedOff($variables.accrualStatus, $variables.accrualRows) ]]">
       <div class="oj-sm-padding-3x rw-notice" role="status">
         <div class="oj-typography-body-md oj-typography-semi-bold"><oj-bind-text value="[[$application.translations.appBundle.view_timesheet_this_month_has_been_confirmed]]"></oj-bind-text></div>
         <div class="oj-typography-body-sm oj-sm-margin-1x-top">
           <oj-bind-text value="[[$application.translations.appBundle.view_timesheet_confirmed_on]]"></oj-bind-text> <oj-bind-text value="[[ $variables.confirmedOn ]]"></oj-bind-text>.
           <oj-bind-text value="[[ $variables.accrualRows ]]"></oj-bind-text>
           <oj-bind-text value="[[$application.translations.appBundle.view_timesheet_interface_rows_were_written_for_the_accrual_]]"></oj-bind-text> <oj-bind-text value="[[ $variables.accrualStatus ]]"></oj-bind-text>).
+        </div>
+      </div>
+    </oj-bind-if>
+
+    <!-- Confirmed and NOTHING WAS SENT. Deliberately not the same notice: a
+         month that confirmed but handed over an empty batch looks to accrual
+         exactly like a month nobody worked, so it must not read as done. -->
+    <oj-bind-if test="[[ $variables.alreadyConfirmed && !$page.functions.accrualHandedOff($variables.accrualStatus, $variables.accrualRows) ]]">
+      <div class="oj-sm-padding-3x rw-notice rw-notice-warning" role="alert">
+        <div class="oj-typography-body-md oj-typography-semi-bold"><oj-bind-text value="[[$application.translations.appBundle.view_timesheet_confirmed_but_nothing_sent]]"></oj-bind-text></div>
+        <div class="oj-typography-body-sm oj-sm-margin-1x-top">
+          <oj-bind-text value="[[$application.translations.appBundle.view_timesheet_confirmed_on]]"></oj-bind-text> <oj-bind-text value="[[ $variables.confirmedOn ]]"></oj-bind-text>.
+          <oj-bind-text value="[[$application.translations.appBundle.view_timesheet_nothing_sent_detail]]"></oj-bind-text>
+          (<oj-bind-text value="[[ $variables.accrualRows ]]"></oj-bind-text>
+          <oj-bind-text value="[[$application.translations.appBundle.view_timesheet_rows_status]]"></oj-bind-text> <oj-bind-text value="[[ $variables.accrualStatus ]]"></oj-bind-text>).
         </div>
       </div>
     </oj-bind-if>

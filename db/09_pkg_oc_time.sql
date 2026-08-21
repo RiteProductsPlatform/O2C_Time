@@ -3483,9 +3483,25 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
        -- always, Pending only on advance closure, Rejected never -- a rejection
        -- is a manager actively saying no, which is the opposite of the silence
        -- advance closure overrides.
-       AND (e.day_status = 'Approved'
+       -- READS THE WEEK, NOT THE DAY, AND THAT MATTERS.
+       --
+       -- This filtered e.day_status and the RULE-020 gate above filters the
+       -- week (through V_OC_TS_MONTH_SUMMARY). Measured on the live schema
+       -- 21-Aug-2026: every July week on 555 read Defaulted/Approved while the
+       -- entries inside weeks approved before the cascade existed still read
+       -- day_status = 'Pending'. The gate passed on six approved employees and
+       -- the payload matched nothing, so the month confirmed with ZERO rows and
+       -- reported Success -- which reads as "there was no time in July".
+       --
+       -- The week is the unit of approval. approve_day / reject_day are retired
+       -- and raise -20027, so DAY_STATUS cannot legitimately diverge from its
+       -- week any more, and Phase 3 removes the column. A gate and a payload
+       -- that answer the same question from different columns will disagree the
+       -- moment one of them is maintained and the other is not -- which is
+       -- exactly what happened here.
+       AND (w.approval_status = 'Approved'
             OR (p_confirm_type = 'Advance closure'
-                AND e.day_status = 'Pending'))
+                AND w.approval_status = 'Pending'))
        AND NOT EXISTS (SELECT 1 FROM xx_o2c_timesheet_accrual_if i
                         WHERE i.confirm_id   = v_confirm
                           AND i.source_ts_id = e.ts_entry_id
@@ -3564,16 +3580,34 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
       FROM xx_o2c_timesheet_accrual_if i
      WHERE i.confirm_id = v_confirm;
 
+    -- ZERO ROWS IS NOT SUCCESS, AND SAYING SO IS THE POINT.
+    --
+    -- This used to stamp 'Success' and 'Interface table filled' whatever v_ar
+    -- was. On 21-Aug-2026 a month confirmed with 0 rows and said exactly that,
+    -- and 0 rows handed to accrual is indistinguishable from "nobody worked on
+    -- this project in July" -- the failure reports itself as data.
+    --
+    -- The month IS still confirmed: the manager did their part and the
+    -- confirmation stands. It is the HAND-OFF that failed, which is precisely
+    -- why ACCRUAL_STATUS is its own column and not folded into the confirmation
+    -- (see the three-columns note in the design decisions).
     UPDATE oc_ts_month_confirm
        SET employee_count     = v_ec,
            billable_hours     = v_bh,
            non_billable_hours = v_nb,
            leave_hours        = v_lh,
            adjustment_hours   = v_ah,
-           accrual_status     = 'Success',
            accrual_rows       = v_ar,
            accrual_pushed_on  = SYSTIMESTAMP,
-           accrual_message    = 'Interface table filled; batch ' || v_batch
+           accrual_status     = CASE WHEN NVL(v_ar,0) = 0
+                                     THEN 'Failed' ELSE 'Success' END,
+           accrual_message    = CASE WHEN NVL(v_ar,0) = 0
+             THEN 'NOTHING WAS SENT. The month is confirmed but no interface '
+               || 'rows were written, so accrual has nothing to collect and '
+               || 'would read this project-month as having no time at all. '
+               || 'Re-run the confirmation once the cause is fixed; it is '
+               || 'idempotent and will backfill.'
+             ELSE 'Interface table filled; batch ' || v_batch END
      WHERE confirm_id = v_confirm;
 
     -- THERE IS NO 'CLOSED' STATUS. Confirmed 14-Aug: "there is nothing called

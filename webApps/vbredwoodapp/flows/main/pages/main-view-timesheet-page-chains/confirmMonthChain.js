@@ -58,14 +58,36 @@ define([
 
           $page.variables.accrualRows = rows;
 
-          await Actions.fireNotificationEvent(context, {
-            summary: 'Month confirmed',
-            message: 'Confirmed for all employees. ' + rows +
-                     ' rows are ready for the accrual application to collect.',
-            severity: 'confirmation',
-            type: 'confirmation',
-            displayMode: 'transient',
-          });
+          // ZERO ROWS IS NOT A CONFIRMATION MESSAGE.
+          //
+          // This said "Confirmed for all employees. 0 rows are ready for the
+          // accrual application to collect" in a green confirmation toast, and
+          // that is what a real 0-row confirmation looked like on 21-Aug-2026 --
+          // the endpoint returned 200 because the MONTH was confirmed, while the
+          // hand-off it exists to perform had written nothing. Accrual cannot
+          // tell an empty batch from a project nobody worked on, so this has to
+          // read as the failure it is even though the call succeeded.
+          if (rows === 0) {
+            await Actions.fireNotificationEvent(context, {
+              summary: 'Confirmed, but nothing was sent to accrual',
+              message: 'The month is confirmed, but no rows were written for ' +
+                       'accrual to collect. They would read this project-month ' +
+                       'as having no time at all. Do not treat this as done — ' +
+                       'report it, then re-confirm once it is fixed.',
+              severity: 'error',
+              type: 'error',
+              displayMode: 'transient',
+            });
+          } else {
+            await Actions.fireNotificationEvent(context, {
+              summary: 'Month confirmed',
+              message: 'Confirmed for all employees. ' + rows +
+                       ' rows are ready for the accrual application to collect.',
+              severity: 'confirmation',
+              type: 'confirmation',
+              displayMode: 'transient',
+            });
+          }
 
           await Actions.callChain(context, { chain: 'loadSummaryChain' });
           return;

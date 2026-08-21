@@ -49,6 +49,22 @@ define([], () => {
         .map((e) => e.employeeId);
     }
 
+    /**
+     * Did the hand-off to accrual actually happen?
+     *
+     * A month can be confirmed and still have sent nothing: the manager's part
+     * succeeds, the payload writes no rows, and accrual is handed an empty
+     * batch it cannot tell from "nobody worked on this project". That happened
+     * on 21-Aug-2026 and the screen reported it as a plain confirmation.
+     *
+     * Lives here rather than in the binding because bindings carry no logic
+     * (S1), and takes both values as arguments because a page module does not
+     * get this.$page.
+     */
+    accrualHandedOff(accrualStatus, accrualRows) {
+      return accrualStatus === 'Success' && Number(accrualRows) > 0;
+    }
+
     clearSelection(page) {
       if (page) { page.selectedKeys = []; }
     }
