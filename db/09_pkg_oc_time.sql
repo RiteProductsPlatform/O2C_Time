@@ -3476,10 +3476,17 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
       --   (SELECT MAX(al.client_role) FROM oc_time_allocation al
       --     WHERE al.employee_id = w.employee_id AND al.project_id = e.project_id)
       --
-      -- and a correlated scalar subquery containing an aggregate is a known way to
-      -- reach ORA-00979: the optimiser unnests it into a grouped view, and the
-      -- correlation columns have to survive into that GROUP BY. Confirming a month
-      -- failed on exactly that error.
+      -- Changed while hunting the ORA-00979 that stopped a month confirming, on the
+      -- theory that a correlated scalar subquery containing an aggregate is a known
+      -- way to reach it -- the optimiser unnests it into a grouped view and the
+      -- correlation columns have to survive into that GROUP BY.
+      --
+      -- ** THAT THEORY WAS WRONG AND THIS IS NOT THE FIX. ** db/105 ran the payload
+      -- INSERT both ways against the live schema: the original raised ORA-00979 and
+      -- this rewrite raised the identical error. Whatever causes it is elsewhere in
+      -- the statement. Kept only because it is equivalent and slightly cheaper --
+      -- one grouped read instead of a subquery per row -- NOT because it repaired
+      -- anything. Do not cite it as the fix.
       --
       -- Equivalent, including the null case: no matching allocation gave NULL from
       -- the scalar subquery and gives NULL from the outer join. The GROUP BY
@@ -3534,8 +3541,14 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
     --            WHERE i.confirm_id = c.confirm_id), ...
     --
     -- five aggregates inside a multi-column SET whose subquery correlates back
-    -- to the row being updated. Split because confirming a month failed with
-    -- ORA-00979 and this was the other statement that could raise it.
+    -- to the row being updated. Split while hunting the ORA-00979 that stopped a
+    -- month confirming, because this was one of the two statements that could
+    -- plausibly raise it.
+    --
+    -- ** IT WAS NOT THE ONE. ** db/105 ran this statement alone against the live
+    -- schema, in both forms, and both succeeded -- the fault is in the payload
+    -- INSERT above. Kept because the split is genuinely more legible, NOT
+    -- because it fixed anything.
     --
     -- Exactly equivalent: the UPDATE only ever touched one row, the one whose
     -- CONFIRM_ID is v_confirm, so aggregating on v_confirm directly covers the
@@ -3716,10 +3729,17 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
           --   (SELECT MAX(al.client_role) FROM oc_time_allocation al
           --     WHERE al.employee_id = w.employee_id AND al.project_id = e.project_id)
           --
-          -- and a correlated scalar subquery containing an aggregate is a known way to
-          -- reach ORA-00979: the optimiser unnests it into a grouped view, and the
-          -- correlation columns have to survive into that GROUP BY. Confirming a month
-          -- failed on exactly that error.
+          -- Changed while hunting the ORA-00979 that stopped a month confirming, on the
+          -- theory that a correlated scalar subquery containing an aggregate is a known
+          -- way to reach it -- the optimiser unnests it into a grouped view and the
+          -- correlation columns have to survive into that GROUP BY.
+          --
+          -- ** THAT THEORY WAS WRONG AND THIS IS NOT THE FIX. ** db/105 ran the payload
+          -- INSERT both ways against the live schema: the original raised ORA-00979 and
+          -- this rewrite raised the identical error. Whatever causes it is elsewhere in
+          -- the statement. Kept only because it is equivalent and slightly cheaper --
+          -- one grouped read instead of a subquery per row -- NOT because it repaired
+          -- anything. Do not cite it as the fix.
           --
           -- Equivalent, including the null case: no matching allocation gave NULL from
           -- the scalar subquery and gives NULL from the outer join. The GROUP BY
