@@ -3429,19 +3429,10 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
            p.main_project_id,
            (SELECT m.project_number FROM oc_main_project_src m
              WHERE m.project_id = p.main_project_id),
-           -- The person's role on this project, copied at confirmation.
-           --
-           -- THE MULTIPLICATION HAZARD THIS USED TO WARN ABOUT IS REAL AND IS
-           -- STILL HANDLED. OC_TIME_ALLOCATION can hold more than one row per
-           -- person per project across date ranges, so joining it RAW would
-           -- multiply every timesheet entry into the interface. That is why
-           -- this was a scalar subquery.
-           --
-           -- It is now a join onto a view that is GROUPED BY employee_id,
-           -- project_id -- exactly one row per pair, so at most one match and
-           -- nothing multiplies. Do not "simplify" alr back to a bare join on
-           -- OC_TIME_ALLOCATION; the GROUP BY is what makes it safe.
-           alr.client_role,
+           -- NULL here on purpose. CLIENT_ROLE is filled by the UPDATE that follows
+           -- this statement -- see the note there. Do not put an aggregate back into
+           -- this select list.
+           CAST(NULL AS VARCHAR2(120)),
            t.task_code, t.task_name, e.entry_date,
            CASE WHEN e.billable_type = 'Billable'     AND e.is_leave = 'N'
                 THEN e.hours ELSE 0 END,
@@ -3470,35 +3461,6 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
       JOIN oc_time_project p  ON p.project_id  = e.project_id
       JOIN oc_time_task    t  ON t.task_id     = e.task_id
       JOIN oc_time_worker  wk ON wk.employee_id = w.employee_id
-      -- CLIENT_ROLE comes from a PRE-GROUPED inline view, not a correlated scalar
-      -- subquery. It used to read
-      --
-      --   (SELECT MAX(al.client_role) FROM oc_time_allocation al
-      --     WHERE al.employee_id = w.employee_id AND al.project_id = e.project_id)
-      --
-      -- Changed while hunting the ORA-00979 that stopped a month confirming, on the
-      -- theory that a correlated scalar subquery containing an aggregate is a known
-      -- way to reach it -- the optimiser unnests it into a grouped view and the
-      -- correlation columns have to survive into that GROUP BY.
-      --
-      -- ** THAT THEORY WAS WRONG AND THIS IS NOT THE FIX. ** db/105 ran the payload
-      -- INSERT both ways against the live schema: the original raised ORA-00979 and
-      -- this rewrite raised the identical error. Whatever causes it is elsewhere in
-      -- the statement. Kept only because it is equivalent and slightly cheaper --
-      -- one grouped read instead of a subquery per row -- NOT because it repaired
-      -- anything. Do not cite it as the fix.
-      --
-      -- Equivalent, including the null case: no matching allocation gave NULL from
-      -- the scalar subquery and gives NULL from the outer join. The GROUP BY
-      -- guarantees one row per employee+project, which is the only thing the MAX()
-      -- was ever there to ensure -- one person can hold several allocation rows on
-      -- a project and the annexure wants a single role.
-      LEFT JOIN (SELECT employee_id, project_id,
-                        MAX(client_role) AS client_role
-                   FROM oc_time_allocation
-                  GROUP BY employee_id, project_id) alr
-             ON alr.employee_id = w.employee_id
-            AND alr.project_id  = e.project_id
      WHERE w.period_id  = p_period_id
        AND e.project_id = p_project_id
        AND e.hours     <> 0
@@ -3529,6 +3491,38 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
                           AND i.source_ts_id = e.ts_entry_id
                           AND i.entry_type   = e.entry_type);
     v_rows := SQL%ROWCOUNT;
+
+    -- CLIENT_ROLE IS FILLED HERE, IN ITS OWN STATEMENT, AND THAT IS THE FIX.
+    --
+    -- Confirming a month failed with ORA-00979 for weeks. The cause is an
+    -- AGGREGATE ANYWHERE IN THE INSERT ABOVE -- not any particular expression.
+    -- Measured on the live schema (db/107), the same INSERT against the same
+    -- data:
+    --
+    --   correlated (SELECT MAX(al.client_role) ...)   ORA-00979
+    --   LEFT JOIN onto a pre-grouped inline view      ORA-00979
+    --   no aggregate at all                           116 rows
+    --   MAX() moved into this UPDATE                  116 rows
+    --
+    -- Three earlier attempts missed it because every test still had an aggregate
+    -- in it somewhere, and the one test that passed wrapped the query in
+    -- SELECT COUNT(*) FROM ( ... ) -- exactly where Oracle eliminates one.
+    --
+    -- MAX is kept rather than swapped for ROWNUM = 1. A person can hold several
+    -- allocation rows on one project across date ranges; MAX picks the same one
+    -- every time and ROWNUM would pick whichever the access path reached first.
+    -- The role on a confirmed annexure must not depend on that.
+    --
+    -- An aggregate in an UPDATE is fine here: db/105 proved this schema runs one
+    -- without complaint. Scoped to this batch, so a re-run that inserts nothing
+    -- updates nothing.
+    UPDATE xx_o2c_timesheet_accrual_if i
+       SET i.client_role = (SELECT MAX(al.client_role)
+                              FROM oc_time_allocation al
+                             WHERE al.employee_id = i.employee_id
+                               AND al.project_id  = p_project_id)
+     WHERE i.confirm_id = v_confirm
+       AND i.batch_id   = v_batch;
 
     -- THE ROLL-UP, AGGREGATED FIRST.
     --
@@ -3698,7 +3692,10 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
                p.main_project_id,
                (SELECT m.project_number FROM oc_main_project_src m
                  WHERE m.project_id = p.main_project_id),
-               alr.client_role,
+               -- NULL here on purpose. CLIENT_ROLE is filled by the UPDATE that follows
+               -- this statement -- see the note there. Do not put an aggregate back into
+               -- this select list.
+               CAST(NULL AS VARCHAR2(120)),
                t.task_code, t.task_name, e.entry_date,
                CASE WHEN e.billable_type = 'Billable'     AND e.is_leave = 'N'
                     THEN e.hours ELSE 0 END,
@@ -3723,35 +3720,6 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
           JOIN oc_time_task     t  ON t.task_id     = e.task_id
           JOIN oc_time_worker   wk ON wk.employee_id = w.employee_id
           JOIN oc_time_period   pe ON pe.period_id  = c.period_id
-          -- CLIENT_ROLE comes from a PRE-GROUPED inline view, not a correlated scalar
-          -- subquery. It used to read
-          --
-          --   (SELECT MAX(al.client_role) FROM oc_time_allocation al
-          --     WHERE al.employee_id = w.employee_id AND al.project_id = e.project_id)
-          --
-          -- Changed while hunting the ORA-00979 that stopped a month confirming, on the
-          -- theory that a correlated scalar subquery containing an aggregate is a known
-          -- way to reach it -- the optimiser unnests it into a grouped view and the
-          -- correlation columns have to survive into that GROUP BY.
-          --
-          -- ** THAT THEORY WAS WRONG AND THIS IS NOT THE FIX. ** db/105 ran the payload
-          -- INSERT both ways against the live schema: the original raised ORA-00979 and
-          -- this rewrite raised the identical error. Whatever causes it is elsewhere in
-          -- the statement. Kept only because it is equivalent and slightly cheaper --
-          -- one grouped read instead of a subquery per row -- NOT because it repaired
-          -- anything. Do not cite it as the fix.
-          --
-          -- Equivalent, including the null case: no matching allocation gave NULL from
-          -- the scalar subquery and gives NULL from the outer join. The GROUP BY
-          -- guarantees one row per employee+project, which is the only thing the MAX()
-          -- was ever there to ensure -- one person can hold several allocation rows on
-          -- a project and the annexure wants a single role.
-          LEFT JOIN (SELECT employee_id, project_id,
-                            MAX(client_role) AS client_role
-                       FROM oc_time_allocation
-                      GROUP BY employee_id, project_id) alr
-                 ON alr.employee_id = w.employee_id
-                AND alr.project_id  = e.project_id
          WHERE w.period_id  = c.period_id
            AND e.project_id = c.project_id
            AND e.entry_type IN ('Reversal', 'Adjustment')
@@ -3763,6 +3731,20 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
                               AND i.entry_type   = e.entry_type);
 
         v_rows := v_rows + SQL%ROWCOUNT;
+
+        -- CLIENT_ROLE filled here rather than in the INSERT above, for the reason
+        -- set out at length in confirm_month: an aggregate anywhere inside that
+        -- statement raises ORA-00979 on this schema. This procedure carried the
+        -- identical correlated MAX subquery and had simply never been run against
+        -- real data, so it would have failed the first time a retro correction was
+        -- approved after its month closed.
+        UPDATE xx_o2c_timesheet_accrual_if i
+           SET i.client_role = (SELECT MAX(al.client_role)
+                                  FROM oc_time_allocation al
+                                 WHERE al.employee_id = i.employee_id
+                                   AND al.project_id  = c.project_id)
+         WHERE i.confirm_id = c.confirm_id
+           AND i.batch_id   = v_batch;
 
         -- Refresh the confirmation's own totals so the Accrual Integration page
         -- reports what the interface actually holds. adjustment_hours sums the
