@@ -58,9 +58,20 @@ BEGIN
         (granularity = 'DAY' AND entry_date IS NOT NULL) OR
         (granularity <> 'DAY' AND entry_date IS NULL)),
       -- RULE-015: a manager never approves their own timesheet.
-      CONSTRAINT chk_oc_tsa_self CHECK (
-        action NOT IN ('Approve','Reject','Override','AdvanceApprove','Confirm')
-        OR actor_emp_id <> employee_id),
+      --
+      -- RELAXED 21-Aug-2026 by explicit decision -- db/104 drops this
+      -- constraint. COMMENTED OUT RATHER THAN DELETED, and deliberately: this
+      -- script is idempotent and re-runnable, so leaving the CHECK here would
+      -- silently restore a rule somebody decided to remove the next time a
+      -- schema was built from scratch. Same reasoning as UK_OC_TP_SINGLE_OPEN
+      -- in 01_time_reference.sql, which db/13 turned off for RULE-017.
+      --
+      -- The package-level guard is the live one and is switchable:
+      -- OC_TIME_CONFIG.ALLOW_SELF_APPROVAL. A CHECK cannot read a table, which
+      -- is why this half could not be switched and had to go.
+      -- CONSTRAINT chk_oc_tsa_self CHECK (
+      --   action NOT IN ('Approve','Reject','Override','AdvanceApprove','Confirm')
+      --   OR actor_emp_id <> employee_id),
       CONSTRAINT fk_oc_tsa_week   FOREIGN KEY (ts_week_id)
         REFERENCES oc_ts_week(ts_week_id) ON DELETE CASCADE,
       CONSTRAINT fk_oc_tsa_period FOREIGN KEY (period_id)

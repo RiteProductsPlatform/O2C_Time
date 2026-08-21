@@ -535,6 +535,11 @@ PROMPT [n/m] 59_derive_roles.sql - APP_ROLE from HCM worker type and PPM manager
 
 @@100_enable_scheduled_absence_sync.sql
 
+-- 104 relaxes RULE-015 (a manager may approve their own week) and DROPS
+-- CHK_OC_TSA_SELF. It must run BEFORE the db/09 recompile below, because
+-- assert_not_self reads the flag it seeds.
+@@104_a_manager_may_approve_their_own_week.sql
+
 -- 101 puts the main application's project code on the accrual interface,
 -- and confirm_month is edited in db/09 to fill it -- which is the other
 -- reason the package is recompiled below.

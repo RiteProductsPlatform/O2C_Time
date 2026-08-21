@@ -27,20 +27,25 @@ define([], () => {
     /**
      * Tick every row this manager can actually approve.
      *
-     * Excludes the acting manager's own row. RULE-015 sends their time to their
-     * reporting manager, so offering it here only produces a refusal — and a
-     * manager who books time to their own project is in their own team list,
-     * which is the normal case, not an edge one. Before this, "Select all
-     * pending" reliably included a row that could never succeed.
+     * Selects every employee whose month is not already Approved — INCLUDING
+     * the acting manager's own row.
      *
-     * The row stays selectable by hand: the rule is worth showing to someone
-     * who deliberately tries it, rather than hidden behind a disabled checkbox.
+     * It used to exclude them. RULE-015 sent a manager's own time to their
+     * reporting manager, so offering the row here only produced a refusal.
+     * That rule was relaxed on 21-Aug-2026 by explicit decision (db/104), and
+     * the exclusion had to go with it: leaving it would have meant "Select all
+     * pending" quietly skipping exactly the row the change was made to allow,
+     * and the manager concluding the fix had not been applied.
+     *
+     * actorEmpId is still accepted so the signature and the caller do not
+     * change, and so restoring the rule is a one-line edit here rather than a
+     * chain change. It is deliberately unused.
      */
+    // eslint-disable-next-line no-unused-vars
     selectAllEmployees(page, actorEmpId) {
       if (!page) { return; }
       page.selectedKeys = (page.employees || [])
         .filter((e) => e.monthStatus !== 'Approved')
-        .filter((e) => !actorEmpId || e.employeeId !== actorEmpId)
         .map((e) => e.employeeId);
     }
 

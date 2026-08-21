@@ -780,7 +780,7 @@
     "managerEmpId": {
       "type": "string",
       "defaultValue": "",
-      "description": "Reporting manager. RULE-015: a manager's own time is approved by THIS person, never by themselves."
+      "description": "Reporting manager. Was RULE-015's approver - a manager's own time went to THIS person, never themselves. Relaxed 21-Aug-2026 (db/104): a manager may now approve their own week, so this is no longer an approval route. Still unpopulated for most of the pod, which is a separate gap."
     },
     "workerType": {
       "type": "string",

@@ -804,8 +804,40 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
 
 
   -- RULE-015: a manager's own time is approved by their reporting manager.
+  --
+  -- RELAXED 21-Aug-2026 by explicit decision -- see db/104. The rule is still
+  -- stated as BLOCKING in the requirement pack, so it keeps its name, its error
+  -- and its ten call sites, and is switched rather than deleted.
+  --
+  -- Reads the flag on EVERY call rather than caching it in package state. A
+  -- cached copy would survive in a pooled ORDS session after the flag changed,
+  -- so a security rule would come back on -- or stay off -- depending on which
+  -- connection answered. One indexed row by unique key, against approvals that
+  -- happen a few times a day, is not a cost worth that.
+  --
+  -- Defaults to ENFORCED when the row is absent: a schema that has this package
+  -- but not db/104 keeps the pack's behaviour, which is the safe direction.
+  --
+  -- NOTE: CHK_OC_TSA_SELF on OC_TS_APPROVAL enforced the same rule and a CHECK
+  -- cannot read a table, so db/104 drops it. Setting the flag back to N
+  -- restores THIS guard only.
+  FUNCTION self_approval_allowed RETURN BOOLEAN IS
+    v_val oc_time_config.config_value%TYPE;
+  BEGIN
+    SELECT config_value INTO v_val
+      FROM oc_time_config
+     WHERE config_name = 'ALLOW_SELF_APPROVAL'
+       AND scope_key   = 'GLOBAL';
+    RETURN UPPER(NVL(v_val,'N')) = 'Y';
+  EXCEPTION WHEN NO_DATA_FOUND THEN
+    RETURN FALSE;
+  END self_approval_allowed;
+
   PROCEDURE assert_not_self(p_employee_id IN VARCHAR2, p_actor_emp_id IN VARCHAR2) IS
   BEGIN
+    IF self_approval_allowed THEN
+      RETURN;
+    END IF;
     IF p_actor_emp_id IS NOT NULL AND p_employee_id = p_actor_emp_id THEN
       RAISE_APPLICATION_ERROR(-20015,
         'A manager''s own time is approved by their reporting manager.');
