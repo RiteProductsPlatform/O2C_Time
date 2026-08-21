@@ -3383,6 +3383,38 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
      || 'Defaulted months and records that it did.');
     END IF;
 
+    -- THE MAIN APPLICATION'S PROJECT CODE IS THE CONSUMER'S KEY, SO ITS ABSENCE
+    -- IS A REFUSAL, NOT A NULL.
+    --
+    -- Confirmed 21-Aug-2026: accrual keys on OC_PROJECT.PROJECT_NUMBER in the
+    -- main application. PROJECT_NUMBER on this interface is FUSION's ('555'),
+    -- which is no use to them, so MAIN_PROJECT_NUMBER is the join column.
+    --
+    -- db/81 stamps the link and db/101 carries it, but nothing has ever
+    -- required it. A project with no link would confirm happily and hand over
+    -- rows the consumer cannot attach to anything -- and because every other
+    -- column looks right, that lands as a reconciliation problem on their side
+    -- rather than as our fault. Cheaper to refuse here.
+    --
+    -- Deliberately checked BEFORE the header MERGE: refusing after it would
+    -- leave a confirmation row for a month that did not go out.
+    DECLARE
+      v_main    NUMBER;
+      v_pnum    oc_time_project.project_number%TYPE;
+    BEGIN
+      SELECT main_project_id, project_number
+        INTO v_main, v_pnum
+        FROM oc_time_project WHERE project_id = p_project_id;
+
+      IF v_main IS NULL THEN
+        RAISE_APPLICATION_ERROR(-20023,
+          'Project ' || v_pnum || ' has no O2C main-application project code, '
+          || 'and accrual keys on that code. Link it first (db/81 matches on '
+          || 'project name against OC_PROJECT), then confirm. Nothing has been '
+          || 'confirmed.');
+      END IF;
+    END;
+
     v_batch := 'O2CTIME-' || TO_CHAR(p_project_id) || '-' ||
                TO_CHAR(p_period_id) || '-' || TO_CHAR(SYSTIMESTAMP,'YYYYMMDDHH24MISSFF3');
 

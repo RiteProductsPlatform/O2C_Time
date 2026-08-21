@@ -274,10 +274,10 @@
           <tr><td class="mono">PERIOD_YEAR</td><td class="mono">NUMBER(4)</td><td>Filter column</td></tr>
           <tr><td class="mono">PERIOD_MONTH</td><td class="mono">NUMBER(2)</td><td>1–12. Filter column</td></tr>
           <tr><td class="mono">MAIN_PROJECT_ID</td><td class="mono">NUMBER</td><td><strong>Your</strong> <code>OC_PROJECT.PROJECT_ID</code>. Null if the project has no link yet</td></tr>
-          <tr><td class="mono">MAIN_PROJECT_NUMBER</td><td class="mono">VARCHAR2(40)</td><td><strong>Your</strong> <code>OC_PROJECT.PROJECT_NUMBER</code> — the code to key on</td></tr>
+          <tr><td class="mono">MAIN_PROJECT_NUMBER</td><td class="mono">VARCHAR2(40)</td><td><span class="chip c-key">join on this</span> <strong>Your</strong> <code>OC_PROJECT.PROJECT_NUMBER</code>. Guaranteed non-null — a project without one is refused at confirmation</td></tr>
           <tr><td class="mono">PROJECT_NUMBER</td><td class="mono">VARCHAR2(60)</td><td><strong>Fusion's</strong> project number, e.g. <code>555</code>. Not yours</td></tr>
           <tr><td class="mono">PROJECT_NAME</td><td class="mono">VARCHAR2(240)</td><td>As at confirmation</td></tr>
-          <tr><td class="mono">CUSTOMER_NAME</td><td class="mono">VARCHAR2(240)</td><td>As at confirmation</td></tr>
+          <tr><td class="mono">CUSTOMER_NAME</td><td class="mono">VARCHAR2(240)</td><td><span class="chip c-no">not populated</span> Confirmed not needed. Present on the interface, always null — do not key on it</td></tr>
           <tr><td class="mono">REVENUE_MODEL</td><td class="mono">VARCHAR2(20)</td><td>Fixed price · T&amp;M · Milestone</td></tr>
           <tr><td class="mono">EMPLOYEE_ID</td><td class="mono">VARCHAR2(50)</td><td>HCM person number, e.g. <code>RI2824</code></td></tr>
           <tr><td class="mono">EMPLOYEE_NAME</td><td class="mono">VARCHAR2(200)</td><td>As at confirmation</td></tr>
@@ -314,10 +314,11 @@
     <div class="note">
       <strong>Two project codes travel together, deliberately.</strong>
       <code>PROJECT_NUMBER</code> is Fusion's and <code>MAIN_PROJECT_NUMBER</code> is
-      yours. Key on ours-to-you (<code>MAIN_PROJECT_NUMBER</code>); the Fusion one is
-      there so a disagreement can be reconciled without a third lookup. A null
-      <code>MAIN_PROJECT_NUMBER</code> means that project has no link on our side yet
-      — tell us rather than name-matching around it.
+      yours. <strong>Join on <code>MAIN_PROJECT_NUMBER</code></strong>; the Fusion one
+      is there so a disagreement can be reconciled without a third lookup.
+      <strong>It cannot arrive null</strong> — as of 21 Aug 2026 a project with no
+      link to your side is refused at confirmation rather than handed over
+      unkeyable, so you never have to name-match around a missing code.
     </div>
   </div>
 </section>
