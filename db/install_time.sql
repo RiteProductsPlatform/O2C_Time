@@ -8,6 +8,22 @@
 -- Every script is idempotent, so re-running the installer is safe and is the
 -- normal way to apply changes. Nothing is dropped.
 --
+-- ── What is NOT here, and why ────────────────────────────────
+--
+-- 19 scripts in db/ are deliberately unreferenced. None of them describes what
+-- the schema IS; each describes something somebody once did to one copy of it,
+-- and running them on a new environment would either do nothing or do harm.
+--
+--   32 33 75 76 77 78     one-off remediation against live data
+--   34 56 57 58 60 83     environment provisioning and test setup
+--   90_demo_reset
+--   90_test_seed 92a 93   demo data and its teardown
+--   29 91 92              operator runbooks, run on demand
+--
+-- Everything else belongs here. If a script defines a table, a view, a
+-- procedure, a trigger or a rule, it goes in the list below -- that is the test
+-- for whether it is missing.
+--
 -- ── Prerequisites, all run as ADMIN (not as O2C_TIME) ────────
 --
 -- 1. Privileges. RESOURCE does NOT include CREATE VIEW, and this module builds
@@ -65,6 +81,7 @@
 -- single statement and will look like it worked.
 --==============================================================
 SET DEFINE OFF
+SET SCAN OFF
 SET SERVEROUTPUT ON SIZE UNLIMITED
 SET ECHO OFF
 SET FEEDBACK ON
@@ -376,23 +393,6 @@ PROMPT [n/m] 45_daily_post_load.sql - what OIC calls after the feeds land
 -- 15 is NOT here: it creates a table the package body reads, so it runs before
 -- step 09 above. Moving it back would reintroduce nine ORA-00942s.
 
--- ── REST surface ─────────────────────────────────────────────
-PROMPT >>> 12 ORDS oc.time            (employee)
-@@ords/11_ords_time.sql
-
-PROMPT >>> 13 ORDS oc.time.approval   (manager)
-@@ords/12_ords_time_approval.sql
-
-PROMPT >>> 14 ORDS oc.time.admin      (admin + accrual pull)
-@@ords/13_ords_time_admin.sql
-
-PROMPT >>> 15 ORDS oc.time.auth       (login, logout, session, set-password)
-@@ords/14_ords_time_auth.sql
-
-PROMPT [n/m] ords/15_ords_time_sync.sql - the OIC surface (INT 001 / INT 002)
-@@ords/15_ords_time_sync.sql
-
-PROMPT [n/m] 46_jobs_daily_post_load.sql - jobs/daily runs the full daily chain
 @@46_jobs_daily_post_load.sql
 
 PROMPT [n/m] 47_cutoff_scheduler.sql - the weekly/delivery cut-off job
@@ -483,6 +483,91 @@ PROMPT [n/m] 55_purge_test_seed.sql - remove fabricated seed data if any exists
 -- nothing, and the procedure it leaves behind is what keeps roles true.
 PROMPT [n/m] 59_derive_roles.sql - APP_ROLE from HCM worker type and PPM manager
 @@59_derive_roles.sql
+
+-- ── Leave apportionment, leave loss, and the absence feed ────
+--
+-- ADDED 21-Aug-2026. Every one of these defines behaviour and none of them was
+-- referenced here, so a fresh environment stopped at db/44's version of
+-- OC_TIME_SYNC_LEAVE -- no apportionment, no displacement -- while the live pod
+-- had run all of them by hand. That gap is what this section closes.
+--
+-- Deliberately NOT included: the one-off remediations against live data
+-- (32, 33, 75, 76, 77, 78), the environment provisioning (34, 56, 57, 58, 60,
+-- 83), the demo and teardown scripts (90, 92a, 93) and the operator runbooks
+-- (29, 91, 92). None of them describe what the schema IS; they describe things
+-- somebody once did to one copy of it.
+
+@@79_leave_apportionment_live.sql
+
+@@80_leave_displaces_hours.sql
+
+@@81_main_app_project_link.sql
+
+@@82_annexure_levels_and_role.sql
+
+-- 84 adds COVER_HOURS_BILLED, which 85 onwards reference even though nothing
+-- writes it any more. Retired columns still have to exist.
+@@84_cover_hours_become_billable.sql
+
+-- 85 creates OC_TIME_CTX. The package below is recompiled after it for that
+-- reason -- see the note at [Recompile].
+@@85_llc_project_share_and_correction.sql
+
+@@86_annexure_bills_what_moved.sql
+
+@@87_cover_billing_on_a_defaulted_week.sql
+
+@@88_coverage_is_a_statement.sql
+
+@@89_annexure_belongs_downstream.sql
+
+@@94_leave_share_is_the_allocation.sql
+
+@@95_two_people_may_be_uncovered.sql
+
+@@96_withdrawn_absence_retracts_its_coverage.sql
+
+@@97_the_put_aside_row_is_not_a_line.sql
+
+@@98_assigning_the_cover_is_the_decision.sql
+
+@@99_recover_the_rows_97_could_not_reach.sql
+
+@@100_enable_scheduled_absence_sync.sql
+
+-- ── OC_TIME_PKG again, and it is not belt and braces ─────────
+--
+-- The package is compiled far above, before OC_TIME_CTX (85) and
+-- V_OC_TS_LEAVE_SHARE (94) exist, and it now references both:
+--
+--   override_approve   sets oc_time_ctx before the write, so the append-only
+--                      audit trigger can record the reason at INSERT time
+--   populate_month     reads v_oc_ts_leave_share rather than restating the
+--                      apportionment
+--
+-- On a fresh schema the first compile therefore leaves the body INVALID. Oracle
+-- would resolve it on first call, but an install that ends with an invalid
+-- package is an install nobody can verify, and the recompile step below reports
+-- it as a failure. Compiling it again here is the fix, and it is idempotent.
+@@09_pkg_oc_time.sql
+
+-- ── REST surface ─────────────────────────────────────────────
+PROMPT >>> 12 ORDS oc.time            (employee)
+@@ords/11_ords_time.sql
+
+PROMPT >>> 13 ORDS oc.time.approval   (manager)
+@@ords/12_ords_time_approval.sql
+
+PROMPT >>> 14 ORDS oc.time.admin      (admin + accrual pull)
+@@ords/13_ords_time_admin.sql
+
+PROMPT >>> 15 ORDS oc.time.auth       (login, logout, session, set-password)
+@@ords/14_ords_time_auth.sql
+
+PROMPT [n/m] ords/15_ords_time_sync.sql - the OIC surface (INT 001 / INT 002)
+@@ords/15_ords_time_sync.sql
+
+PROMPT [n/m] 46_jobs_daily_post_load.sql - jobs/daily runs the full daily chain
 -- 46 MUST come after ords/13. It redefines the jobs/daily handler that 13
 -- creates, so running it earlier means 13 quietly puts the populate-only
 -- version back and the whole post-load chain is dropped with no error
@@ -619,3 +704,4 @@ PROMPT #      An Invited user sets their own password at first sign-in via
 PROMPT #        POST /oc/time/auth/set-password  {email, newPassword}
 PROMPT ##############################################################
 PROMPT
+PROMPT >> O2C Timesheet module installed.

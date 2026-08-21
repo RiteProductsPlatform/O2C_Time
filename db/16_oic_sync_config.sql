@@ -186,11 +186,21 @@ DECLARE
                        || 'Highest precedence, so a shift day beats a holiday.',
           'OC_TIME_CALENDAR',   60, 'Both', 'Y'),
     -- ── registered, deliberately not scheduled ───────────────
-    t_row('ABSENCES',     'OFF: absence is read LIVE per person per date at page '
-                       || 'load, not synced (decision 09-Aug-2026). The model is '
-                       || 'kept because the leave-loss absentee list still needs '
-                       || 'a bulk read. Enable only if that decision changes.',
-          'OC_TIME_ABSENCE',    70, 'Both',    'N'),
+    -- ON since 21-Aug-2026. It was 'N' from 09-Aug on the reasoning that
+    -- absence is read live per person at page load; that only ever covered the
+    -- page somebody opened, so the schedule is back.
+    --
+    -- ADDS AND UPDATES ONLY. This path hands OC_TIME_LOAD_XML a batch with no
+    -- window, so "absent from this batch" and "no longer exists" are the same
+    -- thing to it. A withdrawn or deleted absence retracts only through the
+    -- live per-page read, which posts employeeId + windowFrom + windowTo and
+    -- lets the handler delete what it was not sent. The two are complementary,
+    -- not alternatives -- see db/100.
+    t_row('ABSENCES',     'Approved absence per person per day. Feeds '
+                       || 'OC_TIME_ABSENCE, which drives the Leave rows and the '
+                       || 'leave-loss absentee list. Adds and updates only; '
+                       || 'withdrawal retracts through the live read.',
+          'OC_TIME_ABSENCE',    70, 'Both',    'Y'),
     t_row('SHIFTS',       'OFF: no target table. A shift dictionary (code, '
                        || 'duration, break) with no date, so it does not fit '
                        || 'OC_TIME_CALENDAR, which is one row per day. '
