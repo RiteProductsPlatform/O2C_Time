@@ -822,6 +822,63 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
   END assert_editable;
 
 
+  -- DERIVE THE WEEK FROM ITS DAYS, and only when they are all decided.
+  --
+  -- "till all the days of a week is approved lets keep it as the before status,
+  --  once all the days are approved or reject show the week status" (21-Aug).
+  -- This reverses the retirement recorded in section 7, for the reason that
+  -- retirement never answered: override one day and the whole week read
+  -- Approved, which is not what happened.
+  --
+  -- THE WEEK DOES NOT MOVE WHILE ANYTHING IS STILL PENDING, and that is what
+  -- makes this cheap. The obvious design adds a fourth APPROVAL_STATUS --
+  -- PartiallyApproved -- and then the RULE-020 gate, V_OC_TS_MONTH_SUMMARY, the
+  -- confirm payload and every screen have to learn it. Leaving a half-decided
+  -- week Pending teaches nothing anything: they all already read Pending as
+  -- "not ready".
+  --
+  -- Rejected wins over Approved once everything is decided. A week containing a
+  -- refused day has not been accepted, and the employee has something to fix.
+  --
+  -- Called ONLY from the day procedures. A week-level event goes through the V4
+  -- engine, which writes all seven days itself; calling this from there would
+  -- recompute a week that already agrees with its days.
+  PROCEDURE sync_week_from_days(p_ts_week_id IN NUMBER, p_actor IN VARCHAR2) IS
+    v_days     NUMBER;
+    v_pending  NUMBER;
+    v_rejected NUMBER;
+  BEGIN
+    SELECT COUNT(DISTINCT entry_date),
+           COUNT(DISTINCT CASE WHEN NVL(day_status,'Pending') = 'Pending'
+                               THEN entry_date END),
+           COUNT(DISTINCT CASE WHEN day_status = 'Rejected'
+                               THEN entry_date END)
+      INTO v_days, v_pending, v_rejected
+      FROM oc_ts_entry
+     WHERE ts_week_id = p_ts_week_id
+       AND entry_type IN ('Actual','Default');
+
+    IF v_days = 0 OR v_pending > 0 THEN
+      RETURN;                      -- leave the week exactly as it was
+    END IF;
+
+    UPDATE oc_ts_week
+       SET approval_status = CASE WHEN v_rejected > 0 THEN 'Rejected'
+                                  ELSE 'Approved' END,
+           week_status     = CASE WHEN v_rejected > 0 THEN 'Rejected'
+                                  WHEN overridden_flag = 'Y'
+                                       THEN 'Overridden and approved'
+                                  ELSE 'Approved' END,
+           approved_by     = CASE WHEN v_rejected > 0 THEN approved_by
+                                  ELSE p_actor END,
+           approved_on     = CASE WHEN v_rejected > 0 THEN approved_on
+                                  ELSE SYSTIMESTAMP END,
+           updated_by      = p_actor,
+           updated_on      = SYSTIMESTAMP
+     WHERE ts_week_id = p_ts_week_id;
+  END sync_week_from_days;
+
+
   -- RULE-015: a manager's own time is approved by their reporting manager.
   --
   -- RELAXED 21-Aug-2026 by explicit decision -- see db/104. The rule is still
@@ -2111,24 +2168,37 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
     p_actor        IN VARCHAR2 DEFAULT 'VBCS_USER',
     p_trace_id     IN VARCHAR2 DEFAULT NULL)
   IS
+    v_emp    oc_ts_week.employee_id%TYPE;
+    v_period oc_ts_week.period_id%TYPE;
+    v_rows   NUMBER;
   BEGIN
-    -- RETIRED 14-Aug-2026. APPROVAL IS WEEKLY, and only weekly: "if a week is
-    -- approved all the days in a week are approved, and if a week is rejected
-    -- all the days in the week are rejected".
-    --
-    -- A day never holds a decision of its own. While it could, this procedure
-    -- was able to leave a week whose days disagreed with it -- half approved,
-    -- half pending, and a WEEK_STATUS rolled up from whichever happened to be
-    -- last. That is precisely what the two-axis model exists to remove, and
-    -- oc_time_apply_event now writes every day of a week in ONE statement so
-    -- the disagreement is not expressible.
-    --
-    -- Kept as a procedure rather than dropped: the ORDS handler still calls
-    -- it, and a clear refusal is better than the PLS-00201 an unresolved
-    -- identifier would give. -20027 is inside the range ORDS maps to 400, so
-    -- the message reaches the screen verbatim.
-    RAISE_APPLICATION_ERROR(-20027,
-      'Days are not approved or rejected individually. Act on the whole week.');
+    SELECT employee_id, period_id INTO v_emp, v_period
+      FROM oc_ts_week WHERE ts_week_id = p_ts_week_id;
+
+    assert_not_self(v_emp, p_actor_emp_id);
+
+    UPDATE oc_ts_entry
+       SET day_status      = 'Approved',
+           approval_status = 'Approved',
+           approved_by     = p_actor,
+           approved_on     = SYSTIMESTAMP,
+           updated_by      = p_actor
+     WHERE ts_week_id = p_ts_week_id
+       AND entry_date = TRUNC(p_entry_date)
+       AND entry_type IN ('Actual','Default');
+    v_rows := SQL%ROWCOUNT;
+
+    IF v_rows = 0 THEN
+      RAISE_APPLICATION_ERROR(-20024,
+        'There are no hours on ' || TO_CHAR(TRUNC(p_entry_date),'DD-Mon')
+        || ' to act on.');
+    END IF;
+
+    -- The week follows its days, but only once none are left undecided.
+    sync_week_from_days(p_ts_week_id, p_actor);
+
+    log_event(p_ts_week_id, v_emp, NULL, v_period, 'DAY', TRUNC(p_entry_date),
+              'Approve', NULL, NULL, p_actor_emp_id, p_trace_id);
   END approve_day;
 
 
@@ -2141,24 +2211,35 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
     p_actor        IN VARCHAR2 DEFAULT 'VBCS_USER',
     p_trace_id     IN VARCHAR2 DEFAULT NULL)
   IS
+    v_emp    oc_ts_week.employee_id%TYPE;
+    v_period oc_ts_week.period_id%TYPE;
+    v_rows   NUMBER;
   BEGIN
-    -- RETIRED 14-Aug-2026. APPROVAL IS WEEKLY, and only weekly: "if a week is
-    -- approved all the days in a week are approved, and if a week is rejected
-    -- all the days in the week are rejected".
-    --
-    -- A day never holds a decision of its own. While it could, this procedure
-    -- was able to leave a week whose days disagreed with it -- half approved,
-    -- half pending, and a WEEK_STATUS rolled up from whichever happened to be
-    -- last. That is precisely what the two-axis model exists to remove, and
-    -- oc_time_apply_event now writes every day of a week in ONE statement so
-    -- the disagreement is not expressible.
-    --
-    -- Kept as a procedure rather than dropped: the ORDS handler still calls
-    -- it, and a clear refusal is better than the PLS-00201 an unresolved
-    -- identifier would give. -20027 is inside the range ORDS maps to 400, so
-    -- the message reaches the screen verbatim.
-    RAISE_APPLICATION_ERROR(-20027,
-      'Days are not approved or rejected individually. Act on the whole week.');
+    SELECT employee_id, period_id INTO v_emp, v_period
+      FROM oc_ts_week WHERE ts_week_id = p_ts_week_id;
+
+    assert_not_self(v_emp, p_actor_emp_id);
+
+    UPDATE oc_ts_entry
+       SET day_status      = 'Rejected',
+           approval_status = 'Rejected',
+           updated_by      = p_actor
+     WHERE ts_week_id = p_ts_week_id
+       AND entry_date = TRUNC(p_entry_date)
+       AND entry_type IN ('Actual','Default');
+    v_rows := SQL%ROWCOUNT;
+
+    IF v_rows = 0 THEN
+      RAISE_APPLICATION_ERROR(-20024,
+        'There are no hours on ' || TO_CHAR(TRUNC(p_entry_date),'DD-Mon')
+        || ' to act on.');
+    END IF;
+
+    -- The week follows its days, but only once none are left undecided.
+    sync_week_from_days(p_ts_week_id, p_actor);
+
+    log_event(p_ts_week_id, v_emp, NULL, v_period, 'DAY', TRUNC(p_entry_date),
+              'Reject', p_reason, p_remarks, p_actor_emp_id, p_trace_id);
   END reject_day;
 
 
@@ -2181,24 +2262,37 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
     p_actor        IN VARCHAR2 DEFAULT 'VBCS_USER',
     p_trace_id     IN VARCHAR2 DEFAULT NULL)
   IS
+    v_emp    oc_ts_week.employee_id%TYPE;
+    v_period oc_ts_week.period_id%TYPE;
+    v_rows   NUMBER;
   BEGIN
-    -- RETIRED 14-Aug-2026. APPROVAL IS WEEKLY, and only weekly: "if a week is
-    -- approved all the days in a week are approved, and if a week is rejected
-    -- all the days in the week are rejected".
-    --
-    -- A day never holds a decision of its own. While it could, this procedure
-    -- was able to leave a week whose days disagreed with it -- half approved,
-    -- half pending, and a WEEK_STATUS rolled up from whichever happened to be
-    -- last. That is precisely what the two-axis model exists to remove, and
-    -- oc_time_apply_event now writes every day of a week in ONE statement so
-    -- the disagreement is not expressible.
-    --
-    -- Kept as a procedure rather than dropped: the ORDS handler still calls
-    -- it, and a clear refusal is better than the PLS-00201 an unresolved
-    -- identifier would give. -20027 is inside the range ORDS maps to 400, so
-    -- the message reaches the screen verbatim.
-    RAISE_APPLICATION_ERROR(-20027,
-      'Days are not approved or rejected individually. Act on the whole week.');
+    SELECT employee_id, period_id INTO v_emp, v_period
+      FROM oc_ts_week WHERE ts_week_id = p_ts_week_id;
+
+    assert_not_self(v_emp, p_actor_emp_id);
+
+    UPDATE oc_ts_entry
+       SET day_status      = 'Pending',
+           approval_status = 'Pending',
+           approved_by     = NULL,
+           approved_on     = NULL,
+           updated_by      = p_actor
+     WHERE ts_week_id = p_ts_week_id
+       AND entry_date = TRUNC(p_entry_date)
+       AND entry_type IN ('Actual','Default');
+    v_rows := SQL%ROWCOUNT;
+
+    IF v_rows = 0 THEN
+      RAISE_APPLICATION_ERROR(-20024,
+        'There are no hours on ' || TO_CHAR(TRUNC(p_entry_date),'DD-Mon')
+        || ' to act on.');
+    END IF;
+
+    -- The week follows its days, but only once none are left undecided.
+    sync_week_from_days(p_ts_week_id, p_actor);
+
+    log_event(p_ts_week_id, v_emp, NULL, v_period, 'DAY', TRUNC(p_entry_date),
+              'Revoke', NULL, NULL, p_actor_emp_id, p_trace_id);
   END revoke_decision;
 
 
