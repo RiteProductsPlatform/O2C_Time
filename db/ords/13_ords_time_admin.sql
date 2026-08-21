@@ -1820,6 +1820,237 @@ BEGIN
 END;
 /
 
+-- ============================================================
+-- [ACCRUAL SUMMARIES]  the three grains, for the O2C main application
+--
+-- Asked 21-Aug-2026: accrual wants the table structure and REST access to
+--
+--   v_oc_ts_anx_month     one row per person per project month
+--   v_oc_ts_anx_day       tasks collapsed, one row per person per day
+--   v_oc_ts_anx_day_task  the finest grain
+--
+-- They already hold SELECT on all three (db/101) and can query them directly in
+-- SQL. These endpoints are for the OIC flow, which cannot.
+--
+-- THESE LIVE HERE, NOT IN A SCRIPT OF THEIR OWN. This file opens with
+-- ORDS.DELETE_MODULE for oc.time.admin, so anything defined against that module
+-- from elsewhere disappears the next time this runs. Same family of trap as
+-- re-running db/16 and wondering why the ABSENCES flag reverted.
+--
+-- ── WHAT THE CONSUMER MAY AND MAY NOT WRITE ─────────────────
+--
+-- Read is unrestricted; write is one thing only. The hours on these views come
+-- from approved timesheets and a confirmed month is FROZEN -- that is the whole
+-- reason the interface is a snapshot with the names copied onto it rather than
+-- a set of joins back to our master cache. If a figure is wrong the correction
+-- is a retro adjustment raised in the timesheet, which reaches accrual as a
+-- Reversal(-)/Adjustment(+) PAIR through run_accrual_top_up (ACT-033). It is
+-- never an in-place edit, because a number accrual has already posted against
+-- must stay the number accrual posted against.
+--
+-- So the only consumer-owned state is the pull protocol: PROCESSED_FLAG,
+-- PULLED_ON, BATCH_ID. The ack below is the write.
+--
+-- Acknowledgement is by CONFIRM_ID rather than BATCH_ID, unlike
+-- accrual/ack/:batchId. The views deliberately do not expose BATCH_ID -- db/101
+-- kept the pull protocol's columns out of the summaries -- and CONFIRM_ID is
+-- the grain accrual actually works at: one project, one month. It resolves to
+-- the batches underneath and calls the same mark_accrual_pulled the batch ack
+-- uses, so there is one code path for "this has been taken", not two.
+-- ============================================================
+
+BEGIN
+  ORDS.DEFINE_TEMPLATE(p_module_name => 'oc.time.admin',
+                       p_pattern => 'accrual/summary/month/:periodYear/:periodMonth');
+  ORDS.DEFINE_HANDLER(
+    p_module_name => 'oc.time.admin',
+    p_pattern => 'accrual/summary/month/:periodYear/:periodMonth', p_method => 'GET',
+    p_source_type => ORDS.source_type_collection_feed,
+    p_source => q'~
+      SELECT
+             a.confirm_id,
+             a.period,
+             a.period_year,
+             a.period_month,
+             a.main_project_id,
+             a.main_project_number,
+             a.project_number,
+             a.project_name,
+             a.customer_name,
+             a.revenue_model,
+             a.employee_id,
+             a.employee_name,
+             a.worker_type,
+             a.client_role,
+             a.days_worked,
+             a.billable_hours,
+             a.non_billable_hours,
+             a.leave_hours,
+             a.total_hours
+        FROM v_oc_ts_anx_month a
+       WHERE a.period_year  = :periodYear
+         AND a.period_month = :periodMonth
+         AND (:projectNumber     IS NULL OR a.project_number      = :projectNumber)
+         AND (:mainProjectNumber IS NULL OR a.main_project_number = :mainProjectNumber)
+       ORDER BY a.main_project_number, a.employee_id
+    ~');
+  COMMIT;
+END;
+/
+
+BEGIN
+  ORDS.DEFINE_TEMPLATE(p_module_name => 'oc.time.admin',
+                       p_pattern => 'accrual/summary/day/:periodYear/:periodMonth');
+  ORDS.DEFINE_HANDLER(
+    p_module_name => 'oc.time.admin',
+    p_pattern => 'accrual/summary/day/:periodYear/:periodMonth', p_method => 'GET',
+    p_source_type => ORDS.source_type_collection_feed,
+    p_source => q'~
+      SELECT
+             a.confirm_id,
+             a.period,
+             a.period_year,
+             a.period_month,
+             a.main_project_id,
+             a.main_project_number,
+             a.project_number,
+             a.project_name,
+             a.customer_name,
+             a.revenue_model,
+             a.employee_id,
+             a.employee_name,
+             a.worker_type,
+             a.client_role,
+             TO_CHAR(a.work_date,'YYYY-MM-DD') AS work_date,
+             a.day_name,
+             a.tasks,
+             a.billable_hours,
+             a.non_billable_hours,
+             a.leave_hours,
+             a.total_hours
+        FROM v_oc_ts_anx_day a
+       WHERE a.period_year  = :periodYear
+         AND a.period_month = :periodMonth
+         AND (:projectNumber     IS NULL OR a.project_number      = :projectNumber)
+         AND (:mainProjectNumber IS NULL OR a.main_project_number = :mainProjectNumber)
+         AND (:employeeId        IS NULL OR a.employee_id         = :employeeId)
+       ORDER BY a.main_project_number, a.employee_id, a.work_date
+    ~');
+  COMMIT;
+END;
+/
+
+BEGIN
+  ORDS.DEFINE_TEMPLATE(p_module_name => 'oc.time.admin',
+                       p_pattern => 'accrual/summary/daytask/:periodYear/:periodMonth');
+  ORDS.DEFINE_HANDLER(
+    p_module_name => 'oc.time.admin',
+    p_pattern => 'accrual/summary/daytask/:periodYear/:periodMonth', p_method => 'GET',
+    p_source_type => ORDS.source_type_collection_feed,
+    p_source => q'~
+      SELECT
+             a.confirm_id,
+             a.period,
+             a.period_year,
+             a.period_month,
+             a.main_project_id,
+             a.main_project_number,
+             a.project_number,
+             a.project_name,
+             a.customer_name,
+             a.revenue_model,
+             a.employee_id,
+             a.employee_name,
+             a.worker_type,
+             a.client_role,
+             TO_CHAR(a.work_date,'YYYY-MM-DD') AS work_date,
+             a.day_name,
+             a.wbs_task,
+             a.wbs_task_name,
+             a.entry_type,
+             a.flag,
+             a.unbilled_reason,
+             a.billable_hours,
+             a.non_billable_hours,
+             a.leave_hours,
+             a.total_hours
+        FROM v_oc_ts_anx_day_task a
+       WHERE a.period_year  = :periodYear
+         AND a.period_month = :periodMonth
+         AND (:projectNumber     IS NULL OR a.project_number      = :projectNumber)
+         AND (:mainProjectNumber IS NULL OR a.main_project_number = :mainProjectNumber)
+         AND (:employeeId        IS NULL OR a.employee_id         = :employeeId)
+       ORDER BY a.main_project_number, a.employee_id, a.work_date,
+                a.wbs_task, a.entry_type
+    ~');
+  COMMIT;
+END;
+/
+
+BEGIN
+  ORDS.DEFINE_TEMPLATE(p_module_name => 'oc.time.admin',
+                       p_pattern => 'accrual/summary/ack/:confirmId');
+  ORDS.DEFINE_HANDLER(
+    p_module_name => 'oc.time.admin',
+    p_pattern => 'accrual/summary/ack/:confirmId', p_method => 'POST',
+    p_source_type => ORDS.source_type_plsql,
+    p_source => q'~
+      DECLARE
+        v_batches NUMBER := 0;
+        v_rows    NUMBER := 0;
+        v_exists  NUMBER;
+      BEGIN
+        IF NVL(:status,'Y') NOT IN ('Y','E') THEN
+          :status_code := 400;
+          HTP.P('{"error":"status must be Y (stored) or E (rejected)."}');
+          RETURN;
+        END IF;
+
+        SELECT COUNT(*) INTO v_exists
+          FROM oc_ts_month_confirm WHERE confirm_id = :confirmId;
+        IF v_exists = 0 THEN
+          :status_code := 404;
+          HTP.P('{"error":"No such confirmation."}');
+          RETURN;
+        END IF;
+
+        -- One confirmation can span more than one batch: the month's own batch
+        -- plus a batch per retro top-up posted after it (ACT-033). Acking the
+        -- confirmation has to cover all of them or the top-up rows stay unread
+        -- forever, which is the failure mode nobody would notice -- they are the
+        -- corrections, so their absence looks like there being none.
+        FOR b IN (SELECT DISTINCT batch_id
+                    FROM xx_o2c_timesheet_accrual_if
+                   WHERE confirm_id = :confirmId
+                     AND processed_flag = 'N')
+        LOOP
+          oc_time_pkg.mark_accrual_pulled(
+            p_batch_id => b.batch_id,
+            p_status   => NVL(:status,'Y'),
+            p_message  => :message,
+            p_actor    => NVL(:actor,'ACCRUAL'));
+          v_batches := v_batches + 1;
+        END LOOP;
+
+        SELECT COUNT(*) INTO v_rows
+          FROM xx_o2c_timesheet_accrual_if
+         WHERE confirm_id = :confirmId AND processed_flag <> 'N';
+
+        COMMIT; :status_code := 200;
+        HTP.P('{"confirmId":' || :confirmId ||
+              ',"batchesAcknowledged":' || v_batches ||
+              ',"rowsAcknowledged":' || v_rows || '}');
+      EXCEPTION WHEN OTHERS THEN
+        ROLLBACK; :status_code := 400;
+        HTP.P('{"error":"' ||
+              REPLACE(REPLACE(SQLERRM,'ORA-'||LTRIM(TO_CHAR(ABS(SQLCODE)))||': ',''),'"','\"')
+              || '"}');
+      END;
+    ~');
+  COMMIT;
+END;
+/
+
 PROMPT
 PROMPT ============================================================
 PROMPT ORDS module oc.time.admin defined.

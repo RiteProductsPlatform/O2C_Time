@@ -1,0 +1,536 @@
+<title>Timesheet Accrual Interface</title>
+
+<style>
+  :root {
+    --ink:       #131A22;
+    --ink-2:     #3E4C59;
+    --ink-3:     #6B7A88;
+    --paper:     #F1F4F7;
+    --surface:   #FFFFFF;
+    --surface-2: #E4EAF0;
+    --rule:      #D3DCE6;
+    --rule-2:    #BCC8D4;
+
+    --accent:     #1F5D83;
+    --accent-ink: #14405C;
+    --accent-bg:  #DCE9F2;
+
+    --good: #1F6A4A;  --good-bg: #DBEDE3;
+    --warn: #8A5A08;  --warn-bg: #F6E8CC;
+    --crit: #A73D2F;  --crit-bg: #F8DED9;
+
+    --sans: ui-sans-serif, system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, "Cascadia Mono", "SF Mono", "Roboto Mono", Menlo, Consolas, monospace;
+    --measure: 68ch;
+    --pad: clamp(1rem, 3vw, 2.4rem);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ink:#DCE4EC; --ink-2:#A3B1BF; --ink-3:#7B8996;
+      --paper:#0C1219; --surface:#141C25; --surface-2:#1D2733;
+      --rule:#28333F; --rule-2:#394857;
+      --accent:#5EA8D4; --accent-ink:#8FC7E8; --accent-bg:#122C3E;
+      --good:#5FBE92; --good-bg:#10301F;
+      --warn:#D2A052; --warn-bg:#332711;
+      --crit:#E38678; --crit-bg:#3A1D19;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ink:#DCE4EC; --ink-2:#A3B1BF; --ink-3:#7B8996;
+    --paper:#0C1219; --surface:#141C25; --surface-2:#1D2733;
+    --rule:#28333F; --rule-2:#394857;
+    --accent:#5EA8D4; --accent-ink:#8FC7E8; --accent-bg:#122C3E;
+    --good:#5FBE92; --good-bg:#10301F;
+    --warn:#D2A052; --warn-bg:#332711;
+    --crit:#E38678; --crit-bg:#3A1D19;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font-family: var(--sans); font-size: 15.5px; line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 var(--pad); }
+
+  header.mast {
+    background: var(--surface); border-bottom: 1px solid var(--rule);
+    padding: clamp(2rem,5vw,3.4rem) 0 clamp(1.4rem,3vw,2rem);
+  }
+  header.mast .wrap { display: flex; flex-direction: column; gap: 1.1rem; }
+  .eyebrow {
+    font-family: var(--mono); font-size: .7rem; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--accent);
+    display: flex; flex-wrap: wrap; gap: .4rem 1rem; align-items: center;
+  }
+  .eyebrow .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+  h1 {
+    margin: 0; font-size: clamp(1.8rem,4.4vw,2.8rem); line-height: 1.06;
+    letter-spacing: -.026em; font-weight: 620; text-wrap: balance; max-width: 22ch;
+  }
+  .lede { margin: 0; max-width: var(--measure); color: var(--ink-2); font-size: 1.02rem; }
+
+  nav.toc {
+    position: sticky; top: 0; z-index: 20;
+    background: color-mix(in srgb, var(--paper) 93%, transparent);
+    backdrop-filter: blur(10px); border-bottom: 1px solid var(--rule);
+  }
+  nav.toc .wrap { display: flex; gap: .25rem; overflow-x: auto; padding-top: .4rem; padding-bottom: .4rem; }
+  nav.toc a {
+    flex: none; font-family: var(--mono); font-size: .705rem; letter-spacing: .04em;
+    text-decoration: none; color: var(--ink-2); padding: .32rem .55rem;
+    border-radius: 3px; white-space: nowrap;
+  }
+  nav.toc a:hover { background: var(--surface-2); color: var(--ink); }
+  nav.toc a:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  section { border-bottom: 1px solid var(--rule); padding: clamp(1.8rem,4vw,2.8rem) 0; scroll-margin-top: 3rem; }
+  section > .wrap { display: flex; flex-direction: column; gap: 1rem; }
+  h2 {
+    margin: 0; font-size: 1.34rem; letter-spacing: -.016em; font-weight: 640;
+    text-wrap: balance;
+  }
+  h2 .n { font-family: var(--mono); font-size: .78rem; color: var(--accent); margin-right: .5rem; font-weight: 700; }
+  h3 { margin: .5rem 0 0; font-size: 1.02rem; font-weight: 640; }
+  p { margin: 0; max-width: var(--measure); color: var(--ink-2); }
+  p strong, li strong { color: var(--ink); font-weight: 640; }
+  ul { margin: 0; padding-left: 1.15rem; max-width: var(--measure); color: var(--ink-2); }
+  li { margin-bottom: .34rem; }
+  li:last-child { margin-bottom: 0; }
+
+  code {
+    font-family: var(--mono); font-size: .86em;
+    background: var(--surface-2); padding: .06em .32em; border-radius: 3px;
+    word-break: break-word;
+  }
+  pre {
+    margin: 0; background: var(--surface); border: 1px solid var(--rule);
+    border-radius: 5px; padding: .85rem 1rem; overflow-x: auto;
+    font-family: var(--mono); font-size: .8rem; line-height: 1.6; color: var(--ink);
+  }
+  pre code { background: none; padding: 0; font-size: 1em; }
+
+  .tbl { overflow-x: auto; border: 1px solid var(--rule); border-radius: 5px; background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-size: .82rem; }
+  caption {
+    caption-side: top; text-align: left; font-family: var(--mono);
+    font-size: .655rem; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--ink-3); padding: .55rem .75rem .45rem;
+    border-bottom: 1px solid var(--rule); background: var(--surface-2);
+  }
+  th, td { padding: .42rem .75rem; border-bottom: 1px solid var(--rule); text-align: left; vertical-align: top; }
+  thead th {
+    font-size: .645rem; letter-spacing: .085em; text-transform: uppercase;
+    color: var(--ink-3); font-weight: 700; white-space: nowrap;
+  }
+  tbody tr:last-child td { border-bottom: 0; }
+  tbody tr:hover td { background: var(--surface-2); }
+  td.mono, th.mono { font-family: var(--mono); font-size: .78rem; white-space: nowrap; }
+  td.num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  tfoot td { font-family: var(--mono); font-weight: 700; background: var(--surface-2); border-top: 1px solid var(--rule-2); font-variant-numeric: tabular-nums; }
+  .muted { color: var(--ink-3); }
+
+  .chip {
+    display: inline-block; font-family: var(--mono); font-size: .655rem;
+    letter-spacing: .03em; padding: .1rem .4rem; border-radius: 3px; white-space: nowrap;
+  }
+  .c-get  { background: var(--good-bg); color: var(--good); }
+  .c-post { background: var(--warn-bg); color: var(--warn); }
+  .c-no   { background: var(--crit-bg); color: var(--crit); }
+  .c-key  { background: var(--accent-bg); color: var(--accent-ink); }
+
+  .note {
+    border-left: 3px solid var(--accent); background: var(--surface);
+    padding: .8rem 1rem; border-radius: 0 5px 5px 0; font-size: .9rem;
+    color: var(--ink-2); max-width: var(--measure);
+  }
+  .note strong { color: var(--ink); }
+  .note.crit { border-left-color: var(--crit); background: var(--crit-bg); color: var(--ink); }
+  .note.warn { border-left-color: var(--warn); background: var(--warn-bg); color: var(--ink); }
+  .note.good { border-left-color: var(--good); background: var(--good-bg); color: var(--ink); }
+
+  .ep {
+    background: var(--surface); border: 1px solid var(--rule); border-radius: 5px;
+    padding: .85rem 1rem; display: flex; flex-direction: column; gap: .5rem;
+  }
+  .ep-line { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+  .ep-path { font-family: var(--mono); font-size: .82rem; color: var(--ink); word-break: break-all; }
+  .ep p { font-size: .875rem; }
+
+  footer { padding: 2rem 0 3rem; font-size: .8rem; color: var(--ink-3); background: var(--surface); border-top: 1px solid var(--rule); }
+  footer .wrap { display: flex; flex-direction: column; gap: .4rem; }
+
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
+  html { scroll-behavior: smooth; }
+</style>
+
+<header class="mast">
+  <div class="wrap">
+    <div class="eyebrow">
+      <span class="dot"></span><span>O2C Timesheet Module</span>
+      <span>Interface contract for Accrual</span><span>21 Aug 2026</span>
+    </div>
+    <h1>Timesheet hours, at three grains</h1>
+    <p class="lede">
+      What the timesheet module hands over when a project month is confirmed: three
+      views on one snapshot, the REST endpoints that serve them, and the one thing
+      the accrual side is allowed to write back.
+    </p>
+  </div>
+</header>
+
+<nav class="toc" aria-label="Contents">
+  <div class="wrap">
+    <a href="#s1">1 · Start here</a>
+    <a href="#s2">2 · The three views</a>
+    <a href="#s3">3 · Columns</a>
+    <a href="#s4">4 · Endpoints</a>
+    <a href="#s5">5 · Reading the hours</a>
+    <a href="#s6">6 · What you may write</a>
+    <a href="#s7">7 · Corrections</a>
+    <a href="#s8">8 · Worked example</a>
+  </div>
+</nav>
+
+<section id="s1">
+  <div class="wrap">
+    <h2><span class="n">1</span>Start here</h2>
+    <div class="note warn">
+      <strong>The three views are empty until a month is confirmed.</strong>
+      They are not a live read of timesheets — they are a view over a snapshot that
+      <em>only</em> <code>confirm_month</code> writes. A query for
+      <code>period_month = 8</code> returns zero rows today, and will keep returning
+      zero until a manager confirms August on that project. That is correct
+      behaviour, not a broken feed: nothing is owed to accrual until somebody has
+      signed the month off.
+    </div>
+    <p>
+      Two consequences worth designing around. <strong>Zero rows is ambiguous</strong>
+      — it means either "not confirmed yet" or "confirmed with no hours", and those
+      need different handling on your side. Check
+      <code>OC_TS_MONTH_CONFIRM</code> (exposed at
+      <code>GET accrual/confirmed/:periodId</code>) to tell them apart. And
+      <strong>a month appears all at once</strong>, per project, at the moment of
+      confirmation — there is no partial or trickling state to poll through.
+    </p>
+    <div class="note">
+      <strong>You already have direct SELECT.</strong> <code>O2C_TIME</code> granted
+      it to <code>O2C_DEV</code> on all three views, so the queries you sent work as
+      they are. The endpoints in §4 exist for the OIC flow, which cannot open a
+      database session.
+    </div>
+  </div>
+</section>
+
+<section id="s2">
+  <div class="wrap">
+    <h2><span class="n">2</span>The three views</h2>
+    <p>
+      All three roll up from the same rows, so their hour totals are identical and
+      only the row count changes. Pick by what you are posting.
+    </p>
+    <div class="tbl">
+      <table>
+        <caption>Which one to use</caption>
+        <thead><tr><th>View</th><th>One row per</th><th>Use it to answer</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="mono">v_oc_ts_anx_month</td>
+            <td>person × project × month</td>
+            <td>What do we accrue for this person this month?</td>
+          </tr>
+          <tr>
+            <td class="mono">v_oc_ts_anx_day</td>
+            <td>person × project × day</td>
+            <td>Which days make that number up?</td>
+          </tr>
+          <tr>
+            <td class="mono">v_oc_ts_anx_day_task</td>
+            <td>person × project × day × task × entry type</td>
+            <td>Which task, and was this line a correction?</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note good">
+      <strong>The totals must agree across all three.</strong> They derive from one
+      grain, so a difference is a bug in our views rather than a rounding artefact —
+      please report it rather than reconciling around it.
+    </div>
+  </div>
+</section>
+
+<section id="s3">
+  <div class="wrap">
+    <h2><span class="n">3</span>Columns</h2>
+    <h3>Shared by all three views</h3>
+    <div class="tbl">
+      <table>
+        <caption>Common columns</caption>
+        <thead><tr><th>Column</th><th>Type</th><th>Meaning</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">CONFIRM_ID</td><td class="mono">NUMBER</td><td>The month confirmation this row belongs to. <span class="chip c-key">ack key</span></td></tr>
+          <tr><td class="mono">PERIOD</td><td class="mono">VARCHAR2(30)</td><td>Period name, e.g. <code>JUL-2026</code></td></tr>
+          <tr><td class="mono">PERIOD_YEAR</td><td class="mono">NUMBER(4)</td><td>Filter column</td></tr>
+          <tr><td class="mono">PERIOD_MONTH</td><td class="mono">NUMBER(2)</td><td>1–12. Filter column</td></tr>
+          <tr><td class="mono">MAIN_PROJECT_ID</td><td class="mono">NUMBER</td><td><strong>Your</strong> <code>OC_PROJECT.PROJECT_ID</code>. Null if the project has no link yet</td></tr>
+          <tr><td class="mono">MAIN_PROJECT_NUMBER</td><td class="mono">VARCHAR2(40)</td><td><strong>Your</strong> <code>OC_PROJECT.PROJECT_NUMBER</code> — the code to key on</td></tr>
+          <tr><td class="mono">PROJECT_NUMBER</td><td class="mono">VARCHAR2(60)</td><td><strong>Fusion's</strong> project number, e.g. <code>555</code>. Not yours</td></tr>
+          <tr><td class="mono">PROJECT_NAME</td><td class="mono">VARCHAR2(240)</td><td>As at confirmation</td></tr>
+          <tr><td class="mono">CUSTOMER_NAME</td><td class="mono">VARCHAR2(240)</td><td>As at confirmation</td></tr>
+          <tr><td class="mono">REVENUE_MODEL</td><td class="mono">VARCHAR2(20)</td><td>Fixed price · T&amp;M · Milestone</td></tr>
+          <tr><td class="mono">EMPLOYEE_ID</td><td class="mono">VARCHAR2(50)</td><td>HCM person number, e.g. <code>RI2824</code></td></tr>
+          <tr><td class="mono">EMPLOYEE_NAME</td><td class="mono">VARCHAR2(200)</td><td>As at confirmation</td></tr>
+          <tr><td class="mono">WORKER_TYPE</td><td class="mono">VARCHAR2(20)</td><td><code>Employee</code> or <code>Contractor</code></td></tr>
+          <tr><td class="mono">CLIENT_ROLE</td><td class="mono">VARCHAR2</td><td>Role on the project, e.g. <code>Architect Senior</code></td></tr>
+          <tr><td class="mono">BILLABLE_HOURS</td><td class="mono">NUMBER(8,2)</td><td>Signed — see §5</td></tr>
+          <tr><td class="mono">NON_BILLABLE_HOURS</td><td class="mono">NUMBER(8,2)</td><td>Signed</td></tr>
+          <tr><td class="mono">LEAVE_HOURS</td><td class="mono">NUMBER(8,2)</td><td>Signed. Apportioned by allocation %</td></tr>
+          <tr><td class="mono">TOTAL_HOURS</td><td class="mono">NUMBER</td><td>The three above, summed</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Additional, per view</h3>
+    <div class="tbl">
+      <table>
+        <caption>Grain-specific columns</caption>
+        <thead><tr><th>View</th><th>Column</th><th>Type</th><th>Meaning</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">_month</td><td class="mono">DAYS_WORKED</td><td class="mono">NUMBER</td><td>Distinct dates with hours</td></tr>
+          <tr><td class="mono">_day</td><td class="mono">WORK_DATE</td><td class="mono">DATE</td><td>The day. <code>YYYY-MM-DD</code> over REST</td></tr>
+          <tr><td class="mono">_day</td><td class="mono">DAY_NAME</td><td class="mono">VARCHAR2</td><td><code>MON</code>…<code>SUN</code></td></tr>
+          <tr><td class="mono">_day</td><td class="mono">TASKS</td><td class="mono">NUMBER</td><td>Distinct tasks collapsed into the row</td></tr>
+          <tr><td class="mono">_day_task</td><td class="mono">WORK_DATE</td><td class="mono">DATE</td><td>The day</td></tr>
+          <tr><td class="mono">_day_task</td><td class="mono">DAY_NAME</td><td class="mono">VARCHAR2</td><td><code>MON</code>…<code>SUN</code></td></tr>
+          <tr><td class="mono">_day_task</td><td class="mono">WBS_TASK</td><td class="mono">VARCHAR2(60)</td><td>Task code</td></tr>
+          <tr><td class="mono">_day_task</td><td class="mono">WBS_TASK_NAME</td><td class="mono">VARCHAR2(240)</td><td>Task name</td></tr>
+          <tr><td class="mono">_day_task</td><td class="mono">ENTRY_TYPE</td><td class="mono">VARCHAR2(12)</td><td><code>Actual</code> · <code>Default</code> · <code>Reversal</code> · <code>Adjustment</code></td></tr>
+          <tr><td class="mono">_day_task</td><td class="mono">FLAG</td><td class="mono">VARCHAR2(60)</td><td>Workflow flag explaining the row — see §5</td></tr>
+          <tr><td class="mono">_day_task</td><td class="mono">UNBILLED_REASON</td><td class="mono">VARCHAR2(60)</td><td>Customer Holiday · Training · Travel · Bench</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note">
+      <strong>Two project codes travel together, deliberately.</strong>
+      <code>PROJECT_NUMBER</code> is Fusion's and <code>MAIN_PROJECT_NUMBER</code> is
+      yours. Key on ours-to-you (<code>MAIN_PROJECT_NUMBER</code>); the Fusion one is
+      there so a disagreement can be reconciled without a third lookup. A null
+      <code>MAIN_PROJECT_NUMBER</code> means that project has no link on our side yet
+      — tell us rather than name-matching around it.
+    </div>
+  </div>
+</section>
+
+<section id="s4">
+  <div class="wrap">
+    <h2><span class="n">4</span>Endpoints</h2>
+    <p>
+      Base: <code>&lt;ords-host&gt;/o2c_time/oc/time/admin/</code>. All responses are
+      ORDS collection feeds — <code>{"items":[…],"hasMore":…,"offset":…,"limit":…}</code>.
+      <strong>Honour <code>hasMore</code> and page</strong>; a project month at the
+      finest grain runs to a few hundred rows and the default limit will truncate it.
+    </p>
+
+    <div class="ep">
+      <div class="ep-line"><span class="chip c-get">GET</span>
+        <span class="ep-path">accrual/summary/month/:periodYear/:periodMonth</span></div>
+      <p>One row per person per project month. Optional:
+        <code>?projectNumber=</code> <code>?mainProjectNumber=</code></p>
+    </div>
+    <div class="ep">
+      <div class="ep-line"><span class="chip c-get">GET</span>
+        <span class="ep-path">accrual/summary/day/:periodYear/:periodMonth</span></div>
+      <p>Tasks collapsed. Optional: <code>?projectNumber=</code>
+        <code>?mainProjectNumber=</code> <code>?employeeId=</code></p>
+    </div>
+    <div class="ep">
+      <div class="ep-line"><span class="chip c-get">GET</span>
+        <span class="ep-path">accrual/summary/daytask/:periodYear/:periodMonth</span></div>
+      <p>Finest grain, including corrections. Same optional filters as
+        <code>/day</code>.</p>
+    </div>
+    <div class="ep">
+      <div class="ep-line"><span class="chip c-post">POST</span>
+        <span class="ep-path">accrual/summary/ack/:confirmId</span></div>
+      <p>
+        Acknowledge everything under one confirmation. Body:
+        <code>{"status":"Y","message":"…","actor":"ACCRUAL"}</code> —
+        <code>Y</code> stored, <code>E</code> rejected. Returns
+        <code>{"confirmId":…,"batchesAcknowledged":…,"rowsAcknowledged":…}</code>.
+      </p>
+    </div>
+
+    <h3>Already available, and still the right tool for some jobs</h3>
+    <div class="tbl">
+      <table>
+        <caption>Existing endpoints</caption>
+        <thead><tr><th>Method</th><th>Path</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr><td><span class="chip c-get">GET</span></td><td class="mono">accrual/confirmed/:periodId</td><td>Which project-months are confirmed — use to tell "no rows" from "not confirmed"</td></tr>
+          <tr><td><span class="chip c-get">GET</span></td><td class="mono">accrual/pull/:periodYear/:periodMonth</td><td>Raw unprocessed rows at the finest grain, with <code>BATCH_ID</code></td></tr>
+          <tr><td><span class="chip c-post">POST</span></td><td class="mono">accrual/ack/:batchId</td><td>Acknowledge one batch</td></tr>
+          <tr><td><span class="chip c-get">GET</span></td><td class="mono">accrual/extract/:confirmId</td><td>Everything for a single confirmation</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note">
+      <strong>Two acks, one mechanism.</strong> <code>ack/:batchId</code> pairs with
+      <code>pull</code>; <code>summary/ack/:confirmId</code> pairs with the summary
+      views, which do not expose <code>BATCH_ID</code>. The confirmation-level ack
+      resolves to every batch underneath and calls the same routine, so a month with a
+      later correction posted against it is fully acknowledged rather than partly.
+      Use one or the other consistently.
+    </div>
+  </div>
+</section>
+
+<section id="s5">
+  <div class="wrap">
+    <h2><span class="n">5</span>Reading the hours</h2>
+    <div class="note good">
+      <strong>Hours are signed, so you can always <code>SUM()</code>.</strong>
+      <code>Reversal</code> rows are negative; everything else is non-negative. This is
+      a database constraint, not a convention — you never need sign logic, and a
+      <code>SUM</code> over any grain gives the net position directly.
+    </div>
+    <div class="tbl">
+      <table>
+        <caption>ENTRY_TYPE</caption>
+        <thead><tr><th>Value</th><th>Sign</th><th>Means</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">Actual</td><td>+</td><td>The person entered these hours</td></tr>
+          <tr><td class="mono">Default</td><td>+</td><td>Prepopulated and never corrected — a cut-off passed and the system stood in. <strong>Real hours, treat as Actual</strong></td></tr>
+          <tr><td class="mono">Reversal</td><td>−</td><td>Backs out a previously sent line</td></tr>
+          <tr><td class="mono">Adjustment</td><td>+</td><td>The replacement that follows a Reversal</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="tbl">
+      <table>
+        <caption>FLAG — why a row looks the way it does</caption>
+        <thead><tr><th>Value</th><th>Means</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">Defaulted</td><td>Nobody submitted before the cut-off; prepopulated hours stood</td></tr>
+          <tr><td class="mono">Late submission</td><td>Submitted after the cut-off. Hours are normal</td></tr>
+          <tr><td class="mono">Overridden &amp; approved</td><td>A manager changed the hours and recorded a reason</td></tr>
+          <tr><td class="mono">Advance closure</td><td>The month went out without every approval, deliberately</td></tr>
+          <tr><td class="mono">Reversal</td><td>This line backs out an earlier one</td></tr>
+          <tr><td class="mono">Adjustment</td><td>This line replaces a reversed one</td></tr>
+          <tr><td class="mono">null</td><td>Ordinary approved time</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note warn">
+      <strong>Leave hours are apportioned, not whole days.</strong> A person 25%
+      allocated to a project who takes one 8-hour day off contributes
+      <strong>2.00</strong> leave hours to that project, not 8.00. The remaining 6
+      belong to their other projects. Do not gross leave back up to a full day.
+    </div>
+  </div>
+</section>
+
+<section id="s6">
+  <div class="wrap">
+    <h2><span class="n">6</span>What you may write</h2>
+    <div class="note crit">
+      <strong>Hours are not writable. There is no endpoint that changes a figure, and
+      that is deliberate.</strong> The hours here come from approved timesheets, and a
+      confirmed month is frozen — that is the entire reason this is a snapshot with the
+      names copied onto it rather than a set of joins back to our live tables. A number
+      you have already posted against must stay the number you posted against.
+    </div>
+    <div class="tbl">
+      <table>
+        <caption>Ownership</caption>
+        <thead><tr><th>Field</th><th>Owner</th><th>You can</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">PROCESSED_FLAG</td><td>Accrual</td><td><span class="chip c-post">write</span> via ack — <code>N</code> → <code>Y</code> or <code>E</code></td></tr>
+          <tr><td class="mono">PULLED_ON</td><td>Accrual</td><td><span class="chip c-post">write</span> stamped by ack</td></tr>
+          <tr><td class="mono">PROCESS_MESSAGE</td><td>Accrual</td><td><span class="chip c-post">write</span> your <code>message</code> on ack</td></tr>
+          <tr><td class="mono">All hour columns</td><td>Timesheet</td><td><span class="chip c-no">read only</span></td></tr>
+          <tr><td class="mono">All name / id columns</td><td>Timesheet</td><td><span class="chip c-no">read only</span></td></tr>
+          <tr><td class="mono">ENTRY_TYPE · FLAG</td><td>Timesheet</td><td><span class="chip c-no">read only</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      Acking with <code>status = "E"</code> is how you reject a batch. It marks the
+      rows and stores your message, and it does <em>not</em> alter any figure — it
+      tells us to look, so we can correct at source.
+    </p>
+  </div>
+</section>
+
+<section id="s7">
+  <div class="wrap">
+    <h2><span class="n">7</span>When a figure is wrong</h2>
+    <p>
+      Corrections arrive as <strong>a pair of new rows, never an edit</strong>. A
+      retro adjustment approved after its month was confirmed writes a
+      <code>Reversal</code> for the old figure and an <code>Adjustment</code> for the
+      new one, and both are carried across by a top-up run.
+    </p>
+    <pre><code>Original   2026-07-14  T-100  Actual       8.00
+Reversal   2026-07-14  T-100  Reversal    -8.00
+Adjustment 2026-07-14  T-100  Adjustment   6.00
+                                        -------
+net                                        6.00</code></pre>
+    <ul>
+      <li><strong>The month is never restated.</strong> The original row stays exactly as you first read it.</li>
+      <li><strong>Corrections carry the same <code>CONFIRM_ID</code></strong> as the month they correct, on a later <code>BATCH_ID</code>.</li>
+      <li><strong>They can arrive after you have acked</strong> the month. Re-poll a confirmed month, or poll <code>accrual/pull</code> for unprocessed rows.</li>
+      <li><strong>Post the delta, not the difference you compute.</strong> Both lines are given to you explicitly.</li>
+    </ul>
+    <div class="note">
+      <strong><code>ACTION_DATE</code> vs <code>WORK_DATE</code> on corrections.</strong>
+      A retro adjustment carries the date the correction was <em>decided</em>, not the
+      day worked, so it lands in the period it was agreed in rather than reopening a
+      closed one. <code>WORK_DATE</code> still says which day the hours belong to.
+    </div>
+  </div>
+</section>
+
+<section id="s8">
+  <div class="wrap">
+    <h2><span class="n">8</span>Worked example</h2>
+    <p>
+      Project <code>555 Opportunity To Cash</code> — your <code>PRJ-2026-33</code> —
+      for August 2026. Live figures from the pod, shown at the monthly grain.
+    </p>
+    <div class="tbl">
+      <table>
+        <caption>v_oc_ts_anx_month · 2026-08 · PRJ-2026-33</caption>
+        <thead>
+          <tr><th>Employee</th><th>Client role</th><th>Type</th>
+            <th class="num">Billable</th><th class="num">Non-bill.</th>
+            <th class="num">Leave</th><th class="num">Total</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Kishore Krovvidi <span class="muted">CRI0398</span></td><td>Developer</td><td>Contractor</td><td class="num">0.00</td><td class="num">168.00</td><td class="num">0.00</td><td class="num">168.00</td></tr>
+          <tr><td>Navamani Solairajan <span class="muted">RI9001</span></td><td>Project Manager</td><td>Employee</td><td class="num">72.00</td><td class="num">0.00</td><td class="num">0.00</td><td class="num">72.00</td></tr>
+          <tr><td>SaiSowmith Kantipudi <span class="muted">RI2900</span></td><td>Cloud Engineer</td><td>Employee</td><td class="num">168.00</td><td class="num">0.00</td><td class="num">0.00</td><td class="num">168.00</td></tr>
+          <tr><td>Sam Joshuva S <span class="muted">RI2824</span></td><td>Associate Project Manager</td><td>Employee</td><td class="num">39.50</td><td class="num">0.00</td><td class="num">8.00</td><td class="num">47.50</td></tr>
+          <tr><td>Santosh Kumar Kanala <span class="muted">RI2894</span></td><td>Architect Senior</td><td>Employee</td><td class="num">80.00</td><td class="num">0.00</td><td class="num">8.00</td><td class="num">88.00</td></tr>
+          <tr><td>User Rite <span class="muted">7781</span></td><td>Business Analyst</td><td>Employee</td><td class="num">88.00</td><td class="num">0.00</td><td class="num">0.00</td><td class="num">88.00</td></tr>
+          <tr><td>Venkata Bhaskar Reddy Sangana <span class="muted">RI2914</span></td><td>Engineer</td><td>Employee</td><td class="num">0.00</td><td class="num">168.00</td><td class="num">0.00</td><td class="num">168.00</td></tr>
+        </tbody>
+        <tfoot><tr><td colspan="3">7 people</td><td class="num">447.50</td><td class="num">336.00</td><td class="num">16.00</td><td class="num">799.50</td></tr></tfoot>
+      </table>
+    </div>
+    <p>Sam's 8.00 leave hours are one day off at 25% allocation across four absences — the same days cost his other project the remainder.</p>
+    <h3>Suggested flow</h3>
+    <pre><code>1  GET  accrual/confirmed/:periodId          which project-months are ready
+2  GET  accrual/summary/month/2026/8         post the accrual from this
+3  GET  accrual/summary/daytask/2026/8       only if you need the detail
+4  POST accrual/summary/ack/:confirmId       {"status":"Y","actor":"ACCRUAL"}
+5  later: re-poll for corrections carrying the same CONFIRM_ID</code></pre>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div>O2C Timesheet Module → Accrual. Interface contract, 21 August 2026.</div>
+    <div>Oracle Time &amp; Labor remains the system of record for time. This interface carries confirmed project time only; it does not carry payroll or costing.</div>
+  </div>
+</footer>
