@@ -1465,7 +1465,10 @@ BEGIN
              period_name, absent_employee_id, absent_employee_name,
              absence_date, absence_day, absence_type,
              cover_employee_id, cover_employee_name,
-             llc_status, approved_by, approved_on
+             -- DECIDED_BY, not APPROVED_BY: naming the cover is the decision
+             -- (BRD 4.2.1), so ASSIGNED_BY carries it and APPROVED_BY only ever
+             -- holds a name for rows decided under the old two-step flow.
+             llc_status, decided_by, decided_on
         FROM v_oc_ts_llc_annexure
        WHERE period_id = :periodId
        ORDER BY project_name, absence_date, absent_employee_name

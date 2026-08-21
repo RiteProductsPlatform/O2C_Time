@@ -71,9 +71,11 @@ define([
 
         $page.variables.lines = rows;
 
-        $page.variables.openCount     = rows.filter((r) => r.llcStatus === 'Open').length;
-        $page.variables.assignedCount = rows.filter((r) => r.llcStatus === 'Assigned').length;
-        $page.variables.approvedCount = rows.filter((r) => r.llcStatus === 'Approved').length;
+        // ONE DECIDED STATE. Naming a cover settles the line (BRD 4.2.1), so
+        // 'Assigned' and the legacy 'Approved' are counted together as covered.
+        $page.variables.openCount = rows.filter((r) => r.llcStatus === 'Open').length;
+        $page.variables.assignedCount = rows.filter(
+          (r) => r.llcStatus === 'Assigned' || r.llcStatus === 'Approved').length;
 
         // CAPACITY COVERED, and it is not a billing figure.
         //
@@ -88,7 +90,7 @@ define([
         // whether they are on top of it -- so it sums LOSS_HOURS over approved
         // rows and the label says capacity, not billing.
         $page.variables.billedHours = rows
-          .filter((r) => r.llcStatus === 'Approved')
+          .filter((r) => r.llcStatus === 'Assigned' || r.llcStatus === 'Approved')
           .reduce((sum, r) => sum + (Number(r.lossHours) || 0), 0);
 
         // "there should always be a eligible person to cover in FCP and this is

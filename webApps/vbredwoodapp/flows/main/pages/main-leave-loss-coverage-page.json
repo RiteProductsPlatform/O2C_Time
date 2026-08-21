@@ -60,11 +60,6 @@
       "defaultValue": 0,
       "input": "none"
     },
-    "approvedCount": {
-      "type": "number",
-      "defaultValue": 0,
-      "input": "none"
-    },
     "billedHours": {
       "type": "number",
       "defaultValue": 0,
@@ -107,12 +102,6 @@
       "type": "boolean",
       "defaultValue": false,
       "input": "none"
-    },
-    "confirmMessage": {
-      "type": "string",
-      "defaultValue": "",
-      "input": "none",
-      "description": "Body text for the confirmation dialog. window.confirm cannot be used - SES blocks browser globals in chains (knowledge/14 §7)."
     },
     "unbilledApproved": {
       "type": "number",
@@ -193,13 +182,6 @@
         }
       ]
     },
-    "approveAll": {
-      "chains": [
-        {
-          "chain": "askApproveAllChain"
-        }
-      ]
-    },
     "openAssign": {
       "chains": [
         {
@@ -207,30 +189,6 @@
           "parameters": {
             "row": "{{ $current.row }}"
           }
-        }
-      ]
-    },
-    "approveOne": {
-      "chains": [
-        {
-          "chain": "approveCoverChain",
-          "parameters": {
-            "llcId": "{{ $current.row.llcId }}"
-          }
-        }
-      ]
-    },
-    "confirmApproveAll": {
-      "chains": [
-        {
-          "chain": "approveAllChain"
-        }
-      ]
-    },
-    "cancelApproveAll": {
-      "chains": [
-        {
-          "chain": "cancelApproveAllChain"
         }
       ]
     },

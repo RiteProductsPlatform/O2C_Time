@@ -39,32 +39,7 @@ define([], () => {
     }
 
     /**
-     * What the annexure chip says.
-     *
-     * NOT an hours figure, and not the word "billed". Approving coverage moves
-     * nothing: it records that this colleague covered this absence, and that
-     * statement is what reaches the invoice annexure (REP-002). The chip said
-     * "2.00h billed" for one afternoon on 20-Aug and that reading -- that
-     * covering somebody makes their hours billable -- is exactly what the
-     * functional owner retracted.
-     */
-    billedLabel(row) {
-      if (!row) { return ''; }
-      return 'On annexure';
-    }
-
-    billedClass(row) {
-      return 'rw-flag rw-flag-adjustment';
-    }
-
-    billedTitle(row) {
-      return 'Named in the invoice annexure (REP-002) as covering this '
-           + 'absence. No hours change: the covering colleague\'s time stays '
-           + 'unbilled and the absence stays in the leave column.';
-    }
-
-    /**
-     * Names approved coverage whose absence has since been withdrawn.
+     * Names decided coverage whose absence has since been withdrawn.
      *
      * Worth a banner rather than only a row chip: it is already off the invoice
      * annexure, so nothing is wrong downstream, but the record still says a
@@ -73,10 +48,12 @@ define([], () => {
     orphanNote(n) {
       const c = Number(n) || 0;
       return c === 1
-        ? '1 approved coverage is for an absence that has since been withdrawn. '
-          + 'It no longer reaches the invoice annexure — revoke it to tidy the record.'
-        : c + ' approved coverages are for absences that have since been withdrawn. '
-          + 'They no longer reach the invoice annexure — revoke them to tidy the record.';
+        ? '1 cover is for an absence that has since been withdrawn. It no '
+          + 'longer reaches the invoice annexure — reassign or clear it to tidy '
+          + 'the record.'
+        : c + ' covers are for absences that have since been withdrawn. They no '
+          + 'longer reach the invoice annexure — reassign or clear them to tidy '
+          + 'the record.';
     }
 
     /** Names absences nobody has been assigned to cover. */

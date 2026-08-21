@@ -60,13 +60,12 @@
           <div class="rw-metric-value"><oj-bind-text value="[[ $variables.openCount ]]"></oj-bind-text></div>
           <div class="rw-metric-label"><oj-bind-text value="[[$application.translations.appBundle.leave_loss_coverage_uncovered]]"></oj-bind-text></div>
         </div>
+        <!-- ONE STEP, so one number. "Assigned, awaiting approval" and
+             "Approved" were the two halves of a flow that no longer exists;
+             naming a cover settles the line. -->
         <div class="oj-flex-item">
           <div class="rw-metric-value"><oj-bind-text value="[[ $variables.assignedCount ]]"></oj-bind-text></div>
-          <div class="rw-metric-label"><oj-bind-text value="[[$application.translations.appBundle.leave_loss_coverage_assigned_awaiting_approval]]"></oj-bind-text></div>
-        </div>
-        <div class="oj-flex-item">
-          <div class="rw-metric-value"><oj-bind-text value="[[ $variables.approvedCount ]]"></oj-bind-text></div>
-          <div class="rw-metric-label"><oj-bind-text value="[[$application.translations.appBundle.common_approved]]"></oj-bind-text></div>
+          <div class="rw-metric-label">Covered</div>
         </div>
         <div class="oj-flex-item">
           <div class="rw-metric-value"><oj-bind-text value="[[ $application.functions.fmtHours($variables.billedHours) ]]"></oj-bind-text></div>
@@ -89,11 +88,7 @@
     <div class="oj-sm-padding-4x rw-metric">
       <div class="oj-flex oj-sm-justify-content-space-between oj-sm-align-items-center oj-sm-flex-wrap oj-sm-gap-2x oj-sm-margin-3x-bottom">
         <h2 class="oj-typography-heading-xs oj-sm-margin-0"><oj-bind-text value="[[$application.translations.appBundle.leave_loss_coverage_absences]]"></oj-bind-text></h2>
-        <oj-button chroming="callToAction"
-                   disabled="[[ $variables.busy || $variables.assignedCount === 0 ]]"
-                   on-oj-action="[[ $listeners.approveAll ]]">
-          <span><oj-bind-text value="[[$application.translations.appBundle.leave_loss_coverage_approve_all_assigned]]"></oj-bind-text><oj-bind-text value="[[ $variables.assignedCount ]]"></oj-bind-text>)</span>
-        </oj-button>
+
       </div>
 
       <oj-bind-if test="[[ $variables.orphanCount > 0 ]]">
@@ -166,16 +161,9 @@
                 <span :class="[[ $application.functions.outcomeClass(cell.row.llcStatus) ]]">
                   <oj-bind-text value="[[ cell.row.llcStatus ]]"></oj-bind-text>
                 </span>
-                <!-- The chip used to say only "Billed", which was true of the
-                     flag and not always of the hours: a row approved before the
-                     billing was wired carries the flag with nothing moved. It
-                     now states the quantity, or says plainly that none moved. -->
-                <oj-bind-if test="[[ cell.row.billedFlag === 'Y' ]]">
-                  <span :class="[[ $page.functions.billedClass(cell.row) ]]"
-                        :title="[[ $page.functions.billedTitle(cell.row) ]]">
-                    <oj-bind-text value="[[ $page.functions.billedLabel(cell.row) ]]"></oj-bind-text>
-                  </span>
-                </oj-bind-if>
+                <!-- NO ANNEXURE CHIP. It restated the status: a line with a
+                     cover named is on the annexure, and the status column
+                     already says so. Two marks for one fact is noise. -->
                 <!-- The absence went away after this was approved. The row is
                      kept on purpose and is already off the annexure; this is
                      what tells the manager there is something to revoke. -->
@@ -190,7 +178,11 @@
               <div class="oj-flex oj-sm-gap-1x">
                 <!-- Approved coverage is settled: reassigning it would change
                      hours already on an invoice annexure. -->
-                <oj-bind-if test="[[ cell.row.llcStatus !== 'Approved' ]]">
+                <!-- Always offered. There is no second step to settle a line,
+                     so the only way to change a cover is to name a different
+                     one -- and an absence withdrawn after the fact leaves a row
+                     that has to be unassignable. -->
+                <oj-bind-if test="[[ true ]]">
                   <oj-button chroming="borderless" disabled="[[ $variables.busy ]]"
                              :aria-label="[[ $page.functions.assignLabel(cell.row.absentEmployeeName) ]]"
                              on-oj-action="[[ $listeners.openAssign ]]">
@@ -198,13 +190,7 @@
                   </oj-button>
                 </oj-bind-if>
 
-                <oj-bind-if test="[[ cell.row.llcStatus === 'Assigned' ]]">
-                  <oj-button chroming="outlined" disabled="[[ $variables.busy ]]"
-                             :aria-label="[[ $page.functions.approveLabel(cell.row.absentEmployeeName) ]]"
-                             on-oj-action="[[ $listeners.approveOne ]]">
-                    <span><oj-bind-text value="[[$application.translations.appBundle.common_approve]]"></oj-bind-text></span>
-                  </oj-button>
-                </oj-bind-if>
+
               </div>
             </template>
           </oj-table>
@@ -260,24 +246,5 @@
     </div>
   </oj-dialog>
 
-  <!-- ══════════════════ Confirmation ══════════════════ -->
-  <!-- oj-dialog opened via Actions.callComponentMethod, not window.confirm:
-       SES blocks browser globals inside chains (knowledge/14 §7). -->
-  <oj-dialog id="approveAllDlg" dialog-title="[[$application.translations.appBundle.leave_loss_coverage_approve_all_assigned_coverage]]" cancel-behavior="icon">
-    <div slot="body">
-      <p class="oj-typography-body-md">
-        <oj-bind-text value="[[ $variables.confirmMessage ]]"></oj-bind-text>
-      </p>
-    </div>
-    <div slot="footer">
-      <oj-button on-oj-action="[[ $listeners.cancelApproveAll ]]">
-        <span><oj-bind-text value="[[$application.translations.appBundle.common_cancel]]"></oj-bind-text></span>
-      </oj-button>
-      <oj-button chroming="callToAction" disabled="[[ $variables.busy ]]"
-                 on-oj-action="[[ $listeners.confirmApproveAll ]]">
-        <span><oj-bind-text value="[[$application.translations.appBundle.common_approve_all]]"></oj-bind-text></span>
-      </oj-button>
-    </div>
-  </oj-dialog>
 
 </oj-sp-general-overview-page>
