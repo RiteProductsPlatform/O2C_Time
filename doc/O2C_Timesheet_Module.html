@@ -1,4 +1,4 @@
-<title>O2C Timesheet Module — Working Prototype (V4, Aug 2026)</title>
+<title>O2C Timesheet Walkthrough</title>
 <style>
 :root{
   --rw-coal:#2a2c33; --rw-ink-2:#3a3c44; --rw-slate:#5b5d65; --rw-oyster:#f6f6f4; --rw-paper:#ffffff;
@@ -145,7 +145,7 @@ table.axis th[scope=row]{ text-align:left; font-family:ui-monospace,Consolas,mon
 <div class="rw-app">
   <div class="rw-topbar">
     <div style="display:flex;align-items:center;gap:10px">
-      <span class="rw-brand">O2C Timesheet<small>prototype &middot; V4 &middot; Aug 2026</small></span>
+      <span class="rw-brand">O2C Timesheet<small>walkthrough</small></span>
     </div>
     <div class="rw-topbar-right">
       <div class="rw-role-switch">
@@ -183,1747 +183,1522 @@ table.axis th[scope=row]{ text-align:left; font-family:ui-monospace,Consolas,mon
 
 <script>
 /* ============================================================
-   O2C TIMESHEET MODULE - working prototype
-   Rebuilt 21-Aug-2026 against the V4 two-axis status model.
+   O2C TIMESHEET — DEMO WALKTHROUGH
+   Rebuilt 21-Aug-2026 from the APP'S OWN PAGE FILES, not from the
+   requirement pack. The previous prototype was written from
+   CLAUDE.md and described the module as documented rather than as
+   built: it invented a Status & Flag Model page, put Monthly Summary
+   in the menu when it is a drill-down, made Team Approvals an
+   employee grid when it is a project list, omitted Salary on Hold
+   entirely, and stated that the employee self-view "was recorded as
+   manager-only" when the page exists and ships.
 
-   Everything below reflects decisions taken since the 30-Jul
-   prototype. The ones that changed behaviour, not just wording:
+   Menu, page titles, subtitles and column headers below are lifted
+   from webApps/.../flows/main/pages/*.html and navModel.js.
 
-     - two status axes, not one list of seven
-     - five flags, never deleted, only cleared
-     - transitions are DATA (24 rows), not code
-     - day-level approval retired: approve the week, days cascade
-     - leave loss coverage has NO approval step - assigning is
-       the decision, and the status stops at Assigned
-     - project loss hours are allocation-scoped, not raw absence
-     - leave is apportioned across projects by allocation %
-     - roles are derived from HCM/PPM, never typed
-     - several periods may be Open at once
-     - Cancel is now Reversal
-     - Period Control screen removed (reference data only)
+   The normal flow is what works end to end:
 
-   Sample data is the live pod: project 555, seven real people,
-   August 2026, with the absences actually booked in Fusion.
+     sign in -> My Timesheet -> submit
+             -> Team Approvals -> open project
+             -> Monthly Summary -> open employee
+             -> Approval Detail -> approve
+             -> Confirm month -> Accrual Integration
+
+   Sample data is the live pod: 555 Opportunity To Cash, the six
+   allocated people, July and August 2026.
    ============================================================ */
 
-var TODAY = new Date(2026, 7, 21);          // Fri 21-Aug-2026
+var TODAY = new Date(2026, 7, 21);        // Fri 21-Aug-2026
 var TODAY_STR = '21-Aug-2026';
 
-/* ---- reference: periods (RULE-017 relaxed - two Open at once) ---- */
+/* ---- periods ---- */
 var PERIODS = [
-  {key:'JUL-2026', name:'July 2026',      y:2026, m:6, status:'Open',   editable:false,
-   weeklyCut:'Monday 17:00', deliveryCut:'04-Aug-2026',
-   why:'Open, but past its delivery cut-off - visible and read-only.'},
-  {key:'AUG-2026', name:'August 2026',    y:2026, m:7, status:'Open',   editable:true,
-   weeklyCut:'Monday 17:00', deliveryCut:'03-Sep-2026',
-   why:'The month being worked.'},
-  {key:'SEP-2026', name:'September 2026', y:2026, m:8, status:'Future', editable:false,
-   weeklyCut:'Monday 17:00', deliveryCut:'05-Oct-2026',
-   why:'Frozen until it opens (RULE-004).'},
-  {key:'JUN-2026', name:'June 2026',      y:2026, m:5, status:'Closed', editable:false,
-   weeklyCut:'Monday 17:00', deliveryCut:'03-Jul-2026',
-   why:'Confirmed to accrual. Visible, read-only.'}
+  {key:'JUL-2026', name:'JUL-2026', y:2026, m:6, status:'Closed', editable:false,
+   deliveryCut:'04-Aug-2026', note:'Confirmed to accrual on 21-Aug. Read-only.'},
+  {key:'AUG-2026', name:'AUG-2026', y:2026, m:7, status:'Open', editable:true,
+   deliveryCut:'03-Sep-2026', note:'The month being worked.'},
+  {key:'SEP-2026', name:'SEP-2026', y:2026, m:8, status:'Future', editable:false,
+   deliveryCut:'05-Oct-2026', note:'Frozen until it opens (RULE-004).'}
 ];
 function period(k){ for(var i=0;i<PERIODS.length;i++) if(PERIODS[i].key===k) return PERIODS[i]; return PERIODS[1]; }
 
-/* ---- reference: projects. MAIN code is the O2C main application's ---- */
+/* ---- projects. MAIN is the O2C main application's code, and it is
+   the column accrual joins on. A project without one is refused at
+   confirmation (-20023, added 21-Aug). ---- */
 var PROJECTS = [
-  {id:'555', name:'Opportunity To Cash', customer:'RITE Digital', model:'Fixed price',
-   main:'PRJ-2026-33', mgr:'RI9001', leaveLoss:true,
-   tasks:[{code:'T-100',name:'Delivery'},{code:'T-110',name:'Design'},{code:'T-120',name:'Testing'},{code:'T-900',name:'Internal / Bench'}]},
-  {id:'444', name:'RitePulse', customer:'RITE Digital', model:'T&M',
-   main:'PRJ-2026-32', mgr:'RI9001', leaveLoss:false,
-   tasks:[{code:'R-100',name:'Delivery'},{code:'R-200',name:'Support'}]},
-  {id:'PCS10034', name:'PCS Managed Services', customer:'Pearl Consulting', model:'Milestone',
-   main:'PRJ-2026-34', mgr:'RI9001', leaveLoss:true,
-   tasks:[{code:'P-100',name:'Managed Service'},{code:'P-200',name:'Enhancement'}]}
+  {id:'555', name:'555 Opportunity To Cash', client:'Rite Digital', model:'FCP',
+   main:'PRJ-2026-33', mgr:'RI9001', leaveLoss:true, tsStart:'01-Jul-25', tsEnd:'31-Dec-26',
+   tasks:[{code:'01.01.111', name:'Delivery'},{code:'01.01.112', name:'Design'},{code:'01.02.100', name:'Internal'}]},
+  {id:'444', name:'444 Opportunity To Cash', client:'Rite Digital', model:'T&M',
+   main:'PRJ-2026-32', mgr:'RI9001', leaveLoss:false, tsStart:'01-Apr-25', tsEnd:'31-Mar-27',
+   tasks:[{code:'02.01.100', name:'Delivery'},{code:'02.02.100', name:'Support'}]},
+  {id:'PCS10034', name:'Business World RODS Upgrade', client:'Business World', model:'Milestone',
+   main:'PRJ-2026-34', mgr:'RI9001', leaveLoss:true, tsStart:'01-Jan-26', tsEnd:'31-Dec-26',
+   tasks:[{code:'03.01.100', name:'Managed Service'}]}
 ];
 function proj(id){ for(var i=0;i<PROJECTS.length;i++) if(PROJECTS[i].id===id) return PROJECTS[i]; return null; }
-function taskName(pid, code){ var p=proj(pid); if(!p) return code;
-  for(var i=0;i<p.tasks.length;i++) if(p.tasks[i].code===code) return p.tasks[i].code+' - '+p.tasks[i].name; return code; }
+function taskName(pid,c){ var p=proj(pid); if(!p) return c;
+  for(var i=0;i<p.tasks.length;i++) if(p.tasks[i].code===c) return p.tasks[i].name; return c; }
 
-/* ---- reference: workers.
-   APP_ROLE is DERIVED, never typed:
-     manager    = is PROJECT_MANAGER_ID on an active project
-     contractor = WORKER_TYPE Contractor
-     employee   = has an active allocation
-     none       = in HCM, on none of our projects
-   Manager outranks contractor - a contingent worker can run a
-   project. The employee/contractor rules read WORKER_TYPE, never
-   APP_ROLE, or they would miss a contractor who manages.        */
+/* ---- workers.
+   PATTERN matters and is not cosmetic: RI2824 and RI2894 work
+   SUNDAY TO THURSDAY. Confirmed intentional 21-Aug-2026. They show
+   22 working days in July where the others show 18, they carry
+   weekend dates into the accrual batch, and any check that assumes
+   Mon-Fri marks them wrong when they are right.               ---- */
 var WORKERS = [
-  {id:'RI2824',  name:'Sam Joshuva S',                type:'Employee',   std:8,
-   role:'Associate Project Manager', billing:'Billable',
+  {id:'CRI0398', name:'Kishore Krovvidi',              type:'Employee', std:8, country:'India',
+   role:'Developer',                 billing:'Unbilled', pattern:'MON_FRI',
+   alloc:[{p:'555',pct:100}]},
+  {id:'RI9001',  name:'Navamani Solairajan',           type:'Employee', std:8, country:'India',
+   role:'Project Manager',           billing:'Billable', pattern:'MON_FRI',
+   alloc:[{p:'555',pct:25}]},
+  {id:'RI2900',  name:'SaiSowmith Kantipudi',          type:'Employee', std:8, country:'India',
+   role:'Cloud Engineer',            billing:'Billable', pattern:'MON_FRI',
+   alloc:[{p:'555',pct:100}]},
+  {id:'RI2824',  name:'Sam Joshuva S',                 type:'Employee', std:8, country:'India',
+   role:'Associate Project Manager', billing:'Billable', pattern:'SUN_THU',
    alloc:[{p:'555',pct:25},{p:'444',pct:75}]},
-  {id:'RI2894',  name:'Santosh Kumar Kanala',         type:'Employee',   std:8,
-   role:'Architect Senior', billing:'Billable',
+  {id:'RI2894',  name:'Santosh Kumar Kanala',          type:'Employee', std:8, country:'India',
+   role:'Architect Senior',          billing:'Billable', pattern:'SUN_THU',
    alloc:[{p:'555',pct:50},{p:'444',pct:50}]},
-  {id:'RI2900',  name:'SaiSowmith Kantipudi',         type:'Employee',   std:8,
-   role:'Cloud Engineer', billing:'Billable',
-   alloc:[{p:'555',pct:100}]},
-  {id:'CRI0398', name:'Kishore Krovvidi',             type:'Contractor', std:8,
-   role:'Developer', billing:'Unbilled',
-   alloc:[{p:'555',pct:100}]},
-  {id:'RI2914',  name:'Venkata Bhaskar Reddy Sangana',type:'Employee',   std:9,
-   role:'Engineer', billing:'Unbilled',
-   alloc:[{p:'555',pct:100}]},
-  {id:'7781',    name:'User Rite',                    type:'Employee',   std:8,
-   role:'Business Analyst', billing:'Unbilled',
-   alloc:[{p:'555',pct:100}]},
-  {id:'RI9001',  name:'Navamani Solairajan',          type:'Employee',   std:8,
-   role:'Project Manager', billing:'Billable',
-   alloc:[{p:'555',pct:25}]}
+  {id:'RI2914',  name:'Venkata Bhaskar Reddy Sangana', type:'Employee', std:8, country:'India',
+   role:'Engineer',                  billing:'Unbilled', pattern:'MON_FRI',
+   alloc:[{p:'555',pct:100}]}
 ];
 function wkr(id){ for(var i=0;i<WORKERS.length;i++) if(WORKERS[i].id===id) return WORKERS[i]; return null; }
+function allocPct(e,p){ var w=wkr(e); if(!w) return 0;
+  for(var i=0;i<w.alloc.length;i++) if(w.alloc[i].p===p) return w.alloc[i].pct; return 0; }
+function empsOn(p){ return WORKERS.filter(function(w){ return allocPct(w.id,p)>0; }); }
 function derivedRole(id){
-  var w = wkr(id); if(!w) return 'ROLE_TIME_NONE';
   for(var i=0;i<PROJECTS.length;i++) if(PROJECTS[i].mgr===id) return 'ROLE_TIME_MANAGER';
+  var w=wkr(id); if(!w) return 'ROLE_TIME_NONE';
   if(w.type==='Contractor') return 'ROLE_TIME_CONTRACTOR';
-  if(w.alloc && w.alloc.length) return 'ROLE_TIME_EMPLOYEE';
-  return 'ROLE_TIME_NONE';
+  return w.alloc.length ? 'ROLE_TIME_EMPLOYEE' : 'ROLE_TIME_NONE';
 }
-function allocPct(empId, pid){
-  var w=wkr(empId); if(!w) return 0;
-  for(var i=0;i<w.alloc.length;i++) if(w.alloc[i].p===pid) return w.alloc[i].pct;
-  return 0;
+/* is this a working day for this person? SUN_THU is a real pattern here. */
+function worksOn(empId, dow){         // dow 0=Sun .. 6=Sat
+  var w=wkr(empId);
+  return w && w.pattern==='SUN_THU' ? (dow>=0 && dow<=4) : (dow>=1 && dow<=5);
 }
-function empsOn(pid){ return WORKERS.filter(function(w){ return allocPct(w.id,pid)>0; }); }
 
-/* ---- absence, read LIVE from Fusion per person.
-   These are the ones actually booked on the pod for August.
-   A withdrawn absence stays APPROVED in Fusion and is marked
-   ORA_WITHDRAWN - so we test the absence status, never the
-   approval status, or withdrawn leave reads as real leave.   */
+/* ---- absence, read live from Fusion per person ---- */
 var ABSENCE = [
-  {emp:'RI2824', date:'2026-08-07', hours:8, type:'Annual',   status:'Active'},
-  {emp:'RI2824', date:'2026-08-10', hours:8, type:'Annual',   status:'Active'},
-  {emp:'RI2824', date:'2026-08-14', hours:8, type:'Annual',   status:'Active'},
-  {emp:'RI2824', date:'2026-08-19', hours:8, type:'Sick',     status:'Active'},
-  {emp:'RI2824', date:'2026-08-20', hours:8, type:'Annual',   status:'ORA_WITHDRAWN'},
-  {emp:'RI2894', date:'2026-08-18', hours:8, type:'Annual',   status:'Active'},
-  {emp:'RI2894', date:'2026-08-19', hours:8, type:'Annual',   status:'Active'}
+  {emp:'RI2824', date:'2026-08-07', hours:8, type:'Annual', status:'Active'},
+  {emp:'RI2824', date:'2026-08-10', hours:8, type:'Annual', status:'Active'},
+  {emp:'RI2824', date:'2026-08-19', hours:8, type:'Sick',   status:'Active'},
+  {emp:'RI2824', date:'2026-08-20', hours:8, type:'Annual', status:'ORA_WITHDRAWN'},
+  {emp:'RI2894', date:'2026-08-18', hours:8, type:'Annual', status:'Active'},
+  {emp:'RI2894', date:'2026-08-19', hours:8, type:'Annual', status:'Active'}
 ];
-function absenceOn(empId, iso){
+function absenceOn(e,iso){
   for(var i=0;i<ABSENCE.length;i++){
     var a=ABSENCE[i];
-    if(a.emp===empId && a.date===iso && a.status.indexOf('WITHDRAWN')<0) return a;
+    if(a.emp===e && a.date===iso && a.status.indexOf('WITHDRAWN')<0) return a;
   }
   return null;
 }
-/* Leave apportioned by allocation, quarter-rounded. A full day off
-   costs 555 two hours for Sam, not eight. RULE-010.            */
-function leaveShare(empId, iso, pid){
-  var a = absenceOn(empId, iso); if(!a) return 0;
-  return Math.round(a.hours * allocPct(empId,pid) / 100 * 4) / 4;
+/* Leave is apportioned by allocation. A full day off costs 555 two
+   hours for Sam, not eight (RULE-010). */
+function leaveShare(e,iso,p){
+  var a=absenceOn(e,iso); if(!a) return 0;
+  return Math.round(a.hours*allocPct(e,p)/100*4)/4;
 }
 
 var UNBILLED_REASONS = ['Customer Holiday','Training','Travel','Bench'];
 var REJECT_REASONS   = ['Manager driven','Client driven','Absence'];
 
 /* ============================================================
-   V4 STATUS ENGINE - the transitions are DATA
-   A new status is an INSERT here, not a code change.
-   NULL in fromSub / fromAppr means "any state" - and that is
-   deliberately rare, because a NULL once let a manager approve
-   a week nobody had submitted.
+   V4 STATUS ENGINE — two axes, and the transitions are data.
    ============================================================ */
 var SUB_STATES  = ['NotYetSubmitted','Submitted','LateSubmission','Defaulted'];
 var APPR_STATES = ['Pending','Approved','Rejected','ManagerDefaulted'];
-var FLAGS       = ['Defaulted','LateSubmission','Overridden','Adjusted','ManagerDefaulted'];
-var EVENTS      = ['Submit','Approve','ApproveOverride','Reject','Revoke','RevokeDecision',
-                   'WeeklyCutoff','DeliveryCutoff','DailyChange','AdvanceApprove'];
 
-/* order, event, fromSub, fromAppr, toSub, toAppr, flag, note */
 var TRANSITIONS = [
- {o: 1,e:'Submit',         fs:'NotYetSubmitted', fa:'Pending',  ts:'Submitted',      ta:'Pending',  fl:null,
-  n:'On time. Timing is computed here, never passed in by the page.'},
- {o: 2,e:'Submit',         fs:'NotYetSubmitted', fa:'Pending',  ts:'LateSubmission', ta:'Pending',  fl:'LateSubmission',
-  n:'After the weekly cut-off. Late is a flag; the week is still submitted.', late:true},
- {o: 3,e:'Submit',         fs:null,              fa:'Rejected', ts:'LateSubmission', ta:'Pending',  fl:'LateSubmission',
-  n:'Resubmission after a rejection always reopens as late.'},
- {o: 4,e:'Approve',        fs:'Submitted',       fa:'Pending',  ts:'Submitted',      ta:'Approved', fl:null, n:''},
- {o: 5,e:'Approve',        fs:'LateSubmission',  fa:'Pending',  ts:'LateSubmission', ta:'Approved', fl:null, n:''},
- {o: 6,e:'Approve',        fs:'Defaulted',       fa:'Pending',  ts:'Defaulted',      ta:'Approved', fl:null,
-  n:'A defaulted week can still be approved - that is advance closure territory.'},
- {o: 7,e:'ApproveOverride',fs:'Submitted',       fa:'Pending',  ts:'Submitted',      ta:'Approved', fl:'Overridden',
-  n:'ACT-016 Correct. Reason is mandatory and lands in the audit row as it is written.'},
- {o: 8,e:'ApproveOverride',fs:'LateSubmission',  fa:'Pending',  ts:'LateSubmission', ta:'Approved', fl:'Overridden', n:''},
- {o: 9,e:'ApproveOverride',fs:'Defaulted',       fa:'Pending',  ts:'Defaulted',      ta:'Approved', fl:'Overridden', n:''},
- {o:10,e:'Reject',         fs:'Submitted',       fa:'Pending',  ts:'Submitted',      ta:'Rejected', fl:null, n:''},
- {o:11,e:'Reject',         fs:'LateSubmission',  fa:'Pending',  ts:'LateSubmission', ta:'Rejected', fl:null, n:''},
- {o:12,e:'Reject',         fs:'Defaulted',       fa:'Pending',  ts:'Defaulted',      ta:'Rejected', fl:null, n:''},
- {o:13,e:'Revoke',         fs:'Submitted',       fa:'Pending',  ts:'NotYetSubmitted',ta:'Pending',  fl:null,
-  n:'Employee pulls a submission back. Defaulted is excluded - that week is locked.'},
- {o:14,e:'Revoke',         fs:'LateSubmission',  fa:'Pending',  ts:'NotYetSubmitted',ta:'Pending',  fl:null, n:''},
- {o:15,e:'RevokeDecision', fs:null,              fa:'Approved', ts:null,             ta:'Pending',  fl:null,
-  n:'Manager takes their own decision back. Submission axis is untouched.'},
- {o:16,e:'RevokeDecision', fs:null,              fa:'Rejected', ts:null,             ta:'Pending',  fl:null, n:''},
- {o:17,e:'WeeklyCutoff',   fs:'NotYetSubmitted', fa:'Pending',  ts:'Defaulted',      ta:'Pending',  fl:'Defaulted',
-  n:'The EMPLOYEE was late. Locks the week and holds salary (RULE-016).', by:'EMPLOYEE', lock:true},
- {o:18,e:'DeliveryCutoff', fs:'Submitted',       fa:'Pending',  ts:'Defaulted',      ta:'ManagerDefaulted', fl:'ManagerDefaulted',
-  n:'The MANAGER was late. Never holds the employee salary.', by:'MANAGER'},
- {o:19,e:'DeliveryCutoff', fs:'LateSubmission',  fa:'Pending',  ts:'Defaulted',      ta:'ManagerDefaulted', fl:'ManagerDefaulted',
-  n:'', by:'MANAGER'},
- {o:20,e:'DailyChange',    fs:null,              fa:'Approved', ts:null,             ta:'Pending',  fl:'Adjusted',
-  n:'A change after approval reopens the decision and flags the week Adjusted.'},
- {o:21,e:'DailyChange',    fs:null,              fa:'Rejected', ts:null,             ta:'Pending',  fl:'Adjusted', n:''},
- {o:22,e:'AdvanceApprove', fs:'Defaulted',       fa:'Pending',  ts:'Defaulted',      ta:'Approved', fl:'Adjusted',
-  n:'Advance closure. Defaulted hours are treated as approved so the month can go out.'},
- {o:23,e:'AdvanceApprove', fs:'Submitted',       fa:'Pending',  ts:'Submitted',      ta:'Approved', fl:'Adjusted', n:''},
- {o:24,e:'AdvanceApprove', fs:'LateSubmission',  fa:'Pending',  ts:'LateSubmission', ta:'Approved', fl:'Adjusted', n:''}
+ {o:1, e:'Submit',          fs:'NotYetSubmitted', fa:'Pending',  ts:'Submitted',      ta:'Pending',  fl:null},
+ {o:2, e:'Submit',          fs:'NotYetSubmitted', fa:'Pending',  ts:'LateSubmission', ta:'Pending',  fl:'LateSubmission', late:true},
+ {o:3, e:'Submit',          fs:null,              fa:'Rejected', ts:'LateSubmission', ta:'Pending',  fl:'LateSubmission'},
+ {o:4, e:'Approve',         fs:'Submitted',       fa:'Pending',  ts:'Submitted',      ta:'Approved', fl:null},
+ {o:5, e:'Approve',         fs:'LateSubmission',  fa:'Pending',  ts:'LateSubmission', ta:'Approved', fl:null},
+ {o:6, e:'Approve',         fs:'Defaulted',       fa:'Pending',  ts:'Defaulted',      ta:'Approved', fl:null},
+ {o:7, e:'ApproveOverride', fs:'Submitted',       fa:'Pending',  ts:'Submitted',      ta:'Approved', fl:'Overridden'},
+ {o:8, e:'ApproveOverride', fs:'LateSubmission',  fa:'Pending',  ts:'LateSubmission', ta:'Approved', fl:'Overridden'},
+ {o:9, e:'ApproveOverride', fs:'Defaulted',       fa:'Pending',  ts:'Defaulted',      ta:'Approved', fl:'Overridden'},
+ {o:10,e:'Reject',          fs:'Submitted',       fa:'Pending',  ts:'Submitted',      ta:'Rejected', fl:null},
+ {o:11,e:'Reject',          fs:'LateSubmission',  fa:'Pending',  ts:'LateSubmission', ta:'Rejected', fl:null},
+ {o:12,e:'Reject',          fs:'Defaulted',       fa:'Pending',  ts:'Defaulted',      ta:'Rejected', fl:null},
+ {o:13,e:'Revoke',          fs:'Submitted',       fa:'Pending',  ts:'NotYetSubmitted',ta:'Pending',  fl:null},
+ {o:14,e:'Revoke',          fs:'LateSubmission',  fa:'Pending',  ts:'NotYetSubmitted',ta:'Pending',  fl:null},
+ {o:15,e:'RevokeDecision',  fs:null,              fa:'Approved', ts:null,             ta:'Pending',  fl:null},
+ {o:16,e:'RevokeDecision',  fs:null,              fa:'Rejected', ts:null,             ta:'Pending',  fl:null},
+ {o:17,e:'WeeklyCutoff',    fs:'NotYetSubmitted', fa:'Pending',  ts:'Defaulted',      ta:'Pending',  fl:'Defaulted', by:'EMPLOYEE', lock:true},
+ {o:18,e:'DeliveryCutoff',  fs:'Submitted',       fa:'Pending',  ts:'Defaulted',      ta:'ManagerDefaulted', fl:'ManagerDefaulted', by:'MANAGER'},
+ {o:19,e:'DeliveryCutoff',  fs:'LateSubmission',  fa:'Pending',  ts:'Defaulted',      ta:'ManagerDefaulted', fl:'ManagerDefaulted', by:'MANAGER'},
+ {o:20,e:'DailyChange',     fs:null,              fa:'Approved', ts:null,             ta:'Pending',  fl:'Adjusted'},
+ {o:21,e:'DailyChange',     fs:null,              fa:'Rejected', ts:null,             ta:'Pending',  fl:'Adjusted'},
+ {o:22,e:'AdvanceApprove',  fs:'Defaulted',       fa:'Pending',  ts:'Defaulted',      ta:'Approved', fl:'Adjusted'},
+ {o:23,e:'AdvanceApprove',  fs:'Submitted',       fa:'Pending',  ts:'Submitted',      ta:'Approved', fl:'Adjusted'},
+ {o:24,e:'AdvanceApprove',  fs:'LateSubmission',  fa:'Pending',  ts:'LateSubmission', ta:'Approved', fl:'Adjusted'}
 ];
 
-/* ---- week store ---- */
-var WEEKSTORE = {};   // key emp|proj|periodKey|weekIdx
-var AUDIT = [];       // append-only. Cannot be updated or deleted.
-var seqAudit = 1;
-
+var WEEKSTORE = {}, AUDIT = [], seqAudit = 1;
 function wkey(e,p,pk,i){ return e+'|'+p+'|'+pk+'|'+i; }
 function week(e,p,pk,i){
-  var k = wkey(e,p,pk,i);
-  if(!WEEKSTORE[k]) WEEKSTORE[k] = {
-    emp:e, proj:p, pk:pk, idx:i,
-    sub:'NotYetSubmitted', appr:'Pending',
-    flags:[], versions:[], locked:false, defaultedBy:null, entries:null
-  };
+  var k=wkey(e,p,pk,i);
+  if(!WEEKSTORE[k]) WEEKSTORE[k]={emp:e,proj:p,pk:pk,idx:i,sub:'NotYetSubmitted',appr:'Pending',
+                                  flags:[],versions:[],locked:false,defaultedBy:null,entries:null};
   return WEEKSTORE[k];
 }
-function raiseFlag(w, f){
+function raiseFlag(w,f){
   if(!f) return;
-  for(var i=0;i<w.flags.length;i++){
-    if(w.flags[i].flag===f){ w.flags[i].clearedOn = null; return; }  // re-raising does not move setOn
-  }
-  w.flags.push({flag:f, setOn:TODAY_STR, clearedOn:null});
+  for(var i=0;i<w.flags.length;i++) if(w.flags[i].flag===f){ w.flags[i].clearedOn=null; return; }
+  w.flags.push({flag:f,setOn:TODAY_STR,clearedOn:null});
 }
-function hasFlag(w,f){ for(var i=0;i<w.flags.length;i++) if(w.flags[i].flag===f && !w.flags[i].clearedOn) return true; return false; }
-function activeFlags(w){ return w.flags.filter(function(f){ return !f.clearedOn; }).map(function(f){ return f.flag; }); }
+function activeFlags(w){ return w.flags.filter(function(f){return !f.clearedOn;}).map(function(f){return f.flag;}); }
 
-/* The engine. Returns {ok:true, rule} or {ok:false, err} - it never
-   fails silently: no matching rule is refused BY NAME (-20034).   */
-function applyEvent(w, ev, opt){
-  opt = opt || {};
+function applyEvent(w,ev,opt){
+  opt=opt||{};
   for(var i=0;i<TRANSITIONS.length;i++){
-    var t = TRANSITIONS[i];
-    if(t.e !== ev) continue;
-    if(t.fs !== null && t.fs !== w.sub) continue;
-    if(t.fa !== null && t.fa !== w.appr) continue;
-    if(t.late === true && !opt.late) continue;
-    if(ev === 'Submit' && t.o === 1 && opt.late) continue;   // on-time rule must not swallow a late submit
-    // matched
-    if(t.ts) w.sub  = t.ts;
-    if(t.ta) w.appr = t.ta;
-    raiseFlag(w, t.fl);
-    if(t.by)   w.defaultedBy = t.by;
-    if(t.lock) w.locked = true;
-    if(ev === 'Submit' || ev === 'Revoke') w.locked = false;
-    w.versions.push({no:w.versions.length+1, ev:ev, sub:w.sub, appr:w.appr,
-                     on:TODAY_STR, by:opt.actor||'-', reason:opt.reason||null});
-    AUDIT.push({id:seqAudit++, wk:wkey(w.emp,w.proj,w.pk,w.idx), ev:ev,
-                sub:w.sub, appr:w.appr, on:TODAY_STR, by:opt.actor||'-',
-                reason:opt.reason||null, trace:opt.trace||null});
-    return {ok:true, rule:t};
+    var t=TRANSITIONS[i];
+    if(t.e!==ev) continue;
+    if(t.fs!==null && t.fs!==w.sub) continue;
+    if(t.fa!==null && t.fa!==w.appr) continue;
+    if(t.late===true && !opt.late) continue;
+    if(ev==='Submit' && t.o===1 && opt.late) continue;
+    var from = w.sub+' / '+w.appr;
+    if(t.ts) w.sub=t.ts;
+    if(t.ta) w.appr=t.ta;
+    raiseFlag(w,t.fl);
+    if(t.by) w.defaultedBy=t.by;
+    if(t.lock) w.locked=true;
+    if(ev==='Submit'||ev==='Revoke') w.locked=false;
+    w.versions.push({no:w.versions.length+1,ev:ev,from:from,to:w.sub+' / '+w.appr,
+                     on:TODAY_STR,by:opt.actor||'-',reason:opt.reason||null,
+                     delta:opt.delta||null});
+    AUDIT.push({id:seqAudit++,wk:wkey(w.emp,w.proj,w.pk,w.idx),ev:ev,on:TODAY_STR,
+                by:opt.actor||'-',reason:opt.reason||null});
+    return {ok:true,rule:t};
   }
-  return {ok:false, err:'ORA-20034: no transition rule matches ' + ev +
-    ' from ' + w.sub + ' / ' + w.appr + '. The engine refuses by name rather than doing nothing.'};
+  return {ok:false,err:'ORA-20034: no transition rule matches '+ev+' from '+w.sub+' / '+w.appr+
+    '. The engine refuses by name rather than doing nothing.'};
 }
 
-/* ---- calendar: weeks CLIPPED to the month.
-   A calendar week straddling a month boundary becomes TWO rows, so
-   a week never contributes hours to two periods and the month
-   cannot double-count.                                          */
-var DOW_SHORT = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-var MON_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-function iso(d){
-  var m = d.getMonth()+1, day = d.getDate();
-  return d.getFullYear()+'-'+(m<10?'0':'')+m+'-'+(day<10?'0':'')+day;
-}
-function pretty(d){ return (d.getDate()<10?'0':'')+d.getDate()+'-'+MON_SHORT[d.getMonth()]; }
-function buildWeeks(y, m){
-  var first = new Date(y,m,1), last = new Date(y,m+1,0), out = [], cur = new Date(first);
-  while(cur <= last){
-    var dow = cur.getDay();                      // 0 Sun .. 6 Sat
-    var backToMon = (dow===0) ? 6 : dow-1;
-    var mon = new Date(cur); mon.setDate(cur.getDate()-backToMon);
-    var start = (mon < first) ? new Date(first) : new Date(mon);
-    var end   = new Date(start); end.setDate(start.getDate() + (6 - ((start.getDay()===0)?6:start.getDay()-1)));
-    if(end > last) end = new Date(last);
-    var days = [], d = new Date(start);
-    while(d <= end){ days.push({d:new Date(d), iso:iso(d), dow:d.getDay(),
-                                wknd:(d.getDay()===0||d.getDay()===6)}); d.setDate(d.getDate()+1); }
-    out.push({idx:out.length, start:new Date(start), end:new Date(end), days:days,
-              label:pretty(start)+' to '+pretty(end)});
-    cur = new Date(end); cur.setDate(cur.getDate()+1);
+/* ---- weeks, CLIPPED to the month ---- */
+var DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+var MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function iso(d){ var m=d.getMonth()+1,y=d.getDate();
+  return d.getFullYear()+'-'+(m<10?'0':'')+m+'-'+(y<10?'0':'')+y; }
+function pretty(d){ return (d.getDate()<10?'0':'')+d.getDate()+'-'+MON[d.getMonth()]; }
+function buildWeeks(y,m){
+  var first=new Date(y,m,1), last=new Date(y,m+1,0), out=[], cur=new Date(first);
+  while(cur<=last){
+    var dow=cur.getDay(), back=(dow===0)?6:dow-1;
+    var mon=new Date(cur); mon.setDate(cur.getDate()-back);
+    var st=(mon<first)?new Date(first):new Date(mon);
+    var en=new Date(st); en.setDate(st.getDate()+(6-((st.getDay()===0)?6:st.getDay()-1)));
+    if(en>last) en=new Date(last);
+    var days=[], d=new Date(st);
+    while(d<=en){ days.push({d:new Date(d),iso:iso(d),dow:d.getDay()}); d.setDate(d.getDate()+1); }
+    out.push({idx:out.length,start:new Date(st),end:new Date(en),days:days,
+              label:pretty(st)+' - '+pretty(en)});
+    cur=new Date(en); cur.setDate(cur.getDate()+1);
   }
   return out;
 }
-var WEEKS_BY_PERIOD = {};
-function weeksOf(pk){
-  if(!WEEKS_BY_PERIOD[pk]){ var p=period(pk); WEEKS_BY_PERIOD[pk]=buildWeeks(p.y,p.m); }
-  return WEEKS_BY_PERIOD[pk];
-}
+var WK={};
+function weeksOf(pk){ if(!WK[pk]){ var p=period(pk); WK[pk]=buildWeeks(p.y,p.m); } return WK[pk]; }
 function currentWeekIdx(pk){
-  var ws = weeksOf(pk);
-  for(var i=0;i<ws.length;i++) if(TODAY >= ws[i].start && TODAY <= ws[i].end) return i;
+  var ws=weeksOf(pk);
+  for(var i=0;i<ws.length;i++) if(TODAY>=ws[i].start && TODAY<=ws[i].end) return i;
   return ws.length-1;
 }
 
-/* ---- prepopulated entries: allocation x working day, less leave ---- */
-function buildEntries(empId, pid, pk, widx){
-  var w = wkr(empId), wkD = weeksOf(pk)[widx], pct = allocPct(empId,pid);
-  var task = proj(pid).tasks[0].code;
-  var line = {proj:pid, task:task, type:(w.billing==='Billable'?'Billable':'Non-billable'),
-              reason:(w.billing==='Billable'?'':'Bench'), hrs:[]};
-  var leave = {proj:pid, task:'LEAVE', type:'Leave', reason:'', hrs:[], isLeave:true};
-  var any = false;
-  wkD.days.forEach(function(dy){
-    if(dy.wknd){ line.hrs.push(0); leave.hrs.push(0); return; }
-    var full = Math.round(w.std * pct / 100 * 4)/4;
-    var lv   = leaveShare(empId, dy.iso, pid);
-    if(lv > 0) any = true;
-    line.hrs.push(Math.max(0, Math.round((full - lv)*4)/4));
-    leave.hrs.push(lv);
+/* ---- prepopulated entries ---- */
+function buildEntries(e,p,pk,wi){
+  var w=wkr(e), wd=weeksOf(pk)[wi], pct=allocPct(e,p), task=proj(p).tasks[0].code;
+  var line={task:task,type:(w.billing==='Billable'?'Billable':'Non-billable'),
+            reason:(w.billing==='Billable'?'':'Bench'),hrs:[],shift:'Regular'};
+  var lv={task:'LEAVE',type:'Leave',reason:'',hrs:[],isLeave:true,shift:''};
+  var any=false;
+  wd.days.forEach(function(dy){
+    if(!worksOn(e,dy.dow)){ line.hrs.push(0); lv.hrs.push(0); return; }
+    var full=Math.round(w.std*pct/100*4)/4, l=leaveShare(e,dy.iso,p);
+    if(l>0) any=true;
+    line.hrs.push(Math.max(0,Math.round((full-l)*4)/4));
+    lv.hrs.push(l);
   });
-  var lines = [line];
-  if(any) lines.push(leave);
-  return lines;
+  return any?[line,lv]:[line];
 }
-function entriesFor(empId, pid, pk, widx){
-  var w = week(empId,pid,pk,widx);
-  if(!w.entries) w.entries = buildEntries(empId,pid,pk,widx);
+function entriesFor(e,p,pk,wi){
+  var w=week(e,p,pk,wi);
+  if(!w.entries) w.entries=buildEntries(e,p,pk,wi);
   return w.entries;
 }
 function lineTotal(l){ var t=0; for(var i=0;i<l.hrs.length;i++) t+=num(l.hrs[i]); return t; }
-function dayTotal(lines, di){ var t=0; lines.forEach(function(l){ t+=num(l.hrs[di]); }); return t; }
+function dayTotal(ls,i){ var t=0; ls.forEach(function(l){ t+=num(l.hrs[i]); }); return t; }
+function weekTotals(e,p,pk,wi){
+  var b=0,n=0,l=0;
+  entriesFor(e,p,pk,wi).forEach(function(x){
+    var t=lineTotal(x);
+    if(x.isLeave) l+=t; else if(x.type==='Billable') b+=t; else n+=t;
+  });
+  return {b:b,n:n,l:l,t:b+n+l};
+}
+function monthTotals(e,p,pk){
+  var b=0,n=0,l=0,d=0;
+  weeksOf(pk).forEach(function(wd,i){
+    var t=weekTotals(e,p,pk,i); b+=t.b; n+=t.n; l+=t.l;
+    entriesFor(e,p,pk,i)[0].hrs.forEach(function(h,di){ if(num(h)>0) d++; });
+  });
+  return {b:b,n:n,l:l,t:b+n+l,days:d};
+}
 
-/* ---- leave loss coverage.
-   LOSS is what THIS PROJECT lost, not what the person was away.
-   Three different numbers for one absent day, and only the middle
-   one belongs on this screen.                                    */
-var LLC = [];
+/* ---- leave loss coverage. LOSS is what the PROJECT lost. Assigning
+   the cover IS the decision — there is no approval step, so the
+   status stops at Assigned. ---- */
+var LLC=[];
 function buildLLC(){
-  LLC = [];
+  LLC=[];
   PROJECTS.forEach(function(p){
     if(!p.leaveLoss) return;
     ABSENCE.forEach(function(a){
       if(a.status.indexOf('WITHDRAWN')>=0) return;
-      var pct = allocPct(a.emp, p.id); if(!pct) return;
-      var w = wkr(a.emp);
-      var loss = Math.round(pct/100 * Math.min(1, a.hours/w.std) * w.std * 4)/4;
+      var pct=allocPct(a.emp,p.id); if(!pct) return;
+      var w=wkr(a.emp);
+      var loss=Math.round(pct/100*Math.min(1,a.hours/w.std)*w.std*4)/4;
       if(loss<=0) return;
-      LLC.push({proj:p.id, emp:a.emp, date:a.date, absenceHours:a.hours,
-                loss:loss, cover:null, status:'Open', coverHours:0});
+      LLC.push({proj:p.id,emp:a.emp,date:a.date,type:a.type,hours:a.hours,
+                loss:loss,cover:null,status:'Open'});
     });
   });
-  LLC.sort(function(x,y){ return x.date<y.date?-1:x.date>y.date?1:0; });
-  // the five already assigned on the pod
-  var pre = {'RI2824|2026-08-07':'CRI0398','RI2824|2026-08-10':'RI2914',
-             'RI2824|2026-08-14':'CRI0398','RI2824|2026-08-19':'CRI0398',
-             'RI2894|2026-08-18':'RI2914','RI2894|2026-08-19':'RI2914'};
-  LLC.forEach(function(r){
-    var k = r.emp+'|'+r.date;
-    if(pre[k]){ r.cover = pre[k]; r.status='Assigned'; r.coverHours = r.loss; }
-  });
+  LLC.sort(function(x,y){ return x.date<y.date?-1:1; });
+  var pre={'RI2824|2026-08-07':'CRI0398','RI2824|2026-08-10':'RI2914',
+           'RI2824|2026-08-19':'CRI0398','RI2894|2026-08-18':'RI2914',
+           'RI2894|2026-08-19':'RI2914'};
+  LLC.forEach(function(r){ var k=r.emp+'|'+r.date;
+    if(pre[k]){ r.cover=pre[k]; r.status='Assigned'; } });
 }
 
-/* ---- month confirmation + accrual interface ---- */
-var CONFIRMS = [];    // {proj, pk, type, on, by, rows, hours}
-var IFACE = [];       // XX_O2C_TIMESHEET_ACCRUAL_IF, denormalised on purpose
-var seqConfirm = 9100;
+/* ---- month confirmation and the accrual interface ---- */
+var CONFIRMS=[], IFACE=[], seqConfirm=429;
 
-/* Seeded month totals - the live August figures from the pod, so the
-   monthly summary matches what the real screen shows.             */
-var MONTH_SEED = {
-  '555|AUG-2026': {
-    'CRI0398':{b:0,   n:168, l:0},
-    'RI9001' :{b:72,  n:0,   l:0},
-    'RI2900' :{b:168, n:0,   l:0},
-    'RI2824' :{b:39.5,n:0,   l:8},
-    'RI2894' :{b:80,  n:0,   l:8},
-    '7781'   :{b:88,  n:0,   l:0},
-    'RI2914' :{b:0,   n:168, l:0}
-  }
-};
-function monthTotals(empId, pid, pk){
-  var s = MONTH_SEED[pid+'|'+pk];
-  if(s && s[empId]) return {b:s[empId].b, n:s[empId].n, l:s[empId].l};
-  var b=0,n=0,l=0;
-  weeksOf(pk).forEach(function(wd, i){
-    if(allocPct(empId,pid)<=0) return;
-    entriesFor(empId,pid,pk,i).forEach(function(ln){
-      var t = lineTotal(ln);
-      if(ln.isLeave) l+=t; else if(ln.type==='Billable') b+=t; else n+=t;
-    });
-  });
-  return {b:b, n:n, l:l};
-}
+/* ---- runtime ---- */
+var currentRole='ROLE_TIME_EMPLOYEE';
+var SELF={emp:'RI2824', mgr:'RI9001'};
+var signedIn=false;
+var view={screen:'main-my-timesheet', pk:'AUG-2026', widx:currentWeekIdx('AUG-2026'),
+          proj:'555', mgrProj:null, mgrEmp:null, mgrWeek:null, sel:[]};
 
-/* ---- runtime state ---- */
-var currentRole = 'Employee';
-var SELF = {Employee:'RI2824', Manager:'RI9001', Admin:'admin@rite.digital'};
-var view = {screen:'mytime', pk:'AUG-2026', widx:currentWeekIdx('AUG-2026'),
-            proj:'555', mgrEmp:null, mgrWeek:null};
-
-function selfEmp(){ return currentRole==='Manager' ? SELF.Manager : SELF.Employee; }
+function me(){ return currentRole==='ROLE_TIME_MANAGER' ? SELF.mgr : SELF.emp; }
 function num(v){ var n=parseFloat(v); return isNaN(n)?0:n; }
 function f2(v){ return (Math.round(num(v)*100)/100).toFixed(2); }
 function esc(s){ return (''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 /* ============================================================
-   NAVIGATION - one definition of who may open what (RULE-022).
-   The admin does NOT get the employee and manager menus: Finance
-   Admin is a back-office role, not a super-user of the timesheet
-   screens. An admin who also records time signs in with their
-   worker account. Group order follows the prototype: My Work,
-   Team, Setup, Operations.
+   NAVIGATION — lifted verbatim from resources/js/navModel.js.
+   Entitlement is by omission: a role is never handed an item it may
+   not open, so there is no such thing as a disabled menu entry.
    ============================================================ */
-var NAV = {
-  Employee:[
-    {grp:'My Work'},
-    {id:'mytime',    ico:'&#128339;', label:'My Timesheet'},
-    {id:'clientts',  ico:'&#128206;', label:'Client Timesheets'},
-    {grp:'Reference'},
-    {id:'model',     ico:'&#128208;', label:'Status &amp; Flag Model'}
-  ],
-  Manager:[
-    {grp:'My Work'},
-    {id:'mytime',    ico:'&#128339;', label:'My Timesheet'},
-    {grp:'Team'},
-    {id:'team',      ico:'&#9989;',   label:'Team Approvals'},
-    {id:'summary',   ico:'&#128202;', label:'Monthly Summary'},
-    {id:'llc',       ico:'&#128101;', label:'Leave Loss Coverage'},
-    {id:'salstop',   ico:'&#9208;',   label:'Salary Stopping'},
-    {id:'clientts',  ico:'&#128206;', label:'Client Timesheets'},
-    {grp:'Reference'},
-    {id:'model',     ico:'&#128208;', label:'Status &amp; Flag Model'}
-  ],
-  Admin:[
-    {grp:'Setup'},
-    {id:'calendar',  ico:'&#128198;', label:'Calendar (Fusion Sync)'},
-    {grp:'Operations'},
-    {id:'syncstatus',ico:'&#128225;', label:'Sync Status'},
-    {id:'accrual',   ico:'&#128200;', label:'Accrual Integration'},
-    {id:'integrations',ico:'&#128268;',label:'Integrations (REST)'},
-    {grp:'Reference'},
-    {id:'model',     ico:'&#128208;', label:'Status &amp; Flag Model'}
-  ]
+var MY_WORK = {title:'My Work', items:[
+  {page:'main-my-timesheet',      label:'My Timesheet',      ico:'&#128339;'},
+  {page:'main-client-timesheets', label:'Client Timesheets', ico:'&#128206;'},
+  {page:'main-my-salary-hold',    label:'Salary on Hold',    ico:'&#9888;'}
+]};
+var TEAM = {title:'Team', items:[
+  {page:'main-team-approvals',      label:'Team Approvals',      ico:'&#9989;'},
+  {page:'main-leave-loss-coverage', label:'Leave Loss Coverage', ico:'&#128101;'},
+  {page:'main-salary-stopping',     label:'Salary Stopping',     ico:'&#9208;'}
+]};
+var SETUP = {title:'Setup', items:[
+  {page:'main-calendar-sync', label:'Calendar (Fusion Sync)', ico:'&#128198;'}
+]};
+var OPERATIONS = {title:'Operations', items:[
+  {page:'main-sync-status',         label:'Sync Status',         ico:'&#128225;'},
+  {page:'main-accrual-integration', label:'Accrual Integration', ico:'&#128200;'},
+  {page:'main-integrations',        label:'Integrations (REST)', ico:'&#128268;'}
+]};
+var GROUPS_BY_ROLE = {
+  ROLE_TIME_ADMIN:      [SETUP, OPERATIONS],
+  ROLE_TIME_MANAGER:    [MY_WORK, TEAM],
+  ROLE_TIME_EMPLOYEE:   [MY_WORK],
+  ROLE_TIME_CONTRACTOR: [MY_WORK],
+  ROLE_TIME_NONE:       []
 };
-var DRAWER_MODULE = {Employee:'My Timesheet', Manager:'Manager Workspace', Admin:'Admin Workspace'};
+/* Reachable but never in the menu — opened by drilling. */
+var DRILL = ['main-view-timesheet','main-approval-detail'];
+
+var TITLES = {
+  'main-my-timesheet':        ['My Timesheet','Record your time per task per day, then submit the week for approval.'],
+  'main-client-timesheets':   ['Client Timesheets','Attach the customer-approved timesheet for a project and billing period.'],
+  'main-my-salary-hold':      ['Salary on Hold','The dates your pay is held for, and what to correct to release it.'],
+  'main-team-approvals':      ['Team Approvals',"Open a project to review and approve your team's time."],
+  'main-view-timesheet':      ['Monthly Summary','Hours are shown at task (WBS) level; open an employee to approve by week or by day.'],
+  'main-approval-detail':     ['Approval Detail','Approve or reject by week, or open a week and act on specific dates.'],
+  'main-leave-loss-coverage': ['Leave Loss Coverage','Cover an absentee with an unbilled colleague so the absence hours count as billed.'],
+  'main-salary-stopping':     ['Salary Stopping','Employees whose timesheet defaulted, and the release once it is corrected.'],
+  'main-calendar-sync':       ['Calendar (Fusion Sync)','What has been synced from Oracle Fusion, by layer, and a re-sync per layer.'],
+  'main-sync-status':         ['Sync Status','Every inbound entity, when it last ran and what it carried.'],
+  'main-accrual-integration': ['Accrual Integration','Confirmed project-months, the extract waiting for the accrual application, and the leave-loss annexure.'],
+  'main-integrations':        ['Integrations','Reference catalogue of the Oracle Fusion and OTL surfaces this module reads from and writes to.']
+};
 
 function renderSidebar(){
   var html='';
-  NAV[currentRole].forEach(function(it){
-    if(it.grp){ html += '<div class="rw-nav-group-label">'+it.grp+'</div>'; }
-    else { html += '<button class="rw-nav-item'+(view.screen===it.id?' active':'')+
-      '" onclick="go(\''+it.id+'\')"><span class="ico">'+it.ico+'</span>'+it.label+'</button>'; }
+  (GROUPS_BY_ROLE[currentRole]||[]).forEach(function(g){
+    html += '<div class="rw-nav-group-label">'+g.title+'</div>';
+    g.items.forEach(function(it){
+      html += '<button class="rw-nav-item'+(view.screen===it.page?' active':'')+
+        '" onclick="go(\''+it.page+'\')"><span class="ico">'+it.ico+'</span>'+it.label+'</button>';
+    });
   });
-  document.getElementById('sidebarNav').innerHTML = html;
+  if(!html) html='<div class="rw-nav-group-label">No entitlement</div>';
+  document.getElementById('sidebarNav').innerHTML=html;
 }
-function go(screen){
-  view.screen = screen;
-  renderSidebar();
-  var dt=document.getElementById('drawerTitle'); if(dt) dt.textContent = DRAWER_MODULE[currentRole]||'Timesheet';
-  var fn = {mytime:renderMyTimesheet, clientts:renderClientTS, team:renderTeam,
-            summary:renderSummary, detail:renderDetail, llc:renderLLC, salstop:renderSalStop,
-            calendar:renderCalendar, syncstatus:renderSync, accrual:renderAccrual,
-            integrations:renderIntegrations, model:renderModel}[screen];
+function mayOpen(page){
+  if(DRILL.indexOf(page)>=0) return currentRole==='ROLE_TIME_MANAGER';
+  var gs=GROUPS_BY_ROLE[currentRole]||[];
+  for(var i=0;i<gs.length;i++)
+    for(var j=0;j<gs[i].items.length;j++) if(gs[i].items[j].page===page) return true;
+  return false;
+}
+var RENDER = {};
+function go(page){
+  if(!signedIn){ renderLogin(); return; }
+  if(!mayOpen(page)){
+    toast('RULE-022: your role cannot open that page. The menu never offers it, and the router checks again.',true);
+    return;
+  }
+  view.screen=page; renderSidebar();
+  var dt=document.getElementById('drawerTitle');
+  if(dt) dt.textContent = (TITLES[page]||['O2C Timesheet'])[0];
   document.getElementById('mainArea').innerHTML='';
-  if(fn) fn();
-  document.getElementById('mainArea').scrollTop = 0;
-  if(window.innerWidth < 1100) toggleDrawer(false);
+  (RENDER[page]||function(){ document.getElementById('mainArea').innerHTML=
+     band(page,'Not in this walkthrough',''); })();
+  document.getElementById('mainArea').scrollTop=0;
+  if(window.innerWidth<1100) toggleDrawer(false);
 }
-function toggleDrawer(force){
-  var d=document.getElementById('drawer'), o=document.getElementById('drawerOverlay');
-  var open = (typeof force==='boolean') ? force : !d.classList.contains('open');
-  d.classList.toggle('open', open); o.classList.toggle('open', open);
-}
-function setRole(role, btn){
-  currentRole = role;
-  document.querySelectorAll('.rw-role-btn').forEach(function(b){ b.classList.remove('active'); });
-  if(btn) btn.classList.add('active');
-  var nm, tag;
-  if(role==='Admin'){ nm='Finance Admin'; tag='ROLE_TIME_ADMIN'; }
-  else { var e=wkr(selfEmp()); nm=e.name; tag=derivedRole(e.id); }
-  document.getElementById('userName').textContent = nm;
-  document.getElementById('userAvatar').textContent =
-    nm.split(' ').map(function(w){return w[0];}).join('').slice(0,2).toUpperCase();
-  document.getElementById('userRoleTag').textContent = tag.replace('ROLE_TIME_','');
-  view.mgrEmp=null; view.mgrWeek=null;
-  go({Employee:'mytime', Manager:'team', Admin:'calendar'}[role]);
+function toggleDrawer(f){
+  var d=document.getElementById('drawer'),o=document.getElementById('drawerOverlay');
+  var open=(typeof f==='boolean')?f:!d.classList.contains('open');
+  d.classList.toggle('open',open); o.classList.toggle('open',open);
 }
 
 /* ---- shared UI ---- */
-function band(eyebrow, title, sub, backFn){
+function band(eyebrow,title,sub,back){
   return '<div class="page-band"><p class="page-band-eyebrow">'+eyebrow+'</p><div class="page-band-header">'+
-    (backFn?'<button class="btn btn-ghost" style="color:#fff;border:1px solid rgba(255,255,255,.4)" onclick="'+backFn+'">&larr; Back</button>':'')+
+    (back?'<button class="btn btn-ghost" style="color:#fff;border:1px solid rgba(255,255,255,.4)" onclick="'+back+'">&larr; '+back.split("'")[1].replace('main-','').replace(/-/g,' ')+'</button>':'')+
     '<h1 class="page-band-title">'+title+'</h1></div>'+(sub?'<p class="page-band-sub">'+sub+'</p>':'')+'</div>';
 }
+function pageBand(id,back){
+  var t=TITLES[id]||[id,''];
+  return band('O2C Timesheet', t[0], t[1], back);
+}
 function subChip(s){
-  var m={'NotYetSubmitted':'chip-draft','Submitted':'chip-submitted',
-         'LateSubmission':'chip-late','Defaulted':'chip-defaulted'};
+  var m={NotYetSubmitted:'chip-draft',Submitted:'chip-submitted',
+         LateSubmission:'chip-late',Defaulted:'chip-defaulted'};
   return '<span class="chip '+(m[s]||'chip-draft')+'">'+s+'</span>';
 }
 function apprChip(s){
-  var m={'Pending':'chip-submitted','Approved':'chip-approved',
-         'Rejected':'chip-rejected','ManagerDefaulted':'chip-defaulted'};
+  var m={Pending:'chip-submitted',Approved:'chip-approved',
+         Rejected:'chip-rejected',ManagerDefaulted:'chip-defaulted'};
   return '<span class="chip '+(m[s]||'chip-draft')+'">'+s+'</span>';
 }
-function flagChips(w){
-  return activeFlags(w).map(function(f){ return '<span class="flag-chip">'+f+'</span>'; }).join('');
-}
-function statCard(l,v,sub){ return '<div class="stat-card"><div class="lbl">'+l+'</div><div class="val">'+v+'</div>'+
-  (sub?'<div class="sm muted">'+sub+'</div>':'')+'</div>'; }
+function flagChips(w){ return activeFlags(w).map(function(f){
+  return '<span class="flag-chip">'+f+'</span>'; }).join(''); }
+function statCard(l,v,s){ return '<div class="stat-card"><div class="lbl">'+l+'</div><div class="val">'+v+'</div>'+
+  (s?'<div class="sm muted">'+s+'</div>':'')+'</div>'; }
 function hdrItem(l,v){ return '<div class="hdr-item"><span class="form-label">'+l+'</span><span class="form-value">'+v+'</span></div>'; }
-function openModal(html){ document.getElementById('modalInner').innerHTML=html; document.getElementById('modal').classList.add('show'); }
+function openModal(h){ document.getElementById('modalInner').innerHTML=h;
+  document.getElementById('modal').classList.add('show'); }
 function closeModal(){ document.getElementById('modal').classList.remove('show'); }
 var toastTimer;
-function toast(msg, bad){
-  var t=document.getElementById('toast'); t.textContent=msg;
-  t.classList.toggle('bad', !!bad); t.classList.add('show');
-  clearTimeout(toastTimer); toastTimer=setTimeout(function(){ t.classList.remove('show'); }, 4200);
+function toast(m,bad){
+  var t=document.getElementById('toast'); t.textContent=m;
+  t.classList.toggle('bad',!!bad); t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer=setTimeout(function(){t.classList.remove('show');},4600);
 }
-function periodPicker(onchange){
-  return '<select onchange="'+onchange+'">'+PERIODS.map(function(p){
-    return '<option value="'+p.key+'"'+(p.key===view.pk?' selected':'')+'>'+p.name+
-      ' - '+p.status+(p.editable?'':' (read-only)')+'</option>';
+function periodSelect(on){
+  return '<select onchange="'+on+'">'+PERIODS.map(function(p){
+    return '<option value="'+p.key+'"'+(p.key===view.pk?' selected':'')+'>'+p.name+' &middot; '+p.status+'</option>';
   }).join('')+'</select>';
 }
-function setPeriod(pk){ view.pk=pk; view.widx=currentWeekIdx(pk); go(view.screen); }
+function setPeriod(k){ view.pk=k; view.widx=currentWeekIdx(k); go(view.screen); }
 
 /* ============================================================
-   PAGE-001  MY TIMESHEET
+   LOGIN  —  the module signs users in itself
    ============================================================ */
-function myProjects(){ return wkr(selfEmp()).alloc.map(function(a){ return a.p; }); }
+function renderLogin(){
+  document.getElementById('sidebarNav').innerHTML='';
+  document.getElementById('userName').textContent='Not signed in';
+  document.getElementById('userRoleTag').textContent='—';
+  document.getElementById('userAvatar').textContent='—';
+  var h='<div style="min-height:calc(100vh - 56px);display:flex;align-items:center;justify-content:center;padding:28px">'+
+    '<div style="max-width:920px;width:100%;display:grid;grid-template-columns:1.1fr 1fr;gap:0;'+
+    'border:1px solid var(--rw-border);border-radius:10px;overflow:hidden;background:#fff">'+
+    '<div style="background:linear-gradient(150deg,#2f3a37,#5d716a);color:#fff;padding:34px 30px">'+
+      '<p style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;opacity:.7;margin:0">Rite Digital</p>'+
+      '<h1 style="font-family:Georgia,serif;font-weight:400;font-size:28px;margin:6px 0 4px">O2C Platform</h1>'+
+      '<p style="font-size:14px;opacity:.85;margin:0 0 22px">Timesheet &amp; Time Approval</p>'+
+      '<ul style="font-size:13px;line-height:1.75;opacity:.9;padding-left:18px;margin:0">'+
+        '<li>Record time against your projects, submit weekly.</li>'+
+        '<li>Pre-populated from your work pattern and allocation.</li>'+
+        '<li>Weekly submission with monthly confirmation to accrual.</li>'+
+      '</ul></div>'+
+    '<div style="padding:34px 30px">'+
+      '<p class="section-title" style="margin-bottom:14px">Sign in</p>'+
+      '<p class="sm muted" style="margin-top:0">The module signs you in against its own user store. '+
+      'What you get afterwards is decided by what you do on projects, not by a role somebody typed.</p>'+
+      '<div style="display:flex;flex-direction:column;gap:10px;margin-top:18px">'+
+        signInBtn('RI2824','Sam Joshuva S','Resource &middot; 25% on 555, Sun&ndash;Thu')+
+        signInBtn('RI9001','Navamani Solairajan','Manager &middot; runs all three projects')+
+        signInBtn('ADMIN','Finance Admin','Back office &middot; Setup and Operations only')+
+      '</div>'+
+      '<div class="note" style="margin-top:18px"><strong>Nothing is reachable while signed out.</strong> '+
+      'The shell renders no chrome and the flow defaults to the login page.</div>'+
+    '</div></div></div>';
+  document.getElementById('mainArea').innerHTML=h;
+}
+function signInBtn(id,nm,sub){
+  return '<button class="btn btn-outline" style="justify-content:flex-start;text-align:left;padding:12px 14px;height:auto" '+
+    'onclick="signIn(\''+id+'\')"><span style="display:flex;flex-direction:column;gap:2px">'+
+    '<strong style="font-size:13.5px">'+nm+'</strong>'+
+    '<span class="sm muted">'+sub+'</span></span></button>';
+}
+function signIn(id){
+  signedIn=true;
+  if(id==='ADMIN'){
+    currentRole='ROLE_TIME_ADMIN';
+    setUser('Finance Admin','ADMIN');
+    go('main-calendar-sync');
+  } else {
+    currentRole=derivedRole(id);
+    if(currentRole==='ROLE_TIME_MANAGER') SELF.mgr=id; else SELF.emp=id;
+    setUser(wkr(id).name,currentRole.replace('ROLE_TIME_',''));
+    go('main-my-timesheet');
+  }
+}
+function setUser(nm,tag){
+  document.getElementById('userName').textContent=nm;
+  document.getElementById('userRoleTag').textContent=tag;
+  document.getElementById('userAvatar').textContent=
+    nm.split(' ').map(function(w){return w[0];}).join('').slice(0,2).toUpperCase();
+}
+function signOut(){ signedIn=false; view.screen='main-login'; renderLogin(); }
 
-function renderMyTimesheet(){
-  var e = wkr(selfEmp()), p = period(view.pk), ws = weeksOf(view.pk), wd = ws[view.widx];
-  var pid = view.proj;
-  if(myProjects().indexOf(pid)<0) pid = view.proj = myProjects()[0];
-  var w = week(e.id, pid, view.pk, view.widx);
-  var lines = entriesFor(e.id, pid, view.pk, view.widx);
+/* ============================================================
+   MY TIMESHEET
+   ============================================================ */
+RENDER['main-my-timesheet']=function(){
+  var e=wkr(me()), p=period(view.pk), ws=weeksOf(view.pk), wd=ws[view.widx];
+  var mine=e.alloc.map(function(a){return a.p;});
+  if(mine.indexOf(view.proj)<0) view.proj=mine[0];
+  var pid=view.proj, w=week(e.id,pid,view.pk,view.widx), lines=entriesFor(e.id,pid,view.pk,view.widx);
   var editable = p.editable && !w.locked && w.appr!=='Approved';
 
-  var h = band('PAGE-001 &middot; My Work', 'My Timesheet',
-    'The week arrives already filled in from your allocation, work pattern and shift. Correct what is wrong and submit. '+
-    'Every rule below is enforced in the database, so calling the REST endpoint directly gets the same refusal.');
-  h += '<div class="rw-body">';
-
-  /* toolbar */
-  h += '<div class="rw-toolbar">'+
-    '<div><label class="fl">Period</label>'+periodPicker('setPeriod(this.value)')+'</div>'+
-    '<div><label class="fl">Week</label><select onchange="view.widx=+this.value;go(\'mytime\')">'+
+  var h=pageBand('main-my-timesheet');
+  h+='<div class="rw-body">';
+  h+='<div class="rw-toolbar">'+
+    '<div><label class="fl">Month</label>'+periodSelect('setPeriod(this.value)')+'</div>'+
+    '<div><label class="fl">Select week</label><select onchange="view.widx=+this.value;go(\'main-my-timesheet\')">'+
       ws.map(function(x,i){ return '<option value="'+i+'"'+(i===view.widx?' selected':'')+'>Week '+(i+1)+' &middot; '+x.label+'</option>'; }).join('')+
     '</select></div>'+
-    '<div><label class="fl">Project</label><select onchange="view.proj=this.value;go(\'mytime\')">'+
-      myProjects().map(function(x){ return '<option value="'+x+'"'+(x===pid?' selected':'')+'>'+x+' - '+proj(x).name+'</option>'; }).join('')+
+    '<div><label class="fl">Project</label><select onchange="view.proj=this.value;go(\'main-my-timesheet\')">'+
+      mine.map(function(x){ return '<option value="'+x+'"'+(x===pid?' selected':'')+'>'+proj(x).name+'</option>'; }).join('')+
     '</select></div>'+
     '<div style="flex:1"></div>'+
     '<button class="btn btn-outline" onclick="showAlloc()">My allocation</button>'+
-    '<button class="btn btn-outline" onclick="exportWeek()">Export CSV</button>'+
-    '<button class="btn btn-outline" onclick="saveTS()"'+(editable?'':' disabled')+'>Save draft</button>'+
-    '<button class="btn btn-primary" onclick="submitTS()"'+(editable?'':' disabled')+'>Submit week</button>'+
+    '<button class="btn btn-outline" onclick="saveDraft()"'+(editable?'':' disabled')+'>Save draft</button>'+
+    (w.sub==='Submitted'||w.sub==='LateSubmission'
+      ? '<button class="btn btn-outline" onclick="withdraw()">Withdraw submission</button>' : '')+
+    '<button class="btn btn-primary" onclick="submitWeek()"'+(editable?'':' disabled')+'>Submit week</button>'+
     '</div>';
 
-  /* status header */
-  h += '<div class="card"><div class="card-body"><div class="hdr-grid">'+
+  h+='<div class="card"><div class="card-body"><div class="hdr-grid">'+
     hdrItem('Worker', e.name+' <span class="mono muted">'+e.id+'</span>')+
-    hdrItem('Worker type', e.type+(e.type==='Contractor'?' <span class="chip chip-nb">no salary hold</span>':''))+
+    hdrItem('Work pattern', e.pattern==='SUN_THU'
+      ? 'Sunday&ndash;Thursday <span class="chip chip-info">not Mon&ndash;Fri</span>'
+      : 'Monday&ndash;Friday')+
     hdrItem('Shift standard', e.std+' hrs/day')+
     hdrItem('Allocation here', allocPct(e.id,pid)+'%')+
-    hdrItem('Submission', subChip(w.sub))+
-    hdrItem('Approval', apprChip(w.appr))+
+    hdrItem('Employee status', subChip(w.sub))+
+    hdrItem('Manager status', apprChip(w.appr))+
     hdrItem('Flags', activeFlags(w).length?flagChips(w):'<span class="muted sm">none</span>')+
-    hdrItem('Weekly cut-off', p.weeklyCut)+
     '</div></div></div>';
 
-  if(!p.editable){
-    h += '<div class="note warn"><strong>'+p.name+' is '+p.status.toLowerCase()+' and read-only.</strong> '+
-      p.why+' Every period stays visible - only editing is gated, so you can still see what was recorded.'+
-      '<span class="rule-tag">RULE-004</span><span class="rule-tag">RULE-007</span></div>';
-  } else if(w.locked){
-    h += '<div class="note bad"><strong>This week is locked.</strong> The weekly cut-off passed before it was submitted, '+
-      'so it was defaulted from the prepopulated hours and your salary is on hold until it is submitted.'+
-      '<span class="rule-tag">RULE-016</span></div>';
-  }
+  if(!p.editable) h+='<div class="note warn"><strong>'+p.name+' is '+p.status.toLowerCase()+
+    ' and read-only.</strong> '+p.note+' Every period stays visible &mdash; only editing is gated.</div>';
+  if(w.locked) h+='<div class="note bad"><strong>This week is locked.</strong> The weekly cut-off passed '+
+    'before it was submitted, so it defaulted from the prepopulated hours and pay is held until it is submitted.</div>';
 
   /* the grid */
-  h += '<div class="card"><div class="card-hd"><h3>Week '+(view.widx+1)+' &middot; '+wd.label+'</h3>'+
+  h+='<div class="card"><div class="card-hd"><h3>Week '+(view.widx+1)+' &middot; '+wd.label+'</h3>'+
     '<span class="sm muted">'+proj(pid).name+' &middot; '+proj(pid).model+'</span></div>'+
     '<div class="card-body tight"><div class="tbl-wrap"><table class="dt"><thead><tr>'+
-    '<th>Task</th><th>Type</th><th>Unbilled reason</th>';
+    '<th>Task (WBS)</th><th>Type</th><th>Shift</th><th>Unbilled reason</th>';
   wd.days.forEach(function(dy){
-    h += '<th class="daycol'+(dy.wknd?' wknd':'')+'">'+DOW_SHORT[dy.dow]+'<br><span class="muted">'+pretty(dy.d)+'</span></th>';
+    var off=!worksOn(e.id,dy.dow);
+    h+='<th class="daycol'+(off?' wknd':'')+'">'+DOW[dy.dow]+'<br><span class="muted">'+pretty(dy.d)+'</span></th>';
   });
-  h += '<th class="rt">Total</th><th></th></tr></thead><tbody>';
-
-  lines.forEach(function(ln, li){
-    var isL = !!ln.isLeave;
-    h += '<tr'+(isL?' class="leaverow"':'')+'>';
+  h+='<th class="rt">Total</th></tr></thead><tbody>';
+  lines.forEach(function(ln,li){
+    var isL=!!ln.isLeave;
+    h+='<tr'+(isL?' class="leaverow"':'')+'>';
     if(isL){
-      h += '<td><strong>Leave</strong> <span class="muted sm">from Fusion Absence</span></td>'+
-           '<td><span class="chip chip-nb">Leave</span></td><td class="muted sm">apportioned by allocation</td>';
+      h+='<td><strong>Leave</strong> <span class="muted sm">from Fusion Absence</span></td>'+
+         '<td><span class="chip chip-nb">Leave</span></td><td>&mdash;</td>'+
+         '<td class="muted sm">apportioned by allocation</td>';
     } else {
-      h += '<td><select onchange="setTask('+li+',this.value)"'+(editable?'':' disabled')+'>'+
-        proj(pid).tasks.map(function(t){ return '<option value="'+t.code+'"'+(t.code===ln.task?' selected':'')+'>'+t.code+' - '+t.name+'</option>'; }).join('')+
-        '</select></td>'+
+      h+='<td><select onchange="setTask('+li+',this.value)"'+(editable?'':' disabled')+'>'+
+        proj(pid).tasks.map(function(t){ return '<option value="'+t.code+'"'+(t.code===ln.task?' selected':'')+'>'+t.code+' &middot; '+t.name+'</option>'; }).join('')+'</select></td>'+
         '<td><select onchange="setType('+li+',this.value)"'+(editable?'':' disabled')+'>'+
-        ['Billable','Non-billable'].map(function(t){ return '<option'+(t===ln.type?' selected':'')+'>'+t+'</option>'; }).join('')+
-        '</select></td>'+
+        ['Billable','Non-billable'].map(function(t){ return '<option'+(t===ln.type?' selected':'')+'>'+t+'</option>'; }).join('')+'</select></td>'+
+        '<td><select onchange="curLines()['+li+'].shift=this.value"'+(editable?'':' disabled')+'>'+
+        ['Regular','Night','Early','Split'].map(function(t){ return '<option'+(t===ln.shift?' selected':'')+'>'+t+'</option>'; }).join('')+'</select></td>'+
         '<td>'+(ln.type==='Non-billable'
-          ? '<select onchange="setReason('+li+',this.value)"'+(editable?'':' disabled')+'>'+
+          ? '<select onchange="curLines()['+li+'].reason=this.value"'+(editable?'':' disabled')+'>'+
             UNBILLED_REASONS.map(function(r){ return '<option'+(r===ln.reason?' selected':'')+'>'+r+'</option>'; }).join('')+'</select>'
-          : '<span class="muted sm">-</span>')+'</td>';
+          : '<span class="muted sm">&mdash;</span>')+'</td>';
     }
-    ln.hrs.forEach(function(v, di){
-      var dy = wd.days[di];
-      h += '<td class="daycol'+(dy.wknd?' wknd':'')+'">'+
-        '<input class="hin" value="'+f2(v)+'"'+((editable && !isL)?'':' readonly')+
-        ' onchange="setHrs('+li+','+di+',this.value)"></td>';
+    ln.hrs.forEach(function(v,di){
+      var off=!worksOn(e.id,wd.days[di].dow);
+      h+='<td class="daycol'+(off?' wknd':'')+'"><input class="hin" value="'+f2(v)+'"'+
+        ((editable&&!isL)?'':' readonly')+' onchange="setHrs('+li+','+di+',this.value)"></td>';
     });
-    h += '<td class="rt"><strong>'+f2(lineTotal(ln))+'</strong></td>'+
-      '<td>'+((editable && !isL && lines.filter(function(x){return !x.isLeave;}).length>1)
-        ? '<button class="btn btn-ghost btn-sm" onclick="delLine('+li+')" title="Remove line">&times;</button>' : '')+'</td></tr>';
+    h+='<td class="rt"><strong>'+f2(lineTotal(ln))+'</strong></td></tr>';
   });
-
-  h += '</tbody><tfoot><tr><td colspan="3">Day total</td>';
-  var grand=0;
-  wd.days.forEach(function(dy,di){ var t=dayTotal(lines,di); grand+=t;
-    h += '<td class="daycol rt'+(dy.wknd?' wknd':'')+'">'+f2(t)+'</td>'; });
-  h += '<td class="rt">'+f2(grand)+'</td><td></td></tr></tfoot></table></div></div>';
-  if(editable) h += '<div class="card-hd" style="border-top:1px solid var(--rw-border-2);border-bottom:none">'+
-    '<button class="btn btn-outline btn-sm" onclick="addLine()">+ Add line</button>'+
+  h+='</tbody><tfoot><tr><td colspan="4">Day total</td>';
+  var g=0;
+  wd.days.forEach(function(dy,di){ var t=dayTotal(lines,di); g+=t;
+    h+='<td class="daycol rt'+(!worksOn(e.id,dy.dow)?' wknd':'')+'">'+f2(t)+'</td>'; });
+  h+='<td class="rt">'+f2(g)+'</td></tr></tfoot></table></div></div>';
+  if(editable) h+='<div class="card-hd" style="border-top:1px solid var(--rw-border-2);border-bottom:none">'+
+    '<button class="btn btn-outline btn-sm" onclick="addLine()">Add line</button>'+
     '<span class="sm muted">Quarter hours only. A day may not exceed your '+e.std+'-hour shift.</span></div>';
-  h += '</div>';
+  h+='</div>';
 
-  /* absence panel */
-  var abs = ABSENCE.filter(function(a){ return a.emp===e.id && a.date>=iso(wd.start) && a.date<=iso(wd.end); });
-  h += '<div class="card"><div class="card-hd"><h3>Absence this week</h3>'+
-    '<span class="sm muted">read live from Fusion at page load</span></div><div class="card-body">';
-  if(!abs.length){
-    h += '<p class="muted sm" style="margin:0">Nothing booked in Fusion for this week.</p>';
+  if(e.pattern==='SUN_THU') h+='<div class="note"><strong>This person works Sunday to Thursday.</strong> '+
+    'Friday is greyed out and Sunday is not. That is their HCM work pattern, confirmed intentional &mdash; '+
+    'it makes their month 22 working days where a Mon&ndash;Fri colleague has 18, and it puts weekend dates '+
+    'into the accrual batch. Any check that assumes Mon&ndash;Fri marks them wrong when they are right.</div>';
+
+  h+='</div>';
+  document.getElementById('mainArea').innerHTML=h;
+};
+function curLines(){ return entriesFor(me(),view.proj,view.pk,view.widx); }
+function curWeek(){ return week(me(),view.proj,view.pk,view.widx); }
+function setHrs(li,di,v){
+  var e=wkr(me()), ls=curLines(), n=num(v); if(n<0) n=0;
+  var q=Math.round(n*4)/4;
+  if(Math.abs(q-n)>0.001) toast('Hours are recorded in quarters. '+f2(n)+' was rounded to '+f2(q)+'.');
+  var prev=ls[li].hrs[di]; ls[li].hrs[di]=q;
+  var tot=dayTotal(ls,di);
+  if(tot>e.std){
+    ls[li].hrs[di]=prev;
+    toast('A day cannot hold more than the '+f2(e.std)+" hours of this person's shift. That day would come to "+f2(tot)+'.',true);
   } else {
-    h += '<div class="tbl-wrap"><table class="dt"><thead><tr><th>Date</th><th>Type</th>'+
-      '<th class="rt">Away</th><th class="rt">Charged to '+pid+'</th><th>Fusion status</th></tr></thead><tbody>';
-    abs.forEach(function(a){
-      var wd2 = new Date(a.date+'T00:00:00');
-      var withdrawn = a.status.indexOf('WITHDRAWN')>=0;
-      h += '<tr><td class="mono">'+pretty(wd2)+' <span class="muted">'+DOW_SHORT[wd2.getDay()]+'</span></td>'+
-        '<td>'+a.type+'</td><td class="rt">'+f2(a.hours)+'</td>'+
-        '<td class="rt">'+(withdrawn?'<span class="muted">-</span>':f2(leaveShare(a.emp,a.date,pid)))+'</td>'+
-        '<td>'+(withdrawn?'<span class="chip chip-closed">Withdrawn</span>':'<span class="chip chip-approved">Active</span>')+'</td></tr>';
-    });
-    h += '</tbody></table></div>';
+    var w=curWeek();
+    if(w.appr==='Approved'||w.appr==='Rejected'){
+      applyEvent(w,'DailyChange',{actor:wkr(me()).name});
+      toast('That week had already been decided, so the change reopened it and flagged it Adjusted.');
+    }
   }
-  h += '<div class="note" style="margin:14px 0 0"><strong>Two producers, one loader.</strong> '+
-    'A scheduled feed brings absence in overnight, and every screen also reads it live for the people it shows. '+
-    'The live read posts the person <em>and the window it covers</em>, which turns the payload into a claim - so leave '+
-    'cancelled in Fusion retracts here, along with the hours behind it. The scheduled feed sends no window and can only add.'+
-    '<span class="rule-tag">SC-23</span></div>';
-  h += '<div class="note warn" style="margin:10px 0 0"><strong>A withdrawn absence still reads as APPROVED in Fusion.</strong> '+
-    'It is marked withdrawn on a different column. Filtering on approval status alone lets cancelled leave through as real '+
-    'leave, so the module tests the absence status - which is why 20-Aug above is greyed out rather than charged.</div>';
-  h += '</div></div>';
-
-  h += '</div>';
-  document.getElementById('mainArea').innerHTML = h;
+  go('main-my-timesheet');
 }
-
-function curLines(){ return entriesFor(selfEmp(), view.proj, view.pk, view.widx); }
-function curWeek(){ return week(selfEmp(), view.proj, view.pk, view.widx); }
-
-function setHrs(li, di, v){
-  var e = wkr(selfEmp()), lines = curLines();
-  var n = num(v);
-  if(n < 0) n = 0;
-  var q = Math.round(n*4)/4;
-  if(Math.abs(q-n) > 0.001){
-    toast('Hours are recorded in quarters. '+f2(n)+' was rounded to '+f2(q)+'.');
-  }
-  var prev = lines[li].hrs[di];
-  lines[li].hrs[di] = q;
-  var tot = dayTotal(lines, di);
-  if(tot > e.std){
-    lines[li].hrs[di] = prev;
-    toast('A day cannot hold more than the '+f2(e.std)+' hours of this person’s shift. '+
-          'That day would come to '+f2(tot)+'.', true);
-  } else {
-    afterEdit();
-  }
-  renderMyTimesheet();
-}
-function afterEdit(){
-  var w = curWeek();
-  if(w.appr==='Approved' || w.appr==='Rejected'){
-    var r = applyEvent(w, 'DailyChange', {actor:wkr(selfEmp()).name});
-    if(r.ok) toast('That week had already been decided, so the change reopened it and flagged it Adjusted.');
-  }
-}
-function setTask(li,v){ curLines()[li].task=v; afterEdit(); renderMyTimesheet(); }
-function setType(li,v){ var l=curLines()[li]; l.type=v; if(v==='Billable') l.reason=''; else if(!l.reason) l.reason=UNBILLED_REASONS[0]; afterEdit(); renderMyTimesheet(); }
-function setReason(li,v){ curLines()[li].reason=v; }
+function setTask(li,v){ curLines()[li].task=v; go('main-my-timesheet'); }
+function setType(li,v){ var l=curLines()[li]; l.type=v;
+  if(v==='Billable') l.reason=''; else if(!l.reason) l.reason=UNBILLED_REASONS[0];
+  go('main-my-timesheet'); }
 function addLine(){
-  var p = proj(view.proj), w = curWeek();
-  w.entries.push({proj:view.proj, task:p.tasks[0].code, type:'Billable', reason:'',
-                  hrs:weeksOf(view.pk)[view.widx].days.map(function(){ return 0; })});
-  renderMyTimesheet();
+  var p=proj(view.proj);
+  curWeek().entries.push({task:p.tasks[0].code,type:'Billable',reason:'',shift:'Regular',
+    hrs:weeksOf(view.pk)[view.widx].days.map(function(){return 0;})});
+  go('main-my-timesheet');
 }
-function delLine(li){ curWeek().entries.splice(li,1); renderMyTimesheet(); }
-function saveTS(){ toast('Draft saved. You can keep editing until the weekly cut-off.'); }
-
-function submitTS(){
-  var w = curWeek(), e = wkr(selfEmp()), wd = weeksOf(view.pk)[view.widx];
-  var lines = curLines();
-  /* RULE-002: no empty week */
-  var total = 0; lines.forEach(function(l){ total += lineTotal(l); });
-  if(total <= 0){ toast('There are no hours on this week, so there is nothing to submit.', true); return; }
-  /* timing is computed HERE, never passed in - the page may have
-     worked it out minutes ago and be on the wrong side of 17:00 */
-  var cut = new Date(wd.end); cut.setDate(cut.getDate()+1);  // Monday after week end
-  var late = TODAY > cut;
-  var r = applyEvent(w, 'Submit', {actor:e.name, late:late});
-  if(!r.ok){ toast(r.err, true); return; }
-  toast(late
-    ? 'Submitted after the weekly cut-off, so the week carries a Late submission flag. The week itself is still Submitted.'
-    : 'Week submitted. It is now with '+wkr(proj(view.proj).mgr).name+' for approval.');
-  renderMyTimesheet();
+function saveDraft(){ toast('Draft saved. You can keep editing until the weekly cut-off.'); }
+function submitWeek(){
+  var w=curWeek(), e=wkr(me()), wd=weeksOf(view.pk)[view.widx], ls=curLines(), tot=0;
+  ls.forEach(function(l){ tot+=lineTotal(l); });
+  if(tot<=0){ toast('There are no hours on this week, so there is nothing to submit.',true); return; }
+  var cut=new Date(wd.end); cut.setDate(cut.getDate()+1);
+  var late=TODAY>cut;
+  var r=applyEvent(w,'Submit',{actor:e.name,late:late});
+  if(!r.ok){ toast(r.err,true); return; }
+  toast(late ? 'Submitted after the weekly cut-off, so the week carries a Late submission flag. The week itself is still Submitted.'
+             : 'Week submitted. It is now with '+wkr(proj(view.proj).mgr).name+' for approval.');
+  go('main-my-timesheet');
+}
+function withdraw(){
+  var r=applyEvent(curWeek(),'Revoke',{actor:wkr(me()).name});
+  if(!r.ok){ toast(r.err,true); return; }
+  toast('Submission withdrawn. The week is editable again.');
+  go('main-my-timesheet');
 }
 function showAlloc(){
-  var e = wkr(selfEmp());
-  var h = '<div class="modal-hd"><h3>My allocation</h3><button class="btn btn-ghost btn-sm" onclick="closeModal()">&times;</button></div><div class="modal-bd">'+
-    '<p class="sm muted" style="margin-top:0">Allocation comes from PPM Project Team, and it is what splits your day across projects. '+
-    'It is also what makes a day of leave cost each project a different number of hours.</p>'+
-    '<div class="tbl-wrap"><table class="dt"><thead><tr><th>Project</th><th>Model</th><th class="rt">Allocation</th>'+
-    '<th class="rt">Hours/day</th><th class="rt">A day of leave costs</th></tr></thead><tbody>';
-  var tot=0;
-  e.alloc.forEach(function(a){
-    tot += a.pct;
-    var hpd = Math.round(e.std*a.pct/100*4)/4;
-    h += '<tr><td class="mono">'+a.p+'</td><td>'+proj(a.p).model+'</td><td class="rt">'+a.pct+'%</td>'+
-      '<td class="rt">'+f2(hpd)+'</td><td class="rt">'+f2(hpd)+'</td></tr>';
-  });
-  h += '</tbody><tfoot><tr><td colspan="2">Total</td><td class="rt">'+tot+'%</td>'+
-    '<td class="rt">'+f2(e.std)+'</td><td class="rt">'+f2(e.std)+'</td></tr></tfoot></table></div>'+
+  var e=wkr(me()), h='<div class="modal-hd"><h3>My allocation</h3>'+
+    '<button class="btn btn-ghost btn-sm" onclick="closeModal()">&times;</button></div><div class="modal-bd">'+
+    '<div class="tbl-wrap"><table class="dt"><thead><tr><th>Project</th><th>Client</th>'+
+    '<th class="rt">Allocation %</th><th>Billable status</th><th>Role</th><th>Approving manager</th>'+
+    '</tr></thead><tbody>'+
+    e.alloc.map(function(a){ var p=proj(a.p);
+      return '<tr><td>'+p.name+'</td><td>'+p.client+'</td><td class="rt">'+a.pct+'%</td>'+
+        '<td><span class="chip '+(e.billing==='Billable'?'chip-approved':'chip-nb')+'">'+e.billing+'</span></td>'+
+        '<td>'+e.role+'</td><td>'+wkr(p.mgr).name+'</td></tr>'; }).join('')+
+    '</tbody></table></div>'+
+    '<div class="note" style="margin-top:14px">Allocation comes from PPM Project Team. It is what splits '+
+    'your day across projects, and what makes one day of leave cost each project a different number of hours.</div>'+
     '</div><div class="modal-ft"><button class="btn btn-primary" onclick="closeModal()">Close</button></div>';
   openModal(h);
 }
-function exportWeek(){
-  toast('Day-wise CSV generated for week '+(view.widx+1)+'. Upload is deliberately not built - it needs a column contract first.');
-}
 /* ============================================================
-   MANAGER SCREENS
-   The manager selects on PROJECT_MANAGER_ID, not the line manager
-   hierarchy - a line manager running no project would get the menu
-   and find it empty. MANAGER_EMP_ID still answers RULE-015's
-   separate question: who approves a manager's own week.
+   TEAM APPROVALS  —  A PROJECT LIST, not an employee grid.
+   Columns lifted from main-team-approvals-page.html:
+   Project | Number | TS start | TS end | Team | Billable |
+   Non-billable | Leave | Status
    ============================================================ */
-function mgrProjects(){ return PROJECTS.filter(function(p){ return p.mgr===SELF.Manager; }); }
+function mgrProjects(){ return PROJECTS.filter(function(p){ return p.mgr===SELF.mgr; }); }
 
-/* ---- PAGE-003 Team Approvals: week by week, everyone ---- */
-function renderTeam(){
-  var pid = view.proj, p = period(view.pk), ws = weeksOf(view.pk);
-  if(!proj(pid) || proj(pid).mgr!==SELF.Manager) pid = view.proj = mgrProjects()[0].id;
-  var team = empsOn(pid);
-
-  var h = band('PAGE-003 &middot; Team', 'Team Approvals',
-    'Every week for every person on the project. Approval is at the week - approve it and every day in it approves, '+
-    'in one statement. Day-level approval was retired; the old per-day calls now refuse by name.');
-  h += '<div class="rw-body">';
-  h += '<div class="rw-toolbar">'+
-    '<div><label class="fl">Project</label><select onchange="view.proj=this.value;go(\'team\')">'+
-      mgrProjects().map(function(x){ return '<option value="'+x.id+'"'+(x.id===pid?' selected':'')+'>'+x.id+' - '+x.name+'</option>'; }).join('')+
-    '</select></div>'+
-    '<div><label class="fl">Period</label>'+periodPicker('setPeriod(this.value)')+'</div>'+
-    '<div style="flex:1"></div>'+
-    '<button class="btn btn-outline" onclick="runCutoffs()">Run cut-offs now</button>'+
-    '<button class="btn btn-primary" onclick="go(\'summary\')">Monthly summary &rarr;</button>'+
-    '</div>';
-
-  /* counts */
-  var cnt = {NotYetSubmitted:0, Submitted:0, LateSubmission:0, Defaulted:0, Approved:0, Rejected:0};
+function projStatus(pid){
+  var team=empsOn(pid), ws=weeksOf(view.pk), pend=0, rej=0, n=0;
   team.forEach(function(e){ ws.forEach(function(x,i){
-    var w = week(e.id,pid,view.pk,i); cnt[w.sub]++; if(w.appr==='Approved') cnt.Approved++; if(w.appr==='Rejected') cnt.Rejected++;
+    var w=week(e.id,pid,view.pk,i); n++;
+    if(w.appr==='Rejected') rej++;
+    else if(w.appr!=='Approved') pend++;
   }); });
-  h += '<div class="stat-row">'+
-    statCard('Team', team.length, 'allocated to '+pid)+
-    statCard('Weeks', team.length*ws.length, ws.length+' clipped to the month')+
-    statCard('Awaiting you', cnt.Submitted+cnt.LateSubmission, 'submitted, not decided')+
-    statCard('Not submitted', cnt.NotYetSubmitted, 'employee has not sent it')+
-    statCard('Defaulted', cnt.Defaulted, 'a cut-off passed')+
-    statCard('Approved', cnt.Approved, '')+
-    '</div>';
-
-  h += '<div class="note"><strong>Weeks are clipped to the month.</strong> A calendar week straddling a month boundary '+
-    'becomes two rows, so a week never contributes hours to two periods and the month cannot double-count. That is why '+
-    ws.length+' weeks appear for '+p.name+' and the first and last are short.</div>';
-
-  h += '<div class="card"><div class="card-body tight"><div class="tbl-wrap"><table class="dt"><thead><tr>'+
-    '<th>Employee</th><th>Role on client</th>';
-  ws.forEach(function(x,i){ h += '<th class="daycol">W'+(i+1)+'<br><span class="muted sm">'+x.label+'</span></th>'; });
-  h += '<th class="rt">Month hrs</th><th></th></tr></thead><tbody>';
-
-  team.forEach(function(e){
-    var t = monthTotals(e.id, pid, view.pk);
-    h += '<tr><td><strong>'+e.name+'</strong><br><span class="mono muted sm">'+e.id+' &middot; '+e.type+'</span></td>'+
-      '<td class="sm">'+e.role+'<br><span class="chip '+(e.billing==='Billable'?'chip-approved':'chip-nb')+'">'+e.billing+'</span></td>';
-    ws.forEach(function(x,i){
-      var w = week(e.id,pid,view.pk,i);
-      h += '<td class="daycol" style="text-align:center">'+
-        '<button class="btn btn-ghost btn-sm" style="flex-direction:column;gap:2px" onclick="openDetail(\''+e.id+'\','+i+')">'+
-        subChip(w.sub)+'<br>'+apprChip(w.appr)+'</button></td>';
-    });
-    h += '<td class="rt"><strong>'+f2(t.b+t.n+t.l)+'</strong></td>'+
-      '<td><button class="btn btn-outline btn-sm" onclick="openDetail(\''+e.id+'\','+currentWeekIdx(view.pk)+')">Open</button></td></tr>';
-  });
-  h += '</tbody></table></div></div></div>';
-
-  h += '<div class="note warn"><strong>The cut-off is absolute.</strong> No grace period and no countdown banner. '+
-    'Timing is computed inside the engine at the moment of the call, never passed in by the page - a screen that '+
-    'worked it out minutes ago may be on the wrong side of 17:00.<span class="rule-tag">RULE-007</span></div>';
-  h += '</div>';
-  document.getElementById('mainArea').innerHTML = h;
+  if(confirmOf(pid)) return 'Confirmed';
+  if(rej) return 'Rejected';
+  return pend ? 'Pending' : 'Approved';
+}
+function confirmOf(pid){
+  for(var i=0;i<CONFIRMS.length;i++)
+    if(CONFIRMS[i].proj===pid && CONFIRMS[i].pk===view.pk) return CONFIRMS[i];
+  return null;
 }
 
-function openDetail(empId, widx){ view.mgrEmp=empId; view.mgrWeek=widx; go('detail'); }
-
-function runCutoffs(){
-  var pid = view.proj, ws = weeksOf(view.pk), n=0, held=0;
-  empsOn(pid).forEach(function(e){
-    ws.forEach(function(x,i){
-      if(x.end >= TODAY) return;                       // week not finished
-      var cut = new Date(x.end); cut.setDate(cut.getDate()+1);
-      if(TODAY <= cut) return;                          // cut-off not passed
-      var w = week(e.id,pid,view.pk,i);
-      var r = applyEvent(w, 'WeeklyCutoff', {actor:'SCHEDULER'});
-      if(r.ok){ n++; if(e.type!=='Contractor') held++; }
-      else if(TODAY > new Date(period(view.pk).deliveryCut.replace(/-/g,' '))){
-        // the DELIVERY cut-off is the manager's, and it is a month-level date.
-        // Firing it while it is still in the future would blame a manager who
-        // is not late yet -- the same fault as a NULL FROM column.
-        var r2 = applyEvent(w, 'DeliveryCutoff', {actor:'SCHEDULER'});
-        if(r2.ok) n++;
-      }
-    });
-  });
-  toast(n ? (n+' week(s) defaulted. '+held+' salary hold(s) raised - the weekly cut-off holds pay, the delivery cut-off never does.')
-          : 'Nothing to default: every finished week is already past its cut-off state.');
-  go('team');
-}
-
-/* ---- PAGE-005 Monthly Summary ---- */
-function renderSummary(){
-  var pid = view.proj, p = period(view.pk), team = empsOn(pid), ws = weeksOf(view.pk);
-  var confirmed = CONFIRMS.filter(function(c){ return c.proj===pid && c.pk===view.pk; })[0];
-
-  var h = band('PAGE-005 &middot; Team', 'Monthly Summary',
-    'One month, one project. This is what the manager confirms, and what accrual eventually receives.');
-  h += '<div class="rw-body">';
-  h += '<div class="rw-toolbar">'+
-    '<div><label class="fl">Project</label><select onchange="view.proj=this.value;go(\'summary\')">'+
-      mgrProjects().map(function(x){ return '<option value="'+x.id+'"'+(x.id===pid?' selected':'')+'>'+x.id+' - '+x.name+'</option>'; }).join('')+
-    '</select></div>'+
-    '<div><label class="fl">Period</label>'+periodPicker('setPeriod(this.value)')+'</div>'+
+RENDER['main-team-approvals']=function(){
+  var h=pageBand('main-team-approvals');
+  h+='<div class="rw-body">';
+  h+='<div class="rw-toolbar">'+
+    '<div><label class="fl">Month / Year</label>'+periodSelect('setPeriod(this.value)')+'</div>'+
     '<div style="flex:1"></div>'+
-    '<button class="btn btn-outline" onclick="go(\'team\')">&larr; Team approvals</button>'+
-    (confirmed ? '<button class="btn btn-go" disabled>Confirmed '+confirmed.on+'</button>'
-               : '<button class="btn btn-primary" onclick="confirmDialog()">Confirm month</button>')+
+    '<button class="btn btn-outline" onclick="showCutoffs()">All cut-offs</button>'+
+    '<button class="btn btn-outline" onclick="go(\'main-team-approvals\')">Refresh</button>'+
     '</div>';
 
-  var tb=0, tn=0, tl=0;
-  team.forEach(function(e){ var t=monthTotals(e.id,pid,view.pk); tb+=t.b; tn+=t.n; tl+=t.l; });
-  h += '<div class="stat-row">'+
-    statCard('People', team.length, '')+
-    statCard('Billable', f2(tb), 'hours')+
-    statCard('Non-billable', f2(tn), 'hours')+
-    statCard('Leave', f2(tl), 'apportioned')+
-    statCard('Total', f2(tb+tn+tl), 'hours')+
-    statCard('Project', proj(pid).model, proj(pid).main)+
-    '</div>';
-
-  h += '<div class="card"><div class="card-hd"><h3>'+p.name+' &middot; '+pid+' '+proj(pid).name+'</h3>'+
-    '<span class="sm muted">live figures from the pod</span></div>'+
-    '<div class="card-body tight"><div class="tbl-wrap"><table class="dt"><thead><tr>'+
-    '<th>Employee</th><th>Role on client</th><th>Billing</th><th>Weeks</th>'+
-    '<th class="rt">Billable</th><th class="rt">Non-billable</th><th class="rt">Leave</th><th class="rt">Total</th><th></th>'+
-    '</tr></thead><tbody>';
-  team.forEach(function(e){
-    var t = monthTotals(e.id,pid,view.pk);
-    var st = {NotYetSubmitted:0,Submitted:0,LateSubmission:0,Defaulted:0}, ap={Pending:0,Approved:0,Rejected:0,ManagerDefaulted:0};
-    ws.forEach(function(x,i){ var w=week(e.id,pid,view.pk,i); st[w.sub]++; ap[w.appr]++; });
-    var wsum = [];
-    if(ap.Approved) wsum.push('<span class="chip chip-approved">'+ap.Approved+' approved</span>');
-    if(ap.Pending)  wsum.push('<span class="chip chip-submitted">'+ap.Pending+' pending</span>');
-    if(ap.Rejected) wsum.push('<span class="chip chip-rejected">'+ap.Rejected+' rejected</span>');
-    if(st.Defaulted) wsum.push('<span class="chip chip-defaulted">'+st.Defaulted+' defaulted</span>');
-    h += '<tr><td><strong>'+e.name+'</strong><br><span class="mono muted sm">'+e.id+'</span></td>'+
-      '<td class="sm">'+e.role+'</td>'+
-      '<td><span class="chip '+(e.billing==='Billable'?'chip-approved':'chip-nb')+'">'+e.billing+'</span></td>'+
-      '<td class="sm">'+wsum.join(' ')+'</td>'+
-      '<td class="rt">'+f2(t.b)+'</td><td class="rt">'+f2(t.n)+'</td><td class="rt">'+f2(t.l)+'</td>'+
-      '<td class="rt"><strong>'+f2(t.b+t.n+t.l)+'</strong></td>'+
-      '<td><button class="btn btn-outline btn-sm" onclick="openDetail(\''+e.id+'\','+currentWeekIdx(view.pk)+')">Detail</button></td></tr>';
+  h+='<div class="card"><div class="card-body tight"><div class="tbl-wrap"><table class="dt"><thead><tr>'+
+    '<th>Project</th><th>Number</th><th>TS start</th><th>TS end</th><th class="rt">Team</th>'+
+    '<th class="rt">Billable</th><th class="rt">Non-billable</th><th class="rt">Leave</th>'+
+    '<th>Status</th><th></th></tr></thead><tbody>';
+  mgrProjects().forEach(function(p){
+    var team=empsOn(p.id), b=0,n=0,l=0;
+    team.forEach(function(e){ var t=monthTotals(e.id,p.id,view.pk); b+=t.b; n+=t.n; l+=t.l; });
+    var st=projStatus(p.id);
+    var cls={Confirmed:'chip-approved',Approved:'chip-approved',
+             Pending:'chip-submitted',Rejected:'chip-rejected'}[st];
+    h+='<tr><td><strong>'+p.name+'</strong><br><span class="sm muted">'+p.client+' &middot; '+p.model+'</span></td>'+
+      '<td class="mono">'+p.id+'</td><td class="sm mono">'+p.tsStart+'</td><td class="sm mono">'+p.tsEnd+'</td>'+
+      '<td class="rt">'+team.length+'</td>'+
+      '<td class="rt">'+f2(b)+'</td><td class="rt">'+f2(n)+'</td><td class="rt">'+f2(l)+'</td>'+
+      '<td><span class="chip '+cls+'">'+st+'</span></td>'+
+      '<td><button class="btn btn-primary btn-sm" onclick="openProject(\''+p.id+'\')">Open</button></td></tr>';
   });
-  h += '</tbody><tfoot><tr><td colspan="4">'+team.length+' people</td>'+
-    '<td class="rt">'+f2(tb)+'</td><td class="rt">'+f2(tn)+'</td><td class="rt">'+f2(tl)+'</td>'+
-    '<td class="rt">'+f2(tb+tn+tl)+'</td><td></td></tr></tfoot></table></div></div></div>';
+  h+='</tbody></table></div></div></div>';
 
-  h += '<div class="note"><strong>Billable and unbilled are separated at the row, not netted.</strong> '+
-    'Two people here are on the project but not chargeable to the client, so their hours never reach the invoice '+
-    'and stay visible to the manager. The distinction lives on the worker, not on the role.</div>';
+  h+='<div class="note"><strong>Open a project to review and approve.</strong> Monthly Summary is not a menu '+
+    'item &mdash; it is where Open takes you, and Approval Detail is one level below that. The menu offers only '+
+    'what a role may open; there is no such thing as a disabled entry.</div>';
+  h+='</div>';
+  document.getElementById('mainArea').innerHTML=h;
+};
+function openProject(pid){ view.mgrProj=pid; view.sel=[]; go('main-view-timesheet'); }
+function showCutoffs(){
+  var p=period(view.pk);
+  openModal('<div class="modal-hd"><h3>All cut-offs</h3>'+
+    '<button class="btn btn-ghost btn-sm" onclick="closeModal()">&times;</button></div><div class="modal-bd">'+
+    '<div class="tbl-wrap"><table class="dt"><thead><tr><th>Cut-off</th><th>Whose lateness</th>'+
+    '<th>Effect</th><th>Holds pay?</th></tr></thead><tbody>'+
+    '<tr><td><strong>Weekly</strong></td><td>The employee&rsquo;s</td><td>Defaults and <strong>locks</strong> the week</td>'+
+    '<td><span class="chip chip-rejected">Yes</span></td></tr>'+
+    '<tr><td><strong>Delivery</strong> ('+p.deliveryCut+')</td><td>The manager&rsquo;s</td>'+
+    '<td>Defaults it, stays editable</td><td><span class="chip chip-approved">Never</span></td></tr>'+
+    '</tbody></table></div>'+
+    '<div class="note" style="margin-top:14px"><strong>The cut-off is absolute.</strong> No grace and no '+
+    'countdown. Timing is computed inside the engine at the moment of the call, never passed in by the page.</div>'+
+    '</div><div class="modal-ft"><button class="btn btn-primary" onclick="closeModal()">Close</button></div>');
+}
 
-  if(confirmed){
-    h += '<div class="note ok"><strong>Confirmed '+confirmed.on+' as '+confirmed.type+'.</strong> '+
-      confirmed.rows+' interface rows, '+f2(confirmed.hours)+' hours handed to accrual. '+
-      'The hours are frozen - a later correction travels separately as a reversal and a replacement rather than '+
-      'restating this month.<span class="rule-tag">RULE-020</span></div>';
+/* ============================================================
+   MONTHLY SUMMARY  (main-view-timesheet)
+   Emp ID | Name | Role | Billable status | Billable | Non-billable |
+   Leave | Total | Cap | Weeks | Month status
+   ============================================================ */
+function empMonthStatus(eid,pid){
+  var ws=weeksOf(view.pk), ap=0, rj=0;
+  ws.forEach(function(x,i){ var w=week(eid,pid,view.pk,i);
+    if(w.appr==='Approved') ap++; else if(w.appr==='Rejected') rj++; });
+  if(rj) return 'Rejected';
+  return ap===ws.length ? 'Approved' : 'Pending';
+}
+RENDER['main-view-timesheet']=function(){
+  var pid=view.mgrProj||mgrProjects()[0].id; view.mgrProj=pid;
+  var p=proj(pid), team=empsOn(pid), ws=weeksOf(view.pk), cf=confirmOf(pid);
+  var counts={Approved:0,Pending:0,Rejected:0};
+  team.forEach(function(e){ counts[empMonthStatus(e.id,pid)]++; });
+
+  var h=pageBand('main-view-timesheet',"go('main-team-approvals')");
+  h+='<div class="rw-body">';
+  h+='<div class="card"><div class="card-body">'+
+    '<h3 style="margin:0 0 2px;font-size:18px">'+p.name+'</h3>'+
+    '<p class="sm muted" style="margin:0">'+period(view.pk).name+' &middot; '+p.client+' &middot; '+p.model+
+    ' &middot; <span class="mono">'+p.main+'</span></p></div></div>';
+
+  h+='<div class="stat-row">'+
+    statCard('Team',team.length,'')+
+    statCard('Approved',counts.Approved,'')+
+    statCard('Pending',counts.Pending,'')+
+    statCard('Rejected',counts.Rejected,'')+
+    '</div>';
+
+  if(cf){
+    var ok = cf.status==='Success' && cf.rows>0;
+    h+='<div class="note '+(ok?'ok':'warn')+'"><strong>'+
+      (ok?'This month has been confirmed':'Confirmed, but nothing was sent to accrual')+'.</strong> '+
+      'Confirmed on '+cf.on+'. '+cf.rows+' interface rows were written for the accrual application to collect '+
+      '(status: '+cf.status+').'+
+      (ok?'':' They would read this project-month as having no time at all. Do not treat it as done.')+'</div>';
+  } else if(counts.Pending || counts.Rejected){
+    h+='<div class="note warn"><strong>Not ready to confirm to accrual.</strong> '+
+      'Every employee on the project must be approved first. '+(counts.Pending+counts.Rejected)+' still outstanding.</div>';
   }
-  h += '</div>';
-  document.getElementById('mainArea').innerHTML = h;
-}
 
-/* ---- PAGE-004 Approval Detail ---- */
-function renderDetail(){
-  var pid = view.proj, e = wkr(view.mgrEmp), widx = view.mgrWeek, p = period(view.pk);
-  var ws = weeksOf(view.pk), wd = ws[widx], w = week(e.id,pid,view.pk,widx);
-  var lines = entriesFor(e.id,pid,view.pk,widx);
-  var canDecide = (w.appr==='Pending') &&
-    (w.sub==='Submitted' || w.sub==='LateSubmission' || w.sub==='Defaulted');
+  /* employees */
+  h+='<div class="card"><div class="card-hd"><h3>Employees</h3><div style="display:flex;gap:8px;align-items:center">'+
+    '<span class="sm muted">'+view.sel.length+' selected</span>'+
+    '<button class="btn btn-ghost btn-sm" onclick="selAllPending()">Select all pending</button>'+
+    '<button class="btn btn-ghost btn-sm" onclick="view.sel=[];go(\'main-view-timesheet\')">Clear</button>'+
+    '<button class="btn btn-outline btn-sm" onclick="bulkReject()"'+(view.sel.length?'':' disabled')+'>Reject selected</button>'+
+    '<button class="btn btn-primary btn-sm" onclick="bulkApprove()"'+(view.sel.length?'':' disabled')+'>Approve selected</button>'+
+    '</div></div><div class="card-body tight"><div class="tbl-wrap"><table class="dt"><thead><tr>'+
+    '<th></th><th>Emp ID</th><th>Name</th><th>Role</th><th>Billable status</th>'+
+    '<th class="rt">Billable</th><th class="rt">Non-billable</th><th class="rt">Leave</th><th class="rt">Total</th>'+
+    '<th>Cap</th><th>Weeks</th><th>Month status</th><th></th></tr></thead><tbody>';
+  var TB=0,TN=0,TL=0;
+  team.forEach(function(e){
+    var t=monthTotals(e.id,pid,view.pk); TB+=t.b; TN+=t.n; TL+=t.l;
+    var ms=empMonthStatus(e.id,pid), ap=0;
+    ws.forEach(function(x,i){ if(week(e.id,pid,view.pk,i).appr==='Approved') ap++; });
+    var cls={Approved:'chip-approved',Pending:'chip-submitted',Rejected:'chip-rejected'}[ms];
+    var checked=view.sel.indexOf(e.id)>=0;
+    h+='<tr><td><input type="checkbox"'+(checked?' checked':'')+' onchange="toggleSel(\''+e.id+'\')"></td>'+
+      '<td class="mono">'+e.id+'</td><td>'+e.name+'</td><td class="sm">'+e.role+'</td>'+
+      '<td><span class="chip '+(e.billing==='Billable'?'chip-approved':'chip-nb')+'">'+e.billing+'</span></td>'+
+      '<td class="rt">'+f2(t.b)+'</td><td class="rt">'+f2(t.n)+'</td><td class="rt">'+f2(t.l)+'</td>'+
+      '<td class="rt"><strong>'+f2(t.t)+'</strong></td>'+
+      '<td class="muted">&mdash;</td>'+
+      '<td class="sm">'+ap+' / '+ws.length+'</td>'+
+      '<td><span class="chip '+cls+'">'+ms+'</span></td>'+
+      '<td><button class="btn btn-outline btn-sm" onclick="openEmp(\''+e.id+'\')">Open</button></td></tr>';
+  });
+  h+='</tbody><tfoot><tr><td colspan="5">'+team.length+' people</td>'+
+    '<td class="rt">'+f2(TB)+'</td><td class="rt">'+f2(TN)+'</td><td class="rt">'+f2(TL)+'</td>'+
+    '<td class="rt">'+f2(TB+TN+TL)+'</td><td colspan="4"></td></tr></tfoot></table></div></div></div>';
 
-  var h = band('PAGE-004 &middot; Team', 'Approval Detail &mdash; '+e.name,
-    e.role+' &middot; '+allocPct(e.id,pid)+'% on '+pid+' &middot; '+e.std+'-hour shift &middot; '+e.type,
-    'go(\'team\')');
-  h += '<div class="rw-body">';
-
-  h += '<div class="rw-toolbar">'+
-    '<div><label class="fl">Week</label><select onchange="view.mgrWeek=+this.value;go(\'detail\')">'+
-      ws.map(function(x,i){ return '<option value="'+i+'"'+(i===widx?' selected':'')+'>Week '+(i+1)+' &middot; '+x.label+'</option>'; }).join('')+
-    '</select></div>'+
-    '<div style="flex:1"></div>'+
-    '<button class="btn btn-outline" onclick="showTrail()">Audit trail</button>'+
-    '<button class="btn btn-outline" onclick="doRevokeDecision()"'+(w.appr==='Approved'||w.appr==='Rejected'?'':' disabled')+'>Revoke decision</button>'+
-    '<button class="btn btn-outline" onclick="doCorrect()"'+(canDecide?'':' disabled')+'>Correct</button>'+
-    '<button class="btn btn-danger" onclick="doReject()"'+(canDecide?'':' disabled')+'>Reject</button>'+
-    '<button class="btn btn-go" onclick="doApprove()"'+(canDecide?'':' disabled')+'>Approve week</button>'+
-    '</div>';
-
-  h += '<div class="card"><div class="card-body"><div class="hdr-grid">'+
-    hdrItem('Submission', subChip(w.sub))+
-    hdrItem('Approval', apprChip(w.appr))+
-    hdrItem('Flags', activeFlags(w).length?flagChips(w):'<span class="muted sm">none</span>')+
-    hdrItem('Defaulted by', w.defaultedBy || '<span class="muted sm">-</span>')+
-    hdrItem('Versions', w.versions.length)+
-    hdrItem('Delivery cut-off', p.deliveryCut)+
+  /* Monthly -> Accrual */
+  h+='<div class="card"><div class="card-hd"><h3>Monthly &rarr; Accrual</h3></div><div class="card-body">'+
+    '<p class="sm muted" style="margin:0 0 12px;max-width:none">Confirms the whole project month for '+
+    '<strong>all employees at once</strong> and fills the accrual interface with the consolidated timesheet '+
+    '(employee &times; project &times; task &times; day) plus any day-wise Reversal(&minus;)/Adjustment(+) rows. '+
+    'The accrual application collects it from there.</p>'+
+    '<div style="display:flex;justify-content:flex-end">'+
+    (cf ? '<button class="btn btn-go" disabled>Month already confirmed</button>'
+        : '<button class="btn btn-primary" onclick="confirmDialog()">Confirm month for all employees</button>')+
     '</div></div></div>';
 
-  if(!canDecide && w.sub==='NotYetSubmitted'){
-    h += '<div class="note warn"><strong>Nothing to approve.</strong> This week has not been submitted, and the '+
-      'engine refuses Approve from NotYetSubmitted by name. That guard is deliberate: it was once seeded as '+
-      '"any state" on the reasoning that the screen would never offer the button, and the REST endpoint is directly '+
-      'callable, so the screen is not the control.</div>';
-  }
-
-  /* day grid */
-  h += '<div class="card"><div class="card-hd"><h3>Week '+(widx+1)+' &middot; '+wd.label+'</h3>'+
-    '<span class="sm muted">day level, read-only - approval is at the week</span></div>'+
-    '<div class="card-body tight"><div class="tbl-wrap"><table class="dt"><thead><tr><th>Task</th><th>Type</th>';
-  wd.days.forEach(function(dy){ h += '<th class="daycol'+(dy.wknd?' wknd':'')+'">'+DOW_SHORT[dy.dow]+'<br><span class="muted">'+pretty(dy.d)+'</span></th>'; });
-  h += '<th class="rt">Total</th></tr></thead><tbody>';
-  lines.forEach(function(ln){
-    h += '<tr'+(ln.isLeave?' class="leaverow"':'')+'>'+
-      '<td>'+(ln.isLeave?'<strong>Leave</strong> <span class="muted sm">apportioned</span>':taskName(pid,ln.task))+'</td>'+
-      '<td>'+(ln.isLeave?'<span class="chip chip-nb">Leave</span>'
-        :'<span class="chip '+(ln.type==='Billable'?'chip-approved':'chip-nb')+'">'+ln.type+'</span>'+
-          (ln.reason?' <span class="sm muted">'+ln.reason+'</span>':''))+'</td>';
-    ln.hrs.forEach(function(v,di){ h += '<td class="daycol rt'+(wd.days[di].wknd?' wknd':'')+'">'+f2(v)+'</td>'; });
-    h += '<td class="rt"><strong>'+f2(lineTotal(ln))+'</strong></td></tr>';
-  });
-  h += '</tbody><tfoot><tr><td colspan="2">Day total</td>';
-  var g=0; wd.days.forEach(function(dy,di){ var t=dayTotal(lines,di); g+=t;
-    h += '<td class="daycol rt'+(dy.wknd?' wknd':'')+'">'+f2(t)+'</td>'; });
-  h += '<td class="rt">'+f2(g)+'</td></tr></tfoot></table></div></div></div>';
-
-  /* version trail */
-  h += '<div class="card"><div class="card-hd"><h3>Version trail</h3>'+
-    '<span class="sm muted">every event, numbered</span></div><div class="card-body tight">';
-  if(!w.versions.length){
-    h += '<div class="card-body"><p class="muted sm" style="margin:0">Nothing has happened to this week yet.</p></div>';
-  } else {
-    h += '<div class="tbl-wrap"><table class="dt"><thead><tr><th>#</th><th>Event</th><th>Submission</th>'+
-      '<th>Approval</th><th>By</th><th>On</th><th>Reason</th></tr></thead><tbody>';
-    w.versions.forEach(function(v){
-      h += '<tr><td class="mono">'+v.no+'</td><td><strong>'+v.ev+'</strong></td>'+
-        '<td>'+subChip(v.sub)+'</td><td>'+apprChip(v.appr)+'</td>'+
-        '<td class="sm">'+v.by+'</td><td class="sm mono">'+v.on+'</td>'+
-        '<td class="sm">'+(v.reason?esc(v.reason):'<span class="muted">-</span>')+'</td></tr>';
+  h+='</div>';
+  document.getElementById('mainArea').innerHTML=h;
+};
+function toggleSel(id){
+  var i=view.sel.indexOf(id);
+  if(i>=0) view.sel.splice(i,1); else view.sel.push(id);
+  go('main-view-timesheet');
+}
+function selAllPending(){
+  var pid=view.mgrProj;
+  view.sel=empsOn(pid).filter(function(e){ return empMonthStatus(e.id,pid)!=='Approved'; })
+                      .map(function(e){ return e.id; });
+  go('main-view-timesheet');
+}
+function bulkApprove(){
+  var pid=view.mgrProj, ws=weeksOf(view.pk), ok=0, fail=0, self=0;
+  view.sel.forEach(function(eid){
+    ws.forEach(function(x,i){
+      var w=week(eid,pid,view.pk,i);
+      var r=applyEvent(w,'Approve',{actor:wkr(SELF.mgr).name});
+      if(r.ok){ ok++; if(eid===SELF.mgr) self++; } else fail++;
     });
-    h += '</tbody></table></div>';
+  });
+  view.sel=[];
+  toast(ok+' week(s) approved'+(fail?', '+fail+' refused by the engine':'')+
+    (self?'. That included the manager’s own weeks — RULE-015 was relaxed on 21-Aug.':'.'));
+  go('main-view-timesheet');
+}
+function bulkReject(){
+  var h='<div class="modal-hd"><h3>Reject selected</h3>'+
+    '<button class="btn btn-ghost btn-sm" onclick="closeModal()">&times;</button></div><div class="modal-bd">'+
+    '<label class="fl">Rejection reason</label><select id="rjR" style="width:100%">'+
+    REJECT_REASONS.map(function(r){return '<option>'+r+'</option>';}).join('')+'</select>'+
+    '<div style="height:12px"></div><label class="fl">Remarks</label>'+
+    '<textarea id="rjT" rows="3" style="width:100%"></textarea>'+
+    '<div class="note" style="margin-top:14px">Rejecting reopens the week. When it is resubmitted it comes '+
+    'back as <strong>LateSubmission</strong> and carries the flag &mdash; a resubmission is always late, '+
+    'whatever the clock says.</div></div>'+
+    '<div class="modal-ft"><button class="btn btn-outline" onclick="closeModal()">Cancel</button>'+
+    '<button class="btn btn-danger" onclick="bulkRejectGo()">Reject</button></div>';
+  openModal(h);
+}
+function bulkRejectGo(){
+  var reason=document.getElementById('rjR').value, txt=document.getElementById('rjT').value;
+  var pid=view.mgrProj, ws=weeksOf(view.pk), ok=0;
+  view.sel.forEach(function(eid){ ws.forEach(function(x,i){
+    if(applyEvent(week(eid,pid,view.pk,i),'Reject',
+        {actor:wkr(SELF.mgr).name,reason:reason+(txt?' — '+txt:'')}).ok) ok++; }); });
+  view.sel=[]; closeModal();
+  toast(ok+' week(s) rejected and reopened for the employee.');
+  go('main-view-timesheet');
+}
+function openEmp(eid){ view.mgrEmp=eid; view.mgrWeek=null; view.sel=[]; go('main-approval-detail'); }
+
+/* ============================================================
+   APPROVAL DETAIL
+   weeks : Week | Projects | Billable | Non-billable | Leave |
+           Billing loss | Total | Days | Employee status | Manager status
+   dates : Date | Project | Task | Hours | Type | Shift | Manager status | Source
+   trail : Date | Event | From | To | Delta | Reason | By | When
+   ============================================================ */
+RENDER['main-approval-detail']=function(){
+  var pid=view.mgrProj, e=wkr(view.mgrEmp), ws=weeksOf(view.pk);
+  var h=pageBand('main-approval-detail',"go('main-view-timesheet')");
+  h+='<div class="rw-body">';
+
+  h+='<div class="card"><div class="card-body"><div class="hdr-grid">'+
+    hdrItem('Employee', e.name+' <span class="mono muted">'+e.id+'</span>')+
+    hdrItem('Role', e.role)+
+    hdrItem('Allocation', allocPct(e.id,pid)+'% on '+pid)+
+    hdrItem('Work pattern', e.pattern==='SUN_THU'?'Sun&ndash;Thu':'Mon&ndash;Fri')+
+    hdrItem('Billable status', e.billing)+
+    hdrItem('Delivery cut-off', period(view.pk).deliveryCut)+
+    '</div></div></div>';
+
+  /* --- weeks --- */
+  h+='<div class="card"><div class="card-hd"><h3>Weeks</h3><div style="display:flex;gap:8px">'+
+    '<button class="btn btn-ghost btn-sm" onclick="selAllWeeks()">Select all pending</button>'+
+    '<button class="btn btn-ghost btn-sm" onclick="view.sel=[];go(\'main-approval-detail\')">Clear</button>'+
+    '<button class="btn btn-outline btn-sm" onclick="undoDecision()">Undo decision</button>'+
+    '<button class="btn btn-outline btn-sm" onclick="correctWeeks()"'+(view.sel.length?'':' disabled')+'>Correct</button>'+
+    '<button class="btn btn-danger btn-sm" onclick="rejectWeeks()"'+(view.sel.length?'':' disabled')+'>Reject selected</button>'+
+    '<button class="btn btn-go btn-sm" onclick="approveWeeks()"'+(view.sel.length?'':' disabled')+'>Approve selected</button>'+
+    '</div></div><div class="card-body tight"><div class="tbl-wrap"><table class="dt"><thead><tr>'+
+    '<th></th><th>Week</th><th>Projects</th><th class="rt">Billable</th><th class="rt">Non-billable</th>'+
+    '<th class="rt">Leave</th><th class="rt">Billing loss</th><th class="rt">Total</th><th class="rt">Days</th>'+
+    '<th>Employee status</th><th>Manager status</th><th></th></tr></thead><tbody>';
+  ws.forEach(function(x,i){
+    var w=week(e.id,pid,view.pk,i), t=weekTotals(e.id,pid,view.pk,i);
+    var days=0; entriesFor(e.id,pid,view.pk,i)[0].hrs.forEach(function(v){ if(num(v)>0) days++; });
+    var loss=0;
+    LLC.forEach(function(r){ if(r.proj===pid && r.emp===e.id &&
+      r.date>=iso(x.start) && r.date<=iso(x.end)) loss+=r.loss; });
+    var checked=view.sel.indexOf(i)>=0;
+    h+='<tr><td><input type="checkbox"'+(checked?' checked':'')+' onchange="toggleWk('+i+')"></td>'+
+      '<td><strong>W'+(i+1)+'</strong><br><span class="sm muted">'+x.label+'</span></td>'+
+      '<td class="mono sm">'+pid+'</td>'+
+      '<td class="rt">'+f2(t.b)+'</td><td class="rt">'+f2(t.n)+'</td><td class="rt">'+f2(t.l)+'</td>'+
+      '<td class="rt">'+(loss?f2(loss):'<span class="muted">&mdash;</span>')+'</td>'+
+      '<td class="rt"><strong>'+f2(t.t)+'</strong></td><td class="rt">'+days+'</td>'+
+      '<td>'+subChip(w.sub)+flagChips(w)+'</td><td>'+apprChip(w.appr)+'</td>'+
+      '<td><button class="btn btn-outline btn-sm" onclick="openWk('+i+')">Open</button></td></tr>';
+  });
+  h+='</tbody></table></div></div></div>';
+
+  /* --- dates within one week --- */
+  if(view.mgrWeek!==null){
+    var wi=view.mgrWeek, wd=ws[wi], w=week(e.id,pid,view.pk,wi), lines=entriesFor(e.id,pid,view.pk,wi);
+    h+='<div class="card"><div class="card-hd"><h3>Dates &middot; Week '+(wi+1)+' &middot; '+wd.label+'</h3>'+
+      '<button class="btn btn-ghost btn-sm" onclick="view.mgrWeek=null;go(\'main-approval-detail\')">All weeks</button>'+
+      '</div><div class="card-body tight"><div class="tbl-wrap"><table class="dt"><thead><tr>'+
+      '<th>Date</th><th>Project</th><th>Task</th><th class="rt">Hours</th><th>Type</th><th>Shift</th>'+
+      '<th>Manager status</th><th>Source</th></tr></thead><tbody>';
+    wd.days.forEach(function(dy,di){
+      lines.forEach(function(ln){
+        var v=num(ln.hrs[di]); if(v===0) return;
+        h+='<tr><td class="mono">'+pretty(dy.d)+' <span class="muted">'+DOW[dy.dow]+'</span></td>'+
+          '<td class="mono sm">'+pid+'</td>'+
+          '<td class="sm">'+(ln.isLeave?'Leave':ln.task+' &middot; '+taskName(pid,ln.task))+'</td>'+
+          '<td class="rt">'+f2(v)+'</td>'+
+          '<td>'+(ln.isLeave?'<span class="chip chip-nb">Leave</span>'
+            :'<span class="chip '+(ln.type==='Billable'?'chip-approved':'chip-nb')+'">'+ln.type+'</span>')+'</td>'+
+          '<td class="sm">'+(ln.shift||'&mdash;')+'</td>'+
+          '<td>'+apprChip(w.appr)+'</td>'+
+          '<td class="sm muted">'+(w.sub==='Defaulted'?'Default':'Actual')+'</td></tr>';
+      });
+    });
+    h+='</tbody></table></div></div></div>';
+    h+='<div class="note"><strong>Day-level approval is retired.</strong> These dates are read-only: '+
+      'approve the week and every day in it approves, in one statement. The old per-day procedures remain '+
+      'only so the REST handlers give a message instead of a missing-identifier error.</div>';
   }
-  h += '</div></div>';
 
-  h += '<div class="note"><strong>Day-level approval is retired.</strong> Approve the week and every day in it '+
-    'approves, in one statement; reject it and every day rejects. The old per-day procedures still exist only so '+
-    'the REST handlers give a message rather than a missing-identifier error.</div>';
-  h += '</div>';
-  document.getElementById('mainArea').innerHTML = h;
-}
-
-function mgrWeekObj(){ return week(view.mgrEmp, view.proj, view.pk, view.mgrWeek); }
-
-function doApprove(){
-  var r = applyEvent(mgrWeekObj(), 'Approve', {actor:wkr(SELF.Manager).name});
-  if(!r.ok){ toast(r.err, true); return; }
-  toast('Week approved. Every day in it approved with it.');
-  go('detail');
-}
-function doReject(){
-  var h = '<div class="modal-hd"><h3>Reject week</h3><button class="btn btn-ghost btn-sm" onclick="closeModal()">&times;</button></div>'+
-    '<div class="modal-bd">'+
-    '<label class="fl">Reason</label><select id="rjReason" style="width:100%">'+
-      REJECT_REASONS.map(function(r){ return '<option>'+r+'</option>'; }).join('')+'</select>'+
-    '<div style="height:12px"></div>'+
-    '<label class="fl">Remarks</label><textarea id="rjText" rows="3" style="width:100%" placeholder="What has to change before this is resubmitted?"></textarea>'+
-    '<div class="note" style="margin:14px 0 0">Rejecting reopens the week for the employee. When they resubmit it comes back as '+
-    '<strong>LateSubmission</strong> and carries the flag - a resubmission is always late, whatever the clock says.</div>'+
-    '</div><div class="modal-ft"><button class="btn btn-outline" onclick="closeModal()">Cancel</button>'+
-    '<button class="btn btn-danger" onclick="doRejectGo()">Reject week</button></div>';
-  openModal(h);
-}
-function doRejectGo(){
-  var reason = document.getElementById('rjReason').value;
-  var txt = document.getElementById('rjText').value;
-  var r = applyEvent(mgrWeekObj(), 'Reject', {actor:wkr(SELF.Manager).name, reason:reason+(txt?' - '+txt:'')});
-  closeModal();
-  if(!r.ok){ toast(r.err, true); return; }
-  toast('Week rejected and reopened for the employee.');
-  go('detail');
-}
-function doCorrect(){
-  var h = '<div class="modal-hd"><h3>Correct and approve</h3><button class="btn btn-ghost btn-sm" onclick="closeModal()">&times;</button></div>'+
-    '<div class="modal-bd">'+
-    '<p class="sm muted" style="margin-top:0">ACT-016. The manager overrides what was submitted and approves in one action. '+
-    'The week is flagged <strong>Overridden</strong>.</p>'+
-    '<label class="fl">Reason (required)</label>'+
-    '<textarea id="ovText" rows="3" style="width:100%" placeholder="Why are these hours being changed?"></textarea>'+
-    '<div class="note warn" style="margin:14px 0 0"><strong>The audit trail cannot be rewritten.</strong> '+
-    'The table refuses updates and deletes outright, so this reason is carried <em>into</em> the audit row as it is '+
-    'written rather than patched on afterwards. The correction button failed on every call until that was fixed - '+
-    'the trigger is statement level, so it fired even when the update matched nothing.</div>'+
-    '</div><div class="modal-ft"><button class="btn btn-outline" onclick="closeModal()">Cancel</button>'+
-    '<button class="btn btn-go" onclick="doCorrectGo()">Apply correction</button></div>';
-  openModal(h);
-}
-function doCorrectGo(){
-  var reason = document.getElementById('ovText').value.trim();
-  if(!reason){ toast('A correction needs a reason. A correction with no reason is not one.', true); return; }
-  var r = applyEvent(mgrWeekObj(), 'ApproveOverride',
-    {actor:wkr(SELF.Manager).name, reason:reason, trace:'UI-'+Date.now()});
-  closeModal();
-  if(!r.ok){ toast(r.err, true); return; }
-  toast('Correction applied and week approved. The reason is in the audit row, not beside it.');
-  go('detail');
-}
-function doRevokeDecision(){
-  var r = applyEvent(mgrWeekObj(), 'RevokeDecision', {actor:wkr(SELF.Manager).name});
-  if(!r.ok){ toast(r.err, true); return; }
-  toast('Decision revoked. The week is Pending again; the submission axis is untouched.');
-  go('detail');
-}
-function showTrail(){
-  var k = wkey(view.mgrEmp, view.proj, view.pk, view.mgrWeek);
-  var rows = AUDIT.filter(function(a){ return a.wk===k; });
-  var h = '<div class="modal-hd"><h3>Audit trail</h3><button class="btn btn-ghost btn-sm" onclick="closeModal()">&times;</button></div>'+
-    '<div class="modal-bd"><p class="sm muted" style="margin-top:0">Append-only. Rows here cannot be updated or deleted - '+
-    'a trail that can be rewritten is not a trail.</p>';
-  if(!rows.length){ h += '<p class="muted sm">No entries yet.</p>'; }
-  else {
-    h += '<div class="tbl-wrap"><table class="dt"><thead><tr><th>#</th><th>Event</th><th>State after</th>'+
-      '<th>By</th><th>Reason</th></tr></thead><tbody>'+
-      rows.map(function(a){ return '<tr><td class="mono">'+a.id+'</td><td>'+a.ev+'</td>'+
-        '<td class="sm">'+a.sub+' / '+a.appr+'</td><td class="sm">'+a.by+'</td>'+
-        '<td class="sm">'+(a.reason?esc(a.reason):'<span class="muted">-</span>')+'</td></tr>'; }).join('')+
+  /* --- version trail --- */
+  var trail=[];
+  ws.forEach(function(x,i){ week(e.id,pid,view.pk,i).versions.forEach(function(v){
+    trail.push({wk:i+1,v:v}); }); });
+  h+='<div class="card"><div class="card-hd"><h3>History</h3>'+
+    '<span class="sm muted">every event, numbered and append-only</span></div><div class="card-body tight">';
+  if(!trail.length){
+    h+='<div class="card-body"><p class="muted sm" style="margin:0">Nothing has happened to these weeks yet.</p></div>';
+  } else {
+    h+='<div class="tbl-wrap"><table class="dt"><thead><tr><th>Date</th><th>Event</th><th>From</th>'+
+      '<th>To</th><th>Delta</th><th>Reason</th><th>By</th><th>When</th></tr></thead><tbody>'+
+      trail.map(function(r){ return '<tr><td class="sm">W'+r.wk+'</td><td><strong>'+r.v.ev+'</strong></td>'+
+        '<td class="sm muted">'+r.v.from+'</td><td class="sm">'+r.v.to+'</td>'+
+        '<td class="sm">'+(r.v.delta||'<span class="muted">&mdash;</span>')+'</td>'+
+        '<td class="sm">'+(r.v.reason?esc(r.v.reason):'<span class="muted">&mdash;</span>')+'</td>'+
+        '<td class="sm">'+r.v.by+'</td><td class="sm mono">'+r.v.on+'</td></tr>'; }).join('')+
       '</tbody></table></div>';
   }
-  h += '</div><div class="modal-ft"><button class="btn btn-primary" onclick="closeModal()">Close</button></div>';
-  openModal(h);
-}
+  h+='</div></div>';
 
-/* ---- PAGE-006 Leave Loss Coverage ---- */
-function renderLLC(){
-  var pid = view.proj, p = proj(pid);
-  var rows = LLC.filter(function(r){ return r.proj===pid; });
+  if(view.mgrEmp===SELF.mgr) h+='<div class="note"><strong>This is the manager&rsquo;s own week.</strong> '+
+    'RULE-015 sent it to their reporting manager until 21-Aug-2026, when self-approval was turned on by '+
+    'decision. The requirement pack still states the old rule.</div>';
 
-  var h = band('PAGE-006 &middot; Team', 'Leave Loss Coverage',
-    'On a fixed-price project the client is owed a level of effort whoever takes leave. This lists every absent day '+
-    'on the project, what the project actually lost, and who picked the work up.');
-  h += '<div class="rw-body">';
-  h += '<div class="rw-toolbar">'+
-    '<div><label class="fl">Project</label><select onchange="view.proj=this.value;go(\'llc\')">'+
-      mgrProjects().map(function(x){ return '<option value="'+x.id+'"'+(x.id===pid?' selected':'')+'>'+x.id+' - '+x.name+
-        (x.leaveLoss?'':' (not applicable)')+'</option>'; }).join('')+
-    '</select></div>'+
-    '<div><label class="fl">Period</label>'+periodPicker('setPeriod(this.value)')+'</div>'+
-    '</div>';
-
-  if(!p.leaveLoss){
-    h += '<div class="note warn"><strong>'+pid+' is a '+p.model+' project.</strong> Leave loss coverage applies where the '+
-      'client is owed a level of effort regardless of who delivers it. On '+p.model+' the client is billed for the hours '+
-      'actually worked, so there is nothing to recover.</div></div>';
-    document.getElementById('mainArea').innerHTML = h; return;
-  }
-
-  var totLoss=0, covered=0;
-  rows.forEach(function(r){ totLoss+=r.loss; if(r.cover) covered++; });
-  h += '<div class="stat-row">'+
-    statCard('Absent days', rows.length, 'on this project')+
-    statCard('Project loss', f2(totLoss), 'hours')+
-    statCard('Covered', covered+' / '+rows.length, '')+
-    statCard('Uncovered', rows.length-covered, 'surfaced, not hidden')+
-    '</div>';
-
-  h += '<div class="card"><div class="card-body tight"><div class="tbl-wrap"><table class="dt"><thead><tr>'+
-    '<th>Date</th><th>Day</th><th>Absent</th><th class="rt">Away</th><th class="rt">Project loss</th>'+
-    '<th>Covered by</th><th>Status</th><th></th></tr></thead><tbody>';
-  rows.forEach(function(r, ri){
-    var d = new Date(r.date+'T00:00:00');
-    var idx = LLC.indexOf(r);
-    var eligible = empsOn(pid).filter(function(x){
-      if(x.id===r.emp) return false;
-      if(absenceOn(x.id, r.date)) return false;                       // cannot cover while absent
-      for(var i=0;i<LLC.length;i++){                                   // one person, one cover per day
-        if(LLC[i]!==r && LLC[i].date===r.date && LLC[i].cover===x.id) return false;
-      }
-      return true;
-    });
-    h += '<tr><td class="mono">'+pretty(d)+'</td><td class="muted sm">'+DOW_SHORT[d.getDay()].toUpperCase()+'</td>'+
-      '<td><strong>'+wkr(r.emp).name+'</strong><br><span class="mono muted sm">'+r.emp+' &middot; '+allocPct(r.emp,pid)+'% here</span></td>'+
-      '<td class="rt muted">'+f2(r.absenceHours)+'</td>'+
-      '<td class="rt"><strong>'+f2(r.loss)+'</strong></td>'+
-      '<td><select onchange="assignCover('+idx+',this.value)">'+
-        '<option value="">- not assigned -</option>'+
-        eligible.map(function(x){ return '<option value="'+x.id+'"'+(x.id===r.cover?' selected':'')+'>'+x.name+'</option>'; }).join('')+
-        (r.cover && !eligible.some(function(x){return x.id===r.cover;})
-          ? '<option value="'+r.cover+'" selected>'+wkr(r.cover).name+'</option>' : '')+
-        '</select></td>'+
-      '<td>'+(r.status==='Assigned'
-        ? '<span class="chip chip-approved">Assigned</span>'
-        : '<span class="chip chip-draft">Open</span>')+'</td>'+
-      '<td>'+(r.cover?'<button class="btn btn-ghost btn-sm" onclick="retractCover('+idx+')">Retract</button>':'')+'</td></tr>';
-  });
-  h += '</tbody><tfoot><tr><td colspan="4">'+rows.length+' absent days</td>'+
-    '<td class="rt">'+f2(totLoss)+'</td><td colspan="3">'+covered+' assigned</td></tr></tfoot></table></div></div></div>';
-
-  h += '<div class="card"><div class="card-hd"><h3>One absent day, three numbers</h3></div><div class="card-body tight">'+
-    '<div class="tbl-wrap"><table class="dt"><thead><tr><th>Number</th><th class="rt">Sam, 19 Aug</th><th>Is about</th></tr></thead><tbody>'+
-    '<tr><td>Hours the person was away</td><td class="rt">8.00</td><td>the <strong>person</strong></td></tr>'+
-    '<tr><td>Hours <em>this project</em> lost</td><td class="rt">2.00</td><td>the <strong>project</strong> - Sam is 25% here</td></tr>'+
-    '<tr><td>Hours the cover actually moved</td><td class="rt">2.00</td><td>the <strong>recovery</strong></td></tr>'+
-    '</tbody></table></div></div></div>';
-
-  h += '<div class="note ok"><strong>Assigning the cover is the decision - there is no approval step.</strong> '+
-    'The manager doing it is the person who would approve it, so the status stops at <em>Assigned</em>. '+
-    'This screen used to carry an Approve action and an invoice annexure; both were removed. '+
-    'The annexure belongs downstream, from the confirmed month.</div>';
-  h += '<div class="note"><strong>Coverage is a statement, not a transfer of hours.</strong> '+
-    'Recording that somebody picked the work up does not move hours off one timesheet onto another - both people book '+
-    'their own time, and the module must not invent hours neither of them typed.</div>';
-  h += '<div class="note warn"><strong>Two people may be uncovered on the same day; one person may not cover two.</strong> '+
-    'The constraint is on the cover, not the absence - so the dropdown above hides anyone already covering that date, '+
-    'and anyone who is themselves absent.</div>';
-  h += '</div>';
-  document.getElementById('mainArea').innerHTML = h;
-}
-function assignCover(i, empId){
-  var r = LLC[i];
-  if(!empId){ retractCover(i); return; }
-  r.cover = empId; r.status='Assigned'; r.coverHours = r.loss;
-  toast(wkr(empId).name+' recorded as covering '+wkr(r.emp).name+' on '+r.date+'. No hours were moved.');
-  go('llc');
-}
-function retractCover(i){
-  var r = LLC[i];
-  if(r.status!=='Open' && r.status!=='Assigned'){ toast('Only an Open or Assigned row can be retracted.', true); return; }
-  r.cover=null; r.status='Open'; r.coverHours=0;
-  toast('Coverage retracted. The day is uncovered again and shows as such.');
-  go('llc');
-}
-
-/* ---- PAGE-007 Salary Stopping ---- */
-function renderSalStop(){
-  var pid = view.proj, ws = weeksOf(view.pk);
-  var holds = [];
-  empsOn(pid).forEach(function(e){
-    ws.forEach(function(x,i){
-      var w = week(e.id,pid,view.pk,i);
-      if(w.sub==='Defaulted' && w.defaultedBy==='EMPLOYEE'){
-        holds.push({emp:e, widx:i, label:x.label, contractor:(e.type==='Contractor')});
-      }
-    });
-  });
-  var active = holds.filter(function(x){ return !x.contractor; });
-
-  var h = band('PAGE-007 &middot; Team', 'Salary Stopping',
-    'Two cut-offs exist and only one of them holds pay. This screen shows the holds the weekly cut-off raised, '+
-    'and who is exempt.');
-  h += '<div class="rw-body">';
-  h += '<div class="rw-toolbar">'+
-    '<div><label class="fl">Project</label><select onchange="view.proj=this.value;go(\'salstop\')">'+
-      mgrProjects().map(function(x){ return '<option value="'+x.id+'"'+(x.id===pid?' selected':'')+'>'+x.id+' - '+x.name+'</option>'; }).join('')+
-    '</select></div>'+
-    '<div><label class="fl">Period</label>'+periodPicker('setPeriod(this.value)')+'</div>'+
-    '<div style="flex:1"></div>'+
-    '<button class="btn btn-outline" onclick="runCutoffs()">Run cut-offs now</button>'+
-    '</div>';
-
-  h += '<div class="card"><div class="card-hd"><h3>What each cut-off does</h3></div><div class="card-body tight">'+
-    '<div class="tbl-wrap"><table class="dt"><thead><tr><th>Cut-off</th><th>Whose lateness</th>'+
-    '<th>Effect on the week</th><th>Holds salary?</th></tr></thead><tbody>'+
-    '<tr><td><strong>Weekly</strong></td><td>The employee&rsquo;s</td><td>Defaults it and <strong>locks</strong> it</td>'+
-    '<td><span class="chip chip-rejected">Yes</span></td></tr>'+
-    '<tr><td><strong>Delivery</strong></td><td>The manager&rsquo;s</td><td>Defaults it, stays editable</td>'+
-    '<td><span class="chip chip-approved">Never</span></td></tr>'+
-    '</tbody></table></div></div></div>';
-
-  h += '<div class="stat-row">'+
-    statCard('Holds active', active.length, 'employees')+
-    statCard('Exempt', holds.length-active.length, 'contractors')+
-    statCard('Manager-defaulted', ws.length? countManagerDefaults(pid) : 0, 'no hold raised')+
-    '</div>';
-
-  h += '<div class="card"><div class="card-hd"><h3>Salary holds</h3>'+
-    '<span class="sm muted">released automatically on submission</span></div><div class="card-body tight">';
-  if(!holds.length){
-    h += '<div class="card-body"><p class="muted sm" style="margin:0">No weekly cut-off has defaulted a week on this '+
-      'project yet. Use <em>Run cut-offs now</em> to see what the scheduler would do today.</p></div>';
-  } else {
-    h += '<div class="tbl-wrap"><table class="dt"><thead><tr><th>Employee</th><th>Worker type</th><th>Week</th>'+
-      '<th>Defaulted by</th><th>Hold</th><th></th></tr></thead><tbody>';
-    holds.forEach(function(x){
-      h += '<tr><td><strong>'+x.emp.name+'</strong><br><span class="mono muted sm">'+x.emp.id+'</span></td>'+
-        '<td>'+x.emp.type+'</td><td class="sm">Week '+(x.widx+1)+' &middot; '+x.label+'</td>'+
-        '<td><span class="chip chip-defaulted">EMPLOYEE</span></td>'+
-        '<td>'+(x.contractor
-          ? '<span class="chip chip-closed">Exempt</span>'
-          : '<span class="chip chip-rejected">On hold</span>')+'</td>'+
-        '<td class="sm muted">'+(x.contractor?'Contractors are not on payroll':'Releases when the week is submitted')+'</td></tr>';
-    });
-    h += '</tbody></table></div>';
-  }
-  h += '</div></div>';
-
-  h += '<div class="note"><strong>A manager&rsquo;s lateness must never cost the employee.</strong> '+
-    'The weekly cut-off writes EMPLOYEE and holds pay; the delivery cut-off writes MANAGER and does not. '+
-    'The hold and its automatic release both filter on EMPLOYEE, so a manager-defaulted week never reaches payroll.'+
-    '<span class="rule-tag">RULE-016</span><span class="rule-tag">RA-012</span></div>';
-  h += '<div class="note warn"><strong>The employee cannot see this screen.</strong> RA-011 asked for a self-view and '+
-    'it was recorded as manager-only. Worth revisiting - somebody whose pay is held has an obvious interest in knowing why.</div>';
-  h += '</div>';
-  document.getElementById('mainArea').innerHTML = h;
-}
-function countManagerDefaults(pid){
-  var n=0;
-  empsOn(pid).forEach(function(e){ weeksOf(view.pk).forEach(function(x,i){
-    var w = week(e.id,pid,view.pk,i); if(w.defaultedBy==='MANAGER') n++; }); });
-  return n;
-}
-/* ============================================================
-   PAGE-009  CLIENT TIMESHEETS
-   The client's own signed timesheet, stored against the project
-   month so the evidence sits beside the hours it supports.
-   ============================================================ */
-var CLIENT_FILES = {
-  '555|JUL-2026':[{name:'555_July2026_signed.pdf', mime:'application/pdf', bytes:412773, on:'04-Aug-2026', by:'Navamani Solairajan'}],
-  '555|AUG-2026':[]
+  h+='</div>';
+  document.getElementById('mainArea').innerHTML=h;
 };
-function renderClientTS(){
-  var pid = view.proj;
-  if(currentRole==='Employee'){ pid = myProjects()[0]; }
-  var k = pid+'|'+view.pk, files = CLIENT_FILES[k] || (CLIENT_FILES[k]=[]);
-
-  var h = band('PAGE-009 &middot; '+(currentRole==='Manager'?'Team':'My Work'), 'Client Timesheets',
-    'Some clients keep their own timesheet and sign it. Upload it against the project month so the evidence travels '+
-    'with the hours it supports, rather than sitting in somebody&rsquo;s mailbox.');
-  h += '<div class="rw-body">';
-  h += '<div class="rw-toolbar">'+
-    '<div><label class="fl">Project</label><select onchange="view.proj=this.value;go(\'clientts\')">'+
-      (currentRole==='Manager'?mgrProjects():PROJECTS.filter(function(p){return myProjects().indexOf(p.id)>=0;}))
-        .map(function(x){ return '<option value="'+x.id+'"'+(x.id===pid?' selected':'')+'>'+x.id+' - '+x.name+'</option>'; }).join('')+
-    '</select></div>'+
-    '<div><label class="fl">Period</label>'+periodPicker('setPeriod(this.value)')+'</div>'+
-    '<div style="flex:1"></div>'+
-    '<button class="btn btn-primary" onclick="uploadClientTS()">Upload document</button>'+
-    '</div>';
-
-  h += '<div class="card"><div class="card-body tight">';
-  if(!files.length){
-    h += '<div class="card-body"><p class="muted sm" style="margin:0">Nothing uploaded for '+
-      period(view.pk).name+' on '+pid+' yet.</p></div>';
-  } else {
-    h += '<div class="tbl-wrap"><table class="dt"><thead><tr><th>File</th><th>Type</th><th class="rt">Size</th>'+
-      '<th>Uploaded</th><th>By</th><th></th></tr></thead><tbody>';
-    files.forEach(function(f, i){
-      h += '<tr><td><strong>'+esc(f.name)+'</strong></td><td class="mono sm">'+f.mime+'</td>'+
-        '<td class="rt">'+(Math.round(f.bytes/1024))+' KB</td><td class="sm mono">'+f.on+'</td>'+
-        '<td class="sm">'+f.by+'</td>'+
-        '<td><button class="btn btn-outline btn-sm" onclick="toast(\'Download returns the original bytes with the stored content type, so a PDF opens as a PDF.\')">Download</button> '+
-        '<button class="btn btn-ghost btn-sm" onclick="delClientTS(\''+k+'\','+i+')">Remove</button></td></tr>';
-    });
-    h += '</tbody></table></div>';
-  }
-  h += '</div></div>';
-
-  h += '<div class="note"><strong>Stored in the database, not on a file share.</strong> The file is held as a binary '+
-    'column on the attachment row with its original name, MIME type and byte size, keyed to project and period - so a '+
-    'restore of the schema restores the evidence with it, and the document appears automatically on the month it '+
-    'belongs to.</div>';
-  h += '<div class="note"><strong>Decoded in chunks.</strong> The upload arrives base64 and is decoded a piece at a '+
-    'time. The obvious single-call decode caps out at 32 KB, which is fine in testing and fails on the first real '+
-    '25 MB scan.</div>';
-  h += '<div class="note warn"><strong>Not built: virus scan and size ceiling.</strong> Neither has been asked for and '+
-    'both are straightforward to add. Worth settling before this is opened to a wide audience.</div>';
-  h += '</div>';
-  document.getElementById('mainArea').innerHTML = h;
+function toggleWk(i){ var k=view.sel.indexOf(i); if(k>=0) view.sel.splice(k,1); else view.sel.push(i);
+  go('main-approval-detail'); }
+function openWk(i){ view.mgrWeek=i; go('main-approval-detail'); }
+function selAllWeeks(){
+  var pid=view.mgrProj, e=view.mgrEmp;
+  view.sel=weeksOf(view.pk).map(function(x,i){return i;})
+    .filter(function(i){ return week(e,pid,view.pk,i).appr==='Pending'; });
+  go('main-approval-detail');
 }
-function uploadClientTS(){
-  var k = view.proj+'|'+view.pk;
-  var h = '<div class="modal-hd"><h3>Upload client timesheet</h3><button class="btn btn-ghost btn-sm" onclick="closeModal()">&times;</button></div>'+
-    '<div class="modal-bd">'+
-    '<label class="fl">File name</label><input id="ctName" type="text" style="width:100%" value="'+view.proj+'_'+view.pk+'_signed.pdf">'+
-    '<div style="height:12px"></div>'+
-    '<label class="fl">Content type</label><select id="ctMime" style="width:100%">'+
-      ['application/pdf','image/png','image/jpeg','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']
-        .map(function(m){ return '<option>'+m+'</option>'; }).join('')+'</select>'+
-    '<div class="note" style="margin:14px 0 0">A prototype stands in for the file picker. The real screen posts the '+
-    'file base64 and the handler decodes it in chunks.</div>'+
+function eachSelWeek(fn){
+  var pid=view.mgrProj, e=view.mgrEmp, ok=0, err=null;
+  view.sel.forEach(function(i){
+    var r=fn(week(e,pid,view.pk,i));
+    if(r.ok) ok++; else err=r.err;
+  });
+  view.sel=[];
+  return {ok:ok,err:err};
+}
+function approveWeeks(){
+  var r=eachSelWeek(function(w){ return applyEvent(w,'Approve',{actor:wkr(SELF.mgr).name}); });
+  if(!r.ok && r.err){ toast(r.err,true); } else { toast(r.ok+' week(s) approved. Every day in them approved with them.'); }
+  go('main-approval-detail');
+}
+function rejectWeeks(){
+  var h='<div class="modal-hd"><h3>Reject selected</h3>'+
+    '<button class="btn btn-ghost btn-sm" onclick="closeModal()">&times;</button></div><div class="modal-bd">'+
+    '<label class="fl">Rejection reason</label><select id="rw" style="width:100%">'+
+    REJECT_REASONS.map(function(r){return '<option>'+r+'</option>';}).join('')+'</select>'+
     '</div><div class="modal-ft"><button class="btn btn-outline" onclick="closeModal()">Cancel</button>'+
-    '<button class="btn btn-primary" onclick="uploadGo(\''+k+'\')">Upload</button></div>';
+    '<button class="btn btn-danger" onclick="rejectWeeksGo()">Reject</button></div>';
   openModal(h);
 }
-function uploadGo(k){
-  var nm = document.getElementById('ctName').value.trim() || 'document.pdf';
-  var mm = document.getElementById('ctMime').value;
-  CLIENT_FILES[k] = CLIENT_FILES[k] || [];
-  CLIENT_FILES[k].push({name:nm, mime:mm, bytes:380000+Math.floor(Math.random()*900000),
-                        on:TODAY_STR, by:(currentRole==='Manager'?wkr(SELF.Manager).name:wkr(SELF.Employee).name)});
-  closeModal(); toast('Uploaded and stored against '+k.split('|')[0]+' '+period(k.split('|')[1]).name+'.');
-  go('clientts');
+function rejectWeeksGo(){
+  var reason=document.getElementById('rw').value; closeModal();
+  var r=eachSelWeek(function(w){ return applyEvent(w,'Reject',{actor:wkr(SELF.mgr).name,reason:reason}); });
+  toast(r.ok+' week(s) rejected.');
+  go('main-approval-detail');
 }
-function delClientTS(k,i){ CLIENT_FILES[k].splice(i,1); toast('Removed.'); go('clientts'); }
-
+function correctWeeks(){
+  var h='<div class="modal-hd"><h3>Correct and approve</h3>'+
+    '<button class="btn btn-ghost btn-sm" onclick="closeModal()">&times;</button></div><div class="modal-bd">'+
+    '<p class="sm muted" style="margin-top:0">The manager overrides what was submitted and approves in one '+
+    'action. The week is flagged <strong>Overridden</strong>.</p>'+
+    '<label class="fl">Reason (required)</label><textarea id="ov" rows="3" style="width:100%"></textarea>'+
+    '<div class="note warn" style="margin-top:14px"><strong>The audit trail cannot be rewritten.</strong> '+
+    'The table refuses updates and deletes outright, so this reason is carried <em>into</em> the audit row as '+
+    'it is written rather than patched on afterwards. The button failed on every call until that was fixed.</div>'+
+    '</div><div class="modal-ft"><button class="btn btn-outline" onclick="closeModal()">Cancel</button>'+
+    '<button class="btn btn-go" onclick="correctGo()">Apply correction</button></div>';
+  openModal(h);
+}
+function correctGo(){
+  var reason=(document.getElementById('ov').value||'').trim();
+  if(!reason){ toast('A correction needs a reason. A correction with no reason is not one.',true); return; }
+  closeModal();
+  var r=eachSelWeek(function(w){ return applyEvent(w,'ApproveOverride',
+    {actor:wkr(SELF.mgr).name,reason:reason,delta:'manager override'}); });
+  toast(r.ok+' week(s) corrected and approved. The reason is in the audit row, not beside it.');
+  go('main-approval-detail');
+}
+function undoDecision(){
+  var r=eachSelWeek(function(w){ return applyEvent(w,'RevokeDecision',{actor:wkr(SELF.mgr).name}); });
+  if(!r.ok && r.err){ toast(r.err,true); } else { toast(r.ok+' decision(s) revoked. Submission axis untouched.'); }
+  go('main-approval-detail');
+}
 /* ============================================================
-   MONTH CONFIRMATION  -> the accrual interface
+   MONTH CONFIRMATION -> the accrual interface
    ============================================================ */
 function confirmDialog(){
-  var pid = view.proj, ws = weeksOf(view.pk), team = empsOn(pid);
-  var pending = 0, defaulted = 0, total = 0;
+  var pid=view.mgrProj, p=proj(pid), ws=weeksOf(view.pk), team=empsOn(pid);
+  var pend=0,total=0,defd=0;
   team.forEach(function(e){ ws.forEach(function(x,i){
-    var w = week(e.id,pid,view.pk,i); total++;
-    if(w.appr!=='Approved') pending++;
-    if(w.sub==='Defaulted') defaulted++;
-  }); });
-  var canNormal = (pending===0);
+    var w=week(e.id,pid,view.pk,i); total++;
+    if(w.appr!=='Approved') pend++;
+    if(w.sub==='Defaulted') defd++; }); });
+  var canNormal=(pend===0);
 
-  var h = '<div class="modal-hd"><h3>Confirm '+period(view.pk).name+' &middot; '+pid+'</h3>'+
+  var h='<div class="modal-hd"><h3>Confirm '+period(view.pk).name+' &middot; '+p.name+'</h3>'+
     '<button class="btn btn-ghost btn-sm" onclick="closeModal()">&times;</button></div><div class="modal-bd">'+
     '<div class="hdr-grid" style="margin-bottom:14px">'+
-      hdrItem('Weeks', total)+hdrItem('Not approved', pending)+hdrItem('Defaulted', defaulted)+
+      hdrItem('Weeks',total)+hdrItem('Not approved',pend)+hdrItem('Defaulted',defd)+
+      hdrItem('O2C project code','<span class="mono">'+(p.main||'<span class="chip chip-rejected">missing</span>')+'</span>')+
     '</div>'+
-    '<label class="fl">Confirmation type</label>'+
-    '<select id="cfType" style="width:100%">'+
-      '<option value="Normal"'+(canNormal?'':' disabled')+'>Normal - every week approved'+(canNormal?'':' (blocked: '+pending+' outstanding)')+'</option>'+
-      '<option value="Advance closure"'+(canNormal?'':' selected')+'>Advance closure - go out anyway</option>'+
+    '<label class="fl">Confirmation type</label><select id="cft" style="width:100%">'+
+      '<option value="Normal"'+(canNormal?'':' disabled')+'>Normal &mdash; every week approved'+
+        (canNormal?'':' (blocked: '+pend+' outstanding)')+'</option>'+
+      '<option value="Advance closure"'+(canNormal?'':' selected')+'>Advance closure &mdash; go out anyway</option>'+
     '</select>'+
-    '<div class="note'+(canNormal?'':' warn')+'" style="margin:14px 0 0">'+
-      (canNormal
-        ? '<strong>Every week is approved</strong>, so this is an ordinary confirmation.'
-        : '<strong>'+pending+' week(s) are not approved.</strong> RULE-020 blocks a normal confirm. Advance closure is '+
-          'the explicit exception: defaulted hours are treated as approved so the month can go out, and the '+
-          'confirmation records that it went out this way. The payload has to mirror that - it once filtered on '+
-          'approved days only, so an advance closure confirmed successfully and handed accrual an empty batch, '+
-          'which reads as "no time this month" rather than "nobody approved it".')+
-    '</div>'+
-    '<div class="note" style="margin:10px 0 0">Confirming freezes the month. A later correction does not restate it - '+
-    'it travels separately as a reversal and a replacement, so the number accrual already posted stays put.</div>'+
+    '<div class="note'+(canNormal?'':' warn')+'" style="margin-top:14px">'+
+      (canNormal ? '<strong>Every week is approved</strong>, so this is an ordinary confirmation.'
+        : '<strong>'+pend+' week(s) are not approved.</strong> RULE-020 blocks a normal confirm. Advance '+
+          'closure is the explicit exception: defaulted hours are treated as approved so the month can go '+
+          'out, and the confirmation records that it went out that way.')+'</div>'+
+    '<div class="note" style="margin-top:10px">Confirming freezes the month. A later correction does not '+
+    'restate it &mdash; it travels separately as a Reversal(&minus;) and an Adjustment(+).</div>'+
     '</div><div class="modal-ft"><button class="btn btn-outline" onclick="closeModal()">Cancel</button>'+
     '<button class="btn btn-go" onclick="confirmGo()">Confirm month</button></div>';
   openModal(h);
 }
 function confirmGo(){
-  var type = document.getElementById('cfType').value;
-  var pid = view.proj, pk = view.pk, ws = weeksOf(pk), team = empsOn(pid);
-  var cid = seqConfirm++, rows = 0, hours = 0;
-  var p = proj(pid);
+  var type=document.getElementById('cft').value;
+  var pid=view.mgrProj, p=proj(pid), pk=view.pk, ws=weeksOf(pk), team=empsOn(pid);
+  closeModal();
 
+  /* -20023, added 21-Aug: the main application's project code is what
+     accrual joins on, so its absence is a refusal, not a null. Checked
+     BEFORE anything is written. */
+  if(!p.main){
+    toast('Project '+pid+' has no O2C main-application project code, and accrual keys on that code. '+
+          'Link it first, then confirm. Nothing has been confirmed.',true);
+    return;
+  }
+
+  var cid=seqConfirm++, rows=0, hours=0, batch='O2CTIME-'+pid+'-'+pk;
   team.forEach(function(e){
-    ws.forEach(function(x, wi){
-      var w = week(e.id,pid,pk,wi);
-      /* the payload mirrors the gate: an advance closure accepts a
-         week that is still Pending, or the batch comes out empty */
-      var take = (w.appr==='Approved') || (type==='Advance closure' && w.appr==='Pending');
+    ws.forEach(function(x,wi){
+      var w=week(e.id,pid,pk,wi);
+      /* THE PAYLOAD MIRRORS THE GATE. It filtered the entry's day status
+         while the gate read the week's approval status, and the two had
+         drifted: the month confirmed with zero rows and reported Success.
+         Fixed 21-Aug — both now read the week. */
+      var take=(w.appr==='Approved') || (type==='Advance closure' && w.appr==='Pending');
       if(!take) return;
       entriesFor(e.id,pid,pk,wi).forEach(function(ln){
-        ln.hrs.forEach(function(v, di){
+        ln.hrs.forEach(function(v,di){
           if(num(v)===0) return;
-          var dy = x.days[di];
-          IFACE.push({
-            confirmId:cid, period:pk, y:period(pk).y, m:period(pk).m+1,
-            mainId:p.main, mainNo:p.main,               /* denormalised on purpose */
-            projNo:pid, projName:p.name, customer:p.customer, model:p.model,
+          var dy=x.days[di];
+          IFACE.push({confirmId:cid, period:pk, y:period(pk).y, m:period(pk).m+1,
+            mainNo:p.main, projNo:pid, projName:p.name, client:p.client, model:p.model,
             emp:e.id, empName:e.name, type:e.type, role:e.role,
-            date:dy.iso, day:DOW_SHORT[dy.dow].toUpperCase(),
+            date:dy.iso, day:DOW[dy.dow].toUpperCase(),
             task:(ln.isLeave?'LEAVE':ln.task), taskName:(ln.isLeave?'Leave':taskName(pid,ln.task)),
             entryType:(w.sub==='Defaulted'?'Default':'Actual'),
             flag:(activeFlags(w)[0]||null),
-            bill:(!ln.isLeave && ln.type==='Billable')?num(v):0,
-            nonbill:(!ln.isLeave && ln.type!=='Billable')?num(v):0,
-            leave:(ln.isLeave)?num(v):0
-          });
-          rows++; hours += num(v);
+            bill:(!ln.isLeave&&ln.type==='Billable')?num(v):0,
+            nonbill:(!ln.isLeave&&ln.type!=='Billable')?num(v):0,
+            leave:ln.isLeave?num(v):0, batch:batch, collected:false});
+          rows++; hours+=num(v);
         });
       });
     });
   });
 
-  CONFIRMS.push({id:cid, proj:pid, pk:pk, type:type, on:TODAY_STR,
-                 by:wkr(SELF.Manager).name, rows:rows, hours:hours});
-  closeModal();
+  /* ZERO ROWS IS NOT SUCCESS. A month that confirmed and sent nothing is
+     indistinguishable, to accrual, from a project nobody worked on. */
+  var status = rows>0 ? 'Success' : 'Failed';
+  CONFIRMS.push({id:cid,proj:pid,pk:pk,type:type,on:TODAY_STR,by:wkr(SELF.mgr).name,
+                 rows:rows,hours:hours,status:status,batch:batch});
   if(rows===0){
-    toast('Confirmed, but the batch is empty - nothing matched the payload filter. That is the failure mode worth '+
-          'watching: it reads as "no time this month".', true);
+    toast('Confirmed, but NOTHING was sent to accrual. They would read this project-month as having no '+
+          'time at all. Do not treat this as done.',true);
   } else {
-    toast('Month confirmed as '+type+'. '+rows+' interface rows, '+f2(hours)+' hours handed to accrual.');
+    toast('Month confirmed as '+type+'. '+rows+' rows are ready for the accrual application to collect.');
   }
-  go('summary');
+  go('main-view-timesheet');
 }
 
 /* ============================================================
-   ADMIN
+   LEAVE LOSS COVERAGE
+   Absent employee | Date | Absence | Hours lost | Covered by | Status
    ============================================================ */
-function renderCalendar(){
-  var h = band('Setup &middot; Operations', 'Calendar (Fusion Sync)',
-    'Working days, holidays, shifts and work patterns all come from Fusion. Nothing here is authored.');
-  h += '<div class="rw-body">';
-  h += '<div class="rw-toolbar"><button class="btn btn-primary" onclick="toast(\'Calendar layers re-synced from Fusion HCM.\')">Sync from Fusion</button>'+
-    '<span class="sm muted" style="align-self:center">Last run 21-Aug-2026 05:35 &middot; success</span></div>';
-  h += '<div class="card"><div class="card-hd"><h3>Layers</h3></div><div class="card-body tight"><div class="tbl-wrap">'+
-    '<table class="dt"><thead><tr><th>Layer</th><th class="rt">Rows</th><th>Source</th><th>Drives</th></tr></thead><tbody>'+
-    [['Calendar',150,'HCM','Working days and holidays'],
-     ['Shifts',64,'HCM','Standard hours per day - the ceiling on a day cell'],
-     ['Work patterns',1084,'HCM','Which days a person works'],
-     ['Work schedules',417,'HCM','Pattern assignment over time'],
-     ['Worker shifts',2721,'HCM','Per-person shift assignment']]
-      .map(function(r){ return '<tr><td><strong>'+r[0]+'</strong></td><td class="rt">'+r[1].toLocaleString()+'</td>'+
-        '<td>'+r[2]+'</td><td class="sm">'+r[3]+'</td></tr>'; }).join('')+
+RENDER['main-leave-loss-coverage']=function(){
+  var fcp=PROJECTS.filter(function(p){ return p.leaveLoss && p.mgr===SELF.mgr; });
+  var pid=view.mgrProj; if(!proj(pid)||!proj(pid).leaveLoss) pid=fcp[0].id;
+  var rows=LLC.filter(function(r){ return r.proj===pid; });
+  var covered=rows.filter(function(r){ return r.cover; }).length, loss=0;
+  rows.forEach(function(r){ loss+=r.loss; });
+
+  var h=pageBand('main-leave-loss-coverage');
+  h+='<div class="rw-body">';
+  h+='<div class="rw-toolbar">'+
+    '<div><label class="fl">Project (FCP with leave loss)</label>'+
+    '<select onchange="view.mgrProj=this.value;go(\'main-leave-loss-coverage\')">'+
+      fcp.map(function(x){ return '<option value="'+x.id+'"'+(x.id===pid?' selected':'')+'>'+x.name+'</option>'; }).join('')+
+    '</select></div>'+
+    '<div><label class="fl">Month</label>'+periodSelect('setPeriod(this.value)')+'</div>'+
+    '<div style="flex:1"></div>'+
+    '<button class="btn btn-outline" onclick="toast(\'Absence re-read live from Fusion for every person on this project.\');go(\'main-leave-loss-coverage\')">Refresh absences from HR</button>'+
+    '</div>';
+
+  h+='<div class="stat-row">'+
+    statCard('Absent days',rows.length,'on this project')+
+    statCard('Hours lost',f2(loss),'project-scoped')+
+    statCard('Covered',covered+' / '+rows.length,'')+
+    statCard('Uncovered',rows.length-covered,'surfaced, not hidden')+
+    '</div>';
+
+  h+='<div class="card"><div class="card-body tight"><div class="tbl-wrap"><table class="dt"><thead><tr>'+
+    '<th>Absent employee</th><th>Date</th><th>Absence</th><th class="rt">Hours lost</th>'+
+    '<th>Covered by</th><th>Status</th><th></th></tr></thead><tbody>';
+  rows.forEach(function(r){
+    var d=new Date(r.date+'T00:00:00'), idx=LLC.indexOf(r);
+    var elig=empsOn(pid).filter(function(x){
+      if(x.id===r.emp) return false;
+      if(absenceOn(x.id,r.date)) return false;
+      for(var i=0;i<LLC.length;i++) if(LLC[i]!==r && LLC[i].date===r.date && LLC[i].cover===x.id) return false;
+      return true;
+    });
+    h+='<tr><td><strong>'+wkr(r.emp).name+'</strong><br><span class="mono muted sm">'+r.emp+
+      ' &middot; '+allocPct(r.emp,pid)+'% here</span></td>'+
+      '<td class="mono">'+pretty(d)+' <span class="muted">'+DOW[d.getDay()]+'</span></td>'+
+      '<td class="sm">'+r.type+' &middot; '+f2(r.hours)+' hrs away</td>'+
+      '<td class="rt"><strong>'+f2(r.loss)+'</strong></td>'+
+      '<td><select onchange="assignCover('+idx+',this.value)">'+
+        '<option value="">&mdash; not assigned &mdash;</option>'+
+        elig.map(function(x){ return '<option value="'+x.id+'"'+(x.id===r.cover?' selected':'')+'>'+x.name+'</option>'; }).join('')+
+        (r.cover&&!elig.some(function(x){return x.id===r.cover;})
+          ? '<option value="'+r.cover+'" selected>'+wkr(r.cover).name+'</option>':'')+
+      '</select></td>'+
+      '<td>'+(r.status==='Assigned'?'<span class="chip chip-approved">Assigned</span>'
+                                   :'<span class="chip chip-draft">Open</span>')+'</td>'+
+      '<td>'+(r.cover?'<button class="btn btn-ghost btn-sm" onclick="retractCover('+idx+')">Retract</button>':'')+'</td></tr>';
+  });
+  h+='</tbody><tfoot><tr><td colspan="3">'+rows.length+' absent days</td><td class="rt">'+f2(loss)+'</td>'+
+    '<td colspan="3">'+covered+' assigned</td></tr></tfoot></table></div></div></div>';
+
+  h+='<div class="card"><div class="card-hd"><h3>One absent day, three numbers</h3></div>'+
+    '<div class="card-body tight"><div class="tbl-wrap"><table class="dt"><thead><tr>'+
+    '<th>Number</th><th class="rt">Sam, 19 Aug</th><th>Is about</th></tr></thead><tbody>'+
+    '<tr><td>Hours the person was away</td><td class="rt">8.00</td><td>the <strong>person</strong></td></tr>'+
+    '<tr><td>Hours <em>this project</em> lost</td><td class="rt">2.00</td><td>the <strong>project</strong> &mdash; Sam is 25% here</td></tr>'+
+    '<tr><td>Hours the cover moved</td><td class="rt">2.00</td><td>the <strong>recovery</strong></td></tr>'+
     '</tbody></table></div></div></div>';
-  h += '<div class="note"><strong>A hand-written Monday-to-Friday calendar was built once and then deleted.</strong> '+
-    'It would have made a broken sync look like working data - and a person on a 9-hour day would have been quietly '+
-    'measured against 8.</div>';
-  h += '<div class="note warn"><strong>Period Control is not a screen.</strong> PAGE-008 was removed: periods and '+
-    'cut-offs are reference data, exposed read-only. Several periods may be Open at once, so "the open period" is a '+
-    'choice rather than a fact.<span class="rule-tag">RULE-017</span></div>';
-  h += '<div class="card"><div class="card-hd"><h3>Periods</h3></div><div class="card-body tight"><div class="tbl-wrap">'+
-    '<table class="dt"><thead><tr><th>Period</th><th>Status</th><th>Editable</th><th>Weekly cut-off</th>'+
-    '<th>Delivery cut-off</th><th>Why</th></tr></thead><tbody>'+
-    PERIODS.map(function(p){ return '<tr><td class="mono">'+p.key+'</td>'+
-      '<td><span class="chip '+(p.status==='Open'?'chip-open':p.status==='Closed'?'chip-closed':'chip-draft')+'">'+p.status+'</span></td>'+
-      '<td>'+(p.editable?'<span class="chip chip-approved">Yes</span>':'<span class="chip chip-closed">No</span>')+'</td>'+
-      '<td class="sm">'+p.weeklyCut+'</td><td class="sm mono">'+p.deliveryCut+'</td>'+
-      '<td class="sm muted">'+p.why+'</td></tr>'; }).join('')+
-    '</tbody></table></div></div></div>';
-  h += '<div class="note"><strong>Status alone does not make a month editable.</strong> July is Open and read-only at '+
-    'the same time, because its delivery cut-off has passed. Every period stays visible - only editing is gated.</div>';
-  h += '</div>';
-  document.getElementById('mainArea').innerHTML = h;
+
+  h+='<div class="note ok"><strong>Assigning the cover is the decision &mdash; there is no approval step.</strong> '+
+    'The manager doing it is the person who would approve it, so the status stops at <em>Assigned</em>. '+
+    'This screen used to carry an Approve action and an invoice annexure; both were removed.</div>';
+  h+='<div class="note"><strong>Coverage is a statement, not a transfer of hours.</strong> Recording that '+
+    'somebody picked the work up does not move hours off one timesheet onto another &mdash; both people book '+
+    'their own time, and the module must not invent hours neither of them typed.</div>';
+  h+='</div>';
+  document.getElementById('mainArea').innerHTML=h;
+};
+function assignCover(i,id){
+  var r=LLC[i];
+  if(!id){ retractCover(i); return; }
+  r.cover=id; r.status='Assigned';
+  toast(wkr(id).name+' recorded as covering '+wkr(r.emp).name+' on '+r.date+'. No hours were moved.');
+  go('main-leave-loss-coverage');
+}
+function retractCover(i){
+  LLC[i].cover=null; LLC[i].status='Open';
+  toast('Coverage retracted. The day is uncovered again and shows as such.');
+  go('main-leave-loss-coverage');
 }
 
-var FEEDS = [
-  {n:'WORKERS',        rows:5976,  src:'HCM',         on:true,  order:10, note:'Who exists, shift length, line manager'},
-  {n:'PROJECTS',       rows:423,   src:'PPM',         on:true,  order:20, note:'Project, customer, revenue model, manager'},
-  {n:'TASKS',          rows:10534, src:'PPM',         on:true,  order:30, note:'What can be booked against'},
-  {n:'ALLOCATIONS',    rows:1595,  src:'PPM',         on:true,  order:40, note:'Who is on what, and at what percentage'},
-  {n:'CALENDAR',       rows:150,   src:'HCM',         on:true,  order:50, note:'Working days and holidays'},
-  {n:'SHIFTS',         rows:64,    src:'HCM',         on:true,  order:60, note:'Standard hours per day'},
-  {n:'ABSENCES',       rows:10783, src:'Absence Mgmt',on:true,  order:70, note:'ON since 21-Aug-2026. Adds only - it sends no window'},
-  {n:'WORK_PATTERNS',  rows:1084,  src:'HCM',         on:true,  order:80, note:'Which days a person works'},
-  {n:'WORK_SCHEDULES', rows:417,   src:'HCM',         on:true,  order:90, note:'Pattern assignment over time'},
-  {n:'WORKER_SHIFTS',  rows:2721,  src:'HCM',         on:true,  order:100,note:'Per-person shift assignment'}
-];
-function renderSync(){
-  var h = band('Operations', 'Sync Status',
-    'Ten extracts pull master data from Fusion. These are measured row counts against the pod, not targets.');
-  h += '<div class="rw-body">';
-  h += '<div class="rw-toolbar"><button class="btn btn-primary" onclick="toast(\'All enabled feeds queued. OIC sets the cadence; this makes them eligible.\')">Run all now</button>'+
-    '<span class="sm muted" style="align-self:center">Last full run 21-Aug-2026 05:35</span></div>';
-  h += '<div class="card"><div class="card-body tight"><div class="tbl-wrap"><table class="dt"><thead><tr>'+
-    '<th>Order</th><th>Feed</th><th class="rt">Rows</th><th>Source</th><th>Enabled</th><th>Drives</th></tr></thead><tbody>'+
-    FEEDS.map(function(f){ return '<tr><td class="mono">'+f.order+'</td><td><strong>'+f.n+'</strong></td>'+
-      '<td class="rt">'+f.rows.toLocaleString()+'</td><td>'+f.src+'</td>'+
-      '<td>'+(f.on?'<span class="chip chip-approved">Y</span>':'<span class="chip chip-closed">N</span>')+'</td>'+
-      '<td class="sm muted">'+f.note+'</td></tr>'; }).join('')+
-    '</tbody></table></div></div></div>';
-  h += '<div class="note ok"><strong>Absences went from 4 rows to 10,783 on 17-Aug.</strong> The extract took its '+
-    'day-level rows from a detail table that is empty for 89% of absences, and inner-joined it. The sync reported '+
-    'success on every run, and a person whose leave was silently dropped looks exactly like a person with no leave. '+
-    'It surfaced only because a real absence was booked on a known person and never arrived.</div>';
-  h += '<div class="note warn"><strong>The scheduled absence feed adds; it cannot retract.</strong> It hands over a '+
-    'batch with no date range, so "absent from this batch" and "no longer exists" are the same thing to it. A '+
-    'withdrawn or deleted absence still retracts only through the live per-screen read, which posts a windowed '+
-    'claim. The per-page pulls are therefore not redundant.</div>';
-  h += '<div class="note"><strong>A wrong JSON path resolves to NULL with no error, and the row still loads.</strong> '+
-    'Three project fields were read under the table&rsquo;s column names instead of the feed&rsquo;s, so every run '+
-    'reported success while carrying nothing in them - and one of the three actively wiped the project end date on '+
-    'every run, because an end date has to be able to clear and so is not defaulted to the existing value.</div>';
-  h += '</div>';
-  document.getElementById('mainArea').innerHTML = h;
-}
+/* ============================================================
+   ACCRUAL INTEGRATION
+   ============================================================ */
+RENDER['main-accrual-integration']=function(){
+  var h=pageBand('main-accrual-integration');
+  h+='<div class="rw-body">';
+  h+='<div class="rw-toolbar"><div><label class="fl">Month</label>'+periodSelect('setPeriod(this.value)')+'</div>'+
+    '<div style="flex:1"></div>'+
+    '<button class="btn btn-outline" onclick="toast(\'Retro adjustments approved after the month closed are carried across as Reversal/Adjustment pairs.\')">Post approved adjustments</button>'+
+    '</div>';
 
-function renderAccrual(){
-  var h = band('Operations', 'Accrual Integration',
-    'What a confirmed month hands to the O2C main application, at three grains. Each view rolls up the same rows, '+
-    'so the totals cannot disagree.');
-  h += '<div class="rw-body">';
-
-  h += '<div class="card"><div class="card-hd"><h3>Confirmations</h3></div><div class="card-body tight">';
-  if(!CONFIRMS.length){
-    h += '<div class="card-body"><p class="muted sm" style="margin:0">Nothing confirmed in this session yet. '+
-      'Switch to <strong>Manager</strong>, open <strong>Monthly Summary</strong> and press <em>Confirm month</em> - '+
-      'the rows will appear here.</p></div>';
+  var cfs=CONFIRMS.filter(function(c){ return c.pk===view.pk; });
+  h+='<div class="card"><div class="card-hd"><h3>Confirmed project-months</h3></div>'+
+    '<div class="card-body tight">';
+  if(!cfs.length){
+    h+='<div class="card-body"><p class="muted sm" style="margin:0">Nothing confirmed for '+period(view.pk).name+
+      ' yet. Sign in as the manager, open a project from Team Approvals and confirm the month &mdash; '+
+      'the rows appear here.</p></div>';
   } else {
-    h += '<div class="tbl-wrap"><table class="dt"><thead><tr><th>Confirm</th><th>Project</th><th>Period</th>'+
-      '<th>Type</th><th class="rt">Rows</th><th class="rt">Hours</th><th>By</th><th>Accrual</th><th>OTL</th><th>Partner</th>'+
-      '</tr></thead><tbody>'+
-      CONFIRMS.map(function(c){ return '<tr><td class="mono">'+c.id+'</td><td class="mono">'+c.proj+'</td>'+
-        '<td>'+period(c.pk).name+'</td>'+
-        '<td>'+(c.type==='Advance closure'?'<span class="chip chip-defaulted">Advance closure</span>':'<span class="chip chip-approved">Normal</span>')+'</td>'+
-        '<td class="rt">'+c.rows+'</td><td class="rt">'+f2(c.hours)+'</td><td class="sm">'+c.by+'</td>'+
-        '<td><span class="chip chip-approved">Success</span></td>'+
-        '<td><span class="chip chip-draft">Pending</span></td>'+
-        '<td><span class="chip chip-draft">Pending</span></td></tr>'; }).join('')+
+    h+='<div class="tbl-wrap"><table class="dt"><thead><tr><th>Project</th><th class="rt">Employees</th>'+
+      '<th class="rt">Billable</th><th class="rt">Non-bill</th><th class="rt">Leave</th>'+
+      '<th>Confirmed</th><th>OTL</th><th>Accrual</th></tr></thead><tbody>'+
+      cfs.map(function(c){
+        var b=0,n=0,l=0,es={};
+        IFACE.forEach(function(r){ if(r.confirmId!==c.id) return;
+          b+=r.bill; n+=r.nonbill; l+=r.leave; es[r.emp]=1; });
+        return '<tr><td>'+proj(c.proj).name+'<br><span class="mono muted sm">'+c.mainNo+'</span></td>'+
+          '<td class="rt">'+Object.keys(es).length+'</td>'+
+          '<td class="rt">'+f2(b)+'</td><td class="rt">'+f2(n)+'</td><td class="rt">'+f2(l)+'</td>'+
+          '<td class="sm mono">'+c.on+'</td>'+
+          '<td><span class="chip chip-draft">Pending</span></td>'+
+          '<td><span class="chip '+(c.status==='Success'?'chip-approved':'chip-rejected')+'">'+c.status+'</span></td></tr>';
+      }).join('')+
       '</tbody></table></div>';
   }
-  h += '</div></div>';
+  h+='</div></div>';
 
-  h += '<div class="note"><strong>Three columns, not one.</strong> Accrual, OTL and the partner push fail '+
-    'independently; collapsing them into a single status loses which one needs attention. OTL and Partner stay '+
-    '<em>Pending</em> here because neither is switched on.</div>';
+  h+='<div class="note"><strong>Three columns, not one.</strong> Accrual, OTL and the partner push fail '+
+    'independently; collapsing them loses which one needs attention. OTL stays <em>Pending</em> because it '+
+    'is not switched on.</div>';
 
-  if(IFACE.length){
-    /* MONTH */
-    var mk = {}, dk = {};
-    IFACE.forEach(function(r){
-      var m = r.mainNo+'|'+r.emp;
-      if(!mk[m]) mk[m] = {r:r, days:{}, b:0, n:0, l:0};
-      mk[m].b+=r.bill; mk[m].n+=r.nonbill; mk[m].l+=r.leave; mk[m].days[r.date]=1;
-      var d = r.mainNo+'|'+r.emp+'|'+r.date;
-      if(!dk[d]) dk[d] = {r:r, tasks:{}, b:0, n:0, l:0};
-      dk[d].b+=r.bill; dk[d].n+=r.nonbill; dk[d].l+=r.leave; dk[d].tasks[r.task]=1;
-    });
-
-    h += '<div class="card"><div class="card-hd"><h3>1 &middot; Monthly</h3>'+
-      '<span class="sm muted">one row per person per project month - what accrual posts from</span></div>'+
+  var mine=IFACE.filter(function(r){ return r.period===view.pk; });
+  if(mine.length){
+    h+='<div class="card"><div class="card-hd"><h3>Extract waiting to be collected</h3>'+
+      '<span class="sm muted">'+mine.length+' rows &middot; first 14 shown</span></div>'+
       '<div class="card-body tight"><div class="tbl-wrap"><table class="dt"><thead><tr>'+
-      '<th>O2C code</th><th>Fusion no.</th><th>Employee</th><th>Role on client</th><th class="rt">Days</th>'+
-      '<th class="rt">Billable</th><th class="rt">Non-bill.</th><th class="rt">Leave</th><th class="rt">Total</th>'+
-      '</tr></thead><tbody>';
-    var TB=0,TN=0,TL=0;
-    Object.keys(mk).forEach(function(k){
-      var x = mk[k]; TB+=x.b; TN+=x.n; TL+=x.l;
-      h += '<tr><td class="mono"><strong>'+x.r.mainNo+'</strong></td><td class="mono">'+x.r.projNo+'</td>'+
-        '<td>'+x.r.empName+' <span class="mono muted sm">'+x.r.emp+'</span></td><td class="sm">'+x.r.role+'</td>'+
-        '<td class="rt">'+Object.keys(x.days).length+'</td>'+
-        '<td class="rt">'+f2(x.b)+'</td><td class="rt">'+f2(x.n)+'</td><td class="rt">'+f2(x.l)+'</td>'+
-        '<td class="rt"><strong>'+f2(x.b+x.n+x.l)+'</strong></td></tr>';
-    });
-    h += '</tbody><tfoot><tr><td colspan="5">'+Object.keys(mk).length+' rows</td>'+
-      '<td class="rt">'+f2(TB)+'</td><td class="rt">'+f2(TN)+'</td><td class="rt">'+f2(TL)+'</td>'+
-      '<td class="rt">'+f2(TB+TN+TL)+'</td></tr></tfoot></table></div></div></div>';
-
-    /* DAY */
-    h += '<div class="card"><div class="card-hd"><h3>2 &middot; Daily</h3>'+
-      '<span class="sm muted">one row per person per day - first 12 shown</span></div>'+
-      '<div class="card-body tight"><div class="tbl-wrap"><table class="dt"><thead><tr>'+
-      '<th>O2C code</th><th>Employee</th><th>Date</th><th>Day</th><th class="rt">Tasks</th>'+
-      '<th class="rt">Billable</th><th class="rt">Non-bill.</th><th class="rt">Leave</th></tr></thead><tbody>'+
-      Object.keys(dk).slice(0,12).map(function(k){ var x=dk[k];
-        return '<tr><td class="mono">'+x.r.mainNo+'</td><td class="sm">'+x.r.empName+'</td>'+
-          '<td class="mono">'+x.r.date+'</td><td class="muted sm">'+x.r.day+'</td>'+
-          '<td class="rt">'+Object.keys(x.tasks).length+'</td>'+
-          '<td class="rt">'+f2(x.b)+'</td><td class="rt">'+f2(x.n)+'</td><td class="rt">'+f2(x.l)+'</td></tr>'; }).join('')+
-      '</tbody></table></div></div></div>';
-
-    /* DAY x TASK */
-    h += '<div class="card"><div class="card-hd"><h3>3 &middot; Daily task-wise</h3>'+
-      '<span class="sm muted">the finest grain - first 12 shown</span></div>'+
-      '<div class="card-body tight"><div class="tbl-wrap"><table class="dt"><thead><tr>'+
-      '<th>O2C code</th><th>Employee</th><th>Date</th><th>Task</th><th>Entry type</th><th>Flag</th>'+
-      '<th class="rt">Billable</th><th class="rt">Non-bill.</th><th class="rt">Leave</th></tr></thead><tbody>'+
-      IFACE.slice(0,12).map(function(r){
-        return '<tr><td class="mono">'+r.mainNo+'</td><td class="sm">'+r.empName+'</td>'+
-          '<td class="mono">'+r.date+'</td><td class="sm">'+r.taskName+'</td>'+
+      '<th>Employee</th><th>Project</th><th>WBS task</th><th>Date</th><th class="rt">Billed</th>'+
+      '<th class="rt">Unbilled</th><th class="rt">Leave</th><th>Type</th><th>Flag</th><th>Collected</th>'+
+      '</tr></thead><tbody>'+
+      mine.slice(0,14).map(function(r){
+        return '<tr><td class="sm">'+r.empName+'</td><td class="mono sm">'+r.mainNo+'</td>'+
+          '<td class="sm">'+r.taskName+'</td><td class="mono sm">'+r.date+'</td>'+
+          '<td class="rt">'+f2(r.bill)+'</td><td class="rt">'+f2(r.nonbill)+'</td><td class="rt">'+f2(r.leave)+'</td>'+
           '<td><span class="chip '+(r.entryType==='Default'?'chip-defaulted':'chip-draft')+'">'+r.entryType+'</span></td>'+
-          '<td class="sm">'+(r.flag?'<span class="flag-chip">'+r.flag+'</span>':'<span class="muted">-</span>')+'</td>'+
-          '<td class="rt">'+f2(r.bill)+'</td><td class="rt">'+f2(r.nonbill)+'</td><td class="rt">'+f2(r.leave)+'</td></tr>'; }).join('')+
+          '<td class="sm">'+(r.flag?'<span class="flag-chip">'+r.flag+'</span>':'<span class="muted">&mdash;</span>')+'</td>'+
+          '<td>'+(r.collected?'<span class="chip chip-approved">Y</span>':'<span class="chip chip-draft">N</span>')+'</td></tr>';
+      }).join('')+'</tbody></table></div></div></div>';
+
+    /* the three grains */
+    var mk={},dk={};
+    mine.forEach(function(r){
+      var a=r.mainNo+'|'+r.emp;
+      if(!mk[a]) mk[a]={r:r,days:{},b:0,n:0,l:0};
+      mk[a].b+=r.bill; mk[a].n+=r.nonbill; mk[a].l+=r.leave; mk[a].days[r.date]=1;
+      var d=a+'|'+r.date; if(!dk[d]) dk[d]=1;
+    });
+    h+='<div class="card"><div class="card-hd"><h3>What accrual reads &mdash; three grains, one snapshot</h3>'+
+      '<span class="sm muted">hours must be identical across all three</span></div>'+
+      '<div class="card-body tight"><div class="tbl-wrap"><table class="dt"><thead><tr>'+
+      '<th>Grain</th><th>View</th><th class="rt">Rows</th><th class="rt">Hours</th></tr></thead><tbody>';
+    var TH=0; mine.forEach(function(r){ TH+=r.bill+r.nonbill+r.leave; });
+    h+='<tr><td>Monthly</td><td class="mono sm">v_oc_ts_anx_month</td><td class="rt">'+Object.keys(mk).length+'</td><td class="rt">'+f2(TH)+'</td></tr>'+
+       '<tr><td>Daily</td><td class="mono sm">v_oc_ts_anx_day</td><td class="rt">'+Object.keys(dk).length+'</td><td class="rt">'+f2(TH)+'</td></tr>'+
+       '<tr><td>Daily task-wise</td><td class="mono sm">v_oc_ts_anx_day_task</td><td class="rt">'+mine.length+'</td><td class="rt">'+f2(TH)+'</td></tr>'+
       '</tbody></table></div></div></div>';
+    h+='<div class="note ok"><strong>Both project codes travel, and they are copies.</strong> '+
+      '<span class="mono">'+mine[0].projNo+'</span> is Fusion&rsquo;s; <span class="mono">'+mine[0].mainNo+
+      '</span> is the O2C main application&rsquo;s, and that is the one accrual joins on. Taken at the moment '+
+      'of confirmation rather than joined live, so renaming a project later cannot restate a closed month.</div>';
   }
 
-  h += '<div class="card"><div class="card-hd"><h3>The same project, named twice</h3></div><div class="card-body tight">'+
-    '<div class="tbl-wrap"><table class="dt"><thead><tr><th>Fusion number</th><th>Project</th><th>Revenue model</th>'+
-    '<th>O2C main code</th></tr></thead><tbody>'+
-    PROJECTS.map(function(p){ return '<tr><td class="mono">'+p.id+'</td><td>'+p.name+'</td><td>'+p.model+'</td>'+
-      '<td class="mono"><strong>'+p.main+'</strong></td></tr>'; }).join('')+
-    '</tbody></table></div></div></div>';
-  h += '<div class="note"><strong>Both codes travel, and they are copies.</strong> Our project number is Fusion&rsquo;s; '+
-    'accrual keys on the main application&rsquo;s. Every name on the interface is taken at the moment of confirmation '+
-    'rather than joined live, so renaming a project next month does not restate a month already handed over.</div>';
-  h += '<div class="note warn"><strong>Two directions exist; one is live.</strong> The consumer pulls a confirmed month '+
-    'whenever it wants - that is the built and intended path. A push into the main application&rsquo;s accrual chain is '+
-    'also built and deliberately switched off, so confirmed months are held here until the word is given.</div>';
-  h += '</div>';
-  document.getElementById('mainArea').innerHTML = h;
-}
-
-function renderIntegrations(){
-  var mods = [
-    {m:'oc.time',          who:'Employee', n:24, ex:'GET days/:tsWeekId &middot; POST week/:tsWeekId/submit &middot; GET days/:tsWeekId/export'},
-    {m:'oc.time.approval', who:'Manager',  n:26, ex:'GET summary/:projectId/:periodId &middot; POST approve/:tsWeekId &middot; POST override/:tsWeekId'},
-    {m:'oc.time.admin',    who:'Admin',    n:19, ex:'POST calendar/sync/:layer &middot; GET accrual/pull/:year/:month &middot; POST sync/absence'},
-    {m:'oc.time.auth',     who:'Everyone', n:6,  ex:'POST signin &middot; POST signout &middot; POST password/set'}
-  ];
-  var h = band('Operations', 'Integrations (REST)',
-    'Four ORDS modules, 75 handlers. Business rules are refused identically here and in the screens - the page '+
-    're-checks only to explain a disabled button.');
-  h += '<div class="rw-body">';
-  h += '<div class="card"><div class="card-body tight"><div class="tbl-wrap"><table class="dt"><thead><tr>'+
-    '<th>Module</th><th>Audience</th><th class="rt">Handlers</th><th>Examples</th></tr></thead><tbody>'+
-    mods.map(function(m){ return '<tr><td class="mono"><strong>'+m.m+'</strong></td><td>'+m.who+'</td>'+
-      '<td class="rt">'+m.n+'</td><td class="sm mono">'+m.ex+'</td></tr>'; }).join('')+
-    '</tbody><tfoot><tr><td colspan="2">4 modules</td><td class="rt">75</td><td></td></tr></tfoot></table></div></div></div>';
-  h += '<div class="note"><strong>Rules live in the database, not the page.</strong> A caller hitting ORDS directly '+
-    'gets the identical refusal with the identical wording. Business-rule errors come back as 400 with the rule&rsquo;s '+
-    'own message so the screen can show it verbatim; anything else is a 500.</div>';
-  h += '<div class="card"><div class="card-hd"><h3>Deliberately not built</h3></div><div class="card-body tight">'+
-    '<div class="tbl-wrap"><table class="dt"><thead><tr><th>Item</th><th>Status</th><th>Why</th></tr></thead><tbody>'+
-    [['Push into Oracle Time &amp; Labor','Needs OIC','chip-warn','Tracked and staged; the integration flow is the remaining piece'],
-     ['Push into the O2C accrual chain','Built, dormant','chip-draft','Switched off by instruction - months are held locally'],
-     ['Notifications (11 points)','Needs OIC','chip-warn','Specified, none wired'],
-     ['Timesheet upload from CSV','On hold','chip-draft','Download works; upload paused pending a column contract'],
-     ['Payroll and Project Costing writes','Out of scope','chip-closed','Oracle Time &amp; Labor feeds both natively - we must not write twice'],
-     ['Invoice generation and revenue','Out of scope','chip-closed','The annexure is produced downstream from our summaries'],
-     ['Mobile','Phase 2','chip-closed','-']]
-      .map(function(r){ return '<tr><td><strong>'+r[0]+'</strong></td>'+
-        '<td><span class="chip '+r[2]+'">'+r[1]+'</span></td><td class="sm muted">'+r[3]+'</td></tr>'; }).join('')+
-    '</tbody></table></div></div></div>';
-  h += '<div class="note bad"><strong>One security item to close before production.</strong> The session token is '+
-    'generated without the platform&rsquo;s cryptographic random source, because that needs a grant the project chose '+
-    'not to request during build. Bounded by a 24-hour expiry, deletion on logout and one session per user - but '+
-    'genuinely weaker than it should be. The fix is one line plus the grant, and existing sessions keep working '+
-    'through it.</div>';
-  h += '</div>';
-  document.getElementById('mainArea').innerHTML = h;
-}
+  /* LLC annexure */
+  var ann=LLC.filter(function(r){ return r.cover; });
+  h+='<div class="card"><div class="card-hd"><h3>Leave-loss annexure</h3>'+
+    '<span class="sm muted">assigned coverage, for the invoice pack</span></div><div class="card-body tight">';
+  if(!ann.length){ h+='<div class="card-body"><p class="muted sm" style="margin:0">No coverage assigned.</p></div>'; }
+  else {
+    h+='<div class="tbl-wrap"><table class="dt"><thead><tr><th>Project</th><th>Client</th><th>Absent</th>'+
+      '<th>Date</th><th class="rt">Absence</th><th>Covered by</th><th>Day</th><th>Approved</th>'+
+      '</tr></thead><tbody>'+
+      ann.map(function(r){ var d=new Date(r.date+'T00:00:00'); var p=proj(r.proj);
+        return '<tr><td class="sm">'+p.name+'</td><td class="sm">'+p.client+'</td>'+
+          '<td class="sm">'+wkr(r.emp).name+'</td><td class="mono sm">'+pretty(d)+'</td>'+
+          '<td class="rt">'+f2(r.loss)+'</td><td class="sm">'+wkr(r.cover).name+'</td>'+
+          '<td class="muted sm">'+DOW[d.getDay()]+'</td>'+
+          '<td><span class="chip chip-approved">Assigned</span></td></tr>'; }).join('')+
+      '</tbody></table></div>';
+  }
+  h+='</div></div>';
+  h+='</div>';
+  document.getElementById('mainArea').innerHTML=h;
+};
 
 /* ============================================================
-   STATUS AND FLAG MODEL  (V4)
+   THE REMAINING SCREENS — present and readable, lighter than the flow
    ============================================================ */
-function renderModel(){
-  var h = band('Reference', 'Status &amp; Flag Model (V4)',
-    'A week&rsquo;s state is not one status. It is who has done their part, crossed with what the manager decided. '+
-    'Collapsing them into one list is what produced statuses like "rejected but also late".');
-  h += '<div class="rw-body">';
+RENDER['main-client-timesheets']=function(){
+  var h=pageBand('main-client-timesheets');
+  h+='<div class="rw-body"><div class="rw-toolbar">'+
+    '<div><label class="fl">Project</label><select><option>555 Opportunity To Cash</option></select></div>'+
+    '<div><label class="fl">Billing period</label>'+periodSelect('setPeriod(this.value)')+'</div>'+
+    '<div style="flex:1"></div><button class="btn btn-primary" onclick="toast(\'The file is stored as a binary column with its name, MIME type and size, decoded in chunks so a 25MB scan gets through.\')">Attach document</button>'+
+    '</div>'+
+    '<div class="card"><div class="card-body tight"><div class="tbl-wrap"><table class="dt"><thead><tr>'+
+    '<th>Document</th><th>Coverage</th><th class="rt">Size (KB)</th><th>Uploaded by</th><th>Uploaded</th><th>Remarks</th>'+
+    '</tr></thead><tbody><tr><td><strong>555_Jul2026_signed.pdf</strong></td><td class="sm">JUL-2026 &middot; whole month</td>'+
+    '<td class="rt">403</td><td class="sm">Navamani Solairajan</td><td class="sm mono">04-Aug-2026</td>'+
+    '<td class="sm muted">Client-signed</td></tr></tbody></table></div></div></div>'+
+    '<div class="note"><strong>Stored in the database, not on a file share</strong> &mdash; keyed to project '+
+    'and period, so a restore of the schema restores the evidence with it.</div>'+
+    '<div class="note warn"><strong>Not built:</strong> virus scan and a size ceiling. Neither has been asked '+
+    'for; worth settling before this opens to a wide audience.</div></div>';
+  document.getElementById('mainArea').innerHTML=h;
+};
 
-  /* axis */
-  var CELLS = {
-    'NotYetSubmitted|Pending':'start',
-    'Submitted|Pending':'awaiting', 'Submitted|Approved':'done', 'Submitted|Rejected':'sent back',
-    'LateSubmission|Pending':'awaiting', 'LateSubmission|Approved':'done', 'LateSubmission|Rejected':'sent back',
-    'Defaulted|Pending':'employee late', 'Defaulted|Approved':'force-closed', 'Defaulted|ManagerDefaulted':'manager late'
-  };
-  h += '<div class="card"><div class="card-hd"><h3>Two axes</h3>'+
-    '<span class="sm muted">submission down the side, approval across the top</span></div>'+
-    '<div class="card-body tight"><div class="tbl-wrap"><table class="dt axis"><thead><tr><th></th>'+
-    APPR_STATES.map(function(a){ return '<th style="text-align:center">'+a+'</th>'; }).join('')+
+RENDER['main-my-salary-hold']=function(){
+  var h=pageBand('main-my-salary-hold');
+  h+='<div class="rw-body">'+
+    '<div class="note ok"><strong>Nothing of yours is held.</strong> This page exists so the person whose pay '+
+    'is stopped can see which dates caused it and what to correct &mdash; it is the employee side of Salary '+
+    'Stopping, under My Work rather than Team. Two pages over the same data; the difference is whose pay it is.</div>'+
+    '<div class="card"><div class="card-body tight"><div class="tbl-wrap"><table class="dt"><thead><tr>'+
+    '<th>Date</th><th>Month</th><th class="rt">Expected</th><th class="rt">Submitted</th><th>Status</th>'+
+    '</tr></thead><tbody><tr><td colspan="5" class="muted sm" style="padding:18px">No held dates.</td></tr>'+
+    '</tbody></table></div></div></div>'+
+    '<div class="note"><strong>Only the weekly cut-off holds pay.</strong> The delivery cut-off is the '+
+    'manager&rsquo;s and never reaches payroll &mdash; somebody else&rsquo;s lateness must not cost you.</div></div>';
+  document.getElementById('mainArea').innerHTML=h;
+};
+
+RENDER['main-salary-stopping']=function(){
+  var h=pageBand('main-salary-stopping');
+  h+='<div class="rw-body"><div class="rw-toolbar">'+
+    '<div><label class="fl">Month</label>'+periodSelect('setPeriod(this.value)')+'</div>'+
+    '<div style="flex:1"></div><button class="btn btn-outline" onclick="toast(\'Holds re-evaluated. Only weeks defaulted by the WEEKLY cut-off qualify.\')">Re-evaluate holds</button>'+
+    '</div>'+
+    '<div class="card"><div class="card-hd"><h3>What each cut-off does</h3></div><div class="card-body tight">'+
+    '<div class="tbl-wrap"><table class="dt"><thead><tr><th>Cut-off</th><th>Whose lateness</th><th>Effect</th>'+
+    '<th>Holds salary?</th></tr></thead><tbody>'+
+    '<tr><td><strong>Weekly</strong></td><td>The employee&rsquo;s</td><td>Defaults and <strong>locks</strong></td>'+
+    '<td><span class="chip chip-rejected">Yes</span></td></tr>'+
+    '<tr><td><strong>Delivery</strong></td><td>The manager&rsquo;s</td><td>Defaults, stays editable</td>'+
+    '<td><span class="chip chip-approved">Never</span></td></tr></tbody></table></div></div></div>'+
+    '<div class="card"><div class="card-hd"><h3>Salary held</h3></div><div class="card-body tight">'+
+    '<div class="tbl-wrap"><table class="dt"><thead><tr><th>Employee</th><th>Country</th><th class="rt">Weeks</th>'+
+    '<th class="rt">Applied</th><th class="rt">Default</th><th>Status</th><th>Window</th></tr></thead><tbody>'+
+    '<tr><td colspan="7" class="muted sm" style="padding:18px">No holds for '+period(view.pk).name+'.</td></tr>'+
+    '</tbody></table></div></div></div>'+
+    '<div class="note"><strong>Contractors are exempt</strong> &mdash; they are not on payroll. The hold and '+
+    'its automatic release both filter on the weekly cut-off, so a manager-defaulted week never reaches payroll.</div></div>';
+  document.getElementById('mainArea').innerHTML=h;
+};
+
+RENDER['main-calendar-sync']=function(){
+  var h=pageBand('main-calendar-sync');
+  h+='<div class="rw-body"><div class="rw-toolbar"><div style="flex:1"></div>'+
+    '<button class="btn btn-primary" onclick="toast(\'Calendar layers re-synced from Fusion HCM.\')">Sync</button></div>'+
+    '<div class="card"><div class="card-hd"><h3>Layers</h3>'+
+    '<span class="sm muted">Shift &gt; Client &gt; Project &gt; Corporate</span></div><div class="card-body tight">'+
+    '<div class="tbl-wrap"><table class="dt"><thead><tr><th class="rt">Precedence</th><th>Layer</th>'+
+    '<th class="rt">Scopes</th><th class="rt">Days</th><th>Range</th><th>Source</th><th>Last synced</th>'+
     '</tr></thead><tbody>'+
-    SUB_STATES.map(function(s){ return '<tr><th scope="row">'+s+'</th>'+
-      APPR_STATES.map(function(a){ var c=CELLS[s+'|'+a];
-        return c ? '<td class="hit">'+c+'</td>' : '<td class="muted">&middot;</td>'; }).join('')+'</tr>'; }).join('')+
-    '</tbody></table></div></div></div>';
+    '<tr><td class="rt">4</td><td><strong>Shift</strong></td><td class="rt">418</td><td class="rt">51,895</td>'+
+    '<td class="sm mono">10-May-26 &rarr; 17-Nov-26</td><td class="sm">HCM Work Schedules</td>'+
+    '<td class="sm mono">21-Aug-2026 05:35</td></tr>'+
+    '<tr><td class="rt">1</td><td><strong>Corporate</strong></td><td class="rt">83</td><td class="rt">143</td>'+
+    '<td class="sm mono">14-May-26 &rarr; 15-Aug-27</td><td class="sm">HCM / Corporate</td>'+
+    '<td class="sm mono">21-Aug-2026 05:35</td></tr>'+
+    '</tbody></table></div></div></div>'+
+    '<div class="note bad"><strong>Known gap, and it understates July.</strong> Four of the six people on 555 '+
+    'have only <strong>2 shift rows for the whole of July</strong>, so their entries fell back to 18 days '+
+    'instead of 23 and 23&ndash;29 July was never created. About 130 hours never reached accrual. The cause is '+
+    'upstream in the HCM work-schedule feed, not in the timesheet.</div>'+
+    '<div class="note"><strong>Where two layers cover the same day, the higher precedence wins.</strong> '+
+    'A hand-written Mon&ndash;Fri calendar was built once and deleted: it would have made a broken sync look '+
+    'like working data, and it would have measured a Sun&ndash;Thu worker against the wrong week.</div></div>';
+  document.getElementById('mainArea').innerHTML=h;
+};
 
-  /* flags */
-  h += '<div class="card"><div class="card-hd"><h3>Five flags</h3>'+
-    '<span class="sm muted">each a timestamped row, never a column</span></div><div class="card-body tight">'+
-    '<div class="tbl-wrap"><table class="dt"><thead><tr><th>Flag</th><th>Raised when</th></tr></thead><tbody>'+
-    [['Defaulted','The weekly cut-off passed with nothing submitted. Locks the week and holds pay.'],
-     ['LateSubmission','Submitted after the cut-off, or resubmitted after a rejection. The week is still Submitted.'],
-     ['Overridden','A manager corrected the hours and approved in one action. Reason is mandatory.'],
-     ['Adjusted','A change after a decision, an advance closure, or a reversal. All three surface here.'],
-     ['ManagerDefaulted','The delivery cut-off passed with the week awaiting approval. Never holds pay.']]
-      .map(function(r){ return '<tr><td><span class="flag-chip">'+r[0]+'</span></td><td class="sm">'+r[1]+'</td></tr>'; }).join('')+
-    '</tbody></table></div></div></div>';
-  h += '<div class="note"><strong>A flag is never deleted.</strong> Clearing one records when it cleared, and '+
-    're-raising does not move the original timestamp - so the history of a week survives the week being fixed.</div>';
+var FEEDS=[['WORKERS',5976,'HCM'],['PROJECTS',423,'PPM'],['TASKS',10534,'PPM'],
+           ['ALLOCATIONS',1595,'PPM'],['CALENDAR',150,'HCM'],['SHIFTS',64,'HCM'],
+           ['ABSENCES',10783,'Absence Mgmt'],['WORK_PATTERNS',1084,'HCM'],
+           ['WORK_SCHEDULES',417,'HCM'],['WORKER_SHIFTS',2721,'HCM']];
+RENDER['main-sync-status']=function(){
+  var h=pageBand('main-sync-status');
+  h+='<div class="rw-body"><div class="card"><div class="card-body tight"><div class="tbl-wrap">'+
+    '<table class="dt"><thead><tr><th>Feed</th><th class="rt">Rows</th><th>Source</th><th>Enabled</th>'+
+    '<th>Last run</th></tr></thead><tbody>'+
+    FEEDS.map(function(f){ return '<tr><td><strong>'+f[0]+'</strong></td>'+
+      '<td class="rt">'+f[1].toLocaleString()+'</td><td>'+f[2]+'</td>'+
+      '<td><span class="chip chip-approved">Y</span></td>'+
+      '<td class="sm mono">21-Aug-2026 05:35</td></tr>'; }).join('')+
+    '</tbody></table></div></div></div>'+
+    '<div class="note ok"><strong>Absences went from 4 rows to 10,783 on 17-Aug.</strong> The extract took '+
+    'day-level rows from a detail table empty for 89% of absences and inner-joined it. Every run reported '+
+    'success, and a person whose leave was dropped looks exactly like a person with no leave.</div>'+
+    '<div class="note warn"><strong>The scheduled absence feed adds; it cannot retract.</strong> It sends no '+
+    'date range, so &ldquo;absent from this batch&rdquo; and &ldquo;no longer exists&rdquo; are the same thing '+
+    'to it. A withdrawn absence retracts only through the live per-screen read, which posts a windowed claim.</div></div>';
+  document.getElementById('mainArea').innerHTML=h;
+};
 
-  /* transitions */
-  h += '<div class="card"><div class="card-hd"><h3>The rules are data &mdash; '+TRANSITIONS.length+' rows</h3>'+
-    '<span class="sm muted">a new status is an INSERT, not a code change</span></div>'+
-    '<div class="card-body tight"><div class="tbl-wrap"><table class="dt"><thead><tr>'+
-    '<th>#</th><th>Event</th><th>From submission</th><th>From approval</th><th>To submission</th>'+
-    '<th>To approval</th><th>Flag</th><th>Note</th></tr></thead><tbody>'+
-    TRANSITIONS.map(function(t){ return '<tr><td class="mono">'+t.o+'</td><td><strong>'+t.e+'</strong></td>'+
-      '<td class="sm">'+(t.fs||'<span class="muted">any</span>')+'</td>'+
-      '<td class="sm">'+(t.fa||'<span class="muted">any</span>')+'</td>'+
-      '<td class="sm">'+(t.ts||'<span class="muted">unchanged</span>')+'</td>'+
-      '<td class="sm">'+(t.ta||'<span class="muted">unchanged</span>')+'</td>'+
-      '<td>'+(t.fl?'<span class="flag-chip">'+t.fl+'</span>':'<span class="muted">-</span>')+'</td>'+
-      '<td class="sm muted">'+(t.n||'')+'</td></tr>'; }).join('')+
-    '</tbody></table></div></div></div>';
-
-  h += '<div class="note warn"><strong>Leave the FROM columns guarded.</strong> A null means "any state", and that '+
-    'caused the same bug twice in opposite directions - the delivery cut-off blamed a manager for not approving a '+
-    'week nobody submitted, and Approve let them approve it. Both were seeded null because "the screen would never '+
-    'do that". The screen is not the control.</div>';
-  h += '<div class="note"><strong>Nothing fails quietly.</strong> An event with no matching rule is refused by name '+
-    'rather than doing nothing. Try Approve on a week that has not been submitted - the message names the states it '+
-    'was in.</div>';
-  h += '<div class="note"><strong>There is no Closed.</strong> A week is not editable because the cut-off passed; a '+
-    'rejection reopens it as LateSubmission; a change after the delivery cut-off is an adjustment. Confirmation lives '+
-    'on the month, not on the week.</div>';
-  h += '</div>';
-  document.getElementById('mainArea').innerHTML = h;
-}
+RENDER['main-integrations']=function(){
+  var h=pageBand('main-integrations');
+  h+='<div class="rw-body"><div class="card"><div class="card-hd"><h3>POET readiness</h3>'+
+    '<span class="sm muted">what the OTL push still needs</span></div><div class="card-body tight">'+
+    '<div class="tbl-wrap"><table class="dt"><thead><tr><th>Project</th><th>Name</th>'+
+    '<th class="rt">Chargeable tasks</th><th class="rt">No expenditure type</th>'+
+    '<th class="rt">Workers allocated</th><th class="rt">No expenditure org</th><th>OTL</th>'+
+    '</tr></thead><tbody>'+
+    PROJECTS.map(function(p){ return '<tr><td class="mono">'+p.id+'</td><td>'+p.name+'</td>'+
+      '<td class="rt">'+p.tasks.length+'</td><td class="rt">'+p.tasks.length+'</td>'+
+      '<td class="rt">'+empsOn(p.id).length+'</td><td class="rt">'+empsOn(p.id).length+'</td>'+
+      '<td><span class="chip chip-defaulted">Blocked</span></td></tr>'; }).join('')+
+    '</tbody></table></div></div></div>'+
+    '<div class="note warn"><strong>The OTL push cannot be built yet.</strong> POET is Project / Organization / '+
+    'Expenditure type / Task, and <span class="mono">EXPENDITURE_TYPE</span> on the task and '+
+    '<span class="mono">EXPENDITURE_ORG</span> on the allocation do not exist. It must also filter leave out, '+
+    'since absences originate in Absence Management, which already feeds OTL.</div>'+
+    '<div class="card"><div class="card-hd"><h3>Deliberately not built</h3></div><div class="card-body tight">'+
+    '<div class="tbl-wrap"><table class="dt"><thead><tr><th>Item</th><th>Status</th><th>Why</th></tr></thead><tbody>'+
+    [['Push into Oracle Time &amp; Labor','Needs OIC','chip-warn','Tracked and staged'],
+     ['Push into the O2C accrual chain','Built, dormant','chip-draft','Switched off by instruction'],
+     ['Notifications','Needs OIC','chip-warn','Eleven points specified, none wired'],
+     ['Timesheet upload from CSV','On hold','chip-draft','Download works; upload paused'],
+     ['Payroll and Costing writes','Out of scope','chip-closed','OTL feeds both natively'],
+     ['Mobile','Phase 2','chip-closed','&mdash;']]
+    .map(function(r){ return '<tr><td><strong>'+r[0]+'</strong></td>'+
+      '<td><span class="chip '+r[2]+'">'+r[1]+'</span></td><td class="sm muted">'+r[3]+'</td></tr>'; }).join('')+
+    '</tbody></table></div></div></div></div>';
+  document.getElementById('mainArea').innerHTML=h;
+};
 
 /* ============================================================
    BOOT
    ============================================================ */
 function seed(){
   buildLLC();
-  var pk = 'AUG-2026', ws = weeksOf(pk), pid = '555';
-  var cur = currentWeekIdx(pk);
-  empsOn(pid).forEach(function(e){
-    ws.forEach(function(x, i){
-      var w = week(e.id, pid, pk, i);
-      entriesFor(e.id, pid, pk, i);
-      if(i < cur - 1){
-        applyEvent(w, 'Submit', {actor:e.name});
-        applyEvent(w, 'Approve', {actor:wkr(SELF.Manager).name});
-      } else if(i === cur - 1){
-        /* last full week: a spread worth demoing */
-        if(e.id==='RI2824' || e.id==='RI2900'){ applyEvent(w,'Submit',{actor:e.name}); }
-        else if(e.id==='RI2894'){ applyEvent(w,'Submit',{actor:e.name, late:true}); }
-        else if(e.id==='RI2914'){ applyEvent(w,'WeeklyCutoff',{actor:'SCHEDULER'}); }
-        else if(e.id==='CRI0398'){ applyEvent(w,'WeeklyCutoff',{actor:'SCHEDULER'}); }
-        else { applyEvent(w,'Submit',{actor:e.name}); applyEvent(w,'Approve',{actor:wkr(SELF.Manager).name}); }
+  /* JULY on 555: everybody defaulted at the weekly cut-off and then
+     approved by the manager -- the real state on the pod on 21-Aug. */
+  weeksOf('JUL-2026').forEach(function(x,i){
+    empsOn('555').forEach(function(e){
+      var w=week(e.id,'555','JUL-2026',i);
+      entriesFor(e.id,'555','JUL-2026',i);
+      applyEvent(w,'WeeklyCutoff',{actor:'SCHEDULER'});
+      applyEvent(w,'Approve',{actor:'Navamani Solairajan'});
+    });
+  });
+  /* AUGUST: weeks before the current one are submitted and mostly
+     approved; the current week is still open. */
+  var cur=currentWeekIdx('AUG-2026');
+  weeksOf('AUG-2026').forEach(function(x,i){
+    empsOn('555').forEach(function(e){
+      var w=week(e.id,'555','AUG-2026',i);
+      entriesFor(e.id,'555','AUG-2026',i);
+      if(i<cur-1){ applyEvent(w,'Submit',{actor:e.name});
+                   applyEvent(w,'Approve',{actor:'Navamani Solairajan'}); }
+      else if(i===cur-1){
+        if(e.id==='RI2894') applyEvent(w,'Submit',{actor:e.name,late:true});
+        else if(e.id==='RI2914') applyEvent(w,'WeeklyCutoff',{actor:'SCHEDULER'});
+        else applyEvent(w,'Submit',{actor:e.name});
       }
-      /* the current week and anything after stay NotYetSubmitted */
     });
   });
-  /* July: everything defaulted and never approved - the real state on the pod */
-  weeksOf('JUL-2026').forEach(function(x, i){
-    empsOn(pid).forEach(function(e){
-      var w = week(e.id, pid, 'JUL-2026', i);
-      entriesFor(e.id, pid, 'JUL-2026', i);
-      applyEvent(w, 'WeeklyCutoff', {actor:'SCHEDULER'});
-    });
-  });
+  /* Sam is on 444 too, so his own screen has something to switch to. */
+  weeksOf('AUG-2026').forEach(function(x,i){ entriesFor('RI2824','444','AUG-2026',i); });
 }
 seed();
-renderSidebar();
-go('mytime');
-document.addEventListener('keydown', function(ev){ if(ev.key==='Escape'){ closeModal(); toggleDrawer(false); } });
+renderLogin();
+document.addEventListener('keydown',function(e){
+  if(e.key==='Escape'){ closeModal(); toggleDrawer(false); }
+});
 
 </script>
