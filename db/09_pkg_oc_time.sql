@@ -3320,6 +3320,14 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
     v_year     NUMBER;
     v_month    NUMBER;
     v_pname    VARCHAR2(30);
+    -- Roll-up totals. Held in locals rather than computed inside the UPDATE;
+    -- see the note above that statement.
+    v_ec       NUMBER;
+    v_bh       NUMBER;
+    v_nb       NUMBER;
+    v_lh       NUMBER;
+    v_ah       NUMBER;
+    v_ar       NUMBER;
   BEGIN
     SELECT period_year, period_month, period_name
       INTO v_year, v_month, v_pname
@@ -3422,12 +3430,18 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
            (SELECT m.project_number FROM oc_main_project_src m
              WHERE m.project_id = p.main_project_id),
            -- The person's role on this project, copied at confirmation.
-           -- A SCALAR SUBQUERY, not a join: OC_TIME_ALLOCATION can hold more
-           -- than one row per person per project across date ranges, and a
-           -- join would multiply every entry into the interface.
-           (SELECT MAX(al.client_role) FROM oc_time_allocation al
-             WHERE al.employee_id = w.employee_id
-               AND al.project_id  = e.project_id),
+           --
+           -- THE MULTIPLICATION HAZARD THIS USED TO WARN ABOUT IS REAL AND IS
+           -- STILL HANDLED. OC_TIME_ALLOCATION can hold more than one row per
+           -- person per project across date ranges, so joining it RAW would
+           -- multiply every timesheet entry into the interface. That is why
+           -- this was a scalar subquery.
+           --
+           -- It is now a join onto a view that is GROUPED BY employee_id,
+           -- project_id -- exactly one row per pair, so at most one match and
+           -- nothing multiplies. Do not "simplify" alr back to a bare join on
+           -- OC_TIME_ALLOCATION; the GROUP BY is what makes it safe.
+           alr.client_role,
            t.task_code, t.task_name, e.entry_date,
            CASE WHEN e.billable_type = 'Billable'     AND e.is_leave = 'N'
                 THEN e.hours ELSE 0 END,
@@ -3456,6 +3470,28 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
       JOIN oc_time_project p  ON p.project_id  = e.project_id
       JOIN oc_time_task    t  ON t.task_id     = e.task_id
       JOIN oc_time_worker  wk ON wk.employee_id = w.employee_id
+      -- CLIENT_ROLE comes from a PRE-GROUPED inline view, not a correlated scalar
+      -- subquery. It used to read
+      --
+      --   (SELECT MAX(al.client_role) FROM oc_time_allocation al
+      --     WHERE al.employee_id = w.employee_id AND al.project_id = e.project_id)
+      --
+      -- and a correlated scalar subquery containing an aggregate is a known way to
+      -- reach ORA-00979: the optimiser unnests it into a grouped view, and the
+      -- correlation columns have to survive into that GROUP BY. Confirming a month
+      -- failed on exactly that error.
+      --
+      -- Equivalent, including the null case: no matching allocation gave NULL from
+      -- the scalar subquery and gives NULL from the outer join. The GROUP BY
+      -- guarantees one row per employee+project, which is the only thing the MAX()
+      -- was ever there to ensure -- one person can hold several allocation rows on
+      -- a project and the annexure wants a single role.
+      LEFT JOIN (SELECT employee_id, project_id,
+                        MAX(client_role) AS client_role
+                   FROM oc_time_allocation
+                  GROUP BY employee_id, project_id) alr
+             ON alr.employee_id = w.employee_id
+            AND alr.project_id  = e.project_id
      WHERE w.period_id  = p_period_id
        AND e.project_id = p_project_id
        AND e.hours     <> 0
@@ -3487,27 +3523,51 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
                           AND i.entry_type   = e.entry_type);
     v_rows := SQL%ROWCOUNT;
 
-    UPDATE oc_ts_month_confirm c
-       SET (c.employee_count, c.billable_hours, c.non_billable_hours,
-            c.leave_hours, c.adjustment_hours) =
-           (SELECT COUNT(DISTINCT i.employee_id),
-                   NVL(SUM(CASE WHEN i.entry_type IN ('Actual','Default')
-                                THEN i.billable_hours END),0),
-                   NVL(SUM(CASE WHEN i.entry_type IN ('Actual','Default')
-                                THEN i.non_billable_hours END),0),
-                   NVL(SUM(CASE WHEN i.entry_type IN ('Actual','Default')
-                                THEN i.leave_hours END),0),
-                   NVL(SUM(CASE WHEN i.entry_type IN ('Reversal','Adjustment')
-                                THEN i.billable_hours + i.non_billable_hours
-                                     + i.leave_hours END),0)
-              FROM xx_o2c_timesheet_accrual_if i
-             WHERE i.confirm_id = c.confirm_id),
-           c.accrual_status    = 'Success',
-           c.accrual_rows      = (SELECT COUNT(*) FROM xx_o2c_timesheet_accrual_if i
-                                   WHERE i.confirm_id = c.confirm_id),
-           c.accrual_pushed_on = SYSTIMESTAMP,
-           c.accrual_message   = 'Interface table filled; batch ' || v_batch
-     WHERE c.confirm_id = v_confirm;
+    -- THE ROLL-UP, AGGREGATED FIRST.
+    --
+    -- This was one statement:
+    --
+    --   UPDATE oc_ts_month_confirm c
+    --      SET (c.employee_count, c.billable_hours, ...) =
+    --          (SELECT COUNT(DISTINCT ...), NVL(SUM(...),0), ...
+    --             FROM xx_o2c_timesheet_accrual_if i
+    --            WHERE i.confirm_id = c.confirm_id), ...
+    --
+    -- five aggregates inside a multi-column SET whose subquery correlates back
+    -- to the row being updated. Split because confirming a month failed with
+    -- ORA-00979 and this was the other statement that could raise it.
+    --
+    -- Exactly equivalent: the UPDATE only ever touched one row, the one whose
+    -- CONFIRM_ID is v_confirm, so aggregating on v_confirm directly covers the
+    -- same interface rows the correlation selected. It is also legible, which
+    -- the original was not -- the aggregates sat deep enough inside the SET
+    -- that this statement was read past three times while hunting the fault.
+    SELECT COUNT(DISTINCT i.employee_id),
+           NVL(SUM(CASE WHEN i.entry_type IN ('Actual','Default')
+                        THEN i.billable_hours END),0),
+           NVL(SUM(CASE WHEN i.entry_type IN ('Actual','Default')
+                        THEN i.non_billable_hours END),0),
+           NVL(SUM(CASE WHEN i.entry_type IN ('Actual','Default')
+                        THEN i.leave_hours END),0),
+           NVL(SUM(CASE WHEN i.entry_type IN ('Reversal','Adjustment')
+                        THEN i.billable_hours + i.non_billable_hours
+                             + i.leave_hours END),0),
+           COUNT(*)
+      INTO v_ec, v_bh, v_nb, v_lh, v_ah, v_ar
+      FROM xx_o2c_timesheet_accrual_if i
+     WHERE i.confirm_id = v_confirm;
+
+    UPDATE oc_ts_month_confirm
+       SET employee_count     = v_ec,
+           billable_hours     = v_bh,
+           non_billable_hours = v_nb,
+           leave_hours        = v_lh,
+           adjustment_hours   = v_ah,
+           accrual_status     = 'Success',
+           accrual_rows       = v_ar,
+           accrual_pushed_on  = SYSTIMESTAMP,
+           accrual_message    = 'Interface table filled; batch ' || v_batch
+     WHERE confirm_id = v_confirm;
 
     -- THERE IS NO 'CLOSED' STATUS. Confirmed 14-Aug: "there is nothing called
     -- closed -- if the cut-off date is passed it will not be editable, and if
@@ -3625,9 +3685,7 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
                p.main_project_id,
                (SELECT m.project_number FROM oc_main_project_src m
                  WHERE m.project_id = p.main_project_id),
-               (SELECT MAX(al.client_role) FROM oc_time_allocation al
-                 WHERE al.employee_id = w.employee_id
-                   AND al.project_id  = e.project_id),
+               alr.client_role,
                t.task_code, t.task_name, e.entry_date,
                CASE WHEN e.billable_type = 'Billable'     AND e.is_leave = 'N'
                     THEN e.hours ELSE 0 END,
@@ -3652,6 +3710,28 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
           JOIN oc_time_task     t  ON t.task_id     = e.task_id
           JOIN oc_time_worker   wk ON wk.employee_id = w.employee_id
           JOIN oc_time_period   pe ON pe.period_id  = c.period_id
+          -- CLIENT_ROLE comes from a PRE-GROUPED inline view, not a correlated scalar
+          -- subquery. It used to read
+          --
+          --   (SELECT MAX(al.client_role) FROM oc_time_allocation al
+          --     WHERE al.employee_id = w.employee_id AND al.project_id = e.project_id)
+          --
+          -- and a correlated scalar subquery containing an aggregate is a known way to
+          -- reach ORA-00979: the optimiser unnests it into a grouped view, and the
+          -- correlation columns have to survive into that GROUP BY. Confirming a month
+          -- failed on exactly that error.
+          --
+          -- Equivalent, including the null case: no matching allocation gave NULL from
+          -- the scalar subquery and gives NULL from the outer join. The GROUP BY
+          -- guarantees one row per employee+project, which is the only thing the MAX()
+          -- was ever there to ensure -- one person can hold several allocation rows on
+          -- a project and the annexure wants a single role.
+          LEFT JOIN (SELECT employee_id, project_id,
+                            MAX(client_role) AS client_role
+                       FROM oc_time_allocation
+                      GROUP BY employee_id, project_id) alr
+                 ON alr.employee_id = w.employee_id
+                AND alr.project_id  = e.project_id
          WHERE w.period_id  = c.period_id
            AND e.project_id = c.project_id
            AND e.entry_type IN ('Reversal', 'Adjustment')
