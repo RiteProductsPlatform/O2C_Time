@@ -154,19 +154,24 @@ BEGIN
   END;
 
   ----------------------------------------------------------------
-  -- [5a] the payload INSERT, exactly as confirm_month has it.
+  -- [5a] the payload INSERT.
   --
-  -- db/103 did NOT clear this, though it was reported as having done so.
-  -- Its section 4 wrapped the SELECT in SELECT COUNT(*) FROM ( ... ), and
-  -- under a COUNT(*) Oracle is free to eliminate select-list expressions
-  -- nothing reads -- including the correlated MAX(client_role) subquery. So
-  -- that subquery may never have been evaluated by the test that supposedly
-  -- proved the statement good.
+  -- LIFTED VERBATIM out of db/09 by the script that generated this file, and
+  -- that is the point. The previous version of this bisect was hand-copied
+  -- and named three columns that do not exist -- source_entry_id,
+  -- source_adjustment_id, approved_date, where the table has source_ts_id,
+  -- source_adj_id and action_date -- and dropped a third NOT EXISTS
+  -- predicate. It failed to compile, which was lucky: a bisect whose
+  -- statements differ from the ones being bisected proves nothing, and this
+  -- one could just as easily have run and cleared the wrong statement.
   --
-  -- Which matters, because a CORRELATED SCALAR SUBQUERY CONTAINING AN
-  -- AGGREGATE is a known route to ORA-00979: the optimiser unnests it into a
-  -- grouped view, the correlation columns have to survive into that GROUP BY,
-  -- and this is the error when the transformation does not work out.
+  -- db/103 did NOT clear this, though it was reported as having done so: its
+  -- section 4 wrapped the SELECT in SELECT COUNT(*) FROM ( ... ), and under a
+  -- COUNT(*) Oracle may eliminate select-list expressions nothing reads --
+  -- including the correlated MAX(client_role) subquery. A correlated scalar
+  -- subquery containing an aggregate is a known route to ORA-00979: the
+  -- optimiser unnests it into a grouped view and the correlation columns have
+  -- to survive into that GROUP BY.
   --
   -- Handler does not re-raise, so every later section still runs.
   ----------------------------------------------------------------
@@ -175,17 +180,27 @@ BEGIN
       period, period_year, period_month, confirm_id,
       employee_id, employee_name, worker_type,
       project_number, project_name, customer_name, revenue_model,
+      -- THEIR project code as well as Fusion's. Accrual keys on
+      -- OC_PROJECT.PROJECT_NUMBER in the main application; PROJECT_NUMBER here is
+      -- Fusion's ('555'), and handing them only that makes them name-match back to
+      -- their own project list. Copied at confirmation like every other name on
+      -- this table, so a later re-link cannot restate a closed month.
       main_project_id, main_project_number,
-      client_role, wbs_task, wbs_task_name, work_date,
+      client_role,
+      wbs_task, wbs_task_name, work_date,
       billable_hours, non_billable_hours, leave_hours, unbilled_reason,
-      entry_type, flag, approved_date,
-      source_entry_id, source_adjustment_id, batch_id, trace_id)
+      entry_type, flag, action_date,
+      source_ts_id, source_adj_id, batch_id, trace_id)
     SELECT v_pname, v_year, v_month, v_confirm,
            w.employee_id, wk.employee_name, wk.worker_type,
            p.project_number, p.project_name, p.customer_name, p.revenue_model,
            p.main_project_id,
            (SELECT m.project_number FROM oc_main_project_src m
              WHERE m.project_id = p.main_project_id),
+           -- The person's role on this project, copied at confirmation.
+           -- A SCALAR SUBQUERY, not a join: OC_TIME_ALLOCATION can hold more
+           -- than one row per person per project across date ranges, and a
+           -- join would multiply every entry into the interface.
            (SELECT MAX(al.client_role) FROM oc_time_allocation al
              WHERE al.employee_id = w.employee_id
                AND al.project_id  = e.project_id),
@@ -197,13 +212,17 @@ BEGIN
            CASE WHEN e.is_leave = 'Y' THEN e.hours ELSE 0 END,
            e.unbilled_reason,
            e.entry_type,
+           -- The workflow flag that explains this row to the accrual reader.
+           -- Ordered most-specific first: the row's own entry type wins, then the
+           -- week-level flags. Correction and Contractor Unbilled hours were
+           -- dropped on 30-Jul-2026 and no longer appear here.
            CASE
-             WHEN e.entry_type = 'Reversal'    THEN 'Reversal'
-             WHEN e.entry_type = 'Adjustment'  THEN 'Adjustment'
-             WHEN w.advance_closure_flag = 'Y' THEN 'Advance closure'
-             WHEN w.overridden_flag      = 'Y' THEN 'Overridden & approved'
-             WHEN w.defaulted_flag       = 'Y' THEN 'Defaulted'
-             WHEN w.late_submission_flag = 'Y' THEN 'Late submission'
+             WHEN e.entry_type = 'Reversal'              THEN 'Reversal'
+             WHEN e.entry_type = 'Adjustment'            THEN 'Adjustment'
+             WHEN w.advance_closure_flag = 'Y'           THEN 'Advance closure'
+             WHEN w.overridden_flag      = 'Y'           THEN 'Overridden & approved'
+             WHEN w.defaulted_flag       = 'Y'           THEN 'Defaulted'
+             WHEN w.late_submission_flag = 'Y'           THEN 'Late submission'
              ELSE NULL
            END,
            NVL(TRUNC(CAST(w.approved_on AS DATE)), TRUNC(SYSDATE)),
@@ -216,11 +235,32 @@ BEGIN
      WHERE w.period_id  = v_period
        AND e.project_id = v_project
        AND e.hours     <> 0
+       -- Only manager-approved data posts (INT-014) -- AND, ON ADVANCE CLOSURE,
+       -- the days the gate above has just accepted without approval.
+       --
+       -- This read day_status = 'Approved' alone, so the two halves of one
+       -- decision disagreed: the RULE-020 gate accepts a Pending month when the
+       -- confirm type is 'Advance closure', and then the payload refused every
+       -- day in it. The month confirmed, ACCRUAL_ROWS came out 0, and accrual
+       -- received an empty batch -- which reads as "this project had no time in
+       -- July" rather than "nobody approved it".
+       --
+       -- Advance closure exists precisely because the hours ARE real:
+       -- prepopulated, defaulted by a job when a cut-off passed, missing only
+       -- somebody's agreement. Confirming the month while withholding them says
+       -- the opposite.
+       --
+       -- Mirrors the gate exactly so the two cannot drift again: Approved
+       -- always, Pending only on advance closure, Rejected never -- a rejection
+       -- is a manager actively saying no, which is the opposite of the silence
+       -- advance closure overrides.
        AND (e.day_status = 'Approved'
-            OR (v_type = 'Advance closure' AND e.day_status = 'Pending'))
+            OR (v_type = 'Advance closure'
+                AND e.day_status = 'Pending'))
        AND NOT EXISTS (SELECT 1 FROM xx_o2c_timesheet_accrual_if i
-                        WHERE i.confirm_id     = v_confirm
-                          AND i.source_entry_id = e.ts_entry_id);
+                        WHERE i.confirm_id   = v_confirm
+                          AND i.source_ts_id = e.ts_entry_id
+                          AND i.entry_type   = e.entry_type);
     v_rows := SQL%ROWCOUNT;
     DBMS_OUTPUT.PUT_LINE('[5a] INSERT as-is       OK   rows=' || v_rows);
   EXCEPTION WHEN OTHERS THEN
@@ -229,13 +269,13 @@ BEGIN
   END;
 
   ----------------------------------------------------------------
-  -- [5b] THE PROPOSED FIX for [5a]: the same INSERT with the correlated
-  --      aggregate subquery replaced by a LEFT JOIN onto a pre-grouped
-  --      inline view. There is nothing left to unnest, and one row per
-  --      employee+project is guaranteed by the GROUP BY -- which is what the
-  --      MAX() was there to ensure in the first place.
+  -- [5b] THE PROPOSED FIX: the same statement with the correlated aggregate
+  --      subquery replaced by a LEFT JOIN onto a pre-grouped inline view.
+  --      Nothing left to unnest, and one row per employee+project is
+  --      guaranteed by the GROUP BY -- which is what the MAX() was there to
+  --      ensure anyway.
   --
-  --      Skipped when [5a] worked, so the interface is not double-loaded.
+  --      Runs only if [5a] failed, so the interface is not double-loaded.
   ----------------------------------------------------------------
   IF v_failed = 'insert' THEN
     BEGIN
@@ -243,55 +283,91 @@ BEGIN
         period, period_year, period_month, confirm_id,
         employee_id, employee_name, worker_type,
         project_number, project_name, customer_name, revenue_model,
+        -- THEIR project code as well as Fusion's. Accrual keys on
+        -- OC_PROJECT.PROJECT_NUMBER in the main application; PROJECT_NUMBER here is
+        -- Fusion's ('555'), and handing them only that makes them name-match back to
+        -- their own project list. Copied at confirmation like every other name on
+        -- this table, so a later re-link cannot restate a closed month.
         main_project_id, main_project_number,
-        client_role, wbs_task, wbs_task_name, work_date,
+        client_role,
+        wbs_task, wbs_task_name, work_date,
         billable_hours, non_billable_hours, leave_hours, unbilled_reason,
-        entry_type, flag, approved_date,
-        source_entry_id, source_adjustment_id, batch_id, trace_id)
-    SELECT v_pname, v_year, v_month, v_confirm,
-           w.employee_id, wk.employee_name, wk.worker_type,
-           p.project_number, p.project_name, p.customer_name, p.revenue_model,
-           p.main_project_id,
-           (SELECT m.project_number FROM oc_main_project_src m
-             WHERE m.project_id = p.main_project_id),
-           alr.client_role,
-           t.task_code, t.task_name, e.entry_date,
-           CASE WHEN e.billable_type = 'Billable'     AND e.is_leave = 'N'
-                THEN e.hours ELSE 0 END,
-           CASE WHEN e.billable_type = 'Non-billable' AND e.is_leave = 'N'
-                THEN e.hours ELSE 0 END,
-           CASE WHEN e.is_leave = 'Y' THEN e.hours ELSE 0 END,
-           e.unbilled_reason,
-           e.entry_type,
-           CASE
-             WHEN e.entry_type = 'Reversal'    THEN 'Reversal'
-             WHEN e.entry_type = 'Adjustment'  THEN 'Adjustment'
-             WHEN w.advance_closure_flag = 'Y' THEN 'Advance closure'
-             WHEN w.overridden_flag      = 'Y' THEN 'Overridden & approved'
-             WHEN w.defaulted_flag       = 'Y' THEN 'Defaulted'
-             WHEN w.late_submission_flag = 'Y' THEN 'Late submission'
-             ELSE NULL
-           END,
-           NVL(TRUNC(CAST(w.approved_on AS DATE)), TRUNC(SYSDATE)),
-           e.ts_entry_id, e.adjustment_id, v_batch, v_trace
-      FROM oc_ts_week      w
-      JOIN oc_ts_entry     e  ON e.ts_week_id  = w.ts_week_id
-      JOIN oc_time_project p  ON p.project_id  = e.project_id
-      JOIN oc_time_task    t  ON t.task_id     = e.task_id
-      JOIN oc_time_worker  wk ON wk.employee_id = w.employee_id
-      LEFT JOIN (SELECT employee_id, project_id, MAX(client_role) AS client_role
-                   FROM oc_time_allocation
-                  GROUP BY employee_id, project_id) alr
-             ON alr.employee_id = w.employee_id
-            AND alr.project_id  = e.project_id
-     WHERE w.period_id  = v_period
-       AND e.project_id = v_project
-       AND e.hours     <> 0
-       AND (e.day_status = 'Approved'
-            OR (v_type = 'Advance closure' AND e.day_status = 'Pending'))
-       AND NOT EXISTS (SELECT 1 FROM xx_o2c_timesheet_accrual_if i
-                        WHERE i.confirm_id     = v_confirm
-                          AND i.source_entry_id = e.ts_entry_id);
+        entry_type, flag, action_date,
+        source_ts_id, source_adj_id, batch_id, trace_id)
+      SELECT v_pname, v_year, v_month, v_confirm,
+             w.employee_id, wk.employee_name, wk.worker_type,
+             p.project_number, p.project_name, p.customer_name, p.revenue_model,
+             p.main_project_id,
+             (SELECT m.project_number FROM oc_main_project_src m
+               WHERE m.project_id = p.main_project_id),
+             -- The person's role on this project, copied at confirmation.
+             -- A SCALAR SUBQUERY, not a join: OC_TIME_ALLOCATION can hold more
+             -- than one row per person per project across date ranges, and a
+             -- join would multiply every entry into the interface.
+             alr.client_role,
+             t.task_code, t.task_name, e.entry_date,
+             CASE WHEN e.billable_type = 'Billable'     AND e.is_leave = 'N'
+                  THEN e.hours ELSE 0 END,
+             CASE WHEN e.billable_type = 'Non-billable' AND e.is_leave = 'N'
+                  THEN e.hours ELSE 0 END,
+             CASE WHEN e.is_leave = 'Y' THEN e.hours ELSE 0 END,
+             e.unbilled_reason,
+             e.entry_type,
+             -- The workflow flag that explains this row to the accrual reader.
+             -- Ordered most-specific first: the row's own entry type wins, then the
+             -- week-level flags. Correction and Contractor Unbilled hours were
+             -- dropped on 30-Jul-2026 and no longer appear here.
+             CASE
+               WHEN e.entry_type = 'Reversal'              THEN 'Reversal'
+               WHEN e.entry_type = 'Adjustment'            THEN 'Adjustment'
+               WHEN w.advance_closure_flag = 'Y'           THEN 'Advance closure'
+               WHEN w.overridden_flag      = 'Y'           THEN 'Overridden & approved'
+               WHEN w.defaulted_flag       = 'Y'           THEN 'Defaulted'
+               WHEN w.late_submission_flag = 'Y'           THEN 'Late submission'
+               ELSE NULL
+             END,
+             NVL(TRUNC(CAST(w.approved_on AS DATE)), TRUNC(SYSDATE)),
+             e.ts_entry_id, e.adjustment_id, v_batch, v_trace
+        FROM oc_ts_week      w
+        JOIN oc_ts_entry     e  ON e.ts_week_id  = w.ts_week_id
+        JOIN oc_time_project p  ON p.project_id  = e.project_id
+        JOIN oc_time_task    t  ON t.task_id     = e.task_id
+        JOIN oc_time_worker  wk ON wk.employee_id = w.employee_id
+        LEFT JOIN (SELECT employee_id, project_id,
+                          MAX(client_role) AS client_role
+                     FROM oc_time_allocation
+                    GROUP BY employee_id, project_id) alr
+               ON alr.employee_id = w.employee_id
+              AND alr.project_id  = e.project_id
+       WHERE w.period_id  = v_period
+         AND e.project_id = v_project
+         AND e.hours     <> 0
+         -- Only manager-approved data posts (INT-014) -- AND, ON ADVANCE CLOSURE,
+         -- the days the gate above has just accepted without approval.
+         --
+         -- This read day_status = 'Approved' alone, so the two halves of one
+         -- decision disagreed: the RULE-020 gate accepts a Pending month when the
+         -- confirm type is 'Advance closure', and then the payload refused every
+         -- day in it. The month confirmed, ACCRUAL_ROWS came out 0, and accrual
+         -- received an empty batch -- which reads as "this project had no time in
+         -- July" rather than "nobody approved it".
+         --
+         -- Advance closure exists precisely because the hours ARE real:
+         -- prepopulated, defaulted by a job when a cut-off passed, missing only
+         -- somebody's agreement. Confirming the month while withholding them says
+         -- the opposite.
+         --
+         -- Mirrors the gate exactly so the two cannot drift again: Approved
+         -- always, Pending only on advance closure, Rejected never -- a rejection
+         -- is a manager actively saying no, which is the opposite of the silence
+         -- advance closure overrides.
+         AND (e.day_status = 'Approved'
+              OR (v_type = 'Advance closure'
+                  AND e.day_status = 'Pending'))
+         AND NOT EXISTS (SELECT 1 FROM xx_o2c_timesheet_accrual_if i
+                          WHERE i.confirm_id   = v_confirm
+                            AND i.source_ts_id = e.ts_entry_id
+                            AND i.entry_type   = e.entry_type);
       v_rows := SQL%ROWCOUNT;
       DBMS_OUTPUT.PUT_LINE('[5b] INSERT rewritten   OK   rows=' || v_rows
                         || '   <-- this rewrite is the fix');
@@ -305,9 +381,9 @@ BEGIN
   END IF;
 
   ----------------------------------------------------------------
-  -- [6a] the roll-up UPDATE as confirm_month has it: five aggregates inside a
+  -- [6a] the roll-up UPDATE, also lifted verbatim. Five aggregates inside a
   --      multi-column SET whose subquery correlates back to the row being
-  --      updated. Also never tested alone. Does not re-raise either.
+  --      updated. Never tested alone either. Does not re-raise.
   ----------------------------------------------------------------
   BEGIN
     UPDATE oc_ts_month_confirm c
@@ -341,7 +417,7 @@ BEGIN
   ----------------------------------------------------------------
   -- [6b] THE PROPOSED FIX for [6a]: aggregate into locals, then a plain
   --      single-column UPDATE carrying no subquery at all. Cannot raise
-  --      ORA-00979 whatever the cause was, and reads better besides.
+  --      ORA-00979 whatever the cause, and reads better besides.
   ----------------------------------------------------------------
   DECLARE
     v_ec NUMBER; v_bh NUMBER; v_nb NUMBER; v_lh NUMBER; v_ah NUMBER; v_ar NUMBER;
@@ -372,6 +448,7 @@ BEGIN
            accrual_pushed_on  = SYSTIMESTAMP,
            accrual_message    = 'Interface table filled; batch ' || v_batch
      WHERE confirm_id = v_confirm;
+
     DBMS_OUTPUT.PUT_LINE('[6b] UPDATE rewritten   OK   rows=' || SQL%ROWCOUNT
                       || '  employees=' || v_ec || ' billable=' || v_bh
                       || ' nonbill=' || v_nb || ' leave=' || v_lh
@@ -389,10 +466,10 @@ BEGIN
     DBMS_OUTPUT.PUT_LINE('>>> GUILTY: ' || v_failed);
     DBMS_OUTPUT.PUT_LINE('>>> ' || SUBSTR(v_err,1,300));
     IF v_fixed = 'insert' THEN
-      DBMS_OUTPUT.PUT_LINE('>>> AND THE FIX IS CONFIRMED: the LEFT JOIN rewrite in '
-                        || '[5b] loaded the interface. That goes into db/09.');
+      DBMS_OUTPUT.PUT_LINE('>>> FIX CONFIRMED: the LEFT JOIN rewrite in [5b] loaded '
+                        || 'the interface. That is what goes into db/09.');
     ELSE
-      DBMS_OUTPUT.PUT_LINE('>>> Whichever rewrite above reads OK is what goes into db/09.');
+      DBMS_OUTPUT.PUT_LINE('>>> Whichever rewrite above reads OK goes into db/09.');
     END IF;
   END IF;
   ROLLBACK;
