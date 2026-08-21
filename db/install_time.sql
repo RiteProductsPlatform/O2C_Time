@@ -540,6 +540,13 @@ PROMPT [n/m] 59_derive_roles.sql - APP_ROLE from HCM worker type and PPM manager
 -- assert_not_self reads the flag it seeds.
 @@104_a_manager_may_approve_their_own_week.sql
 
+-- 109 re-derives APP_ROLE; 112 adds the sixth flag and the shortfall check.
+-- Both must precede the db/09 recompile below -- 112 defines a procedure
+-- override_approve calls.
+@@109_roles_are_stale_again.sql
+
+@@112_manager_may_leave_a_day_short.sql
+
 -- 101 puts the main application's project code on the accrual interface,
 -- and confirm_month is edited in db/09 to fill it -- which is the other
 -- reason the package is recompiled below.

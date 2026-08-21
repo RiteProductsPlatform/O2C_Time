@@ -2423,6 +2423,21 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
        SET overridden_flag = 'Y', updated_by = p_actor
      WHERE ts_week_id = v_week;
 
+    -- A MANAGER MAY LEAVE THE DAY SHORT, AND THE WEEK SAYS SO.
+    --
+    -- Decided 21-Aug: "let it stand short, flag the week". -20028 requires each
+    -- day to equal its standard but fires at SUBMIT, which a manager correcting
+    -- afterwards never passes through -- so cutting a day from 8 to 6 used to
+    -- be completely silent, the two hours simply absent from the accrual batch
+    -- with nothing recording why.
+    --
+    -- Not refused: the manager is the authority and p_reason is the record.
+    -- Just no longer invisible. Overridden alone could not carry this -- it is
+    -- equally true of moving hours between tasks, which leaves the day adding
+    -- up -- so ShortOfStandard is its own flag, and db/112 clears it again the
+    -- moment the week is put right.
+    oc_time_check_short_week(v_week, p_actor);
+
     log_event(v_week, v_emp, NULL, v_period, 'DAY', v_date,
               'Override', NULL, p_reason, p_actor_emp_id, p_trace_id);
   EXCEPTION WHEN OTHERS THEN
