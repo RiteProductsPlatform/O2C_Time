@@ -35,6 +35,34 @@ define([], () => {
         (r) => String(r && r.rejected_date).substring(0, 10) === want);
     }
 
+    /**
+     * The status chip for one day cell, or '' for no chip.
+     *
+     * ONLY DECIDED DAYS GET ONE. A chip on all seven every week is furniture:
+     * it stops being read, and then the one that matters is not read either.
+     * Pending is the ordinary state and says nothing worth a badge.
+     *
+     * Rejected wins over the day's own status. A week can be sent back with
+     * one day named while that day still reads Pending underneath -- the
+     * rejection is recorded against the WEEK with its dates, and DAY_STATUS
+     * only moves when the manager acts on the day itself. The employee needs
+     * the version that tells them to do something.
+     */
+    dayStatusLabel(rejectedDates, entryDate, dayStatus) {
+      if (this.isRejectedDay(rejectedDates, entryDate)) { return 'Rejected'; }
+      if (dayStatus === 'Rejected') { return 'Rejected'; }
+      if (dayStatus === 'Approved') { return 'Approved'; }
+      return '';
+    }
+
+    /** Chip styling to match. Empty label renders nothing at all. */
+    dayStatusClass(rejectedDates, entryDate, dayStatus) {
+      const l = this.dayStatusLabel(rejectedDates, entryDate, dayStatus);
+      if (l === 'Rejected') { return 'rw-flag rw-flag-reversal rw-day-chip'; }
+      if (l === 'Approved') { return 'rw-flag rw-flag-approved rw-day-chip'; }
+      return 'rw-day-chip';
+    }
+
     /** The cell's class list, so the binding itself carries no logic (S1). */
     dayCellClass(rejectedDates, entryDate) {
       return this.isRejectedDay(rejectedDates, entryDate)

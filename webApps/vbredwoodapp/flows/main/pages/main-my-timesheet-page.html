@@ -433,6 +433,18 @@
                           </span>
                         </oj-bind-if>
                       </span>
+
+                      <!-- THE DAY SAYS ITS OWN STATUS (22-Aug). Colour alone
+                           asked the reader to know that pink means rejected;
+                           the word does not. It renders only on a DECIDED day
+                           -- a chip on all seven every week is furniture, and
+                           furniture stops being read, including the one time
+                           it matters. -->
+                      <oj-bind-if test="[[ $page.functions.dayStatusLabel($variables.rejectedDates, cell.data.entryDate, cell.data.dayStatus) !== '' ]]">
+                        <span :class="[[ $page.functions.dayStatusClass($variables.rejectedDates, cell.data.entryDate, cell.data.dayStatus) ]]">
+                          <oj-bind-text value="[[ $page.functions.dayStatusLabel($variables.rejectedDates, cell.data.entryDate, cell.data.dayStatus) ]]"></oj-bind-text>
+                        </span>
+                      </oj-bind-if>
                     </span>
                   </template>
                 </oj-bind-for-each>

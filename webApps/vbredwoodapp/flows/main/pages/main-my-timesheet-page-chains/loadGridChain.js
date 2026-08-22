@@ -193,6 +193,12 @@ define([
               // Zero standard hours means a weekend or a holiday. Still
               // editable (RULE-012); the tint only marks it as unusual.
               isWorking: (d.standard_hours || 0) > 0,
+              // The manager's verdict on this day, so the cell can say so
+              // itself. V_OC_TS_DAY_SHIFT already carried it and the grid was
+              // throwing it away -- the employee could only learn a day was
+              // rejected by reading the dates out of the banner and counting
+              // columns.
+              dayStatus: d.day_status || 'Pending',
             });
             cur.setUTCDate(cur.getUTCDate() + 1);
           }
@@ -277,6 +283,7 @@ define([
             rowKey: row.rowKey,
             dayIndex: i,
             entryDate: h.entryDate,
+            dayStatus: h.dayStatus,
           }));
 
           return row;

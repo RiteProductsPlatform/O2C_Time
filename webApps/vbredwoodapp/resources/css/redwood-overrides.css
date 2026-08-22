@@ -185,3 +185,45 @@ oj-sp-smart-search-page [class*="content-container"] {
   border-color: #ff8a8a;
   box-shadow: inset 0 0 0 1px rgba(255, 138, 138, 0.4);
 }
+
+/* The day's own status chip, under its hours box (22-Aug-2026).
+
+   Colour alone asked the reader to know that pink means rejected. The word
+   does not, and it is also what a screen reader reaches — the tint is
+   decoration to anything that is not looking at the screen.
+
+   Block and centred so it sits under the input rather than pushing the row
+   wider: a day column is 6.75rem and these cells already hold a box plus two
+   spinner arrows. Smaller than a normal flag chip for the same reason. */
+.rw-day-chip {
+  display: block;
+  margin: 3px auto 0;
+  width: fit-content;
+  font-size: 0.68rem;
+  line-height: 1.4;
+  padding: 0 5px;
+  white-space: nowrap;
+}
+
+/* Approved has no chip class of its own anywhere else in the app — every
+   other approved state is rendered by statusClass() on a status column, and
+   a day cell has no column to put that in. */
+.rw-flag-approved {
+  background: rgba(45, 125, 70, 0.12);
+  color: #1e6b3a;
+  border: 1px solid rgba(45, 125, 70, 0.3);
+  border-radius: 3px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .rw-flag-approved {
+    background: rgba(120, 220, 150, 0.16);
+    color: #8fe0aa;
+    border-color: rgba(120, 220, 150, 0.35);
+  }
+}
+:root[data-theme="dark"] .rw-flag-approved {
+  background: rgba(120, 220, 150, 0.16);
+  color: #8fe0aa;
+  border-color: rgba(120, 220, 150, 0.35);
+}
