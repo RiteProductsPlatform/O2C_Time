@@ -48,13 +48,25 @@ PROMPT ============================================================
 -- Reverting the scope while the old procedure still calls the day raiser would
 -- make the next correction fail with -20031. Cheap to check, and the failure
 -- it prevents lands on a manager mid-approval rather than here.
+--
+-- EXECUTABLE LINES ONLY. The first version of this omitted the LTRIM test and
+-- fired on a correctly-updated procedure, because db/112's new COMMENT
+-- explains that "oc_time_raise_day_flag now REFUSES this code" -- the guard
+-- matched its own explanation.
+--
+-- CLAUDE.md section 5 records this happening twice before with MAX() during
+-- the ORA-00979 hunt, and the lesson written down there is exactly the one
+-- needed here: when an assertion is supposed to prove something is GONE,
+-- assert on the lines that actually run. A guard that cries wolf is worse
+-- than no guard, because the time it fires for real nobody believes it.
 DECLARE
   v_bad NUMBER;
 BEGIN
   SELECT COUNT(*) INTO v_bad
     FROM user_source
    WHERE name = 'OC_TIME_CHECK_SHORT_WEEK'
-     AND UPPER(text) LIKE '%RAISE_DAY_FLAG%';
+     AND UPPER(text) LIKE '%RAISE_DAY_FLAG%'
+     AND LTRIM(text) NOT LIKE '--%';
 
   IF v_bad > 0 THEN
     RAISE_APPLICATION_ERROR(-20033,
