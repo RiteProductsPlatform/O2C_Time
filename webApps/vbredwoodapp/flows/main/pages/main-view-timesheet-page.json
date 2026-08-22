@@ -224,6 +224,17 @@
           }
         }
       ]
+    },
+    "toggleAllPick": {
+      "chains": [
+        {
+          "chain": "toggleAllPickChain",
+          "parameters": {
+            "employeeId": "{{ $current.row.employeeId }}",
+            "picked": "{{ $event.detail.value }}"
+          }
+        }
+      ]
     }
   },
   "imports": {

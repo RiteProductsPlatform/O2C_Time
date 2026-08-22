@@ -25,6 +25,12 @@
         ]
       }
     },
+    "decidedDays": {
+      "type": "number",
+      "defaultValue": 0,
+      "input": "none",
+      "description": "Days the manager has already approved or rejected. Non-zero hides Withdraw: a half-decided week still reads Submitted, and revoking resets every day to Pending, which would erase those decisions."
+    },
     "weekStatus": {
       "type": "string",
       "defaultValue": "Not yet submitted",

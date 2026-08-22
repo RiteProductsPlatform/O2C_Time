@@ -479,21 +479,45 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
   END get_period_for_date;
 
 
-  -- Weeks are clipped to the month (see header note).
+  -- A WEEK IS WHOLE AND BELONGS TO THE MONTH CONTAINING ITS MONDAY (db/116).
+  --
+  -- These used to clip to the month, which is what the header note and
+  -- CLAUDE.md section 6 still describe. Clipping produced a two-day stub
+  -- whenever a month opened mid-week -- 1-Aug-2026 is a Saturday, so August's
+  -- WEEK_INDEX 1 was the weekend 1-2 Aug and the first week anyone worked read
+  -- as Week 2. Reported 21-Aug and reversed on instruction: "if first week is
+  -- coming half in next month let it be, and same way last week in next
+  -- month."
+  --
+  -- The clipping rule existed so a week could never contribute hours to two
+  -- periods. That still holds -- a week belongs to exactly ONE period, its
+  -- Monday's -- so confirm_month still sums a clean set and nothing
+  -- double-counts. What changed is that a period is no longer exactly its
+  -- calendar month: JUL-2026 now carries 1-2 Aug and not 1-3 Jul. Anyone
+  -- reconciling an accrual batch against a calendar month has to know that.
+  --
+  -- Keep these three in step with the standalone oc_time_week_* functions in
+  -- db/116 -- SQL callers use those, PL/SQL uses these, and a disagreement
+  -- would put an entry in one week and its own week row in another.
   FUNCTION week_start_of(p_date IN DATE) RETURN DATE IS
   BEGIN
-    RETURN GREATEST(TRUNC(p_date, 'IW'), TRUNC(p_date, 'MM'));
+    RETURN TRUNC(p_date, 'IW');
   END week_start_of;
 
   FUNCTION week_end_of(p_date IN DATE) RETURN DATE IS
   BEGIN
-    RETURN LEAST(TRUNC(p_date,'IW') + 6, LAST_DAY(TRUNC(p_date,'MM')));
+    RETURN TRUNC(p_date,'IW') + 6;
   END week_end_of;
 
   FUNCTION week_index_of(p_date IN DATE) RETURN NUMBER IS
+    v_mon   DATE := TRUNC(p_date, 'IW');
+    v_first DATE;
   BEGIN
-    -- 1-based index of the clipped week inside its month.
-    RETURN TRUNC((TRUNC(p_date,'IW') - TRUNC(TRUNC(p_date,'MM'),'IW')) / 7) + 1;
+    -- The first Monday on or after the 1st of the Monday's month.
+    -- TRUNC(...,'IW') is Monday under every NLS_TERRITORY; TO_CHAR(d,'D') is
+    -- not, and would shift every index by one depending on who ran it.
+    v_first := TRUNC(TRUNC(v_mon, 'MM') + 6, 'IW');
+    RETURN TRUNC((v_mon - v_first) / 7) + 1;
   END week_index_of;
 
 
@@ -636,7 +660,7 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
       RETURN v_id;
     EXCEPTION WHEN NO_DATA_FOUND THEN NULL; END;
 
-    -- The week belongs to the period that contains its (clipped) start.
+    -- The week belongs to the period containing its Monday (db/116).
     SELECT period_id INTO v_period
       FROM oc_time_period
      WHERE period_year  = EXTRACT(YEAR  FROM v_ws)
@@ -648,7 +672,7 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
       week_start, week_end, week_status, created_by)
     VALUES (
       p_employee_id, v_period,
-      EXTRACT(YEAR FROM v_ws), EXTRACT(MONTH FROM v_ws), week_index_of(p_date),
+      EXTRACT(YEAR FROM v_ws), EXTRACT(MONTH FROM v_ws), week_index_of(v_ws),
       v_ws, v_we, 'Not yet submitted', p_actor)
     RETURNING ts_week_id INTO v_id;
 
@@ -669,6 +693,30 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
   -- ═══════════════════════════════════════════════════════════
   -- Validation
   -- ═══════════════════════════════════════════════════════════
+
+  -- -20029 IS ON HOLD (db/115). The upper half of the same pair as -20028: one
+  -- said a day must EQUAL its standard, this said it must not EXCEED it.
+  -- Holding only the first would mean "less is fine, more is not", and the
+  -- instruction was "it can be more and less also".
+  --
+  -- Checked against the requirement pack 22-Aug: no rule anywhere in the Rules
+  -- sheet caps a day at shift hours. RULE-003 caps it at 24 and notes in its
+  -- own comment that "allocation can exceed 100% but a day cannot exceed 24h"
+  -- -- which anticipates exactly the case this refused. -20003 below is that
+  -- rule and stays.
+  --
+  -- Separate flag from the equality one: a ceiling without an equality
+  -- requirement is a coherent policy somebody may well want back on its own.
+  FUNCTION day_shift_ceiling_enforced RETURN BOOLEAN IS
+    v_val oc_time_config.config_value%TYPE;
+  BEGIN
+    SELECT config_value INTO v_val FROM oc_time_config
+     WHERE config_name = 'ENFORCE_DAY_SHIFT_CEILING' AND scope_key = 'GLOBAL';
+    RETURN UPPER(NVL(v_val,'Y')) = 'Y';
+  EXCEPTION WHEN NO_DATA_FOUND THEN RETURN TRUE;
+  END day_shift_ceiling_enforced;
+
+
 
   -- RULE-003: the DAILY total across every line must not exceed 24h. Allocation
   -- may exceed 100% but a day cannot exceed 24 hours.
@@ -709,7 +757,7 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
     -- v_total INCLUDES LEAVE, deliberately. Half a day of leave against an
     -- 8-hour shift leaves 4 hours workable, not 8 -- counting only worked hours
     -- would let the day reach 12.
-    IF v_std > 0 AND v_total > v_std THEN
+    IF v_std > 0 AND v_total > v_std AND day_shift_ceiling_enforced THEN
       RAISE_APPLICATION_ERROR(-20029,
         'A day cannot hold more than the ' || TRIM(TO_CHAR(v_std,'FM9990.00'))
         || ' hours of this person''s shift. '
@@ -782,6 +830,13 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
     --   * the week must still be the employee's to change; Approved,
     --     Overridden and Closed are checked below and are NOT reopened
     --
+    -- Say so PROPERLY when the window has closed. Without this the keyhole
+    -- below simply does not open and the employee falls through to the
+    -- ordinary gates, which answer "this week is locked" -- true, and no help
+    -- at all: it mentions neither the held pay nor the window that expired.
+    -- db/114 raises -20030 with the date on it.
+    oc_time_assert_hold_window(p_ts_week_id);
+
     -- EXISTS is SQL-only (PLS-00204), hence the SELECT INTO.
     SELECT CASE WHEN EXISTS (
              SELECT 1
@@ -843,7 +898,9 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
   -- Called ONLY from the day procedures. A week-level event goes through the V4
   -- engine, which writes all seven days itself; calling this from there would
   -- recompute a week that already agrees with its days.
-  PROCEDURE sync_week_from_days(p_ts_week_id IN NUMBER, p_actor IN VARCHAR2) IS
+  PROCEDURE sync_week_from_days(p_ts_week_id   IN NUMBER,
+                                p_actor        IN VARCHAR2,
+                                p_actor_emp_id IN VARCHAR2 DEFAULT NULL) IS
     v_days     NUMBER;
     v_pending  NUMBER;
     v_rejected NUMBER;
@@ -876,6 +933,37 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
            updated_by      = p_actor,
            updated_on      = SYSTIMESTAMP
      WHERE ts_week_id = p_ts_week_id;
+
+    -- SALARY HOLD, and it must happen HERE as well as in approve_week. That
+    -- procedure releases the hold in the same transaction, for the reason it
+    -- states: this is somebody's pay, and "it will clear tonight" is not good
+    -- enough. A manager who decides the same week one day at a time has done
+    -- exactly the same thing, so it has to land in the same place -- otherwise
+    -- the release depends on WHICH BUTTON was used, which nobody would guess.
+    -- Nothing happens on a rejection: a refused day is still outstanding.
+    IF v_rejected = 0 THEN
+      UPDATE oc_ts_salary_hold_day
+         SET day_status  = 'Approved',
+             approved_by = p_actor_emp_id,
+             approved_on = SYSTIMESTAMP,
+             updated_by  = p_actor,
+             updated_on  = SYSTIMESTAMP
+       WHERE ts_week_id  = p_ts_week_id
+         AND day_status  = 'Corrected';
+
+      UPDATE oc_ts_salary_hold h
+         SET h.salary_status = 'Released',
+             h.released_by   = p_actor_emp_id,
+             h.released_on   = SYSTIMESTAMP,
+             h.remarks       = 'Released: every held date resubmitted and approved.'
+       WHERE h.salary_status = 'Held'
+         AND EXISTS (SELECT 1 FROM oc_ts_salary_hold_day d
+                      WHERE d.hold_id = h.hold_id
+                        AND d.ts_week_id = p_ts_week_id)
+         AND NOT EXISTS (SELECT 1 FROM oc_ts_salary_hold_day d
+                          WHERE d.hold_id = h.hold_id
+                            AND d.day_status <> 'Approved');
+    END IF;
   END sync_week_from_days;
 
 
@@ -897,6 +985,26 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
   -- NOTE: CHK_OC_TSA_SELF on OC_TS_APPROVAL enforced the same rule and a CHECK
   -- cannot read a table, so db/104 drops it. Setting the flag back to N
   -- restores THIS guard only.
+  -- RULE-012 / -20028 is ON HOLD (db/115). "It can be more and less also"
+  -- (21-Aug), so a day is no longer required to EQUAL its standard.
+  --
+  -- Defaults to TRUE -- the pack's behaviour -- so a schema carrying db/09
+  -- without db/115 keeps refusing. Turning it off is the deliberate act of
+  -- inserting the row, exactly as ALLOW_SELF_APPROVAL works.
+  --
+  -- What replaces it is db/112's ShortOfStandard flag, which marks the week
+  -- rather than blocking the submit. The gate and the flag are not duplicates:
+  -- removing the flag would make a short day silent again.
+  FUNCTION day_standard_enforced RETURN BOOLEAN IS
+    v_val oc_time_config.config_value%TYPE;
+  BEGIN
+    SELECT config_value INTO v_val FROM oc_time_config
+     WHERE config_name = 'ENFORCE_DAY_STANDARD_HOURS' AND scope_key = 'GLOBAL';
+    RETURN UPPER(NVL(v_val,'Y')) = 'Y';
+  EXCEPTION WHEN NO_DATA_FOUND THEN RETURN TRUE;
+  END day_standard_enforced;
+
+
   FUNCTION self_approval_allowed RETURN BOOLEAN IS
     v_val oc_time_config.config_value%TYPE;
   BEGIN
@@ -1652,7 +1760,10 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
        WHERE NVL(d.std,0) > 0
          AND NVL(d.booked,0) <> d.std;
 
-      IF v_offend IS NOT NULL THEN
+      -- ON HOLD by decision, see day_standard_enforced. The shortfall is not
+      -- ignored -- oc_time_check_short_week raises ShortOfStandard on the week
+      -- -- it simply no longer stops the employee submitting.
+      IF v_offend IS NOT NULL AND day_standard_enforced THEN
         RAISE_APPLICATION_ERROR(-20028,
           'Each day must add up to its standard hours before the week can be '
           || 'submitted. ' || v_offend || '.');
@@ -1823,6 +1934,37 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
         'Only a submitted week can be revoked. This week is ' || v_status ||
         '. Ask your manager to send it back.');
     END IF;
+
+    -- A WEEK THE MANAGER HAS STARTED DECIDING IS NO LONGER THE EMPLOYEE'S TO
+    -- PULL BACK, and the week_status test above does not catch it.
+    --
+    -- Day-level approval (restored 21-Aug) leaves a half-decided week reading
+    -- 'Submitted' on purpose -- sync_week_from_days does not move the week
+    -- until no day is Pending. So a manager who approved three of five days
+    -- left a week that still looked revocable, the Withdraw button still
+    -- appeared, and the UPDATE at the foot of this procedure -- which resets
+    -- EVERY day to 'Pending' -- would have silently erased those three
+    -- decisions along with the reject reasons.
+    --
+    -- The two changes were each correct and their combination was not. This is
+    -- the gate the day path needs: the employee may withdraw an untouched
+    -- submission, and nothing else.
+    DECLARE
+      v_decided NUMBER;
+    BEGIN
+      SELECT COUNT(DISTINCT entry_date) INTO v_decided
+        FROM oc_ts_entry
+       WHERE ts_week_id = p_ts_week_id
+         AND entry_type IN ('Actual','Default')
+         AND day_status IN ('Approved','Rejected');
+
+      IF v_decided > 0 THEN
+        RAISE_APPLICATION_ERROR(-20021,
+          'Your manager has already decided ' || v_decided
+          || ' day(s) of this week, so it can no longer be withdrawn. Ask '
+          || 'them to send it back.');
+      END IF;
+    END;
 
     -- assert_editable is deliberately NOT used: it refuses a Submitted week,
     -- which is precisely the state being undone here. The period gate still
@@ -2195,7 +2337,7 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
     END IF;
 
     -- The week follows its days, but only once none are left undecided.
-    sync_week_from_days(p_ts_week_id, p_actor);
+    sync_week_from_days(p_ts_week_id, p_actor, p_actor_emp_id);
 
     log_event(p_ts_week_id, v_emp, NULL, v_period, 'DAY', TRUNC(p_entry_date),
               'Approve', NULL, NULL, p_actor_emp_id, p_trace_id);
@@ -2236,7 +2378,7 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
     END IF;
 
     -- The week follows its days, but only once none are left undecided.
-    sync_week_from_days(p_ts_week_id, p_actor);
+    sync_week_from_days(p_ts_week_id, p_actor, p_actor_emp_id);
 
     log_event(p_ts_week_id, v_emp, NULL, v_period, 'DAY', TRUNC(p_entry_date),
               'Reject', p_reason, p_remarks, p_actor_emp_id, p_trace_id);
@@ -2289,7 +2431,7 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
     END IF;
 
     -- The week follows its days, but only once none are left undecided.
-    sync_week_from_days(p_ts_week_id, p_actor);
+    sync_week_from_days(p_ts_week_id, p_actor, p_actor_emp_id);
 
     log_event(p_ts_week_id, v_emp, NULL, v_period, 'DAY', TRUNC(p_entry_date),
               'Revoke', NULL, NULL, p_actor_emp_id, p_trace_id);

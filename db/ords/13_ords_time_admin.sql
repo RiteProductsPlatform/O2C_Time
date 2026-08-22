@@ -1261,6 +1261,101 @@ BEGIN
 END;
 /
 
+-- ── POST jobs/populate/monthly  (O2C-286, called by OIC) ─────
+--
+-- ONE URL, NO PARAMETERS. The alternative was to let OIC work out which period
+-- to populate and call jobs/populate/:periodId with it -- which puts a date
+-- rule, a month rollover and a lookup into an integration that has no access
+-- to OC_TIME_PERIOD. The month to populate is a question this schema can
+-- answer and OIC cannot, so it answers it.
+--
+-- ALWAYS 200 EXCEPT ON A REAL FAULT. "Skipped" is a normal answer -- it is what
+-- comes back on any day that is not the run day -- and OIC must not treat it as
+-- an error. Only an unexpected exception is a 500. Compare jobs/populate above,
+-- which 400s on anything: correct there, because a caller naming a period id
+-- meant to populate it.
+--
+-- Response, for whoever maps it in the integration:
+--   {"status":"Populated","periodId":42,"jobRunId":517,"read":..,"upserted":..,
+--    "failed":..,"message":"Populated SEP-2026."}
+--   {"status":"Skipped","periodId":null,"jobRunId":null,"message":"Not a run
+--    day..."}
+--   {"status":"PartiallyFailed","periodId":44,"jobRunId":4044,"failed":83,
+--    "message":"Populated SEP-2026. 83 allocation(s) could not be populated..."}
+--
+-- THREE statuses, all of them 200. Branch on status, NOT on jobRunId being
+-- present -- a Populated run with nothing left to change is still Populated,
+-- and upserted 0 on a re-run is the MERGE working, not a failure.
+--
+-- PartiallyFailed is the one to raise a notification on. It means the month
+-- was built but somebody will open an empty timesheet.
+BEGIN
+  ORDS.DEFINE_TEMPLATE(p_module_name => 'oc.time.admin',
+                       p_pattern => 'jobs/populate/monthly');
+  ORDS.DEFINE_HANDLER(
+    p_module_name => 'oc.time.admin', p_pattern => 'jobs/populate/monthly',
+    p_method => 'POST',
+    p_source_type => ORDS.source_type_plsql,
+    p_source => q'~
+      DECLARE
+        v_st   VARCHAR2(30);  v_pd NUMBER; v_jb NUMBER; v_ms VARCHAR2(400);
+        v_read NUMBER := 0;   v_up NUMBER := 0; v_fail NUMBER := 0;
+        v_err  VARCHAR2(400);
+      BEGIN
+        -- :force lets an operator replay a missed month by hand through the
+        -- same path OIC uses, rather than a second one that drifts from it.
+        oc_time_run_monthly_population(
+          p_as_of => NULL,
+          p_force => NVL(:force,'N'),
+          p_actor => NVL(:actor,'OIC_MONTHLY'),
+          o_status => v_st, o_period => v_pd, o_job => v_jb, o_message => v_ms);
+
+        IF v_jb IS NOT NULL THEN
+          SELECT records_read, records_upserted, records_failed
+            INTO v_read, v_up, v_fail
+            FROM oc_time_sync_job WHERE job_run_id = v_jb;
+        END IF;
+
+        -- A RUN THAT DROPPED ROWS IS NOT SIMPLY "Populated". Measured on the
+        -- first live call: 490 read, 83 failed, and this handler answered
+        -- status Populated with a 200 -- so OIC would have recorded a clean
+        -- month while 41 people got no timesheet. That is the same shape as
+        -- the zero-row accrual confirm and the three before it: a step that
+        -- describes its own work too narrowly and then reports success.
+        --
+        -- Still a 200, and deliberately. Every one of those 83 was
+        -- NO_WBS_TASK -- six projects with no billable task loaded -- which
+        -- will recur every month until the master data is fixed. Faulting on
+        -- it would leave the integration permanently red, and a red that never
+        -- changes is read as noise. The STATUS carries it instead, so OIC can
+        -- alert on it without the run counting as failed.
+        IF v_st = 'Populated' AND v_fail > 0 THEN
+          v_st := 'PartiallyFailed';
+          v_ms := v_ms || ' ' || v_fail || ' allocation(s) could not be '
+               || 'populated - see GET sync/failed for job ' || v_jb || '.';
+        END IF;
+
+        :status_code := 200;
+        HTP.P('{"status":"' || v_st
+          || '","periodId":' || NVL(TO_CHAR(v_pd),'null')
+          || ',"jobRunId":'  || NVL(TO_CHAR(v_jb),'null')
+          || ',"read":'      || v_read
+          || ',"upserted":'  || v_up
+          || ',"failed":'    || v_fail
+          || ',"message":"'  || REPLACE(v_ms,'"','\"') || '"}');
+      EXCEPTION WHEN OTHERS THEN
+        -- SQLERRM cannot be referenced inside a SQL statement, so it is
+        -- captured into a local first (CLAUDE.md section 5).
+        v_err := SQLERRM;
+        :status_code := 500;
+        HTP.P('{"status":"Failed","message":"'
+          || REPLACE(v_err,'"','\"') || '"}');
+      END;
+    ~');
+  COMMIT;
+END;
+/
+
 -- ── POST jobs/daily ──────────────────────────────────────────
 BEGIN
   ORDS.DEFINE_TEMPLATE(p_module_name => 'oc.time.admin', p_pattern => 'jobs/daily');

@@ -92,6 +92,36 @@ define([], () => {
       return this.isSelected(selectedKeys, employeeId) ? ['on'] : [];
     }
 
+    // -- Header tick (select all) -----------------------------
+    // Three states collapsed into two, because oj-checkboxset has no
+    // indeterminate: ticked means "every pending row is selected", and a
+    // partial selection reads as unticked. Clicking then selects the rest,
+    // which is what somebody who can see some rows already ticked expects.
+    //
+    // A month with nothing pending returns unticked and toggling it is a
+    // no-op -- there is nothing to select, and showing a permanently ticked
+    // box on a fully approved month would suggest otherwise.
+
+    /** @return {Array<string>} the header checkboxset value. */
+    allPickValue(selectedKeys, employees) {
+      const pending = (employees || [])
+        .filter((e) => e.monthStatus !== 'Approved');
+      if (pending.length === 0) { return []; }
+      const keys = selectedKeys || [];
+      return pending.every((e) => keys.indexOf(e.employeeId) >= 0)
+        ? ['on'] : [];
+    }
+
+    /** Tick selects every pending row; untick clears the whole selection. */
+    toggleAllPick(page, ticked) {
+      if (!page) { return; }
+      if (ticked) {
+        this.selectAllEmployees(page, null);
+      } else {
+        page.selectedKeys = [];
+      }
+    }
+
     /** @return {string} accessible name for the row tick. */
     pickLabel(employeeName) {
       return 'Select ' + employeeName;

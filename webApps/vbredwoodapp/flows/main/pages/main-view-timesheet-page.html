@@ -113,17 +113,9 @@
           <span class="oj-typography-body-sm rw-metric-label">
             <oj-bind-text value="[[ $variables.selectedKeys.length ]]"></oj-bind-text> <oj-bind-text value="[[$application.translations.appBundle.common_selected]]"></oj-bind-text>
           </span>
-          <!-- BRD: "approve all or some employees". Select all skips anyone already
-               approved, so an approve-all never re-sends settled rows. -->
-          <oj-button chroming="borderless"
-                     on-oj-action="[[ $listeners.selectAllPending ]]">
-            <span><oj-bind-text value="[[$application.translations.appBundle.common_select_all_pending]]"></oj-bind-text></span>
-          </oj-button>
-          <oj-button chroming="borderless"
-                     disabled="[[ $variables.selectedKeys.length === 0 ]]"
-                     on-oj-action="[[ $listeners.clearSelection ]]">
-            <span><oj-bind-text value="[[$application.translations.appBundle.common_clear]]"></oj-bind-text></span>
-          </oj-button>
+          <!-- BRD: "approve all or some employees". The select-all is the tick in
+               the table's first column header; skipping Approved rows means an
+               approve-all never re-sends settled work. -->
           <oj-button chroming="outlined"
                      disabled="[[ $variables.busy || $variables.selectedKeys.length === 0 ]]"
                      on-oj-action="[[ $listeners.openReject ]]">
@@ -156,7 +148,7 @@
                     horizontal-grid-visible="enabled"
                     selection-mode='{"row": "none", "column": "none"}'
                     columns='[
-                      {"headerText":"","field":"employeeId","template":"pickCell","width":44,"sortable":"disabled"},
+                      {"headerText":"","field":"employeeId","template":"pickCell","headerTemplate":"pickHeader","width":44,"sortable":"disabled"},
                       {"headerText":"Emp ID","field":"employeeId","width":110},
                       {"headerText":"Name","field":"employeeName","template":"nameCell","weight":3,"minWidth":190},
                       {"headerText":"Role","field":"clientRole","weight":2,"minWidth":170},
@@ -170,6 +162,18 @@
                       {"headerText":"Month status","field":"monthStatus","template":"statusCell","width":175},
                       {"headerText":"","field":"employeeId","template":"actionCell","width":100,"sortable":"disabled"}
                     ]'>
+
+            <!-- Select-all lives HERE now, not in the page header (22-Aug).
+                 Ticking selects every row that is not already Approved;
+                 unticking clears the selection. -->
+            <template slot="pickHeader">
+              <oj-checkboxset class="vtim-row-pick"
+                              aria-label="Select all pending employees"
+                              value="[[ $page.functions.allPickValue($variables.selectedKeys, $variables.employees) ]]"
+                              on-value-changed="[[ $listeners.toggleAllPick ]]">
+                <oj-option value="on"></oj-option>
+              </oj-checkboxset>
+            </template>
 
             <template slot="pickCell" data-oj-as="cell">
               <!-- oj-checkboxset, not a raw HTML checkbox: Redwood standards forbid raw

@@ -151,11 +151,22 @@ define([
         // therefore hid Saturday and Sunday completely, and RULE-012 says they
         // ARE editable: an employee who worked a weekend had nowhere to put it.
         //
-        // week_start/week_end are already clipped to the month, so this still
-        // gives a short week at a month boundary — 31-Aug alone is one column,
-        // not seven. The shift row is merged in by date for the days it has.
+        // week_start/week_end are a WHOLE ISO week as of db/116 — always seven
+        // columns, including at a month boundary, where the last week of a
+        // month now runs into the next one. The shift row is merged in by date
+        // for the days it has.
         const byDate = {};
         dayRows.forEach((d) => { byDate[String(d.entry_date).substring(0, 10)] = d; });
+
+        // HOW MANY DAYS THE MANAGER HAS ALREADY DECIDED. Day-level approval
+        // leaves a half-decided week reading 'Submitted' on purpose, so
+        // weekStatus alone cannot tell the Withdraw button whether anyone has
+        // touched it — and withdrawing would reset every day to Pending and
+        // wipe those decisions. The server refuses it (-20021); this stops the
+        // button being offered in the first place.
+        $page.variables.decidedDays = dayRows.filter(
+          (d) => d.day_status === 'Approved' || d.day_status === 'Rejected'
+        ).length;
 
         const DOW = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
         const headers = [];

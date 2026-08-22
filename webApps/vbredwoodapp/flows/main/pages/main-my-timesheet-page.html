@@ -498,7 +498,7 @@
          not yet anyone else's decision, so the employee can still pull it back
          and correct it. Once a manager has approved, only they can send it
          back — the server enforces that, this just stops offering it. -->
-    <oj-bind-if test="[[ $variables.weekStatus === 'Submitted' ]]">
+    <oj-bind-if test="[[ $variables.weekStatus === 'Submitted' && $variables.decidedDays === 0 ]]">
       <div class="oj-flex oj-sm-align-items-center oj-sm-gap-3x oj-sm-justify-content-flex-end">
         <span class="oj-flex-item oj-typography-body-sm rw-metric-label" role="status">
           <oj-bind-text value="[[$application.translations.appBundle.my_timesheet_submitted_and_waiting_for_your_manager_withd]]"></oj-bind-text>

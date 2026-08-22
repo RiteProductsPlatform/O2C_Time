@@ -57,3 +57,38 @@ oj-sp-smart-search-page [class*="content-container"] {
   overflow-wrap: normal;
   word-break: keep-all;
 }
+
+/* NOTIFICATIONS GO TO THE TOP RIGHT, not the bottom (22-Aug-2026).
+
+   The main O2C application puts them there -- "Period 'November' created as
+   Closed." lands under the header -- and a toast at the bottom of a long
+   scrolling grid is off screen exactly when the grid is long enough to need
+   one. Somebody approving twenty rows never sees the result of row twenty.
+
+   Positioning is done in CSS rather than on an oj-messages `position`
+   attribute because VB owns that element: the notifications these chains fire
+   go through vb/action/fireNotificationEventAction, and the container is part
+   of the runtime shell, not of any page we author. There is nothing in
+   webApps/ to put an attribute on.
+
+   !important throughout, for the same reason -- the runtime sets these inline
+   and a plain declaration loses. That is the one place in this file where it
+   is not laziness.
+
+   Both JET container classes are covered: the version in play depends on the
+   pinned JET build (18.1.0-2510.3 today) and they are cheap to state. */
+.oj-messages-layout-notification,
+.oj-messages-notification,
+.oj-messages-general.oj-messages-notification {
+  top: 64px !important;          /* clear of the 56px shell header */
+  bottom: auto !important;
+  right: 16px !important;
+  left: auto !important;
+}
+
+/* The inner list has its own anchoring in some builds. */
+.oj-messages-layout-notification > .oj-messages-container,
+.oj-messages-notification > .oj-messages-container {
+  top: 0 !important;
+  bottom: auto !important;
+}
