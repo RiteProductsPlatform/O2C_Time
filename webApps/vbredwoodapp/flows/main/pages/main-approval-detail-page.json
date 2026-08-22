@@ -452,7 +452,6 @@
         {
           "chain": "toggleAllDatePickChain",
           "parameters": {
-            "entryDate": "{{ $current.row.entryDate }}",
             "picked": "{{ $event.detail.value }}"
           }
         }

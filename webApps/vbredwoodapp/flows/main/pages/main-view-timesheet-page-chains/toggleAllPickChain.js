@@ -23,11 +23,17 @@ define([
     /**
      * @param {Object} context
      * @param {Object} params
-     * @param {Array}  params.value the checkboxset value: ['on'] or []
+     * @param {Array}  params.picked the checkboxset value: ['on'] or []
+     *
+     * `picked`, NOT `value`. The listener was cloned from the row picker,
+     * which sends `picked` plus a $current.row id -- so this destructured a
+     * name nothing sent and read undefined every time. The header tick went
+     * on, and nothing happened: it is not the checkbox that failed, it is the
+     * wiring behind it, which looks identical in the markup.
      */
-    async run(context, { value }) {
+    async run(context, { picked } = {}) {
       const { $page } = context;
-      const ticked = Array.isArray(value) && value.indexOf('on') >= 0;
+      const ticked = Array.isArray(picked) && picked.indexOf('on') >= 0;
       $page.functions.toggleAllPick($page.variables, ticked);
     }
   }
