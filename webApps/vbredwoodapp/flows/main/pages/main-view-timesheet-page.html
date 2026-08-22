@@ -192,9 +192,17 @@
                 <oj-bind-if test="[[ cell.row.workerType === 'Contractor' ]]">
                   <span class="rw-flag rw-flag-advance"><oj-bind-text value="[[$application.translations.appBundle.view_timesheet_contractor]]"></oj-bind-text></span>
                 </oj-bind-if>
-                <oj-bind-if test="[[ cell.row.overriddenFlag === 'Y' ]]">
-                  <span class="rw-flag rw-flag-overridden" title="A manager changed hours before approving. The originals are in the audit trail."><oj-bind-text value="[[$application.translations.appBundle.view_timesheet_overridden]]"></oj-bind-text></span>
-                </oj-bind-if>
+                <!-- NO Overridden CHIP HERE (22-Aug). It says a manager corrected
+                     a particular day, which is a useful thing to know on the day
+                     grid and noise on a month row: it does not change whether
+                     this person needs approving, which is the only question
+                     this list answers. It stays on the DAY, where the correction
+                     was made, and on the WEEK as "Overridden and approved",
+                     which ACT-016 and SC-10 require.
+
+                     Late and Defaulted below are different -- both are about
+                     whether the month is in order, which is exactly what a
+                     month row is for. -->
                 <oj-bind-if test="[[ cell.row.lateSubmissionFlag === 'Y' ]]">
                   <span class="rw-flag rw-flag-late" title="Submitted after the weekly cut-off. The status is still Submitted; this records the SLA miss."><oj-bind-text value="[[$application.translations.appBundle.view_timesheet_late]]"></oj-bind-text></span>
                 </oj-bind-if>
