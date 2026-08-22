@@ -41,9 +41,21 @@ SET DEFINE ON
 SET LINESIZE 250
 SET PAGESIZE 200
 
--- Change these two, or replace with binds.
-DEFINE emp    = 'RI2249'
-DEFINE period = 'AUG-2026'
+-- Change these two. UNQUOTED here, quoted at every use site below.
+--
+-- Whether DEFINE strips surrounding quotes varies between SQL*Plus, SQLcl and
+-- SQL Developer, so "DEFINE emp = 'RI2249'" plus "= '&emp'" can expand to
+-- = ''RI2249'' on some of them and match nothing -- with no error, just an
+-- empty result, which reads as "this person has no timesheet".
+--
+-- Unquoted value, quoted usage, is the form that means the same thing
+-- everywhere.
+--
+--   emp     OC_TIME_WORKER.EMPLOYEE_ID   RI2249, RI2894, RI2824, RI9001 ...
+--   period  OC_TIME_PERIOD.PERIOD_NAME   JUN-2026, JUL-2026, AUG-2026
+--                                        (upper case, exactly as stored)
+DEFINE emp    = RI2249
+DEFINE period = AUG-2026
 
 COLUMN nm         FORMAT A22
 COLUMN wk         FORMAT A17
