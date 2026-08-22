@@ -72,8 +72,8 @@ SELECT a.change_type,
 
 PROMPT
 PROMPT Import is the loader rather than a person and is deliberately not
-PROMPT flagged. An entry counted twice under one change type is one flag --
-PROMPT the flag says it happened, the audit says how often.
+PROMPT flagged. An entry counted twice under one change type is still one
+PROMPT flag: the flag says it happened, the audit says how often.
 
 PROMPT ============================================================
 PROMPT [2/4] Raise Overridden and Adjusted from the trail
