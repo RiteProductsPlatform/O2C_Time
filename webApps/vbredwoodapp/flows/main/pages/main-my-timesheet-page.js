@@ -11,6 +11,37 @@ define([], () => {
   class PageModule {
 
     /**
+     * Is this day one the manager sent back?
+     *
+     * The banner already lists the rejected dates, but a list above a grid
+     * makes the reader match dates by eye across seven columns -- and the
+     * whole point of rejecting a single day rather than the week is that only
+     * that day needs attention. This puts the mark where the correction gets
+     * typed.
+     *
+     * Takes rejectedDates as an argument rather than reading this.$page: a
+     * page module does not get $page, and this is called from inside two
+     * nested for-each templates where only $variables and $current resolve.
+     *
+     * The feed names the column rejected_date and the cell carries entryDate.
+     * Both are YYYY-MM-DD, but one comes from ORDS and the other from a Date
+     * the browser built, so both are trimmed to ten characters before
+     * comparing rather than trusted to match exactly.
+     */
+    isRejectedDay(rejectedDates, entryDate) {
+      if (!entryDate || !rejectedDates || !rejectedDates.length) { return false; }
+      const want = String(entryDate).substring(0, 10);
+      return rejectedDates.some(
+        (r) => String(r && r.rejected_date).substring(0, 10) === want);
+    }
+
+    /** The cell's class list, so the binding itself carries no logic (S1). */
+    dayCellClass(rejectedDates, entryDate) {
+      return this.isRejectedDay(rejectedDates, entryDate)
+        ? 'rw-grid-day rw-day-rejected' : 'rw-grid-day';
+    }
+
+    /**
      * What a closed month means for this employee.
      *
      * Two different answers, because the difference is actionable: inside the

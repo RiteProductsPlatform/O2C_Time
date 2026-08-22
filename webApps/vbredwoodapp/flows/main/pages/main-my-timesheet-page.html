@@ -385,7 +385,11 @@
                      sight and the cell looked empty while holding 8. -->
                 <oj-bind-for-each data="[[ line.data.cells ]]">
                   <template data-oj-as="cell">
-                    <span class="rw-grid-day" role="cell">
+                    <!-- A rejected day is marked HERE, not only in the banner
+                         above. The banner lists the dates; matching them by eye
+                         against seven columns is the work that rejecting one day
+                         instead of the whole week was meant to avoid. -->
+                    <span :class="[[ $page.functions.dayCellClass($variables.rejectedDates, cell.data.entryDate) ]]" role="cell">
                       <span class="rw-hr">
                         <!-- Tab moves box to box across the week. The arrows are
                              deliberately OUT of the tab order (tabindex="-1"):

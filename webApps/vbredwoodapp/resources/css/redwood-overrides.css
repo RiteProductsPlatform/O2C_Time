@@ -136,3 +136,52 @@ oj-sp-smart-search-page [class*="content-container"] {
   flex: none;
   overflow: visible;
 }
+
+/* A REJECTED DAY IS RED WHERE IT IS TYPED, not only in the banner
+   (22-Aug-2026).
+
+   The rejection banner lists the dates the manager sent back. On a seven
+   column grid that leaves the employee matching "19-Aug-2026" against column
+   headers by eye — which is the work that rejecting ONE DAY instead of the
+   whole week was supposed to save them.
+
+   Tinted cell plus a red input border, not a red input alone: the box is 4.5rem
+   wide and a border on it is easy to miss at a glance across a wide row. The
+   tint is what carries at arm's length; the border is what confirms it once
+   you look.
+
+   Colour is not the only signal — the banner still lists the dates in words,
+   and the workflow panel below spells out the reason. Nobody has to
+   distinguish red from grey to know which day to fix. */
+.rw-day-rejected {
+  background: rgba(199, 62, 62, 0.09);
+  border-radius: 4px;
+}
+
+.rw-day-rejected .rw-hr-box,
+.rw-day-rejected input {
+  border-color: #c73e3e;
+  box-shadow: inset 0 0 0 1px rgba(199, 62, 62, 0.35);
+}
+
+/* Dark theme: the same hue at a weight that reads on a dark ground rather
+   than glowing. Guarded so an explicit light choice still wins. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .rw-day-rejected {
+    background: rgba(255, 120, 120, 0.14);
+  }
+  :root:not([data-theme="light"]) .rw-day-rejected .rw-hr-box,
+  :root:not([data-theme="light"]) .rw-day-rejected input {
+    border-color: #ff8a8a;
+    box-shadow: inset 0 0 0 1px rgba(255, 138, 138, 0.4);
+  }
+}
+
+:root[data-theme="dark"] .rw-day-rejected {
+  background: rgba(255, 120, 120, 0.14);
+}
+:root[data-theme="dark"] .rw-day-rejected .rw-hr-box,
+:root[data-theme="dark"] .rw-day-rejected input {
+  border-color: #ff8a8a;
+  box-shadow: inset 0 0 0 1px rgba(255, 138, 138, 0.4);
+}
