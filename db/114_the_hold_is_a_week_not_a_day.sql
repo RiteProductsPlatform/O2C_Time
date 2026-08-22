@@ -63,50 +63,82 @@ PROMPT ============================================================
 PROMPT [1/4] The window becomes 90 days
 PROMPT ============================================================
 
--- Two places hold the number and they must move together, or the screen and
--- the procedure disagree about whether a hold is still live:
---   OC_TIME_CONFIG        CFG-012, the global default
---   OC_TIME_PERIOD        HOLD_RELEASE_DAYS, the per-period override
-UPDATE oc_time_config
-   SET config_value = '90',
-       description  = 'CFG-012 Days an employee/contractor can resubmit a '
-                   || 'defaulted timesheet. 90 = about three months '
-                   || '(decision 21-Aug-2026, was 60).',
-       updated_by   = 'DECISION_21AUG2026',
-       updated_on   = SYSTIMESTAMP
- WHERE config_name = 'HOLD_RELEASE_DAYS';
+-- THREE places hold this number and they are not the ones this script first
+-- reached for. Recorded because the first version wrote to all three wrong
+-- ones and two of them failed loudly while the third failed silently:
+--
+--   OC_TIME_CONFIG 'hold_release_days'   what the period view actually reads
+--                                        (db/36's CROSS JOIN), lower case
+--   OC_TIME_PERIOD_BASE.HOLD_RELEASE_DAYS  what db/36 SEEDS that row FROM, so
+--                                        it must move too or the next db/36
+--                                        run puts 60 back
+--   OC_TS_SALARY_HOLD.WINDOW_EXPIRES_ON  stamped per hold when it was raised
+--
+-- NOT OC_TIME_PERIOD. It is a view over the MEC synonym and raises ORA-01779.
+--
+-- There is also a stale 'salaryHoldReleaseDays' row from db/10's seed, camel
+-- case, which nothing reads any more. Left alone rather than deleted -- it is
+-- somebody else's to retire -- but do not "fix" the window by editing it.
+DECLARE
+  v_n NUMBER;
+BEGIN
+  MERGE INTO oc_time_config t
+  USING (SELECT 'hold_release_days' AS n FROM dual) s
+     ON (t.config_name = s.n AND t.scope_key = 'GLOBAL')
+   WHEN MATCHED THEN UPDATE SET
+     config_value = '90',
+     description  = 'Days before an unresolved salary hold auto-releases. 90 '
+                 || '= about three months (decision 21-Aug-2026, was 60).'
+   WHEN NOT MATCHED THEN
+     INSERT (config_name, config_type, config_value, scope_key, description)
+     VALUES ('hold_release_days', 'business', '90', 'GLOBAL',
+             'Days before an unresolved salary hold auto-releases. 90 = about '
+          || 'three months (decision 21-Aug-2026, was 60).');
+  v_n := SQL%ROWCOUNT;
+  DBMS_OUTPUT.PUT_LINE('  config rows merged: ' || v_n);
 
-BEGIN DBMS_OUTPUT.PUT_LINE('config rows updated: ' || SQL%ROWCOUNT); END;
+  UPDATE oc_time_period_base
+     SET hold_release_days = 90,
+         updated_by        = 'DECISION_21AUG2026',
+         updated_on        = SYSTIMESTAMP
+   WHERE NVL(hold_release_days, 60) <> 90;
+  DBMS_OUTPUT.PUT_LINE('  base rows updated : ' || SQL%ROWCOUNT);
+  COMMIT;
+END;
 /
 
--- Only periods that have not closed. Reopening the window on a month already
--- settled would revive holds finance has finished with.
-UPDATE oc_time_period
-   SET hold_release_days = 90,
-       updated_by        = 'DECISION_21AUG2026',
-       updated_on        = SYSTIMESTAMP
- WHERE NVL(hold_release_days, 60) <> 90
-   AND status <> 'Closed';
-
-BEGIN DBMS_OUTPUT.PUT_LINE('period rows updated: ' || SQL%ROWCOUNT); END;
+-- Existing HELD holds get the longer window too. WINDOW_EXPIRES_ON was stamped
+-- from the 60 in force when the hold was raised, so without this the change
+-- reaches only holds created from now on -- and the person asking for three
+-- months would still be refused on day 61.
+--
+-- No updated_by/updated_on: this table has neither. CORRECTED_* and RELEASED_*
+-- are the only actor columns, and neither is what this is.
+DECLARE
+  v_n NUMBER;
+BEGIN
+  UPDATE oc_ts_salary_hold h
+     SET h.window_expires_on   = TRUNC(h.held_on) + 90,
+         h.hold_release_days   = 90
+   WHERE h.salary_status = 'Held'
+     AND h.window_expires_on IS NOT NULL
+     AND h.window_expires_on <> TRUNC(h.held_on) + 90;
+  v_n := SQL%ROWCOUNT;
+  COMMIT;
+  DBMS_OUTPUT.PUT_LINE('  live holds re-stamped: ' || v_n);
+END;
 /
-COMMIT;
 
--- Existing HELD holds get the longer window too. A hold stamped under the old
--- 60 keeps a WINDOW_EXPIRES_ON computed from it, so without this the change
--- would apply only to holds created from tomorrow -- and the person asking for
--- three months would still be refused at day 61.
-UPDATE oc_ts_salary_hold h
-   SET h.window_expires_on = TRUNC(h.held_on) + 90,
-       h.updated_by        = 'DECISION_21AUG2026',
-       h.updated_on        = SYSTIMESTAMP
- WHERE h.salary_status = 'Held'
-   AND h.window_expires_on IS NOT NULL
-   AND h.window_expires_on <> TRUNC(h.held_on) + 90;
+COLUMN config_name  FORMAT A26
+COLUMN config_value FORMAT A8
+SELECT config_name, config_value, scope_key
+  FROM oc_time_config
+ WHERE config_name IN ('hold_release_days','salaryHoldReleaseDays')
+ ORDER BY config_name;
 
-BEGIN DBMS_OUTPUT.PUT_LINE('live holds re-stamped: ' || SQL%ROWCOUNT); END;
-/
-COMMIT;
+PROMPT
+PROMPT hold_release_days must read 90. salaryHoldReleaseDays is the stale seed
+PROMPT and nothing reads it -- it is shown so nobody edits the wrong one.
 
 PROMPT ============================================================
 PROMPT [2/4] The employee's view, one row per WEEK

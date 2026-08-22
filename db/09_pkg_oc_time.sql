@@ -2150,6 +2150,30 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
         -- what stops a manager's lateness releasing an employee's salary hold.
         oc_time_fire_event(w.ts_week_id, 'DeliveryCutoff', p_actor);
 
+        -- WHO MISSED IT. The engine moves the APPROVAL axis and deliberately
+        -- leaves the submission axis alone, so after this event the two axes
+        -- already say everything: Defaulted + ManagerDefaulted means both were
+        -- late. DEFAULTED_BY is the revision-2 collapsed column and cannot say
+        -- that, and seven filters in run_salary_stopping read it -- so it has
+        -- to be told (db/121, 22-Aug).
+        --
+        --   was EMPLOYEE  -> BOTH      the weekly job already blamed them and
+        --                              now the manager has missed as well
+        --   was NULL      -> MANAGER   the employee submitted on time; this is
+        --                              the manager's alone
+        --
+        -- BOTH still holds pay, because the employee did miss their cut-off.
+        -- MANAGER does not, and must not: RULE-016 and TIMESHEET_FLOW section
+        -- 01 -- "the delivery cut-off must never hold the employee's salary".
+        -- That is the whole reason this is two values and not one.
+        UPDATE oc_ts_week
+           SET defaulted_by = CASE WHEN defaulted_by = 'EMPLOYEE' THEN 'BOTH'
+                                   WHEN defaulted_by IS NULL      THEN 'MANAGER'
+                                   ELSE defaulted_by END,
+               updated_by   = p_actor,
+               updated_on   = SYSTIMESTAMP
+         WHERE ts_week_id = w.ts_week_id;
+
         log_event(w.ts_week_id, w.employee_id, NULL, p_period_id, 'WEEK', NULL,
                   'Default', NULL,
                   'Delivery cut-off passed with no manager decision',
@@ -3011,16 +3035,16 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
                      -- approval does not stop salary. Four scripts already
                      -- CLAIMED this filter existed; none of them checked.
                      SUM(CASE WHEN w.submission_status = 'Defaulted'
-                               AND w.defaulted_by = 'EMPLOYEE'
+                               AND w.defaulted_by IN ('EMPLOYEE','BOTH')
                               THEN 1 ELSE 0 END)                 AS weeks_def,
                      SUM(CASE WHEN w.submission_status = 'Defaulted'
-                               AND w.defaulted_by = 'EMPLOYEE'
+                               AND w.defaulted_by IN ('EMPLOYEE','BOTH')
                               THEN 0 ELSE 1 END)                 AS weeks_sub,
                      SUM(CASE WHEN w.submission_status = 'Defaulted'
-                               AND w.defaulted_by = 'EMPLOYEE'
+                               AND w.defaulted_by IN ('EMPLOYEE','BOTH')
                               THEN 0 ELSE w.total_hours END)     AS applied_hrs,
                      SUM(CASE WHEN w.submission_status = 'Defaulted'
-                               AND w.defaulted_by = 'EMPLOYEE'
+                               AND w.defaulted_by IN ('EMPLOYEE','BOTH')
                               THEN w.total_hours ELSE 0 END)     AS default_hrs
                 FROM oc_ts_week     w
                 JOIN oc_time_worker k ON k.employee_id = w.employee_id
@@ -3051,7 +3075,7 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
                  AND w.week_end   >= pw.window_from
                GROUP BY w.employee_id
               HAVING SUM(CASE WHEN w.submission_status = 'Defaulted'
-                               AND w.defaulted_by = 'EMPLOYEE'
+                               AND w.defaulted_by IN ('EMPLOYEE','BOTH')
                               THEN 1 ELSE 0 END) > 0)
     LOOP
       v_read := v_read + 1;
@@ -3158,7 +3182,7 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
                   JOIN oc_ts_week  wk ON wk.ts_week_id = en.ts_week_id
                  WHERE wk.employee_id  = e.employee_id
                    AND wk.submission_status = 'Defaulted'
-                   AND wk.defaulted_by      = 'EMPLOYEE'
+                   AND wk.defaulted_by      IN ('EMPLOYEE','BOTH')
                    -- The payroll window, not the calendar month. Strictly
                    -- before the cut-off: a day cannot be late on the day
                    -- itself.
@@ -3212,7 +3236,7 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
                          AND pw2.country   = k2.base_country
                         WHERE w.employee_id  = h.employee_id
                           AND w.submission_status = 'Defaulted'
-                          AND w.defaulted_by      = 'EMPLOYEE'
+                          AND w.defaulted_by      IN ('EMPLOYEE','BOTH')
                           -- The SAME per-country window the hold was opened
                           -- against. Judged against the period-derived locals
                           -- instead, a hold could be released because a week
