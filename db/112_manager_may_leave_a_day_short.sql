@@ -37,8 +37,10 @@
 -- Without the clear, the first correction would mark a week short forever, and
 -- a flag nobody can get rid of is one people learn to ignore.
 --
--- Idempotent. Depends on: time/09, 27, 37, and time/122 for the day-level
--- half (oc_time_raise_day_flag / oc_time_clear_day_flag). RUN db/122 FIRST.
+-- Idempotent. Depends on: time/09, 27, 37.
+-- RUN THIS BEFORE db/124, which reverts the flag's scope -- the other way
+-- round leaves a window where a correction calls a day raiser the
+-- dictionary has already refused.
 -- RUN db/09 AFTER THIS: override_approve is edited there to call the check.
 --==============================================================
 SET DEFINE OFF
@@ -130,37 +132,26 @@ BEGIN
    WHERE NVL(d.std, 0) > 0
      AND NVL(d.booked, 0) < d.std;
 
-  -- PER DAY AS WELL AS PER WEEK (db/122). The week says "this week does not
-  -- add up", which is what a list of weeks needs; the day says which one,
-  -- which is what somebody who has opened it needs. Raised and cleared
-  -- together so a day put right loses its chip while the week keeps the
-  -- history in CLEARED_ON.
+  -- WEEK ONLY. NOT PER DAY -- and it was, for about an hour.
   --
-  -- Every day in the week is visited, not only the short ones: a day that was
-  -- short and is now correct has to have its flag CLEARED, and a loop over
-  -- short days alone would never reach it.
-  FOR d IN (SELECT e.entry_date,
-                   SUM(e.hours)          AS booked,
-                   MAX(e.standard_hours) AS std
-              FROM oc_ts_entry e
-             WHERE e.ts_week_id = p_ts_week_id
-               AND e.entry_type IN ('Actual','Default')
-             GROUP BY e.entry_date)
-  LOOP
-    FOR en IN (SELECT ts_entry_id FROM oc_ts_entry
-                WHERE ts_week_id = p_ts_week_id
-                  AND entry_date = d.entry_date
-                  AND entry_type IN ('Actual','Default'))
-    LOOP
-      IF NVL(d.std,0) > 0 AND NVL(d.booked,0) < d.std THEN
-        oc_time_raise_day_flag(en.ts_entry_id, 'ShortOfStandard', p_actor,
-          TRIM(TO_CHAR(d.booked,'FM9990.00')) || ' of '
-          || TRIM(TO_CHAR(d.std,'FM9990.00')) || ' hours.');
-      ELSE
-        oc_time_clear_day_flag(en.ts_entry_id, 'ShortOfStandard', p_actor);
-      END IF;
-    END LOOP;
-  END LOOP;
+  -- db/122 gave every flag a day-level home and this one followed the others
+  -- there. Seeing it land, the answer was "we don't care if it is short, remove
+  -- Short" (22-Aug): a day the manager deliberately cut from 8 to 7 is not a
+  -- problem with that day, so labelling the row is noise on the screen where
+  -- the correction was just made.
+  --
+  -- The WEEK flag stays, because the original decision was precisely "let it
+  -- stand short, FLAG THE WEEK" (21-Aug). The week is where the shortfall
+  -- matters -- it is what reaches the accrual batch, and the number nobody
+  -- could account for before this flag existed.
+  --
+  -- Overridden still lands on the day, so the row does say a manager changed
+  -- it. What it no longer does is editorialise about whether the new figure
+  -- was big enough.
+  --
+  -- db/124 sets SCOPE_LEVEL back to WEEK, so oc_time_raise_day_flag now
+  -- REFUSES this code with -20031. Re-adding a call here without widening the
+  -- dictionary again will fail loudly rather than silently doing nothing.
 
   IF v_short > 0 THEN
     v_note := v_short || ' day(s) short by '

@@ -232,12 +232,15 @@ define([], () => {
       return String(flagCodes).split(',').filter((c) => c.length > 0);
     }
 
+    // ShortOfStandard is NOT here and must not be re-added: it went back to
+    // week-only on 22-Aug (db/124), because on a day it reads as a fault with
+    // that day when the manager had just decided it. An unknown code still
+    // renders with the plain chip class, so nothing breaks if one appears.
     /** Reuses the week chips' styling so one flag looks the same everywhere. */
     dayFlagClass(code) {
       const known = {
         Overridden: 'rw-flag rw-flag-overridden',
         Adjusted: 'rw-flag rw-flag-adjustment',
-        ShortOfStandard: 'rw-flag rw-flag-defaulted',
       };
       return known[code] || 'rw-flag';
     }
@@ -247,7 +250,6 @@ define([], () => {
       const known = {
         Overridden: 'Overridden',
         Adjusted: 'Adjusted',
-        ShortOfStandard: 'Short',
       };
       return known[code] || code;
     }
