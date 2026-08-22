@@ -32,6 +32,7 @@ define([
         $page.variables.showOverride   = false;
         $page.functions.setDialog('overrideDlg', false);
         $page.variables.overrideReason = '';
+        $page.variables.overrideReasonRaw = '';
       }
     }
   }

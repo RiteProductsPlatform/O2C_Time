@@ -32,6 +32,7 @@ define([
       $page.variables.overrideLabel   = label || '';
       $page.variables.overrideHours   = Number(hours) || 0;
       $page.variables.overrideReason  = '';
+      $page.variables.overrideReasonRaw = '';
       $page.variables.showOverride    = true;
       $page.functions.setDialog('overrideDlg', true);
     }

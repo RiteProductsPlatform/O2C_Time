@@ -2589,6 +2589,19 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
        SET overridden_flag = 'Y', updated_by = p_actor
      WHERE ts_week_id = v_week;
 
+    -- AND ON THE DAY ITSELF (db/122). The line above sets the revision-2
+    -- boolean on the week, which is all that existed before -- so a manager
+    -- who corrected one day of five could not see afterwards which one, and
+    -- neither could an auditor. The reason is on the audit row, but nothing
+    -- carried it onto the grid.
+    --
+    -- The week keeps its boolean. It answers "does this week need a look",
+    -- which is what the week list reads; the day answers "which day", which
+    -- is what the person who opened the week needs. Neither is derivable from
+    -- the other without rebuilding it from the audit trail.
+    oc_time_raise_day_flag(p_ts_entry_id, 'Overridden', p_actor,
+      'Corrected to ' || TRIM(TO_CHAR(p_new_hours,'FM9990.00')) || ' hours.');
+
     -- A MANAGER MAY LEAVE THE DAY SHORT, AND THE WEEK SAYS SO.
     --
     -- Decided 21-Aug: "let it stand short, flag the week". -20028 requires each
@@ -3574,6 +3587,25 @@ CREATE OR REPLACE PACKAGE BODY oc_time_pkg AS
     UPDATE oc_ts_adjustment
        SET status = 'Approved', posted_flag = 'Y', posted_on = SYSTIMESTAMP
      WHERE adjustment_id = p_adjustment_id;
+
+    -- FLAG BOTH HALVES OF THE PAIR (db/122). This is the case that prompted
+    -- day-level flags: a WBS change touches a few days of a week, and a flag
+    -- on the week cannot say which. The offsetting rows already carry the
+    -- original WORK DATE -- accrual reads them per entry and always could --
+    -- but reconstructing "which day moved" from a Reversal and an Adjustment
+    -- that net to zero is work nobody should have to do to read a screen.
+    --
+    -- Both rows, not just the Adjustment: the day lost hours from one project
+    -- and gained them on another, and both facts belong to that day.
+    FOR fr IN (SELECT e.ts_entry_id
+                 FROM oc_ts_entry e
+                WHERE e.ts_week_id = v_week
+                  AND e.entry_date = r.work_date
+                  AND e.entry_type IN ('Reversal','Adjustment'))
+    LOOP
+      oc_time_raise_day_flag(fr.ts_entry_id, 'Adjusted', p_actor,
+        'Retro reallocation, adjustment ' || r.adjustment_id || '.');
+    END LOOP;
 
     INSERT INTO oc_ts_audit (
       ts_week_id, employee_id, entry_date, change_type,

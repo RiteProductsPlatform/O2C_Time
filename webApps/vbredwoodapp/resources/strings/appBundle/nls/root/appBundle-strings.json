@@ -219,11 +219,11 @@
   "@approval_detail_select_all_dates": {
     "description": "Select all dates"
   },
-  "approval_detail_reject_dates": "Reject dates",
+  "approval_detail_reject_dates": "Reject",
   "@approval_detail_reject_dates": {
     "description": "Reject dates"
   },
-  "approval_detail_approve_dates": "Approve dates",
+  "approval_detail_approve_dates": "Approve",
   "approval_detail_undo_decision": "Undo decision",
   "@approval_detail_approve_dates": {
     "description": "Approve dates"

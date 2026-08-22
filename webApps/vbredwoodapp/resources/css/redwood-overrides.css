@@ -92,3 +92,47 @@ oj-sp-smart-search-page [class*="content-container"] {
   top: 0 !important;
   bottom: auto !important;
 }
+
+/* A VALUE TOO WIDE FOR ITS COLUMN CLIPS VISIBLY AND READS ON HOVER
+   (22-Aug-2026).
+
+   Reported on Approval Detail: "the column width is not proportionate to the
+   data and its not visible properly, and if some values in the table is long
+   if we hover over it, it needs to be visible."
+
+   Two halves, and only together do they work. The cell templates carry a
+   :title so the full value is reachable; this makes the shortfall VISIBLE, so
+   somebody knows there is something to hover over. Without the ellipsis a
+   clipped value just looks like a shorter value, and nobody hovers over text
+   that appears complete.
+
+   Widths were rebalanced at the same time, but that is the weakest of the
+   three fixes: the next long project name outgrows whatever number is chosen
+   today, whereas the title keeps working.
+
+   Not applied to the header -- .oj-table-column-header-text above already
+   sets nowrap there, for the different reason that a wrapped header is a
+   layout bug rather than a truncated value. */
+.oj-table-data-cell {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The span inside a cell template needs it too: the ellipsis belongs to the
+   box that actually overflows, and with a template that box is the span, not
+   the td. */
+.oj-table-data-cell > span {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}
+
+/* Flag chips must not be squeezed by the ellipsis on their neighbour -- they
+   are short by definition and losing one changes what the row means. */
+.oj-table-data-cell .rw-flag {
+  flex: none;
+  overflow: visible;
+}

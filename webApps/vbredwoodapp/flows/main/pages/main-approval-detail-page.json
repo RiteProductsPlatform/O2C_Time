@@ -147,6 +147,12 @@
       "defaultValue": false,
       "input": "none",
       "description": "Change history is collapsed until asked for: it runs to a screenful on a corrected week and sits below the approve/reject controls."
+    },
+    "overrideReasonRaw": {
+      "type": "string",
+      "defaultValue": "",
+      "input": "none",
+      "description": "What the manager has typed SO FAR. oj-text-area commits `value` on blur, so the Apply correction button cannot gate on overrideReason -- it is empty until the caret leaves the field, and the form looks complete beside a disabled button. rawValue updates per keystroke and is used for enablement only; overrideReason is still what gets sent."
     }
   },
   "types": {
@@ -438,6 +444,17 @@
       "chains": [
         {
           "chain": "toggleHistoryChain"
+        }
+      ]
+    },
+    "toggleAllDatePick": {
+      "chains": [
+        {
+          "chain": "toggleAllDatePickChain",
+          "parameters": {
+            "entryDate": "{{ $current.row.entryDate }}",
+            "picked": "{{ $event.detail.value }}"
+          }
         }
       ]
     }

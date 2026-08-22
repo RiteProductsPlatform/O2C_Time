@@ -282,15 +282,6 @@
               <span class="oj-ux-ico-download" aria-hidden="true"></span>
               <span><oj-bind-text value="[[$application.translations.appBundle.approval_detail_download_csv]]"></oj-bind-text></span>
             </a>
-            <oj-button chroming="borderless"
-                       on-oj-action="[[ $listeners.selectAllDates ]]">
-              <span><oj-bind-text value="[[$application.translations.appBundle.approval_detail_select_all_dates]]"></oj-bind-text></span>
-            </oj-button>
-            <oj-button chroming="borderless"
-                       disabled="[[ $variables.selectedDates.length === 0 ]]"
-                       on-oj-action="[[ $listeners.clearDateSelection ]]">
-              <span><oj-bind-text value="[[$application.translations.appBundle.common_clear]]"></oj-bind-text></span>
-            </oj-button>
             <!-- Undo a decision taken by mistake. Approve and Reject only ever
                  write their own status, so without this the two buttons that
                  produce a mis-click cannot correct it. Enabled only when
@@ -351,17 +342,30 @@
                       horizontal-grid-visible="enabled"
                       selection-mode='{"row": "none", "column": "none"}'
                       columns='[
-                        {"headerText":"","field":"tsEntryId","template":"pickCell","width":44,"sortable":"disabled"},
-                        {"headerText":"Date","field":"entryDate","template":"dateCell","width":140},
-                        {"headerText":"Project","field":"projectName","weight":2,"minWidth":150},
-                        {"headerText":"Task","field":"taskName","template":"taskCell","weight":2,"minWidth":150},
-                        {"headerText":"Hours","field":"hours","template":"hoursCell","width":95},
-                        {"headerText":"Type","field":"billableType","template":"typeCell","width":130},
-                        {"headerText":"Shift","field":"shiftCode","width":95},
-                        {"headerText":"Manager status","field":"dayStatus","template":"dayStatusCell","width":180},
-                        {"headerText":"Source","field":"source","width":105},
-                        {"headerText":"","field":"tsEntryId","template":"actionCell","width":110,"sortable":"disabled"}
+                        {"headerText":"","field":"tsEntryId","template":"pickCell","headerTemplate":"pickDateHeader","width":44,"sortable":"disabled"},
+                        {"headerText":"Date","field":"entryDate","template":"dateCell","width":118},
+                        {"headerText":"Project","field":"projectName","template":"projectCell","weight":3,"minWidth":170},
+                        {"headerText":"Task","field":"taskName","template":"taskCell","weight":3,"minWidth":170},
+                        {"headerText":"Hours","field":"hours","template":"hoursCell","width":84},
+                        {"headerText":"Type","field":"billableType","template":"typeCell","width":112},
+                        {"headerText":"Shift","field":"shiftCode","template":"shiftCell","width":84},
+                        {"headerText":"Status","field":"dayStatus","template":"dayStatusCell","width":150},
+                        {"headerText":"Flags","field":"flagCodes","template":"dayFlagCell","width":150,"sortable":"disabled"},
+                        {"headerText":"Source","field":"source","template":"sourceCell","width":110},
+                        {"headerText":"","field":"tsEntryId","template":"actionCell","width":96,"sortable":"disabled"}
                       ]'>
+
+              <!-- Select-all lives HERE now, not in the toolbar (22-Aug). Same
+                   rule as the rows: it counts DATES, not lines, so a day with
+                   two project lines is one tick. -->
+              <template slot="pickDateHeader">
+                <oj-checkboxset class="apdt-row-pick"
+                                aria-label="Select all dates"
+                                value="[[ $page.functions.allDatePickValue($variables.selectedDates, $variables.days) ]]"
+                                on-value-changed="[[ $listeners.toggleAllDatePick ]]">
+                  <oj-option value="on"></oj-option>
+                </oj-checkboxset>
+              </template>
 
               <template slot="pickCell" data-oj-as="cell">
                 <!-- Ticking any line ticks the whole DATE — approval is by day. -->
@@ -382,8 +386,50 @@
                 </span>
               </template>
 
+              <!-- TITLE ON EVERY TEXT CELL (22-Aug). A column can always be too
+                   narrow for the value somebody puts in it -- a long project
+                   name, a task code nobody anticipated -- and the fix that
+                   survives the next piece of data is being able to read it on
+                   hover, not another width guess. The ellipsis rule in
+                   redwood-overrides.css is what shows there is more to see. -->
+              <template slot="projectCell" data-oj-as="cell">
+                <span :title="[[ cell.row.projectName ]]">
+                  <oj-bind-text value="[[ cell.row.projectName ]]"></oj-bind-text>
+                </span>
+              </template>
+
+              <template slot="shiftCell" data-oj-as="cell">
+                <span :title="[[ cell.row.shiftCode ]]">
+                  <oj-bind-text value="[[ cell.row.shiftCode ]]"></oj-bind-text>
+                </span>
+              </template>
+
+              <!-- DAY FLAGS (db/122). The week banner says a week needs a look;
+                   this says which day, which is the question somebody who has
+                   already opened the week is asking. A WBS change touching two
+                   days of five is the case that made it necessary.
+
+                   Rendered from flagCodes on the day feed rather than a second
+                   call: the CSV export reads the same view, so the file and
+                   the screen cannot disagree about what was flagged. -->
+              <template slot="dayFlagCell" data-oj-as="cell">
+                <span :title="[[ cell.row.flagLabels ]]">
+                  <oj-bind-for-each data="[[ $page.functions.dayFlagList(cell.row.flagCodes) ]]">
+                    <template>
+                      <span :class="[[ $page.functions.dayFlagClass($current.data) ]]"><oj-bind-text value="[[ $page.functions.dayFlagLabel($current.data) ]]"></oj-bind-text></span>
+                    </template>
+                  </oj-bind-for-each>
+                </span>
+              </template>
+
+              <template slot="sourceCell" data-oj-as="cell">
+                <span :title="[[ cell.row.source ]]">
+                  <oj-bind-text value="[[ cell.row.source ]]"></oj-bind-text>
+                </span>
+              </template>
+
               <template slot="taskCell" data-oj-as="cell">
-                <span>
+                <span :title="[[ cell.row.taskName ]]">
                   <oj-bind-text value="[[ cell.row.taskName ]]"></oj-bind-text>
                   <oj-bind-if test="[[ cell.row.isLeave === 'Y' ]]">
                     <span class="rw-flag rw-flag-advance"
@@ -613,8 +659,13 @@
                          value="{{ $variables.overrideHours }}"
                          min="0" max="24" step="0.25">
         </oj-input-number>
+        <!-- TWO BINDINGS, EACH DOING ITS OWN JOB. `value` commits on blur and
+             is what the chain sends; `raw-value` updates per keystroke and is
+             what the button reads. Gating on `value` alone left the button
+             disabled while the reason sat filled in on screen (22-Aug). -->
         <oj-text-area label-hint="[[$application.translations.appBundle.approval_detail_reason_for_the_correction]]" rows="2" required="true"
                       value="{{ $variables.overrideReason }}"
+                      raw-value="{{ $variables.overrideReasonRaw }}"
                       placeholder="[[$application.translations.appBundle.approval_detail_kept_in_the_audit_trail]]">
         </oj-text-area>
       </oj-form-layout>
@@ -624,7 +675,7 @@
         <span><oj-bind-text value="[[$application.translations.appBundle.common_cancel]]"></oj-bind-text></span>
       </oj-button>
       <oj-button chroming="callToAction"
-                 disabled="[[ $variables.busy || !$variables.overrideReason ]]"
+                 disabled="[[ $variables.busy || !$variables.overrideReasonRaw ]]"
                  on-oj-action="[[ $listeners.doOverride ]]">
         <span><oj-bind-text value="[[$application.translations.appBundle.approval_detail_apply_correction]]"></oj-bind-text></span>
       </oj-button>

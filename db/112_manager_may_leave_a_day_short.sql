@@ -37,7 +37,8 @@
 -- Without the clear, the first correction would mark a week short forever, and
 -- a flag nobody can get rid of is one people learn to ignore.
 --
--- Idempotent. Depends on: time/09, 27, 37.
+-- Idempotent. Depends on: time/09, 27, 37, and time/122 for the day-level
+-- half (oc_time_raise_day_flag / oc_time_clear_day_flag). RUN db/122 FIRST.
 -- RUN db/09 AFTER THIS: override_approve is edited there to call the check.
 --==============================================================
 SET DEFINE OFF
@@ -128,6 +129,38 @@ BEGIN
            GROUP BY e.entry_date) d
    WHERE NVL(d.std, 0) > 0
      AND NVL(d.booked, 0) < d.std;
+
+  -- PER DAY AS WELL AS PER WEEK (db/122). The week says "this week does not
+  -- add up", which is what a list of weeks needs; the day says which one,
+  -- which is what somebody who has opened it needs. Raised and cleared
+  -- together so a day put right loses its chip while the week keeps the
+  -- history in CLEARED_ON.
+  --
+  -- Every day in the week is visited, not only the short ones: a day that was
+  -- short and is now correct has to have its flag CLEARED, and a loop over
+  -- short days alone would never reach it.
+  FOR d IN (SELECT e.entry_date,
+                   SUM(e.hours)          AS booked,
+                   MAX(e.standard_hours) AS std
+              FROM oc_ts_entry e
+             WHERE e.ts_week_id = p_ts_week_id
+               AND e.entry_type IN ('Actual','Default')
+             GROUP BY e.entry_date)
+  LOOP
+    FOR en IN (SELECT ts_entry_id FROM oc_ts_entry
+                WHERE ts_week_id = p_ts_week_id
+                  AND entry_date = d.entry_date
+                  AND entry_type IN ('Actual','Default'))
+    LOOP
+      IF NVL(d.std,0) > 0 AND NVL(d.booked,0) < d.std THEN
+        oc_time_raise_day_flag(en.ts_entry_id, 'ShortOfStandard', p_actor,
+          TRIM(TO_CHAR(d.booked,'FM9990.00')) || ' of '
+          || TRIM(TO_CHAR(d.std,'FM9990.00')) || ' hours.');
+      ELSE
+        oc_time_clear_day_flag(en.ts_entry_id, 'ShortOfStandard', p_actor);
+      END IF;
+    END LOOP;
+  END LOOP;
 
   IF v_short > 0 THEN
     v_note := v_short || ' day(s) short by '

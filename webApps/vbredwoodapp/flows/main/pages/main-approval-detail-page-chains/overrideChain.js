@@ -53,6 +53,17 @@ define([
         return;
       }
 
+      // BLUR HAS USUALLY HAPPENED BY NOW -- clicking the button moves focus
+      // out of the text area, so `value` is committed before this runs. Not
+      // always though: Enter on some keyboards, or an automated click, can
+      // reach here first. rawValue is what the button was enabled on, so it
+      // is the honest fallback rather than refusing a reason the manager can
+      // plainly see they typed.
+      if (!$page.variables.overrideReason
+          && $page.variables.overrideReasonRaw) {
+        $page.variables.overrideReason = $page.variables.overrideReasonRaw;
+      }
+
       if (!$page.variables.overrideReason) {
         await Actions.fireNotificationEvent(context, {
           summary: 'Reason required',
@@ -83,7 +94,8 @@ define([
         if (resp.ok) {
           $page.variables.showOverride  = false;
           $page.functions.setDialog('overrideDlg', false);
-          $page.variables.overrideReason = '';
+          $page.variables.overrideReason    = '';
+          $page.variables.overrideReasonRaw = '';
           $page.variables.overrideCount = ($page.variables.overrideCount || 0) + 1;
 
           await Actions.fireNotificationEvent(context, {

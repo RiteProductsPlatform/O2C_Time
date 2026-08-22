@@ -210,6 +210,69 @@ define([], () => {
       if (page) { page.selectedDates = []; }
     }
 
+    // -- Header tick (select all dates) ------------------------
+    // The grid holds one row per LINE and approval is by DATE, so the header
+    // has to reason about distinct dates rather than rows -- a day with two
+    // project lines is one tick, not two. Same rule the row template already
+    // follows.
+    //
+    // No indeterminate state: oj-checkboxset has none, so a partial selection
+    // reads as unticked and clicking selects the rest, which is what somebody
+    // looking at a few ticked rows expects.
+
+    // -- Day flags ---------------------------------------------
+    // flagCodes arrives as a comma-separated string from
+    // V_OC_TS_DAY_FLAG_ROLL rather than an array, because it is folded into
+    // the day feed by LISTAGG -- one call for the grid instead of two. The
+    // split happens here and not in a binding (S1).
+
+    /** @return {Array<string>} flag codes on this row, or an empty list. */
+    dayFlagList(flagCodes) {
+      if (!flagCodes) { return []; }
+      return String(flagCodes).split(',').filter((c) => c.length > 0);
+    }
+
+    /** Reuses the week chips' styling so one flag looks the same everywhere. */
+    dayFlagClass(code) {
+      const known = {
+        Overridden: 'rw-flag rw-flag-overridden',
+        Adjusted: 'rw-flag rw-flag-adjustment',
+        ShortOfStandard: 'rw-flag rw-flag-defaulted',
+      };
+      return known[code] || 'rw-flag';
+    }
+
+    /** Short label. The full text is on the row title. */
+    dayFlagLabel(code) {
+      const known = {
+        Overridden: 'Overridden',
+        Adjusted: 'Adjusted',
+        ShortOfStandard: 'Short',
+      };
+      return known[code] || code;
+    }
+
+    /** @return {Array<string>} the header checkboxset value. */
+    allDatePickValue(selectedDates, days) {
+      const dates = [];
+      (days || []).forEach((d) => {
+        if (dates.indexOf(d.entryDate) === -1) { dates.push(d.entryDate); }
+      });
+      if (dates.length === 0) { return []; }
+      const sel = selectedDates || [];
+      return dates.every((d) => sel.indexOf(d) >= 0) ? ['on'] : [];
+    }
+
+    /** Tick selects every date in the grid; untick clears the selection. */
+    toggleAllDatePick(page, ticked) {
+      if (!page) { return; }
+      if (ticked) {
+        this.selectAllDates(page);
+      } else {
+        page.selectedDates = [];
+      }
+    }
+
     /**
      * A settled week offers no approve/reject action.
      *
