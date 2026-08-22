@@ -410,8 +410,9 @@
                    days of five is the case that made it necessary.
 
                    Rendered from flagCodes on the day feed rather than a second
-                   call: the CSV export reads the same view, so the file and
-                   the screen cannot disagree about what was flagged. -->
+                   call. Note the CSV export does NOT carry them: its column
+                   list is a contract, so widening it is a separate decision
+                   (db/122). The screen shows more than the download here. -->
               <template slot="dayFlagCell" data-oj-as="cell">
                 <span :title="[[ cell.row.flagLabels ]]">
                   <oj-bind-for-each data="[[ $page.functions.dayFlagList(cell.row.flagCodes) ]]">

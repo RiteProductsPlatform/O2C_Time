@@ -75,13 +75,17 @@ PROMPT [2/5] The scopes each flag is allowed at
 PROMPT ============================================================
 
 -- A flag is only raised at a level its dictionary row permits, so this is the
--- switch that turns the day half on. Three move to BOTH; the rest stay WEEK
--- because they are genuinely about the week and nothing else:
+-- switch that turns the day half on.
 --
---   Defaulted / LateSubmission  a submission is a WEEK act -- there is no
---                               day-level submit, so there is no day that
---                               was late on its own
---   ManagerDefaulted            likewise: the manager missed a WEEK
+-- Measured on the pod: only ONE row actually needed widening -- db/27 seeded
+-- most of the dictionary as BOTH already, which is more evidence that the
+-- day half was intended from the start and simply never wired up.
+--
+-- Widening the dictionary does NOT make a flag appear at day level. Nothing is
+-- raised until something calls oc_time_raise_day_flag, and only three callers
+-- do. Defaulted, LateSubmission and ManagerDefaulted stay week-only in
+-- PRACTICE for a reason worth keeping: submission is a WEEK act -- there is no
+-- day-level submit -- so no single day was late or defaulted on its own.
 UPDATE oc_ts_flag_def
    SET scope_level = 'BOTH'
  WHERE flag_code IN ('Overridden','Adjusted','ShortOfStandard')
@@ -215,17 +219,44 @@ PROMPT [5/5] Put the flags on the day feed
 PROMPT ============================================================
 
 -- V_OC_TS_DAY_DETAIL is what GET days/:tsWeekId returns and what the Approval
--- Detail grid binds to. Adding the columns here rather than in the handler
--- keeps the CSV export (ACT-018) in step with the screen for free -- they read
--- the same view, and a screen that shows a flag the export omits is a
--- reconciliation argument waiting to happen.
+-- Detail grid binds to.
+--
+-- THE COLUMNS DO NOT REACH ANYTHING BY THEMSELVES. Both day handlers and the
+-- CSV export enumerate their select lists rather than using *, so a column
+-- added here is invisible until each one names it. Measured: the view had the
+-- columns and the feed returned none of them.
+--
+-- ords/12 names them in the two GET handlers. THE CSV EXPORT (ACT-018) IS
+-- DELIBERATELY LEFT ALONE -- its column list is a contract somebody may be
+-- parsing, and widening it is a decision rather than a consequence. So the
+-- screen shows flags the download does not, and that is a known difference,
+-- not an oversight.
 --
 -- LEFT JOIN, so an unflagged day is a null and not a missing row.
+--
+-- USER_VIEWS.TEXT IS A **LONG**, NOT A CLOB. Declaring the local as CLOB
+-- raises ORA-00932 "expected CLOB got LONG", which reads like the two operands
+-- disagree and invites a cast. There is no cast: PL/SQL will assign a LONG to
+-- a VARCHAR2 implicitly and to nothing else. CLAUDE.md section 5 records this
+-- for USER_IND_EXPRESSIONS.COLUMN_EXPRESSION and it is the same rule here --
+-- written down, and walked into anyway.
+--
+-- 32760 is the implicit-assignment ceiling. A view source past it would
+-- truncate, and a truncated source is a syntax error on the CREATE rather than
+-- a silently wrong view -- loud, which is what you want. The explicit check
+-- below makes it loud EARLIER and says why.
 DECLARE
-  v_src CLOB;
+  v_src VARCHAR2(32760);
 BEGIN
   SELECT text INTO v_src
     FROM user_views WHERE view_name = 'V_OC_TS_DAY_DETAIL';
+
+  IF LENGTH(v_src) > 32000 THEN
+    RAISE_APPLICATION_ERROR(-20032,
+      'V_OC_TS_DAY_DETAIL is ' || LENGTH(v_src) || ' characters, too close to '
+      || 'the 32760 LONG-to-VARCHAR2 ceiling to wrap safely. Add the flag '
+      || 'columns to db/97 directly instead.');
+  END IF;
 
   IF INSTR(UPPER(v_src), 'FLAG_CODES') > 0 THEN
     DBMS_OUTPUT.PUT_LINE('  Day feed already carries the flags - skipped.');

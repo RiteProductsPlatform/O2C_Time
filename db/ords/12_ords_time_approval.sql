@@ -245,7 +245,8 @@ BEGIN
              project_id, project_name, task_id, task_code, task_name,
              hours, entry_type, billable_type, unbilled_reason,
              shift_code, standard_hours, is_leave, absence_type,
-             day_status, reject_reason, reject_remarks, source
+             day_status, reject_reason, reject_remarks, source,
+             flag_count, flag_codes, flag_labels
         FROM v_oc_ts_day_detail
        WHERE ts_week_id = :tsWeekId
        ORDER BY entry_date, project_name, task_code
@@ -280,7 +281,8 @@ BEGIN
              project_id, project_name, task_id, task_code, task_name,
              hours, entry_type, billable_type, unbilled_reason,
              shift_code, standard_hours, is_leave, absence_type,
-             day_status, reject_reason, reject_remarks, source
+             day_status, reject_reason, reject_remarks, source,
+             flag_count, flag_codes, flag_labels
         FROM v_oc_ts_day_detail
        WHERE ts_week_id = :tsWeekId
          AND project_id = :projectId
