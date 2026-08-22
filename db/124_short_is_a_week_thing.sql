@@ -109,8 +109,8 @@ SELECT flag_code, label, scope_level, sort_order
  ORDER BY sort_order;
 
 PROMPT
-PROMPT ShortOfStandard must read WEEK. Overridden and Adjusted stay BOTH --
-PROMPT those two genuinely belong to a day, which is the case that started this.
+PROMPT ShortOfStandard must read WEEK. Overridden and Adjusted stay BOTH,
+PROMPT because those two genuinely belong to a day - the case that started this.
 
 PROMPT ============================================================
 PROMPT [4/4] What the day rows carry now
