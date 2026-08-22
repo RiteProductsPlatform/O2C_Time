@@ -195,7 +195,11 @@ oj-sp-smart-search-page [class*="content-container"] {
    Block and centred so it sits under the input rather than pushing the row
    wider: a day column is 6.75rem and these cells already hold a box plus two
    spinner arrows. Smaller than a normal flag chip for the same reason. */
-.rw-day-chip {
+/* .rw-flag also sets display, at the same specificity, from the inline
+   <style> in shell-page.html -- so which one wins depends on document order
+   rather than on intent. Doubling the class makes it deterministic without
+   reaching for !important. */
+.rw-day-chip.rw-day-chip {
   display: block;
   margin: 3px auto 0;
   width: fit-content;
