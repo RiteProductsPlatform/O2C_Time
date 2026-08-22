@@ -42,7 +42,7 @@ define([
           return;
         }
 
-        const rows = ((resp.body && resp.body.items) || []).map((l) => ({
+        const rows = (($application.functions.apiBody(resp).items) || []).map((l) => ({
           llcId: l.llc_id,
           absentEmployeeId: l.absent_employee_id,
           absentEmployeeName: l.absent_employee_name,

@@ -65,7 +65,7 @@ define([
           return;
         }
 
-        const rows = ((resp.body && resp.body.items) || []).map((w) => ({
+        const rows = (($application.functions.apiBody(resp).items) || []).map((w) => ({
           tsWeekId: w.ts_week_id,
           weekIndex: w.week_index,
           weekRange: w.week_range,

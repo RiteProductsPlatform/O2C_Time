@@ -46,7 +46,7 @@ define([
           return;
         }
 
-        const items = (resp.body && resp.body.items) || [];
+        const items = ($application.functions.apiBody(resp).items) || [];
 
         $page.variables.allocationRows = items.map((a) => ({
           allocationId: a.allocation_id,

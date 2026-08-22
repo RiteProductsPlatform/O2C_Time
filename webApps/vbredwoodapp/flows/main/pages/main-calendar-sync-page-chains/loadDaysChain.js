@@ -45,7 +45,7 @@ define([
           return;
         }
 
-        const rows = ((resp.body && resp.body.items) || []).map((d) => ({
+        const rows = (($application.functions.apiBody(resp).items) || []).map((d) => ({
           calendarId: d.calendar_id,
           calDate: d.cal_date,
           dayName: d.day_name,

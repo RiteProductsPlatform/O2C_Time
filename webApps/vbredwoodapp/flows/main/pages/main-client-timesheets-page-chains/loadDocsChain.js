@@ -47,7 +47,7 @@ define([
           return;
         }
 
-        $page.variables.docs = ((resp.body && resp.body.items) || []).map((d) => ({
+        $page.variables.docs = (($application.functions.apiBody(resp).items) || []).map((d) => ({
           docId: d.doc_id,
           docName: d.doc_name,
           mimeType: d.mime_type,

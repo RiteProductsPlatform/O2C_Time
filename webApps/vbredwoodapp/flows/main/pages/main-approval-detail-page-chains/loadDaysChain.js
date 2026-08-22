@@ -51,7 +51,7 @@ define([
           return;
         }
 
-        const rows = ((resp.body && resp.body.items) || []).map((d) => ({
+        const rows = (($application.functions.apiBody(resp).items) || []).map((d) => ({
           tsEntryId: d.ts_entry_id,
           entryDate: d.entry_date,
           dayName: d.day_name,

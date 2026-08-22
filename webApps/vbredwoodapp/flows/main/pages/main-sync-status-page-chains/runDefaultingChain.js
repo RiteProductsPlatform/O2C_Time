@@ -44,7 +44,7 @@ define([
         });
 
         if (resp.ok) {
-          const n = (resp.body && resp.body.defaulted) || 0;
+          const n = ($application.functions.apiBody(resp).defaulted) || 0;
           await Actions.fireNotificationEvent(context, {
             summary: 'Defaulting complete',
             message: n === 0

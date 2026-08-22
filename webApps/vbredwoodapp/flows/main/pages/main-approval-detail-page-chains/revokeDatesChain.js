@@ -56,8 +56,8 @@ define([
         });
 
         if (resp.ok) {
-          const n = (resp.body && resp.body.revokedDates) || dates.length;
-          const status = (resp.body && resp.body.weekStatus) || '';
+          const n = ($application.functions.apiBody(resp).revokedDates) || dates.length;
+          const status = ($application.functions.apiBody(resp).weekStatus) || '';
 
           $page.variables.selectedDates = [];
 

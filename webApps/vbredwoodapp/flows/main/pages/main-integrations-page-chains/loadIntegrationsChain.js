@@ -42,7 +42,7 @@ define([
           return;
         }
 
-        $page.variables.rowsRaw = ((resp.body && resp.body.items) || []).map((i) => ({
+        $page.variables.rowsRaw = (($application.functions.apiBody(resp).items) || []).map((i) => ({
           integrationId: i.integration_id,
           area: i.area || '',
           fusionSource: i.fusion_source || '',

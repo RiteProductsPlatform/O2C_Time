@@ -39,7 +39,7 @@ define([
         });
 
         if (resp.ok) {
-          $page.variables.confirmed = ((resp.body && resp.body.items) || []).map((c) => ({
+          $page.variables.confirmed = (($application.functions.apiBody(resp).items) || []).map((c) => ({
             confirmId: c.confirm_id,
             projectNumber: c.project_number,
             projectName: c.project_name,

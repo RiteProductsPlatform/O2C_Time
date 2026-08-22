@@ -46,7 +46,7 @@ define([
           return;
         }
 
-        const rows = ((resp.body && resp.body.items) || []).map((x) => ({
+        const rows = (($application.functions.apiBody(resp).items) || []).map((x) => ({
           failedId: x.failed_id,
           jobName: x.job_name,
           jobType: x.job_type,

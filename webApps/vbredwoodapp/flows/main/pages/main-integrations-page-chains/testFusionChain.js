@@ -43,7 +43,7 @@ define([
         });
 
         if (resp.ok) {
-          const items = (resp.body && resp.body.items) || [];
+          const items = ($application.functions.apiBody(resp).items) || [];
           const who = items.length ? items[0].PersonNumber : null;
 
           $page.variables.probeState = 'ok';

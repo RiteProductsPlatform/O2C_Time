@@ -48,7 +48,7 @@ define([
           return;
         }
 
-        const rows = ((resp.body && resp.body.items) || []).map((e) => ({
+        const rows = (($application.functions.apiBody(resp).items) || []).map((e) => ({
           employeeId: e.employee_id,
           employeeName: e.employee_name,
           workerType: e.worker_type,

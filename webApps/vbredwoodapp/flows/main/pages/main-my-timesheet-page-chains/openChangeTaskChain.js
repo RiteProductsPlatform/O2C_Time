@@ -72,7 +72,7 @@ define([
         // would be a no-op, and offering it invites the employee to "change"
         // to what they already have and wonder why nothing happened.
         $page.variables.chgTaskOptionsArray =
-          ((resp.body && resp.body.items) || [])
+          (($application.functions.apiBody(resp).items) || [])
             .filter((t) => t.task_id !== taskId)
             .map((t) => ({
               value: t.task_id,

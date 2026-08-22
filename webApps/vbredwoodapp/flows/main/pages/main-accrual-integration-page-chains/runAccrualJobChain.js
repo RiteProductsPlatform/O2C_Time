@@ -62,8 +62,8 @@ define([
           return;
         }
 
-        const rows   = (resp.body && resp.body.rowsPosted) || 0;
-        const months = (resp.body && resp.body.monthsChecked) || 0;
+        const rows   = ($application.functions.apiBody(resp).rowsPosted) || 0;
+        const months = ($application.functions.apiBody(resp).monthsChecked) || 0;
 
         await Actions.fireNotificationEvent(context, {
           summary: rows ? 'Adjustments posted' : 'Nothing to post',

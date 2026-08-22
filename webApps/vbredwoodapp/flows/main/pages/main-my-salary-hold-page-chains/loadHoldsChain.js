@@ -48,7 +48,7 @@ define([
           return;
         }
 
-        const items = (resp.body && resp.body.items) || [];
+        const items = ($application.functions.apiBody(resp).items) || [];
 
         $page.variables.holdRows = items.map((r) => ({
           holdDayId: r.hold_day_id,

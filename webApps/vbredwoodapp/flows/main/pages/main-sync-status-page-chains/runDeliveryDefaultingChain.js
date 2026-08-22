@@ -49,7 +49,7 @@ define([
           return;
         }
 
-        const n = (resp.body && resp.body.defaulted) || 0;
+        const n = ($application.functions.apiBody(resp).defaulted) || 0;
         await Actions.fireNotificationEvent(context, {
           summary: 'Delivery defaulting complete',
           message: n === 0

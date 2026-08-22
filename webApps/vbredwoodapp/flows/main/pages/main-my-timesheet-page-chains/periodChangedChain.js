@@ -87,7 +87,7 @@ define([
           return;
         }
 
-        const weeks = (resp.body && resp.body.items) || [];
+        const weeks = ($application.functions.apiBody(resp).items) || [];
         $page.variables.weeksRaw = weeks;
 
         $page.variables.weekOptionsArray = weeks.map((w) => ({

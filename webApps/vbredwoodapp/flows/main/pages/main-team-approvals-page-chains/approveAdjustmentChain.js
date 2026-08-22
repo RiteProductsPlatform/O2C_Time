@@ -44,7 +44,7 @@ define([
         });
 
         if (resp.ok) {
-          const posted = resp.body && resp.body.posted === 'Y';
+          const posted = $application.functions.apiBody(resp).posted === 'Y';
 
           await Actions.fireNotificationEvent(context, {
             summary: posted ? 'Adjustment posted' : 'Approval recorded',

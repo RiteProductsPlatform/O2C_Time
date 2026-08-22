@@ -46,7 +46,7 @@ define([
         }
 
         $page.variables.adjTaskOptionsArray =
-          ((resp.body && resp.body.items) || []).map((t) => ({
+          (($application.functions.apiBody(resp).items) || []).map((t) => ({
             value: t.task_id,
             label: t.task_name,
             taskGroup: t.task_group,

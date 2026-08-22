@@ -55,7 +55,7 @@ define([
           return;
         }
 
-        const rows = ((resp.body && resp.body.items) || []).map((h) => ({
+        const rows = (($application.functions.apiBody(resp).items) || []).map((h) => ({
           holdId: h.hold_id,
           employeeId: h.employee_id,
           employeeName: h.employee_name,

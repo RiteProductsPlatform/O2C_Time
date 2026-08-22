@@ -42,7 +42,7 @@ define([
           return;
         }
 
-        $page.variables.poet = ((resp.body && resp.body.items) || []).map((r) => ({
+        $page.variables.poet = (($application.functions.apiBody(resp).items) || []).map((r) => ({
           projectId:        r.project_id,
           projectNumber:    r.project_number,
           projectName:      r.project_name,

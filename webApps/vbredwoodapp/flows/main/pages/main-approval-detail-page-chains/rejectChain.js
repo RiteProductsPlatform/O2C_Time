@@ -59,7 +59,7 @@ define([
           });
 
           if (resp.ok) {
-            const n = (resp.body && resp.body.rejectedDates) || 0;
+            const n = ($application.functions.apiBody(resp).rejectedDates) || 0;
             $page.variables.showReject    = false;
             $page.functions.setDialog('rejectDlg', false);
             $page.variables.selectedDates = [];

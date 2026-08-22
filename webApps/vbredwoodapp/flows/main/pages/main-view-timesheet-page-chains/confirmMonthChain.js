@@ -54,7 +54,7 @@ define([
         });
 
         if (resp.ok) {
-          const rows = (resp.body && resp.body.accrualRows) || 0;
+          const rows = ($application.functions.apiBody(resp).accrualRows) || 0;
 
           $page.variables.accrualRows = rows;
 

@@ -44,7 +44,7 @@ define([
         });
 
         if (resp.ok) {
-          const n = (resp.body && resp.body.daysSynced) || 0;
+          const n = ($application.functions.apiBody(resp).daysSynced) || 0;
           await Actions.fireNotificationEvent(context, {
             summary: 'Layer synced',
             message: layer + ': ' + n + ' day(s) synced from Fusion.',

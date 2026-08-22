@@ -40,7 +40,7 @@ define([
         });
 
         if (resp.ok) {
-          const status = (resp.body && resp.body.weekStatus) || 'Approved';
+          const status = ($application.functions.apiBody(resp).weekStatus) || 'Approved';
           $page.variables.overrideCount = 0;
 
           await Actions.fireNotificationEvent(context, {

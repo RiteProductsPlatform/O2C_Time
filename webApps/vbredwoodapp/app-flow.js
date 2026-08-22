@@ -395,16 +395,47 @@ define(['oj-sp/spectra-shell/config/config'], function () {
      * @param verb     past participle, e.g. 'approved'
      * @param detail   per-item reasons from the server, if any
      */
+    /**
+     * The parsed body of a REST response, whatever the server said it was.
+     *
+     * ORDS PL/SQL handlers write JSON with HTP.P, which sets no content type,
+     * so the response comes back as text/html and callRest leaves `body` a
+     * STRING. Reading `resp.body.someField` off it is undefined -- silently,
+     * on every write endpoint in this module.
+     *
+     * That is how "Nothing was rejected" appeared over a rejection that
+     * worked: the count fell back to 0 because the field could not be read.
+     * Reads that fall back to what was SENT -- `|| dates.length` -- hid the
+     * same fault by producing a plausible number.
+     *
+     * Returns {} rather than throwing. A toast is not the place to surface a
+     * parse error, and the caller's own `|| fallback` still applies.
+     *
+     * The proper fix is the handlers emitting application/json. Until they do,
+     * this makes every count in every message real.
+     */
+    apiBody(resp) {
+      const b = resp && resp.body;
+      if (!b) { return {}; }
+      if (typeof b !== 'string') { return b; }
+      try { return JSON.parse(b) || {}; } catch (e) { return {}; }
+    }
+
+
     countOutcome(n, skipped, one, many, verb, detail) {
       const got = Number(n) || 0;
       const miss = Number(skipped) || 0;
       const tail = detail ? ' ' + detail : '';
 
       if (got === 0) {
+        // `detail` is written for the SUCCESS case -- "They are back with the
+        // employee", "see the rule message" -- so appending it here produced
+        // "Nothing was rejected. They are back with the employee.", which
+        // states the opposite of itself. The zero branch says what it knows
+        // and nothing more.
         return 'Nothing was ' + verb + '.'
-             + (detail ? ' ' + detail
-                       : ' The server reported none and gave no reason —'
-                         + ' please report this rather than retrying blindly.');
+             + ' The server reported none and gave no reason —'
+             + ' please report this rather than retrying blindly.';
       }
       const head = got + ' ' + (got === 1 ? one : many) + ' ' + verb;
       if (miss > 0) {

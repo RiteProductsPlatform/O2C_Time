@@ -60,7 +60,7 @@ define([
         });
 
         if (resp.ok) {
-          const n = (resp.body && resp.body.rejected) || selected.length;
+          const n = ($application.functions.apiBody(resp).rejected) || selected.length;
 
           $page.variables.showReject    = false;
           $page.functions.setDialog('rejectDlg', false);

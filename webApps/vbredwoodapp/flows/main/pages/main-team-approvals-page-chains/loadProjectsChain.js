@@ -49,7 +49,7 @@ define([
         if (resp.ok) {
           // Stored unfiltered; filterProjectsChain derives what the table shows,
           // so typing in the filter costs no round-trip.
-          $page.variables.projectsRaw = ((resp.body && resp.body.items) || [])
+          $page.variables.projectsRaw = (($application.functions.apiBody(resp).items) || [])
             .map((p) => ({
               projectId: p.project_id,
               projectNumber: p.project_number,

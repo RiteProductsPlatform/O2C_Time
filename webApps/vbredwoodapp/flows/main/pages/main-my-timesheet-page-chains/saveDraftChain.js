@@ -91,8 +91,8 @@ define([
           // handler and stored nothing still read as a success. A 200 with
           // saved = 0 means the rows did not arrive in the shape the handler
           // reads — that is worth saying, not papering over.
-          const saved = (resp.body && typeof resp.body.saved === 'number')
-            ? resp.body.saved : null;
+          const saved = (typeof $application.functions.apiBody(resp).saved === 'number')
+            ? $application.functions.apiBody(resp).saved : null;
 
           // A count of zero is never a success, so it must never be phrased as
           // one. "0 entries saved" told the user nothing about why - and the
@@ -101,8 +101,8 @@ define([
           if (saved === 0) {
             await Actions.fireNotificationEvent(context, {
               summary: 'Nothing was saved',
-              message: (resp.body && resp.body.error)
-                ? resp.body.error
+              message: ($application.functions.apiBody(resp).error)
+                ? $application.functions.apiBody(resp).error
                 : 'The server stored none of the ' + sent + ' changed '
                   + 'cells and gave no reason. Your hours are still on screen — '
                   + 'please report this rather than retyping them.',

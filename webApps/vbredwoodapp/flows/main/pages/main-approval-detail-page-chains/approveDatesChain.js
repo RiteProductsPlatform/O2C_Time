@@ -50,8 +50,8 @@ define([
         });
 
         if (resp.ok) {
-          const n = (resp.body && resp.body.approvedDates) || dates.length;
-          const status = (resp.body && resp.body.weekStatus) || '';
+          const n = ($application.functions.apiBody(resp).approvedDates) || dates.length;
+          const status = ($application.functions.apiBody(resp).weekStatus) || '';
           const closed = status === 'Approved' || status === 'Overridden and approved';
 
           $page.variables.selectedDates = [];

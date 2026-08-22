@@ -50,7 +50,7 @@ define([
           return;
         }
 
-        $page.variables.extractRaw = ((resp.body && resp.body.items) || []).map((r) => ({
+        $page.variables.extractRaw = (($application.functions.apiBody(resp).items) || []).map((r) => ({
           ifId: r.if_id,
           employeeId: r.employee_id,
           employeeName: r.employee_name,
