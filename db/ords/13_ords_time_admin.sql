@@ -159,6 +159,10 @@ BEGIN
         v_n     NUMBER := 0;
         v_layer VARCHAR2(12) := UPPER(:layer);
       BEGIN
+        -- application/json, or callRest leaves the body a STRING. HTP.P
+        -- sets no content type; without this every count read off this
+        -- response is undefined and every message built from one is wrong.
+        OWA_UTIL.mime_header('application/json', TRUE);
         SELECT NVL(actor,'VBCS_USER') INTO v_actor
           FROM JSON_TABLE(v_body, '$'
                  COLUMNS (actor VARCHAR2(100) PATH '$.actor'));
@@ -288,6 +292,10 @@ BEGIN
         -- same way SQLERRM already is directly below.
         v_code NUMBER;
       BEGIN
+        -- application/json, or callRest leaves the body a STRING. HTP.P
+        -- sets no content type; without this every count read off this
+        -- response is undefined and every message built from one is wrong.
+        OWA_UTIL.mime_header('application/json', TRUE);
         SELECT job_run_id, NVL(actor,'BIP_LOADER'), NVL(fin,'N'), trace
           INTO v_job, v_actor, v_final, v_trace
           FROM JSON_TABLE(v_body, '$'
@@ -445,6 +453,10 @@ BEGIN
         -- same way SQLERRM already is directly below.
         v_code NUMBER;
       BEGIN
+        -- application/json, or callRest leaves the body a STRING. HTP.P
+        -- sets no content type; without this every count read off this
+        -- response is undefined and every message built from one is wrong.
+        OWA_UTIL.mime_header('application/json', TRUE);
         SELECT job_run_id, NVL(actor,'BIP_LOADER'), NVL(fin,'N'), trace
           INTO v_job, v_actor, v_final, v_trace
           FROM JSON_TABLE(v_body, '$'
@@ -637,6 +649,10 @@ BEGIN
         -- same way SQLERRM already is directly below.
         v_code NUMBER;
       BEGIN
+        -- application/json, or callRest leaves the body a STRING. HTP.P
+        -- sets no content type; without this every count read off this
+        -- response is undefined and every message built from one is wrong.
+        OWA_UTIL.mime_header('application/json', TRUE);
         SELECT job_run_id, NVL(actor,'BIP_LOADER'), NVL(fin,'N'), trace
           INTO v_job, v_actor, v_final, v_trace
           FROM JSON_TABLE(v_body, '$'
@@ -777,6 +793,10 @@ BEGIN
         -- same way SQLERRM already is directly below.
         v_code NUMBER;
       BEGIN
+        -- application/json, or callRest leaves the body a STRING. HTP.P
+        -- sets no content type; without this every count read off this
+        -- response is undefined and every message built from one is wrong.
+        OWA_UTIL.mime_header('application/json', TRUE);
         SELECT job_run_id, NVL(actor,'BIP_LOADER'), NVL(fin,'N'), trace
           INTO v_job, v_actor, v_final, v_trace
           FROM JSON_TABLE(v_body, '$'
@@ -942,6 +962,10 @@ BEGIN
         v_gone  NUMBER := 0;
         v_back  NUMBER := 0;
       BEGIN
+        -- application/json, or callRest leaves the body a STRING. HTP.P
+        -- sets no content type; without this every count read off this
+        -- response is undefined and every message built from one is wrong.
+        OWA_UTIL.mime_header('application/json', TRUE);
         SELECT job_run_id, NVL(actor,'BIP_LOADER'), NVL(fin,'N'), trace,
                emp, TO_DATE(wfrom,'YYYY-MM-DD'), TO_DATE(wto,'YYYY-MM-DD')
           INTO v_job, v_actor, v_final, v_trace, v_emp, v_wfrom, v_wto
@@ -1189,6 +1213,10 @@ BEGIN
         v_job    NUMBER;
         v_still  NUMBER;
       BEGIN
+        -- application/json, or callRest leaves the body a STRING. HTP.P
+        -- sets no content type; without this every count read off this
+        -- response is undefined and every message built from one is wrong.
+        OWA_UTIL.mime_header('application/json', TRUE);
         SELECT employee_id INTO v_emp
           FROM oc_time_sync_failed WHERE failed_id = :failedId;
 
@@ -1244,6 +1272,10 @@ BEGIN
     p_source => q'[
       DECLARE v_job NUMBER; v_read NUMBER; v_up NUMBER; v_fail NUMBER;
       BEGIN
+        -- application/json, or callRest leaves the body a STRING. HTP.P
+        -- sets no content type; without this every count read off this
+        -- response is undefined and every message built from one is wrong.
+        OWA_UTIL.mime_header('application/json', TRUE);
         v_job := oc_time_pkg.populate_month(:periodId, :employeeId,
                                             NVL(:actor,'VBCS_USER'));
         SELECT records_read, records_upserted, records_failed
@@ -1302,6 +1334,10 @@ BEGIN
         v_read NUMBER := 0;   v_up NUMBER := 0; v_fail NUMBER := 0;
         v_err  VARCHAR2(400);
       BEGIN
+        -- application/json, or callRest leaves the body a STRING. HTP.P
+        -- sets no content type; without this every count read off this
+        -- response is undefined and every message built from one is wrong.
+        OWA_UTIL.mime_header('application/json', TRUE);
         -- :force lets an operator replay a missed month by hand through the
         -- same path OIC uses, rather than a second one that drifts from it.
         oc_time_run_monthly_population(
@@ -1365,6 +1401,10 @@ BEGIN
     p_source => q'[
       DECLARE v_job NUMBER;
       BEGIN
+        -- application/json, or callRest leaves the body a STRING. HTP.P
+        -- sets no content type; without this every count read off this
+        -- response is undefined and every message built from one is wrong.
+        OWA_UTIL.mime_header('application/json', TRUE);
         v_job := oc_time_pkg.populate_daily(
                    NVL(TO_DATE(:actionDate,'YYYY-MM-DD'), TRUNC(SYSDATE)),
                    :scopeKey, NVL(:actor,'VBCS_USER'));
@@ -1390,6 +1430,10 @@ BEGIN
     p_source => q'[
       DECLARE v_job NUMBER; v_up NUMBER;
       BEGIN
+        -- application/json, or callRest leaves the body a STRING. HTP.P
+        -- sets no content type; without this every count read off this
+        -- response is undefined and every message built from one is wrong.
+        OWA_UTIL.mime_header('application/json', TRUE);
         v_job := oc_time_pkg.run_weekly_defaulting(
                    :periodId,
                    NVL(TO_DATE(:asOf,'YYYY-MM-DD'), SYSDATE),
@@ -1445,6 +1489,10 @@ BEGIN
     p_source => q'~
       DECLARE v_job NUMBER; v_up NUMBER;
       BEGIN
+        -- application/json, or callRest leaves the body a STRING. HTP.P
+        -- sets no content type; without this every count read off this
+        -- response is undefined and every message built from one is wrong.
+        OWA_UTIL.mime_header('application/json', TRUE);
         v_job := oc_time_pkg.run_delivery_defaulting(
                    :periodId,
                    NVL(TO_DATE(:asOf,'YYYY-MM-DD'), SYSDATE),
@@ -1476,6 +1524,10 @@ BEGIN
     p_source => q'~
       DECLARE v_job NUMBER; v_rows NUMBER; v_read NUMBER;
       BEGIN
+        -- application/json, or callRest leaves the body a STRING. HTP.P
+        -- sets no content type; without this every count read off this
+        -- response is undefined and every message built from one is wrong.
+        OWA_UTIL.mime_header('application/json', TRUE);
         v_job := oc_time_pkg.run_accrual_top_up(
                    :periodId, NVL(:actor,'VBCS_USER'), :traceId);
         SELECT records_read, records_upserted INTO v_read, v_rows
@@ -1643,6 +1695,10 @@ BEGIN
     p_source => q'[
       DECLARE v_n NUMBER;
       BEGIN
+        -- application/json, or callRest leaves the body a STRING. HTP.P
+        -- sets no content type; without this every count read off this
+        -- response is undefined and every message built from one is wrong.
+        OWA_UTIL.mime_header('application/json', TRUE);
         IF NVL(:status,'Y') NOT IN ('Y','E') THEN
           :status_code := 400;
           HTP.P('{"error":"status must be Y (stored) or E (rejected)."}');
@@ -1786,6 +1842,10 @@ BEGIN
         v_status VARCHAR2(20) := NVL(:status, 'Failed');
         v_msg    VARCHAR2(2000) := :message;
       BEGIN
+        -- application/json, or callRest leaves the body a STRING. HTP.P
+        -- sets no content type; without this every count read off this
+        -- response is undefined and every message built from one is wrong.
+        OWA_UTIL.mime_header('application/json', TRUE);
         IF v_status NOT IN ('Pending','Success','Failed','Skipped') THEN
           :status_code := 400;
           HTP.P('{"error":"status must be Pending, Success, Failed or Skipped"}');
@@ -1859,6 +1919,10 @@ BEGIN
         v_status VARCHAR2(20);
         v_name   VARCHAR2(30);
       BEGIN
+        -- application/json, or callRest leaves the body a STRING. HTP.P
+        -- sets no content type; without this every count read off this
+        -- response is undefined and every message built from one is wrong.
+        OWA_UTIL.mime_header('application/json', TRUE);
         v_job := oc_time_open_period(:periodId, NVL(:actor,'VBCS_ADMIN'));
         SELECT period_name, status INTO v_name, v_status
           FROM oc_time_period WHERE period_id = :periodId;
@@ -1896,6 +1960,10 @@ BEGIN
         v_status VARCHAR2(20);
         v_name   VARCHAR2(30);
       BEGIN
+        -- application/json, or callRest leaves the body a STRING. HTP.P
+        -- sets no content type; without this every count read off this
+        -- response is undefined and every message built from one is wrong.
+        OWA_UTIL.mime_header('application/json', TRUE);
         v_job := oc_time_close_period(:periodId, NVL(:actor,'VBCS_ADMIN'),
                                       NVL(:force,'N'));
         SELECT period_name, status INTO v_name, v_status
@@ -2095,6 +2163,10 @@ BEGIN
         v_rows    NUMBER := 0;
         v_exists  NUMBER;
       BEGIN
+        -- application/json, or callRest leaves the body a STRING. HTP.P
+        -- sets no content type; without this every count read off this
+        -- response is undefined and every message built from one is wrong.
+        OWA_UTIL.mime_header('application/json', TRUE);
         IF NVL(:status,'Y') NOT IN ('Y','E') THEN
           :status_code := 400;
           HTP.P('{"error":"status must be Y (stored) or E (rejected)."}');

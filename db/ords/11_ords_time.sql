@@ -194,6 +194,10 @@ BEGIN
     p_source => q'[
       DECLARE v_id NUMBER;
       BEGIN
+        -- application/json, or callRest leaves the body a STRING. HTP.P
+        -- sets no content type; without this every count read off this
+        -- response is undefined and every message built from one is wrong.
+        OWA_UTIL.mime_header('application/json', TRUE);
         v_id := oc_time_pkg.ensure_week(
                   :employeeId, TO_DATE(:onDate,'YYYY-MM-DD'),
                   NVL(:actor,'VBCS_USER'));
@@ -256,6 +260,10 @@ BEGIN
     p_source_type => ORDS.source_type_plsql,
     p_source => q'[
       BEGIN
+        -- application/json, or callRest leaves the body a STRING. HTP.P
+        -- sets no content type; without this every count read off this
+        -- response is undefined and every message built from one is wrong.
+        OWA_UTIL.mime_header('application/json', TRUE);
         oc_time_pkg.save_entry(
           p_ts_week_id      => :tsWeekId,
           p_project_id      => :projectId,
@@ -308,6 +316,10 @@ BEGIN
         v_actor  VARCHAR2(100);
         v_saved  NUMBER := 0;
       BEGIN
+        -- application/json, or callRest leaves the body a STRING. HTP.P
+        -- sets no content type; without this every count read off this
+        -- response is undefined and every message built from one is wrong.
+        OWA_UTIL.mime_header('application/json', TRUE);
         SELECT NVL(src,'Employee'), NVL(act,'VBCS_USER')
           INTO v_source, v_actor
           FROM JSON_TABLE(v_body, '$'
@@ -364,6 +376,10 @@ BEGIN
     p_source_type => ORDS.source_type_plsql,
     p_source => q'[
       BEGIN
+        -- application/json, or callRest leaves the body a STRING. HTP.P
+        -- sets no content type; without this every count read off this
+        -- response is undefined and every message built from one is wrong.
+        OWA_UTIL.mime_header('application/json', TRUE);
         oc_time_pkg.remove_line(:tsWeekId, :projectId, :taskId, NVL(:actor,'VBCS_USER'));
         COMMIT;
         :status_code := 200;
@@ -391,6 +407,10 @@ BEGIN
         v_status VARCHAR2(30);
         v_adj    NUMBER;
       BEGIN
+        -- application/json, or callRest leaves the body a STRING. HTP.P
+        -- sets no content type; without this every count read off this
+        -- response is undefined and every message built from one is wrong.
+        OWA_UTIL.mime_header('application/json', TRUE);
         -- :reason is required only when the week is under a salary hold AND
         -- something changed -- submit_week decides that, not this handler, so
         -- the rule lives in one place and a caller reaching ORDS directly meets
@@ -437,6 +457,10 @@ BEGIN
     p_source => q'[
       DECLARE v_status VARCHAR2(30);
       BEGIN
+        -- application/json, or callRest leaves the body a STRING. HTP.P
+        -- sets no content type; without this every count read off this
+        -- response is undefined and every message built from one is wrong.
+        OWA_UTIL.mime_header('application/json', TRUE);
         oc_time_pkg.revoke_week(:id, NVL(:actor,'VBCS_USER'), :traceId);
         SELECT week_status INTO v_status FROM oc_ts_week WHERE ts_week_id = :id;
         COMMIT;
@@ -490,6 +514,10 @@ BEGIN
     p_source => q'[
       DECLARE v_status VARCHAR2(20);
       BEGIN
+        -- application/json, or callRest leaves the body a STRING. HTP.P
+        -- sets no content type; without this every count read off this
+        -- response is undefined and every message built from one is wrong.
+        OWA_UTIL.mime_header('application/json', TRUE);
         oc_time_pkg.correct_salary_hold_day(
           p_hold_day_id => :holdDayId,
           p_hours       => :hours,
@@ -684,6 +712,10 @@ BEGIN
     p_source => q'[
       DECLARE v_id NUMBER;
       BEGIN
+        -- application/json, or callRest leaves the body a STRING. HTP.P
+        -- sets no content type; without this every count read off this
+        -- response is undefined and every message built from one is wrong.
+        OWA_UTIL.mime_header('application/json', TRUE);
         v_id := oc_time_pkg.apply_adjustment(
                   p_employee_id    => :employeeId,
                   p_work_date      => TO_DATE(:workDate,'YYYY-MM-DD'),
@@ -768,6 +800,10 @@ BEGIN
         v_blob BLOB;
         v_size NUMBER;
       BEGIN
+        -- application/json, or callRest leaves the body a STRING. HTP.P
+        -- sets no content type; without this every count read off this
+        -- response is undefined and every message built from one is wrong.
+        OWA_UTIL.mime_header('application/json', TRUE);
         -- The page sends base64; decode server-side so the 25MB ceiling and the
         -- MIME whitelist (CHK_OC_TSCD_SIZE / CHK_OC_TSCD_MIME) are enforced
         -- where a caller cannot bypass them.
@@ -819,6 +855,10 @@ BEGIN
     p_source_type => ORDS.source_type_plsql,
     p_source => q'[
       BEGIN
+        -- application/json, or callRest leaves the body a STRING. HTP.P
+        -- sets no content type; without this every count read off this
+        -- response is undefined and every message built from one is wrong.
+        OWA_UTIL.mime_header('application/json', TRUE);
         DELETE FROM oc_ts_client_doc WHERE doc_id = :id;
         IF SQL%ROWCOUNT = 0 THEN
           ROLLBACK; :status_code := 404;
@@ -852,6 +892,10 @@ BEGIN
     p_source_type => ORDS.source_type_plsql,
     p_source => q'~
       BEGIN
+        -- application/json, or callRest leaves the body a STRING. HTP.P
+        -- sets no content type; without this every count read off this
+        -- response is undefined and every message built from one is wrong.
+        OWA_UTIL.mime_header('application/json', TRUE);
         oc_time_change_line_task(
           p_ts_week_id  => :tsWeekId,
           p_project_id  => :projectId,

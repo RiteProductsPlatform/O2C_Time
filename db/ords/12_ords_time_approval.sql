@@ -417,6 +417,10 @@ BEGIN
         v_err    VARCHAR2(500);
         v_detail VARCHAR2(3000);
       BEGIN
+        -- application/json, or callRest leaves the body a STRING. HTP.P
+        -- sets no content type; without this every count read off this
+        -- response is undefined and every message built from one is wrong.
+        OWA_UTIL.mime_header('application/json', TRUE);
         SELECT proj, per, aeid, NVL(act,'VBCS_USER'), tr
           INTO v_proj, v_period, v_aeid, v_actor, v_trace
           FROM JSON_TABLE(v_body, '$'
@@ -510,6 +514,10 @@ BEGIN
         v_err     VARCHAR2(500);
         v_detail  VARCHAR2(3000);
       BEGIN
+        -- application/json, or callRest leaves the body a STRING. HTP.P
+        -- sets no content type; without this every count read off this
+        -- response is undefined and every message built from one is wrong.
+        OWA_UTIL.mime_header('application/json', TRUE);
         SELECT proj, per, rsn, rmk, aeid, NVL(act,'VBCS_USER'), tr
           INTO v_proj, v_period, v_reason, v_remarks, v_aeid, v_actor, v_trace
           FROM JSON_TABLE(v_body, '$'
@@ -576,6 +584,10 @@ BEGIN
     p_source => q'[
       DECLARE v_status VARCHAR2(30);
       BEGIN
+        -- application/json, or callRest leaves the body a STRING. HTP.P
+        -- sets no content type; without this every count read off this
+        -- response is undefined and every message built from one is wrong.
+        OWA_UTIL.mime_header('application/json', TRUE);
         oc_time_pkg.approve_week(:id, :actorEmpId, NVL(:actor,'VBCS_USER'), :traceId);
         SELECT week_status INTO v_status FROM oc_ts_week WHERE ts_week_id = :id;
         COMMIT; :status_code := 200;
@@ -600,6 +612,10 @@ BEGIN
     p_source_type => ORDS.source_type_plsql,
     p_source => q'[
       BEGIN
+        -- application/json, or callRest leaves the body a STRING. HTP.P
+        -- sets no content type; without this every count read off this
+        -- response is undefined and every message built from one is wrong.
+        OWA_UTIL.mime_header('application/json', TRUE);
         oc_time_pkg.reject_week(:id, :reason, :remarks, :actorEmpId,
                                 NVL(:actor,'VBCS_USER'), :traceId);
         COMMIT; :status_code := 200;
@@ -639,6 +655,10 @@ BEGIN
         v_done   NUMBER := 0;
         v_status VARCHAR2(30);
       BEGIN
+        -- application/json, or callRest leaves the body a STRING. HTP.P
+        -- sets no content type; without this every count read off this
+        -- response is undefined and every message built from one is wrong.
+        OWA_UTIL.mime_header('application/json', TRUE);
         SELECT aeid, NVL(act,'VBCS_USER'), tr
           INTO v_aeid, v_actor, v_trace
           FROM JSON_TABLE(v_body, '$'
@@ -684,6 +704,10 @@ BEGIN
         v_trace  VARCHAR2(64);
         v_status VARCHAR2(30);
       BEGIN
+        -- application/json, or callRest leaves the body a STRING. HTP.P
+        -- sets no content type; without this every count read off this
+        -- response is undefined and every message built from one is wrong.
+        OWA_UTIL.mime_header('application/json', TRUE);
         SELECT aeid, NVL(act,'VBCS_USER'), tr
           INTO v_aeid, v_actor, v_trace
           FROM JSON_TABLE(v_body, '$'
@@ -728,6 +752,10 @@ BEGIN
         v_done   NUMBER := 0;
         v_status VARCHAR2(30);
       BEGIN
+        -- application/json, or callRest leaves the body a STRING. HTP.P
+        -- sets no content type; without this every count read off this
+        -- response is undefined and every message built from one is wrong.
+        OWA_UTIL.mime_header('application/json', TRUE);
         SELECT aeid, NVL(act,'VBCS_USER'), tr
           INTO v_aeid, v_actor, v_trace
           FROM JSON_TABLE(v_body, '$'
@@ -779,6 +807,10 @@ BEGIN
         v_trace   VARCHAR2(64);
         v_done    NUMBER := 0;
       BEGIN
+        -- application/json, or callRest leaves the body a STRING. HTP.P
+        -- sets no content type; without this every count read off this
+        -- response is undefined and every message built from one is wrong.
+        OWA_UTIL.mime_header('application/json', TRUE);
         SELECT rsn, rmk, aeid, NVL(act,'VBCS_USER'), tr
           INTO v_reason, v_remarks, v_aeid, v_actor, v_trace
           FROM JSON_TABLE(v_body, '$'
@@ -817,6 +849,10 @@ BEGIN
     p_source_type => ORDS.source_type_plsql,
     p_source => q'[
       BEGIN
+        -- application/json, or callRest leaves the body a STRING. HTP.P
+        -- sets no content type; without this every count read off this
+        -- response is undefined and every message built from one is wrong.
+        OWA_UTIL.mime_header('application/json', TRUE);
         oc_time_pkg.override_approve(:tsEntryId, :newHours, :reason, :actorEmpId,
                                      NVL(:actor,'VBCS_USER'), :traceId);
         COMMIT; :status_code := 200;
@@ -846,6 +882,10 @@ BEGIN
     p_source => q'[
       DECLARE v_status VARCHAR2(30);
       BEGIN
+        -- application/json, or callRest leaves the body a STRING. HTP.P
+        -- sets no content type; without this every count read off this
+        -- response is undefined and every message built from one is wrong.
+        OWA_UTIL.mime_header('application/json', TRUE);
         oc_time_pkg.finish_override(:tsWeekId, :actorEmpId, NVL(:actor,'VBCS_USER'));
         SELECT week_status INTO v_status FROM oc_ts_week WHERE ts_week_id = :tsWeekId;
         COMMIT; :status_code := 200;
@@ -871,6 +911,10 @@ BEGIN
     p_source_type => ORDS.source_type_plsql,
     p_source => q'[
       BEGIN
+        -- application/json, or callRest leaves the body a STRING. HTP.P
+        -- sets no content type; without this every count read off this
+        -- response is undefined and every message built from one is wrong.
+        OWA_UTIL.mime_header('application/json', TRUE);
         oc_time_pkg.approve_employee_month(
           :projectId, :periodId, :employeeId, :actorEmpId,
           NVL(:actor,'VBCS_USER'), :traceId);
@@ -912,6 +956,10 @@ BEGIN
         v_count  NUMBER;
         v_done   NUMBER := 0;
       BEGIN
+        -- application/json, or callRest leaves the body a STRING. HTP.P
+        -- sets no content type; without this every count read off this
+        -- response is undefined and every message built from one is wrong.
+        OWA_UTIL.mime_header('application/json', TRUE);
         SELECT proj, per, aeid, NVL(act,'VBCS_USER'), tr
           INTO v_proj, v_period, v_aeid, v_actor, v_trace
           FROM JSON_TABLE(v_body, '$'
@@ -967,6 +1015,10 @@ BEGIN
         v_rows NUMBER;
         v_msg  VARCHAR2(2000);
       BEGIN
+        -- application/json, or callRest leaves the body a STRING. HTP.P
+        -- sets no content type; without this every count read off this
+        -- response is undefined and every message built from one is wrong.
+        OWA_UTIL.mime_header('application/json', TRUE);
         v_id := oc_time_pkg.confirm_month(
                   p_project_id   => :projectId,
                   p_period_id    => :periodId,
@@ -1037,6 +1089,10 @@ BEGIN
     p_source => q'[
       DECLARE v_status VARCHAR2(30); v_posted CHAR(1);
       BEGIN
+        -- application/json, or callRest leaves the body a STRING. HTP.P
+        -- sets no content type; without this every count read off this
+        -- response is undefined and every message built from one is wrong.
+        OWA_UTIL.mime_header('application/json', TRUE);
         oc_time_pkg.approve_adjustment(:id, :actorEmpId,
                                        NVL(:actor,'VBCS_USER'), :traceId);
         SELECT status, posted_flag INTO v_status, v_posted
@@ -1112,6 +1168,10 @@ BEGIN
         v_rem NUMBER;
         v_orp NUMBER;
       BEGIN
+        -- application/json, or callRest leaves the body a STRING. HTP.P
+        -- sets no content type; without this every count read off this
+        -- response is undefined and every message built from one is wrong.
+        OWA_UTIL.mime_header('application/json', TRUE);
         -- RETRACT FIRST. "Rebuild the absentee list" has to mean both halves:
         -- generate_llc_lines only ever INSERTs, so before db/96 a withdrawn
         -- absence left its coverage line standing -- assignable, and if already
@@ -1221,6 +1281,10 @@ BEGIN
     p_source_type => ORDS.source_type_plsql,
     p_source => q'[
       BEGIN
+        -- application/json, or callRest leaves the body a STRING. HTP.P
+        -- sets no content type; without this every count read off this
+        -- response is undefined and every message built from one is wrong.
+        OWA_UTIL.mime_header('application/json', TRUE);
         oc_time_pkg.assign_cover(:id, :coverEmployeeId, NVL(:actor,'VBCS_USER'));
         COMMIT; :status_code := 200;
         HTP.P('{"llcId":' || :id || ',"llcStatus":"Assigned"}');
@@ -1244,6 +1308,10 @@ BEGIN
     p_source_type => ORDS.source_type_plsql,
     p_source => q'[
       BEGIN
+        -- application/json, or callRest leaves the body a STRING. HTP.P
+        -- sets no content type; without this every count read off this
+        -- response is undefined and every message built from one is wrong.
+        OWA_UTIL.mime_header('application/json', TRUE);
         -- OC_TIME_APPROVE_COVER, not OC_TIME_PKG.APPROVE_COVER. The wrapper
         -- adds the one guard PROC-006 states -- coverage is recorded before the
         -- finance cut-off, so a confirmed month refuses.
@@ -1306,6 +1374,10 @@ BEGIN
     p_source => q'[
       DECLARE v_status VARCHAR2(20); v_hold NUMBER; v_sal VARCHAR2(20);
       BEGIN
+        -- application/json, or callRest leaves the body a STRING. HTP.P
+        -- sets no content type; without this every count read off this
+        -- response is undefined and every message built from one is wrong.
+        OWA_UTIL.mime_header('application/json', TRUE);
         oc_time_pkg.decide_salary_hold_day(
           p_hold_day_id  => :holdDayId,
           p_approve      => NVL(:approve,'N'),
@@ -1367,6 +1439,10 @@ BEGIN
     p_source => q'[
       DECLARE v_job NUMBER;
       BEGIN
+        -- application/json, or callRest leaves the body a STRING. HTP.P
+        -- sets no content type; without this every count read off this
+        -- response is undefined and every message built from one is wrong.
+        OWA_UTIL.mime_header('application/json', TRUE);
         v_job := oc_time_pkg.run_salary_stopping(:periodId, NVL(:actor,'VBCS_USER'));
         :status_code := 200;
         HTP.P('{"jobRunId":' || v_job || '}');
@@ -1413,6 +1489,10 @@ BEGIN
     p_source_type => ORDS.source_type_plsql,
     p_source => q'[
       BEGIN
+        -- application/json, or callRest leaves the body a STRING. HTP.P
+        -- sets no content type; without this every count read off this
+        -- response is undefined and every message built from one is wrong.
+        OWA_UTIL.mime_header('application/json', TRUE);
         oc_time_pkg.release_salary_hold(:id, :actorEmpId, :remarks,
                                         NVL(:actor,'VBCS_USER'));
         COMMIT; :status_code := 200;

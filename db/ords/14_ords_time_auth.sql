@@ -60,6 +60,10 @@ BEGIN
         v_emp   VARCHAR2(50);
         v_name  VARCHAR2(200);
       BEGIN
+        -- application/json, or callRest leaves the body a STRING. HTP.P
+        -- sets no content type; without this every count read off this
+        -- response is undefined and every message built from one is wrong.
+        OWA_UTIL.mime_header('application/json', TRUE);
         IF v_email IS NULL OR :password IS NULL THEN
           :status_code := 400;
           HTP.P('{"error":"Email and password are required."}');
@@ -178,6 +182,10 @@ BEGIN
     p_mimes_allowed => 'application/json',
     p_source => q'~
       BEGIN
+        -- application/json, or callRest leaves the body a STRING. HTP.P
+        -- sets no content type; without this every count read off this
+        -- response is undefined and every message built from one is wrong.
+        OWA_UTIL.mime_header('application/json', TRUE);
         DELETE FROM oc_time_session WHERE token = :token;
         COMMIT;
         -- 200 whether or not the token existed: an already-dead session is a
@@ -209,6 +217,10 @@ BEGIN
         v_hash  VARCHAR2(128);
         v_stat  VARCHAR2(20);
       BEGIN
+        -- application/json, or callRest leaves the body a STRING. HTP.P
+        -- sets no content type; without this every count read off this
+        -- response is undefined and every message built from one is wrong.
+        OWA_UTIL.mime_header('application/json', TRUE);
         IF :newPassword IS NULL OR LENGTH(:newPassword) < 8 THEN
           :status_code := 400;
           HTP.P('{"error":"The new password must be at least 8 characters."}');
